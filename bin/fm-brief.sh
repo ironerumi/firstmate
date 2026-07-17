@@ -6,10 +6,13 @@
 # description, acceptance criteria, and context, and may adjust other sections
 # when the task genuinely deviates (e.g. working an existing external PR instead
 # of shipping a new one).
-# Usage: fm-brief.sh <task-id> <repo-name> [--scout] [--herdr-lab]
+# Usage: fm-brief.sh <task-id> <repo-name> [--scout|--skill-led] [--herdr-lab]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #   --scout writes the scout contract instead: the deliverable is a report at
 #   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is scratch.
+#   --skill-led writes a concise ship contract for an exact skill invocation that
+#   owns implementation, review, tests, and delivery mechanics. Firstmate keeps
+#   only isolation, status, unlanded-work, and merge-authority safeguards around it.
 #   --secondmate writes a persistent secondmate charter. The project list
 #   is cloned into the secondmate home, while the natural-language scope
 #   tells the main firstmate when to route work there; routine churn stays in its own home;
@@ -71,12 +74,14 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 KIND=ship
+SKILL_LED=0
 HERDR_LAB=0
 NO_PROJECTS=0
 POS=()
 for a in "$@"; do
   case "$a" in
     --scout) KIND=scout ;;
+    --skill-led) SKILL_LED=1 ;;
     --secondmate) KIND=secondmate ;;
     --herdr-lab) HERDR_LAB=1 ;;
     --no-projects) NO_PROJECTS=1 ;;
@@ -84,6 +89,11 @@ for a in "$@"; do
   esac
 done
 ID=${POS[0]}
+
+if [ "$SKILL_LED" -eq 1 ] && [ "$KIND" != ship ]; then
+  echo "error: --skill-led applies only to ship briefs" >&2
+  exit 1
+fi
 
 if [ "$KIND" = secondmate ] && [ "$HERDR_LAB" -eq 1 ]; then
   echo "error: --herdr-lab applies only to crewmate ship or scout briefs" >&2
@@ -266,6 +276,41 @@ When the report is complete, append \`done: {one-line conclusion}\` to the statu
 If your findings reveal work that should ship (e.g. you reproduced a bug and the fix is clear), say so in the report; firstmate may promote this task in place, and you would then receive mode-specific ship instructions as a follow-up message.
 EOF
 echo "scaffolded: $BRIEF (scout; replace {TASK})"
+exit 0
+fi
+
+if [ "$SKILL_LED" -eq 1 ]; then
+cat > "$BRIEF" <<EOF
+You are a crewmate: an autonomous worker agent managed by firstmate.
+
+# Task
+{TASK}
+
+$HERDR_SECTION
+
+# Safety envelope
+Verify that \`pwd -P\` and \`git rev-parse --show-toplevel\` both resolve to this isolated task worktree, never the primary project copy.
+Stop before writing if that assertion fails.
+Work only inside this worktree, except for the status file below.
+Never push to the default branch.
+Merge only when the task text explicitly grants that authority; otherwise return the ready branch or PR to firstmate.
+Invoke the named skill exactly as written and let it own implementation, review, tests, documentation, and delivery mechanics.
+Do not stack a second workflow or independent review around the owning skill.
+Never discard, reset, or hide unlanded work.
+Never stop, restart, or update the shared no-mistakes daemon.
+
+# Supervisor channel
+Append sparse, actionable events to $STATUS_FILE using one of: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
+Use \`$PAUSED_VERB: {why}\` only for a bounded external wait expected to clear on its own; use \`blocked:\` when firstmate must act.
+For a human decision, append one \`needs-decision:\` question with your recommendation and wait.
+After an answer or cleared blocker, append the matching \`resolved:\` event before continuing.
+
+# Definition of done
+Follow the named skill through its terminal outcome.
+Append \`done:\` with the concrete artifact - corrected document path, ready branch, or full green PR URL - and stop.
+If the skill cannot complete safely, append \`blocked:\` or \`failed:\` with the concrete reason and preserve all work.
+EOF
+echo "scaffolded: $BRIEF (skill-led ship; replace {TASK})"
 exit 0
 fi
 

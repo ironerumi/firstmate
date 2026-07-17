@@ -33,6 +33,7 @@ test_help_includes_entire_header() {
   local help
   help=$("$ROOT/bin/fm-brief.sh" --help)
   assert_contains "$help" "Refuses to overwrite an existing brief." "fm-brief.sh --help omitted its header terminator"
+  assert_contains "$help" "--skill-led writes a concise ship contract" "fm-brief.sh --help omitted the skill-led variant"
   pass "fm-brief.sh: --help renders the complete header"
 }
 
@@ -71,6 +72,41 @@ test_ship_modes_generate_clean_briefs() {
     assert_no_grep "EOF" "$brief" "$id: brief leaked a heredoc EOF marker (unterminated heredoc)"
   done
   pass "fm-brief.sh: no-mistakes/direct-PR/local-only briefs generate cleanly"
+}
+
+test_skill_led_ship_keeps_only_the_supervision_envelope() {
+  local home id brief lines status=0
+  home="$TMP_ROOT/skill-led-home"
+  mkdir -p "$home/data"
+  id="brief-skill-led-a4"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --skill-led >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_present "$brief" "skill-led brief was not scaffolded"
+  assert_grep "both resolve to this isolated task worktree" "$brief" \
+    "skill-led brief lost the isolation assertion"
+  assert_grep "Invoke the named skill exactly as written" "$brief" \
+    "skill-led brief did not delegate mechanics to the owning skill"
+  assert_grep "Do not stack a second workflow or independent review" "$brief" \
+    "skill-led brief allowed a duplicate workflow"
+  assert_grep "Never discard, reset, or hide unlanded work" "$brief" \
+    "skill-led brief lost unlanded-work protection"
+  assert_grep "Merge only when the task text explicitly grants that authority" "$brief" \
+    "skill-led brief lost explicit merge authority"
+  assert_grep "corrected document path, ready branch, or full green PR URL" "$brief" \
+    "skill-led brief did not require a concrete terminal artifact"
+  assert_no_grep "no-mistakes doctor" "$brief" \
+    "skill-led brief stacked the standard no-mistakes setup"
+  assert_no_grep "# Project memory" "$brief" \
+    "skill-led brief retained the standard ship template's optional mechanics"
+  lines=$(wc -l < "$brief" | tr -d ' ')
+  [ "$lines" -le 45 ] || fail "skill-led brief is not concise ($lines lines, expected at most 45)"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" bad-scout some-proj --scout --skill-led >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--skill-led combined with --scout must fail"
+  status=0
+  FM_HOME="$home" FM_SECONDMATE_CHARTER=x "$ROOT/bin/fm-brief.sh" bad-mate --secondmate --no-projects --skill-led >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--skill-led combined with --secondmate must fail"
+  pass "fm-brief.sh: skill-led ship keeps a concise supervision envelope"
 }
 
 test_faster_paths_use_configured_authority_without_stacked_review() {
@@ -344,6 +380,7 @@ test_scout_and_secondmate_scaffold() {
 test_script_parses
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
+test_skill_led_ship_keeps_only_the_supervision_envelope
 test_faster_paths_use_configured_authority_without_stacked_review
 test_no_mistakes_dod_wording
 test_ship_project_memory_wording
