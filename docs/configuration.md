@@ -23,6 +23,13 @@ Wake, watcher, away-mode, and X-specific state mechanics remain with their named
 `AGENTS.md` retains the run-once and read-once operator rules, lock-refusal safety, installation consent, and direct-report recovery boundaries because those facts apply at every session start.
 Ordinary dead-direct-report recovery is owned by `stuck-crewmate-recovery`, while persistent-secondmate recovery is owned by `secondmate-provisioning`.
 
+## Primary branch (config/primary-branch)
+
+The primary Firstmate checkout normally stays on the repository default branch so the worktree-tangle guard can detect accidental project work in that checkout.
+A local, gitignored `config/primary-branch` file may instead contain one existing local branch name intentionally maintained as the primary checkout.
+Absent, empty, invalid, or nonexistent branch values preserve the default-branch behavior.
+This setting changes only the expected branch used by the tangle guard and bootstrap diagnostic; it never creates, checks out, rebases, merges, pushes, or updates that branch.
+
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 
 The tracked `.tasks.toml` pins the default `tasks-axi` markdown backend to `data/backlog.md`, with `done_keep = 10` and an archive at `data/done-archive.md`.
