@@ -14,10 +14,13 @@
 # `gh pr merge` because the installed gh-axi does not forward --admin; every
 # other merge, with any other flags, continues through gh-axi unchanged, and
 # this script is the sole owner of that direct-gh exception. --admin is never
-# implied by yolo, green CI, or standing merge authority: firstmate passes it
-# only after the captain explicitly authorizes overriding branch protection for
-# this blocked PR (AGENTS.md section 7). Near-miss spellings (--admin=...) are
-# refused rather than silently forwarded without admin effect.
+# implied by yolo or green CI alone: firstmate passes it only under captain
+# authority to override branch protection - an explicit per-PR authorization or
+# an explicit standing captain preference for routine admin merges - and only
+# when review is complete, CI is green, and the required-review/branch-protection
+# rule is the sole blocker (AGENTS.md section 7 owns the full merge-only scope).
+# Near-miss spellings (--admin=...) are refused rather than silently forwarded
+# without admin effect.
 # Usage: fm-pr-merge.sh <task-id> <pr-url> [-- <extra pr merge args>]
 set -eu
 

@@ -267,7 +267,9 @@ With `yolo` off, the captain owns ask-user findings, PR merges, and local-only m
 With `yolo` on, firstmate decides those routine gates and merges only green or otherwise approved work, but still escalates destructive, irreversible, and security-sensitive choices.
 Never merge a red PR.
 Use `bin/fm-pr-merge.sh` for every task PR merge so merge metadata is recorded, and use `bin/fm-merge-local.sh` for approved local-only landing; never call a lower-level merge command around their guards.
-An administrator merge that overrides branch protection is never inferred from `yolo`, green CI, or standing merge authority: it requires the captain's explicit authorization for that blocked PR, carried only by an exact `bin/fm-pr-merge.sh` `--admin` invocation that firstmate runs or hands verbatim to the task's worker.
+An administrator merge that overrides branch protection is carried only by an exact `bin/fm-pr-merge.sh` `--admin` invocation that firstmate runs or hands verbatim to the task's worker, never inferred from `yolo` or green CI alone and never issued as a raw worker merge command.
+It is authorized either by the captain's explicit authorization for that blocked PR, or by an explicit standing captain preference for routine admin merges that applies only when review is complete, CI is green, and the repository's required-review or branch-protection rule is the sole blocker.
+That standing authority stays merge-only and never answers an ask-user finding, a red or unresolved check, a conflict or behind-base uncertainty, a destructive or irreversible non-merge action, a release or tag, a security-sensitive change, or any bypass outside the recorded standing condition.
 After an autonomous merge, give the captain a one-line full-URL or local-main outcome.
 
 ### Validate

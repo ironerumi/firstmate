@@ -76,8 +76,10 @@ test_ship_modes_generate_clean_briefs() {
 
 # PR-mode ship briefs must keep the default merge prohibition while carrying
 # the one narrowly authorized exception: an exact firstmate-issued
-# bin/fm-pr-merge.sh command naming this task. Local-only briefs stay free of
-# any PR merge channel.
+# bin/fm-pr-merge.sh command naming this task. The exception must admit both
+# accepted authority forms - an explicit per-PR authorization and an explicit
+# standing preference - without weakening the no-self-selection prohibition.
+# Local-only briefs stay free of any PR merge channel.
 test_ship_briefs_carry_guarded_merge_exception() {
   local home id proj brief
   home="$TMP_ROOT/merge-exception-home"
@@ -97,6 +99,8 @@ test_ship_briefs_carry_guarded_merge_exception() {
       "$id: brief exception does not name the task and canonical PR command"
     assert_grep 'command that firstmate itself sends you; run it verbatim' "$brief" \
       "$id: brief exception is not limited to a firstmate-issued exact command"
+    assert_grep 'a per-PR authorization or an explicit standing preference' "$brief" \
+      "$id: brief exception does not admit both accepted authority forms"
     assert_grep 'branch protection the only blocker' "$brief" \
       "$id: brief exception lost the authorization conditions"
   done
