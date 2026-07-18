@@ -54,6 +54,20 @@ fm_primary_expected_branch() {  # <root>
   fm_default_branch "$root"
 }
 
+# Landing-branch resolution for the guarded local-only landing paths
+# (bin/fm-merge-local.sh and bin/fm-teardown.sh's local-only landed check):
+# the home's config/primary-branch applies only when <proj> IS this home's
+# primary Firstmate checkout, proven by physical-path identity with <home>.
+# Echoes the branch and returns 0 for that one case; returns 1 for every other
+# project so callers keep their ordinary origin-default resolution unchanged.
+fm_home_primary_landing_branch() {  # <home> <proj>
+  local home=$1 proj=$2 home_real proj_real
+  home_real=$(cd "$home" 2>/dev/null && pwd -P) || return 1
+  proj_real=$(cd "$proj" 2>/dev/null && pwd -P) || return 1
+  [ "$home_real" = "$proj_real" ] || return 1
+  fm_primary_expected_branch "$proj"
+}
+
 # If the git checkout at <root> is tangled - on a NAMED branch that is not its
 # intentionally configured or default branch - echo the offending branch name and return 0. For every healthy
 # state (not a git work tree, detached HEAD, or already on the default branch)

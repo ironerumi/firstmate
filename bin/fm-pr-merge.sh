@@ -2,12 +2,23 @@
 # Merge a task's PR after recording pr= and any available pr_head= through
 # bin/fm-pr-check.sh, so teardown can verify landed work after squash merges.
 # The full canonical GitHub PR URL is parsed by bin/fm-pr-lib.sh and the derived
-# owner/repository and PR number are passed to gh-axi as separate arguments.
+# owner/repository and PR number are passed to the merge command as separate
+# arguments.
 #
 # Merge method defaults to --squash when the caller passes none of --squash,
 # --merge, --rebase, or --method after the optional -- separator. Extra args
 # must not include --repo or -R because the repository comes only from the URL.
-# Usage: fm-pr-merge.sh <task-id> <pr-url> [-- <extra gh-axi pr merge args>]
+#
+# Admin override: the exact token --admin after -- is the one captain-authorized
+# branch-protection override. It routes this single merge through plain
+# `gh pr merge` because the installed gh-axi does not forward --admin; every
+# other merge, with any other flags, continues through gh-axi unchanged, and
+# this script is the sole owner of that direct-gh exception. --admin is never
+# implied by yolo, green CI, or standing merge authority: firstmate passes it
+# only after the captain explicitly authorizes overriding branch protection for
+# this blocked PR (AGENTS.md section 7). Near-miss spellings (--admin=...) are
+# refused rather than silently forwarded without admin effect.
+# Usage: fm-pr-merge.sh <task-id> <pr-url> [-- <extra pr merge args>]
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,7 +68,31 @@ reject_repo_overrides() {
   done
 }
 
+# Only the exact --admin token is the captain-authorized admin override (see
+# header); near-miss spellings are refused so an intended override can never be
+# silently forwarded to gh-axi and dropped without admin effect.
+reject_admin_variants() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --admin=*)
+        echo "error: pass exactly --admin for a captain-authorized admin merge" >&2
+        return 1
+        ;;
+    esac
+  done
+}
+
+caller_has_admin() {
+  local arg
+  for arg in "$@"; do
+    [ "$arg" = --admin ] && return 0
+  done
+  return 1
+}
+
 reject_repo_overrides "$@" || exit 1
+reject_admin_variants "$@" || exit 1
 
 # Task-derived paths are constructed only after the canonical ID validation.
 META="$STATE/$ID.meta"
@@ -77,4 +112,8 @@ if ! caller_has_merge_method "$@"; then
   merge_args=(--squash)
 fi
 
-gh-axi pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" "${merge_args[@]+"${merge_args[@]}"}" "$@"
+merge_cli=gh-axi
+if caller_has_admin "$@"; then
+  merge_cli=gh
+fi
+"$merge_cli" pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" "${merge_args[@]+"${merge_args[@]}"}" "$@"

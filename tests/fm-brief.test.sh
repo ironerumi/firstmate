@@ -74,6 +74,41 @@ test_ship_modes_generate_clean_briefs() {
   pass "fm-brief.sh: no-mistakes/direct-PR/local-only briefs generate cleanly"
 }
 
+# PR-mode ship briefs must keep the default merge prohibition while carrying
+# the one narrowly authorized exception: an exact firstmate-issued
+# bin/fm-pr-merge.sh command naming this task. Local-only briefs stay free of
+# any PR merge channel.
+test_ship_briefs_carry_guarded_merge_exception() {
+  local home id proj brief
+  home="$TMP_ROOT/merge-exception-home"
+  write_registry "$home"
+  for id_proj in "brief-merge-nm-b1:no-registry-proj" "brief-merge-dp-b2:direct-proj"; do
+    id=${id_proj%%:*}
+    proj=${id_proj##*:}
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" >/dev/null 2>&1
+    brief="$home/data/$id/brief.md"
+    assert_present "$brief" "$id: brief was not scaffolded"
+    assert_grep 'Never merge a PR on your own' "$brief" \
+      "$id: brief lost the default merge prohibition"
+    # shellcheck disable=SC2016  # Literal backtick-wrapped brief text is the expected value.
+    assert_grep 'raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden' "$brief" \
+      "$id: brief lost the forbidden merge channels"
+    assert_grep "bin/fm-pr-merge.sh $id <PR url>" "$brief" \
+      "$id: brief exception does not name the task and canonical PR command"
+    assert_grep 'command that firstmate itself sends you; run it verbatim' "$brief" \
+      "$id: brief exception is not limited to a firstmate-issued exact command"
+    assert_grep 'branch protection the only blocker' "$brief" \
+      "$id: brief exception lost the authorization conditions"
+  done
+  id='brief-merge-lo-b3'
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" local-proj >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_no_grep 'fm-pr-merge.sh' "$brief" "local-only brief gained a PR merge exception"
+  assert_grep 'Never push to any remote and never open a PR' "$brief" \
+    "local-only brief lost its no-remote rule"
+  pass "fm-brief.sh: ship briefs keep the default merge prohibition with the narrow firstmate-issued exception"
+}
+
 test_skill_led_ship_keeps_only_the_supervision_envelope() {
   local home id brief lines status=0
   home="$TMP_ROOT/skill-led-home"
@@ -380,6 +415,7 @@ test_scout_and_secondmate_scaffold() {
 test_script_parses
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
+test_ship_briefs_carry_guarded_merge_exception
 test_skill_led_ship_keeps_only_the_supervision_envelope
 test_faster_paths_use_configured_authority_without_stacked_review
 test_no_mistakes_dod_wording

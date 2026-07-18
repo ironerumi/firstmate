@@ -28,7 +28,8 @@ Ordinary dead-direct-report recovery is owned by `stuck-crewmate-recovery`, whil
 The primary Firstmate checkout normally stays on the repository default branch so the worktree-tangle guard can detect accidental project work in that checkout.
 A local, gitignored `config/primary-branch` file may instead contain one existing local branch name intentionally maintained as the primary checkout.
 Absent, empty, invalid, or nonexistent branch values preserve the default-branch behavior.
-This setting changes only the expected branch used by the tangle guard and bootstrap diagnostic; it never creates, checks out, rebases, merges, pushes, or updates that branch.
+This setting changes the expected branch used by the tangle guard and bootstrap diagnostic, and the landing branch the guarded local-only paths (`bin/fm-merge-local.sh` and `bin/fm-teardown.sh`'s landed-work check) use when the project being landed is this home's own primary Firstmate checkout.
+Ordinary registered projects always keep origin-default resolution, and the setting itself never creates, checks out, rebases, pushes, or updates that branch.
 
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 

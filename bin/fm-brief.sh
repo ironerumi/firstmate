@@ -323,7 +323,11 @@ EOF
 case "$MODE" in
   direct-PR)
     SETUP2=""
-    RULE1='1. Never push to the default branch (push only your `fm/'"$ID"'` branch). Never merge a PR.'
+    # shellcheck disable=SC2016  # single quotes are deliberate: the backtick-wrapped commands are literal brief text; only the '"$ID"' break-outs interpolate.
+    RULE1='1. Never push to the default branch (push only your `fm/'"$ID"'` branch). Never merge a PR on your own:
+   raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden.
+   Sole exception: one exact `bin/fm-pr-merge.sh '"$ID"' <PR url> ...` command that firstmate itself sends you; run it verbatim, changing nothing.
+   Firstmate sends it only after the captain authorizes that merge with review complete, CI green, and branch protection the only blocker.'
     DOD=$(cat <<EOF
 # Definition of done
 This project ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
@@ -349,7 +353,11 @@ EOF
   *)  # no-mistakes (default)
     SETUP2="
 2. Run \`no-mistakes doctor\`; if it reports the repo is not initialized here, run \`no-mistakes init\`."
-    RULE1='1. Never push to the default branch. Never merge a PR.'
+    # shellcheck disable=SC2016  # single quotes are deliberate: the backtick-wrapped commands are literal brief text; only the '"$ID"' break-out interpolates.
+    RULE1='1. Never push to the default branch. Never merge a PR on your own:
+   raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden.
+   Sole exception: one exact `bin/fm-pr-merge.sh '"$ID"' <PR url> ...` command that firstmate itself sends you; run it verbatim, changing nothing.
+   Firstmate sends it only after the captain authorizes that merge with review complete, CI green, and branch protection the only blocker.'
     DOD=$(cat <<EOF
 # Definition of done
 The task is complete only when committed on your branch.
