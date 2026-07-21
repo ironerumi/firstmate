@@ -237,6 +237,7 @@ Load `diagnostic-reasoning` before scoping a reported bug and before acting on a
 Classify work as dispatchable when it does not overlap work under way, or queued and blocked when it touches the same project subsystem or depends on unlanded work.
 Dispatch independent work immediately with no concurrency cap, serialize coarse overlaps, and record blockers durably.
 Write the task-specific brief under section 11 before spawning.
+For a captain-initiated dispatch wave, scaffold every brief in that wave with `--source firstmate --batch <one-shared-id-per-wave>`.
 
 ### Dispatch and supervision handoff
 

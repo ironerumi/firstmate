@@ -7,7 +7,9 @@
 # when the task genuinely deviates (e.g. working an existing external PR instead
 # of shipping a new one).
 # Usage: fm-brief.sh <task-id> <repo-name> [--scout|--skill-led] [--herdr-lab]
+#                     [--source firstmate|human] [--batch <id>]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
+#                     [--source firstmate|human] [--batch <id>]
 #   --scout writes the scout contract instead: the deliverable is a report at
 #   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is scratch.
 #   --skill-led writes a concise ship contract for an exact skill invocation that
@@ -24,6 +26,13 @@
 #   omitting both still fails loudly so an accidental omission is never silent.
 #   Set FM_SECONDMATE_CHARTER='<charter>' to fill the charter text.
 #   Set FM_SECONDMATE_SCOPE='<scope>' to write a routing scope distinct from the charter text.
+#   --source firstmate|human stamps the generated brief's provenance line for the
+#   kaizen batch scanner (default human: misclassification undercounts firstmate,
+#   never pollutes it). --batch <id> stamps the shared batch grouping id for the
+#   same scanner (default sentinel "unknown" when omitted). Every generated
+#   variant (ship, scout, secondmate, and any skill-led ship template) carries
+#   exactly one `source:` + `batch_id:` pair. Malformed or missing option values
+#   are rejected before any file is written.
 #   --herdr-lab is mandatory when the task will issue Herdr lifecycle commands.
 #   It adds the hard isolation contract backed by bin/fm-herdr-lab.sh.
 #   The flag must be explicit because {TASK} is filled after scaffolding and the
@@ -77,15 +86,32 @@ KIND=ship
 SKILL_LED=0
 HERDR_LAB=0
 NO_PROJECTS=0
+SOURCE=human
+BATCH=unknown
 POS=()
-for a in "$@"; do
-  case "$a" in
-    --scout) KIND=scout ;;
-    --skill-led) SKILL_LED=1 ;;
-    --secondmate) KIND=secondmate ;;
-    --herdr-lab) HERDR_LAB=1 ;;
-    --no-projects) NO_PROJECTS=1 ;;
-    *) POS+=("$a") ;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --scout) KIND=scout; shift ;;
+    --skill-led) SKILL_LED=1; shift ;;
+    --secondmate) KIND=secondmate; shift ;;
+    --herdr-lab) HERDR_LAB=1; shift ;;
+    --no-projects) NO_PROJECTS=1; shift ;;
+    --source)
+      [ $# -ge 2 ] || { echo "error: --source requires a value (firstmate|human)" >&2; exit 1; }
+      SOURCE=$2
+      case "$SOURCE" in
+        firstmate|human) ;;
+        *) echo "error: --source must be 'firstmate' or 'human' (got: $SOURCE)" >&2; exit 1 ;;
+      esac
+      shift 2
+      ;;
+    --batch)
+      [ $# -ge 2 ] || { echo "error: --batch requires a value" >&2; exit 1; }
+      BATCH=$2
+      [ -n "$BATCH" ] || { echo "error: --batch value must not be empty" >&2; exit 1; }
+      shift 2
+      ;;
+    *) POS+=("$1"); shift ;;
   esac
 done
 ID=${POS[0]}
@@ -140,6 +166,9 @@ else
 fi
 cat > "$BRIEF" <<EOF
 You are a persistent second mate managed by the main firstmate. Work on your own; do not wait for a human.
+
+source: $SOURCE
+batch_id: $BATCH
 
 # Charter
 $SECONDMATE_CHARTER
@@ -235,6 +264,9 @@ if [ "$KIND" = scout ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
 
+source: $SOURCE
+batch_id: $BATCH
+
 # Task
 {TASK}
 
@@ -282,6 +314,9 @@ fi
 if [ "$SKILL_LED" -eq 1 ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate.
+
+source: $SOURCE
+batch_id: $BATCH
 
 # Task
 {TASK}
@@ -381,6 +416,9 @@ esac
 
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
+
+source: $SOURCE
+batch_id: $BATCH
 
 # Task
 {TASK}

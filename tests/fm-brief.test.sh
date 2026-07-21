@@ -416,6 +416,109 @@ test_scout_and_secondmate_scaffold() {
   pass "fm-brief: scout and secondmate code paths still scaffold well-formed briefs"
 }
 
+# Provenance stamping (--source/--batch): defaults, explicit values, and the
+# batch sentinel. Every scaffolded variant carries exactly one well-formed
+# `source:` + `batch_id:` pair for the kaizen batch scanner.
+test_provenance_defaults_to_human_and_unknown() {
+  local home id brief
+  home="$TMP_ROOT/provenance-default-home"
+  mkdir -p "$home/data"
+  id="brief-provenance-default-e1"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_present "$brief" "brief was not scaffolded"
+  assert_grep "source: human" "$brief" \
+    "ship brief without --source must default to source: human"
+  assert_grep "batch_id: unknown" "$brief" \
+    "ship brief without --batch must default to the unknown sentinel"
+  pass "fm-brief.sh: provenance defaults to source: human / batch_id: unknown"
+}
+
+test_provenance_explicit_values_stamp_ship_brief() {
+  local home id brief
+  home="$TMP_ROOT/provenance-explicit-home"
+  mkdir -p "$home/data"
+  id="brief-provenance-explicit-e2"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --source firstmate --batch wave-42 >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_present "$brief" "brief was not scaffolded"
+  assert_grep "source: firstmate" "$brief" \
+    "ship brief did not stamp explicit --source firstmate"
+  assert_grep "batch_id: wave-42" "$brief" \
+    "ship brief did not stamp explicit --batch wave-42"
+  pass "fm-brief.sh: explicit --source/--batch stamp the ship brief"
+}
+
+test_provenance_stamps_all_variants() {
+  local home brief
+  home="$TMP_ROOT/provenance-variants-home"
+  mkdir -p "$home/data"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-ship-e3 alpha --source firstmate --batch wave-e3 >/dev/null 2>&1
+  brief="$home/data/prov-ship-e3/brief.md"
+  assert_grep "source: firstmate" "$brief" "ship variant missing source: stamp"
+  assert_grep "batch_id: wave-e3" "$brief" "ship variant missing batch_id: stamp"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-scout-e3 alpha --scout --source firstmate --batch wave-e3 >/dev/null 2>&1
+  brief="$home/data/prov-scout-e3/brief.md"
+  assert_grep "source: firstmate" "$brief" "scout variant missing source: stamp"
+  assert_grep "batch_id: wave-e3" "$brief" "scout variant missing batch_id: stamp"
+
+  FM_HOME="$home" FM_SECONDMATE_CHARTER='ops' \
+    "$ROOT/bin/fm-brief.sh" prov-sm-e3 --secondmate --no-projects --source firstmate --batch wave-e3 >/dev/null 2>&1
+  brief="$home/data/prov-sm-e3/brief.md"
+  assert_grep "source: firstmate" "$brief" "secondmate variant missing source: stamp"
+  assert_grep "batch_id: wave-e3" "$brief" "secondmate variant missing batch_id: stamp"
+
+  pass "fm-brief.sh: ship, scout, and secondmate variants all stamp source/batch_id"
+}
+
+test_provenance_validation_rejects_malformed_input() {
+  local home status
+  home="$TMP_ROOT/provenance-validation-home"
+  mkdir -p "$home/data"
+
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-bad-source alpha --source bogus >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--source with an invalid value must fail"
+  assert_absent "$home/data/prov-bad-source/brief.md" "rejected --source still wrote a brief"
+
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-missing-source alpha --source >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--source with no value must fail"
+  assert_absent "$home/data/prov-missing-source/brief.md" "value-less --source still wrote a brief"
+
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-missing-batch alpha --batch >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--batch with no value must fail"
+  assert_absent "$home/data/prov-missing-batch/brief.md" "value-less --batch still wrote a brief"
+
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-empty-batch alpha --batch "" >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--batch with an empty value must fail"
+  assert_absent "$home/data/prov-empty-batch/brief.md" "empty --batch still wrote a brief"
+
+  pass "fm-brief.sh: malformed or missing --source/--batch values are rejected"
+}
+
+test_provenance_preserves_existing_template_body() {
+  local home id brief
+  home="$TMP_ROOT/provenance-template-home"
+  mkdir -p "$home/data"
+  id="brief-provenance-template-e5"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --source firstmate --batch wave-e5 >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_present "$brief" "brief was not scaffolded"
+  assert_grep "# Definition of done" "$brief" "provenance flags regressed the Definition of done section"
+  assert_grep "{TASK}" "$brief" "provenance flags regressed the {TASK} placeholder"
+  assert_grep "# Herdr lifecycle declaration - NOT ENABLED" "$brief" \
+    "provenance flags regressed the unguarded Herdr declaration"
+  assert_grep "mid-task \`working:\` line (including setup complete) is nonterminal" "$brief" \
+    "provenance flags regressed the nonterminal working:/setup-complete gate protection"
+  assert_no_grep "EOF" "$brief" "provenance flags left a leaked heredoc EOF marker"
+  pass "fm-brief.sh: --source/--batch stamping does not regress the existing template body"
+}
+
 test_script_parses
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
@@ -432,3 +535,8 @@ test_secondmate_no_projects_charter
 test_pause_verb_override_renders_all_brief_scaffolds
 test_scout_and_secondmate_load_decision_hold_policy
 test_scout_and_secondmate_scaffold
+test_provenance_defaults_to_human_and_unknown
+test_provenance_explicit_values_stamp_ship_brief
+test_provenance_stamps_all_variants
+test_provenance_validation_rejects_malformed_input
+test_provenance_preserves_existing_template_body
