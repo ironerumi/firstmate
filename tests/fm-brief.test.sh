@@ -470,7 +470,12 @@ test_provenance_stamps_all_variants() {
   assert_grep "source: firstmate" "$brief" "secondmate variant missing source: stamp"
   assert_grep "batch_id: wave-e3" "$brief" "secondmate variant missing batch_id: stamp"
 
-  pass "fm-brief.sh: ship, scout, and secondmate variants all stamp source/batch_id"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-skill-led-e3 alpha --skill-led --source firstmate --batch wave-e3 >/dev/null 2>&1
+  brief="$home/data/prov-skill-led-e3/brief.md"
+  assert_grep "source: firstmate" "$brief" "skill-led variant missing source: stamp"
+  assert_grep "batch_id: wave-e3" "$brief" "skill-led variant missing batch_id: stamp"
+
+  pass "fm-brief.sh: ship, scout, secondmate, and skill-led variants all stamp source/batch_id"
 }
 
 test_provenance_validation_rejects_malformed_input() {
@@ -513,8 +518,10 @@ test_provenance_preserves_existing_template_body() {
   assert_grep "{TASK}" "$brief" "provenance flags regressed the {TASK} placeholder"
   assert_grep "# Herdr lifecycle declaration - NOT ENABLED" "$brief" \
     "provenance flags regressed the unguarded Herdr declaration"
-  assert_grep "mid-task \`working:\` line (including setup complete) is nonterminal" "$brief" \
-    "provenance flags regressed the nonterminal working:/setup-complete gate protection"
+  assert_grep "# Project memory" "$brief" \
+    "provenance flags regressed the project-memory section"
+  assert_grep "Never merge a PR on your own" "$brief" \
+    "provenance flags regressed the default merge prohibition"
   assert_no_grep "EOF" "$brief" "provenance flags left a leaked heredoc EOF marker"
   pass "fm-brief.sh: --source/--batch stamping does not regress the existing template body"
 }
