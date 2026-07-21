@@ -24,7 +24,9 @@
 # Uncommitted changes are never landed.
 # local-only projects additionally accept work merged into the local default
 # branch (firstmate performs that merge after configured approval) as a fallback
-# for the common case where there is no remote at all.
+# for the common case where there is no remote at all. When the project IS this
+# home's primary Firstmate checkout, a valid config/primary-branch
+# (docs/configuration.md) names that landing branch instead of origin's default.
 # Scout tasks (kind=scout in meta) carve out of that check: their worktree is
 # declared scratch and the report at data/<task-id>/report.md is the work
 # product. Teardown proceeds only once the report exists and the shared
@@ -106,6 +108,8 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
 . "$SCRIPT_DIR/fm-pr-lib.sh"
+# shellcheck source=bin/fm-tangle-lib.sh
+. "$SCRIPT_DIR/fm-tangle-lib.sh"
 if [ "$#" -lt 1 ] || ! fm_task_id_path_safe "$1"; then
   echo "error: invalid teardown request" >&2
   exit 2
@@ -674,7 +678,9 @@ validate_worktree_teardown_safety() {
   unpushed=$(printf '%s\n' "$unpushed_raw" | head -5)
 
   if [ -n "$unpushed" ] && [ "$MODE" = local-only ]; then
-    DEFAULT=$(default_branch) || { echo "REFUSED: cannot determine default branch for $PROJ; expected origin/HEAD, main, or master." >&2; return 1; }
+    DEFAULT=$(fm_home_primary_landing_branch "$FM_HOME" "$PROJ") \
+      || DEFAULT=$(default_branch) \
+      || { echo "REFUSED: cannot determine default branch for $PROJ; expected origin/HEAD, main, or master." >&2; return 1; }
     if ! unmerged_raw=$(git -C "$WT" log --oneline HEAD --not "$DEFAULT" -- 2>/dev/null); then
       if worktree_safety_blocked_by_lock "commits not on $DEFAULT"; then
         return "$TEARDOWN_WORKTREE_SAFETY_LOCK_BLOCKED"

@@ -33,6 +33,7 @@ test_help_includes_entire_header() {
   local help
   help=$("$ROOT/bin/fm-brief.sh" --help)
   assert_contains "$help" "Refuses to overwrite an existing brief." "fm-brief.sh --help omitted its header terminator"
+  assert_contains "$help" "--skill-led writes a concise ship contract" "fm-brief.sh --help omitted the skill-led variant"
   pass "fm-brief.sh: --help renders the complete header"
 }
 
@@ -71,6 +72,80 @@ test_ship_modes_generate_clean_briefs() {
     assert_no_grep "EOF" "$brief" "$id: brief leaked a heredoc EOF marker (unterminated heredoc)"
   done
   pass "fm-brief.sh: no-mistakes/direct-PR/local-only briefs generate cleanly"
+}
+
+# PR-mode ship briefs must keep the default merge prohibition while carrying
+# the one narrowly authorized exception: an exact firstmate-issued
+# bin/fm-pr-merge.sh command naming this task. The exception must admit both
+# accepted authority forms - an explicit per-PR authorization and an explicit
+# standing preference - without weakening the no-self-selection prohibition.
+# Local-only briefs stay free of any PR merge channel.
+test_ship_briefs_carry_guarded_merge_exception() {
+  local home id proj brief
+  home="$TMP_ROOT/merge-exception-home"
+  write_registry "$home"
+  for id_proj in "brief-merge-nm-b1:no-registry-proj" "brief-merge-dp-b2:direct-proj"; do
+    id=${id_proj%%:*}
+    proj=${id_proj##*:}
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" >/dev/null 2>&1
+    brief="$home/data/$id/brief.md"
+    assert_present "$brief" "$id: brief was not scaffolded"
+    assert_grep 'Never merge a PR on your own' "$brief" \
+      "$id: brief lost the default merge prohibition"
+    # shellcheck disable=SC2016  # Literal backtick-wrapped brief text is the expected value.
+    assert_grep 'raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden' "$brief" \
+      "$id: brief lost the forbidden merge channels"
+    assert_grep "bin/fm-pr-merge.sh $id <PR url>" "$brief" \
+      "$id: brief exception does not name the task and canonical PR command"
+    assert_grep 'command that firstmate itself sends you; run it verbatim' "$brief" \
+      "$id: brief exception is not limited to a firstmate-issued exact command"
+    assert_grep 'a per-PR authorization or an explicit standing preference' "$brief" \
+      "$id: brief exception does not admit both accepted authority forms"
+    assert_grep 'branch protection the only blocker' "$brief" \
+      "$id: brief exception lost the authorization conditions"
+  done
+  id='brief-merge-lo-b3'
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" local-proj >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_no_grep 'fm-pr-merge.sh' "$brief" "local-only brief gained a PR merge exception"
+  assert_grep 'Never push to any remote and never open a PR' "$brief" \
+    "local-only brief lost its no-remote rule"
+  pass "fm-brief.sh: ship briefs keep the default merge prohibition with the narrow firstmate-issued exception"
+}
+
+test_skill_led_ship_keeps_only_the_supervision_envelope() {
+  local home id brief lines status=0
+  home="$TMP_ROOT/skill-led-home"
+  mkdir -p "$home/data"
+  id="brief-skill-led-a4"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --skill-led >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_present "$brief" "skill-led brief was not scaffolded"
+  assert_grep "both resolve to this isolated task worktree" "$brief" \
+    "skill-led brief lost the isolation assertion"
+  assert_grep "Invoke the named skill exactly as written" "$brief" \
+    "skill-led brief did not delegate mechanics to the owning skill"
+  assert_grep "Do not stack a second workflow or independent review" "$brief" \
+    "skill-led brief allowed a duplicate workflow"
+  assert_grep "Never discard, reset, or hide unlanded work" "$brief" \
+    "skill-led brief lost unlanded-work protection"
+  assert_grep "Merge only when the task text explicitly grants that authority" "$brief" \
+    "skill-led brief lost explicit merge authority"
+  assert_grep "corrected document path, ready branch, or full green PR URL" "$brief" \
+    "skill-led brief did not require a concrete terminal artifact"
+  assert_no_grep "no-mistakes doctor" "$brief" \
+    "skill-led brief stacked the standard no-mistakes setup"
+  assert_no_grep "# Project memory" "$brief" \
+    "skill-led brief retained the standard ship template's optional mechanics"
+  lines=$(wc -l < "$brief" | tr -d ' ')
+  [ "$lines" -le 45 ] || fail "skill-led brief is not concise ($lines lines, expected at most 45)"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" bad-scout some-proj --scout --skill-led >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--skill-led combined with --scout must fail"
+  status=0
+  FM_HOME="$home" FM_SECONDMATE_CHARTER=x "$ROOT/bin/fm-brief.sh" bad-mate --secondmate --no-projects --skill-led >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--skill-led combined with --secondmate must fail"
+  pass "fm-brief.sh: skill-led ship keeps a concise supervision envelope"
 }
 
 test_faster_paths_use_configured_authority_without_stacked_review() {
@@ -341,9 +416,121 @@ test_scout_and_secondmate_scaffold() {
   pass "fm-brief: scout and secondmate code paths still scaffold well-formed briefs"
 }
 
+# Provenance stamping (--source/--batch): defaults, explicit values, and the
+# batch sentinel. Every scaffolded variant carries exactly one well-formed
+# `source:` + `batch_id:` pair for the kaizen batch scanner.
+test_provenance_defaults_to_human_and_unknown() {
+  local home id brief
+  home="$TMP_ROOT/provenance-default-home"
+  mkdir -p "$home/data"
+  id="brief-provenance-default-e1"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_present "$brief" "brief was not scaffolded"
+  assert_grep "source: human" "$brief" \
+    "ship brief without --source must default to source: human"
+  assert_grep "batch_id: unknown" "$brief" \
+    "ship brief without --batch must default to the unknown sentinel"
+  pass "fm-brief.sh: provenance defaults to source: human / batch_id: unknown"
+}
+
+test_provenance_explicit_values_stamp_ship_brief() {
+  local home id brief
+  home="$TMP_ROOT/provenance-explicit-home"
+  mkdir -p "$home/data"
+  id="brief-provenance-explicit-e2"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --source firstmate --batch wave-42 >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_present "$brief" "brief was not scaffolded"
+  assert_grep "source: firstmate" "$brief" \
+    "ship brief did not stamp explicit --source firstmate"
+  assert_grep "batch_id: wave-42" "$brief" \
+    "ship brief did not stamp explicit --batch wave-42"
+  pass "fm-brief.sh: explicit --source/--batch stamp the ship brief"
+}
+
+test_provenance_stamps_all_variants() {
+  local home brief
+  home="$TMP_ROOT/provenance-variants-home"
+  mkdir -p "$home/data"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-ship-e3 alpha --source firstmate --batch wave-e3 >/dev/null 2>&1
+  brief="$home/data/prov-ship-e3/brief.md"
+  assert_grep "source: firstmate" "$brief" "ship variant missing source: stamp"
+  assert_grep "batch_id: wave-e3" "$brief" "ship variant missing batch_id: stamp"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-scout-e3 alpha --scout --source firstmate --batch wave-e3 >/dev/null 2>&1
+  brief="$home/data/prov-scout-e3/brief.md"
+  assert_grep "source: firstmate" "$brief" "scout variant missing source: stamp"
+  assert_grep "batch_id: wave-e3" "$brief" "scout variant missing batch_id: stamp"
+
+  FM_HOME="$home" FM_SECONDMATE_CHARTER='ops' \
+    "$ROOT/bin/fm-brief.sh" prov-sm-e3 --secondmate --no-projects --source firstmate --batch wave-e3 >/dev/null 2>&1
+  brief="$home/data/prov-sm-e3/brief.md"
+  assert_grep "source: firstmate" "$brief" "secondmate variant missing source: stamp"
+  assert_grep "batch_id: wave-e3" "$brief" "secondmate variant missing batch_id: stamp"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-skill-led-e3 alpha --skill-led --source firstmate --batch wave-e3 >/dev/null 2>&1
+  brief="$home/data/prov-skill-led-e3/brief.md"
+  assert_grep "source: firstmate" "$brief" "skill-led variant missing source: stamp"
+  assert_grep "batch_id: wave-e3" "$brief" "skill-led variant missing batch_id: stamp"
+
+  pass "fm-brief.sh: ship, scout, secondmate, and skill-led variants all stamp source/batch_id"
+}
+
+test_provenance_validation_rejects_malformed_input() {
+  local home status
+  home="$TMP_ROOT/provenance-validation-home"
+  mkdir -p "$home/data"
+
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-bad-source alpha --source bogus >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--source with an invalid value must fail"
+  assert_absent "$home/data/prov-bad-source/brief.md" "rejected --source still wrote a brief"
+
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-missing-source alpha --source >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--source with no value must fail"
+  assert_absent "$home/data/prov-missing-source/brief.md" "value-less --source still wrote a brief"
+
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-missing-batch alpha --batch >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--batch with no value must fail"
+  assert_absent "$home/data/prov-missing-batch/brief.md" "value-less --batch still wrote a brief"
+
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-empty-batch alpha --batch "" >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--batch with an empty value must fail"
+  assert_absent "$home/data/prov-empty-batch/brief.md" "empty --batch still wrote a brief"
+
+  pass "fm-brief.sh: malformed or missing --source/--batch values are rejected"
+}
+
+test_provenance_preserves_existing_template_body() {
+  local home id brief
+  home="$TMP_ROOT/provenance-template-home"
+  mkdir -p "$home/data"
+  id="brief-provenance-template-e5"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --source firstmate --batch wave-e5 >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_present "$brief" "brief was not scaffolded"
+  assert_grep "# Definition of done" "$brief" "provenance flags regressed the Definition of done section"
+  assert_grep "{TASK}" "$brief" "provenance flags regressed the {TASK} placeholder"
+  assert_grep "# Herdr lifecycle declaration - NOT ENABLED" "$brief" \
+    "provenance flags regressed the unguarded Herdr declaration"
+  assert_grep "# Project memory" "$brief" \
+    "provenance flags regressed the project-memory section"
+  assert_grep "Never merge a PR on your own" "$brief" \
+    "provenance flags regressed the default merge prohibition"
+  assert_no_grep "EOF" "$brief" "provenance flags left a leaked heredoc EOF marker"
+  pass "fm-brief.sh: --source/--batch stamping does not regress the existing template body"
+}
+
 test_script_parses
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
+test_ship_briefs_carry_guarded_merge_exception
+test_skill_led_ship_keeps_only_the_supervision_envelope
 test_faster_paths_use_configured_authority_without_stacked_review
 test_no_mistakes_dod_wording
 test_ship_project_memory_wording
@@ -355,3 +542,8 @@ test_secondmate_no_projects_charter
 test_pause_verb_override_renders_all_brief_scaffolds
 test_scout_and_secondmate_load_decision_hold_policy
 test_scout_and_secondmate_scaffold
+test_provenance_defaults_to_human_and_unknown
+test_provenance_explicit_values_stamp_ship_brief
+test_provenance_stamps_all_variants
+test_provenance_validation_rejects_malformed_input
+test_provenance_preserves_existing_template_body

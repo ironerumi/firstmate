@@ -6,10 +6,15 @@
 # description, acceptance criteria, and context, and may adjust other sections
 # when the task genuinely deviates (e.g. working an existing external PR instead
 # of shipping a new one).
-# Usage: fm-brief.sh <task-id> <repo-name> [--scout] [--herdr-lab]
+# Usage: fm-brief.sh <task-id> <repo-name> [--scout|--skill-led] [--herdr-lab]
+#                     [--source firstmate|human] [--batch <id>]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
+#                     [--source firstmate|human] [--batch <id>]
 #   --scout writes the scout contract instead: the deliverable is a report at
 #   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is scratch.
+#   --skill-led writes a concise ship contract for an exact skill invocation that
+#   owns implementation, review, tests, and delivery mechanics. Firstmate keeps
+#   only isolation, status, unlanded-work, and merge-authority safeguards around it.
 #   --secondmate writes a persistent secondmate charter. The project list
 #   is cloned into the secondmate home, while the natural-language scope
 #   tells the main firstmate when to route work there; routine churn stays in its own home;
@@ -21,6 +26,13 @@
 #   omitting both still fails loudly so an accidental omission is never silent.
 #   Set FM_SECONDMATE_CHARTER='<charter>' to fill the charter text.
 #   Set FM_SECONDMATE_SCOPE='<scope>' to write a routing scope distinct from the charter text.
+#   --source firstmate|human stamps the generated brief's provenance line for the
+#   kaizen batch scanner (default human: misclassification undercounts firstmate,
+#   never pollutes it). --batch <id> stamps the shared batch grouping id for the
+#   same scanner (default sentinel "unknown" when omitted). Every generated
+#   variant (ship, scout, secondmate, and any skill-led ship template) carries
+#   exactly one `source:` + `batch_id:` pair. Malformed or missing option values
+#   are rejected before any file is written.
 #   --herdr-lab is mandatory when the task will issue Herdr lifecycle commands.
 #   It adds the hard isolation contract backed by bin/fm-herdr-lab.sh.
 #   The flag must be explicit because {TASK} is filled after scaffolding and the
@@ -71,19 +83,43 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 KIND=ship
+SKILL_LED=0
 HERDR_LAB=0
 NO_PROJECTS=0
+SOURCE=human
+BATCH=unknown
 POS=()
-for a in "$@"; do
-  case "$a" in
-    --scout) KIND=scout ;;
-    --secondmate) KIND=secondmate ;;
-    --herdr-lab) HERDR_LAB=1 ;;
-    --no-projects) NO_PROJECTS=1 ;;
-    *) POS+=("$a") ;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --scout) KIND=scout; shift ;;
+    --skill-led) SKILL_LED=1; shift ;;
+    --secondmate) KIND=secondmate; shift ;;
+    --herdr-lab) HERDR_LAB=1; shift ;;
+    --no-projects) NO_PROJECTS=1; shift ;;
+    --source)
+      [ $# -ge 2 ] || { echo "error: --source requires a value (firstmate|human)" >&2; exit 1; }
+      SOURCE=$2
+      case "$SOURCE" in
+        firstmate|human) ;;
+        *) echo "error: --source must be 'firstmate' or 'human' (got: $SOURCE)" >&2; exit 1 ;;
+      esac
+      shift 2
+      ;;
+    --batch)
+      [ $# -ge 2 ] || { echo "error: --batch requires a value" >&2; exit 1; }
+      BATCH=$2
+      [ -n "$BATCH" ] || { echo "error: --batch value must not be empty" >&2; exit 1; }
+      shift 2
+      ;;
+    *) POS+=("$1"); shift ;;
   esac
 done
 ID=${POS[0]}
+
+if [ "$SKILL_LED" -eq 1 ] && [ "$KIND" != ship ]; then
+  echo "error: --skill-led applies only to ship briefs" >&2
+  exit 1
+fi
 
 if [ "$KIND" = secondmate ] && [ "$HERDR_LAB" -eq 1 ]; then
   echo "error: --herdr-lab applies only to crewmate ship or scout briefs" >&2
@@ -130,6 +166,9 @@ else
 fi
 cat > "$BRIEF" <<EOF
 You are a persistent second mate managed by the main firstmate. Work on your own; do not wait for a human.
+
+source: $SOURCE
+batch_id: $BATCH
 
 # Charter
 $SECONDMATE_CHARTER
@@ -225,6 +264,9 @@ if [ "$KIND" = scout ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
 
+source: $SOURCE
+batch_id: $BATCH
+
 # Task
 {TASK}
 
@@ -269,6 +311,44 @@ echo "scaffolded: $BRIEF (scout; replace {TASK})"
 exit 0
 fi
 
+if [ "$SKILL_LED" -eq 1 ]; then
+cat > "$BRIEF" <<EOF
+You are a crewmate: an autonomous worker agent managed by firstmate.
+
+source: $SOURCE
+batch_id: $BATCH
+
+# Task
+{TASK}
+
+$HERDR_SECTION
+
+# Safety envelope
+Verify that \`pwd -P\` and \`git rev-parse --show-toplevel\` both resolve to this isolated task worktree, never the primary project copy.
+Stop before writing if that assertion fails.
+Work only inside this worktree, except for the status file below.
+Never push to the default branch.
+Merge only when the task text explicitly grants that authority; otherwise return the ready branch or PR to firstmate.
+Invoke the named skill exactly as written and let it own implementation, review, tests, documentation, and delivery mechanics.
+Do not stack a second workflow or independent review around the owning skill.
+Never discard, reset, or hide unlanded work.
+Never stop, restart, or update the shared no-mistakes daemon.
+
+# Supervisor channel
+Append sparse, actionable events to $STATUS_FILE using one of: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
+Use \`$PAUSED_VERB: {why}\` only for a bounded external wait expected to clear on its own; use \`blocked:\` when firstmate must act.
+For a human decision, append one \`needs-decision:\` question with your recommendation and wait.
+After an answer or cleared blocker, append the matching \`resolved:\` event before continuing.
+
+# Definition of done
+Follow the named skill through its terminal outcome.
+Append \`done:\` with the concrete artifact - corrected document path, ready branch, or full green PR URL - and stop.
+If the skill cannot complete safely, append \`blocked:\` or \`failed:\` with the concrete reason and preserve all work.
+EOF
+echo "scaffolded: $BRIEF (skill-led ship; replace {TASK})"
+exit 0
+fi
+
 # Ship task: shape Setup / Rule 1 / Definition of done by the project's delivery mode.
 # yolo does not affect the brief (it governs firstmate's approval behaviour), so discard it.
 read -r MODE _ <<EOF
@@ -278,7 +358,11 @@ EOF
 case "$MODE" in
   direct-PR)
     SETUP2=""
-    RULE1='1. Never push to the default branch (push only your `fm/'"$ID"'` branch). Never merge a PR.'
+    # shellcheck disable=SC2016  # single quotes are deliberate: the backtick-wrapped commands are literal brief text; only the '"$ID"' break-outs interpolate.
+    RULE1='1. Never push to the default branch (push only your `fm/'"$ID"'` branch). Never merge a PR on your own:
+   raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden.
+   Sole exception: one exact `bin/fm-pr-merge.sh '"$ID"' <PR url> ...` command that firstmate itself sends you; run it verbatim, changing nothing.
+   Firstmate sends it only under captain authority to override branch protection - a per-PR authorization or an explicit standing preference - with review complete, CI green, and branch protection the only blocker.'
     DOD=$(cat <<EOF
 # Definition of done
 This project ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
@@ -304,7 +388,11 @@ EOF
   *)  # no-mistakes (default)
     SETUP2="
 2. Run \`no-mistakes doctor\`; if it reports the repo is not initialized here, run \`no-mistakes init\`."
-    RULE1='1. Never push to the default branch. Never merge a PR.'
+    # shellcheck disable=SC2016  # single quotes are deliberate: the backtick-wrapped commands are literal brief text; only the '"$ID"' break-out interpolates.
+    RULE1='1. Never push to the default branch. Never merge a PR on your own:
+   raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden.
+   Sole exception: one exact `bin/fm-pr-merge.sh '"$ID"' <PR url> ...` command that firstmate itself sends you; run it verbatim, changing nothing.
+   Firstmate sends it only under captain authority to override branch protection - a per-PR authorization or an explicit standing preference - with review complete, CI green, and branch protection the only blocker.'
     DOD=$(cat <<EOF
 # Definition of done
 The task is complete only when committed on your branch.
@@ -328,6 +416,9 @@ esac
 
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
+
+source: $SOURCE
+batch_id: $BATCH
 
 # Task
 {TASK}

@@ -14,6 +14,11 @@
 #   (f) malformed PR URL fails fast without calling gh-axi
 #   (g) explicit merge method is not overridden by the default --squash
 #   (h) repo override args fail fast because the repo comes from the URL
+#   (i) the exact --admin invocation merges through plain gh (gh-axi drops
+#       --admin) while metadata recording and the default --squash still apply;
+#       the normal path never merges through plain gh
+#   (j) near-miss --admin=<value> spellings fail fast before recording
+#   (k) repo overrides are still refused on the admin path
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -42,8 +47,9 @@ make_case() {
   printf '%s\n' "$case_dir"
 }
 
-# gh-axi mock recording every invocation to a log file, and gh mock answering
-# headRefOid for fm-pr-check.sh's pr_head lookup. Args: case_dir head_sha
+# gh-axi mock recording every invocation to a log file, and gh mock recording
+# its own invocations and answering headRefOid for fm-pr-check.sh's pr_head
+# lookup. Args: case_dir head_sha
 add_gh_mocks() {
   local case_dir=$1 head=$2
   cat > "$case_dir/fakebin/gh-axi" <<'SH'
@@ -53,6 +59,7 @@ exit 0
 SH
   cat > "$case_dir/fakebin/gh" <<SH
 #!/usr/bin/env bash
+printf '%s\n' "\$*" >> "\$FM_TEST_GH_LOG"
 case "\${1:-} \${2:-}" in
   "pr view")
     case " \$* " in
@@ -89,6 +96,7 @@ run_pr_merge() {
   FM_ROOT_OVERRIDE="$ROOT" \
   FM_STATE_OVERRIDE="$case_dir/state" \
   FM_TEST_GH_AXI_LOG="$case_dir/gh-axi.log" \
+  FM_TEST_GH_LOG="$case_dir/gh.log" \
   PATH="$case_dir/fakebin:$PATH" \
     "$PR_MERGE" "$@"
   rc=$?
@@ -119,7 +127,83 @@ test_records_pr_and_head_before_merging() {
     "records-before-merge: pr_head= was not recorded"
   grep -qxF 'pr merge 9 --repo example/repo --squash' "$case_dir/gh-axi.log" \
     || fail "records-before-merge: gh-axi pr merge was not invoked with number, --repo, and default --squash"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" \
+    "records-before-merge: a normal merge went through plain gh instead of gh-axi"
   pass "fm-pr-merge records pr= and pr_head= before invoking gh-axi pr merge"
+}
+
+test_admin_flag_routes_through_gh() {
+  local case_dir
+  case_dir=$(make_case admin-flag)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  : > "$case_dir/gh-axi.log"
+  : > "$case_dir/gh.log"
+
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/30 -- --admin \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "admin-flag: fm-pr-merge failed"
+
+  grep -qxF 'pr merge 30 --repo example/repo --squash --admin' "$case_dir/gh.log" \
+    || fail "admin-flag: --admin merge was not carried through plain gh with default --squash"
+  assert_no_grep 'pr merge' "$case_dir/gh-axi.log" \
+    "admin-flag: gh-axi was invoked for an admin merge (it drops --admin)"
+  assert_grep 'pr=https://github.com/example/repo/pull/30' "$case_dir/state/task-x1.meta" \
+    "admin-flag: pr= was not recorded on the admin path"
+  assert_grep 'pr_head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$case_dir/state/task-x1.meta" \
+    "admin-flag: pr_head= was not recorded on the admin path"
+  pass "fm-pr-merge carries the exact --admin invocation through plain gh with metadata recorded"
+}
+
+test_admin_variant_refused_before_recording() {
+  local case_dir rc
+  case_dir=$(make_case admin-variant)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  : > "$case_dir/gh-axi.log"
+  : > "$case_dir/gh.log"
+
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/31 -- --admin=true \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "admin-variant: fm-pr-merge should refuse --admin=<value>"
+  assert_grep 'pass exactly --admin' "$case_dir/stderr" \
+    "admin-variant: refusal did not name the exact token"
+  assert_no_grep 'pr=https://github.com/example/repo/pull/31' "$case_dir/state/task-x1.meta" \
+    "admin-variant: PR was recorded before rejecting the admin variant"
+  assert_no_grep 'pr merge' "$case_dir/gh-axi.log" \
+    "admin-variant: gh-axi pr merge was invoked despite the refusal"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" \
+    "admin-variant: gh pr merge was invoked despite the refusal"
+  pass "fm-pr-merge refuses near-miss --admin spellings before recording state"
+}
+
+test_admin_with_repo_override_refused() {
+  local case_dir rc
+  case_dir=$(make_case admin-repo-override)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" cccccccccccccccccccccccccccccccccccccccc
+  : > "$case_dir/gh-axi.log"
+  : > "$case_dir/gh.log"
+
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/right/repo/pull/32 -- --admin --repo wrong/repo \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "admin-repo-override: fm-pr-merge should refuse repo overrides on the admin path"
+  assert_grep 'extra merge arguments must not override the repository' "$case_dir/stderr" \
+    "admin-repo-override: refusal did not explain the repo override"
+  assert_no_grep 'pr=https://github.com/right/repo/pull/32' "$case_dir/state/task-x1.meta" \
+    "admin-repo-override: PR was recorded before rejecting the repo override"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" \
+    "admin-repo-override: gh pr merge was invoked despite the repo override"
+  assert_no_grep 'pr merge' "$case_dir/gh-axi.log" \
+    "admin-repo-override: gh-axi pr merge was invoked despite the repo override"
+  pass "fm-pr-merge still refuses repo overrides when --admin is present"
 }
 
 test_merge_failure_propagates_after_recording() {
@@ -302,6 +386,9 @@ test_parses_pr_url_for_gh_axi() {
 }
 
 test_records_pr_and_head_before_merging
+test_admin_flag_routes_through_gh
+test_admin_variant_refused_before_recording
+test_admin_with_repo_override_refused
 test_merge_failure_propagates_after_recording
 test_extra_merge_args_forwarded
 test_missing_meta_refuses_before_merge

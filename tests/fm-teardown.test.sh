@@ -588,6 +588,47 @@ test_local_only_merged_to_local_main_allows() {
   pass "local-only worktree with work merged into local main is torn down (no regression)"
 }
 
+# The guarded local-only landing honors config/primary-branch only when the
+# project IS this home's primary Firstmate checkout (FM_HOME), so work merged
+# into that configured branch counts as landed there and nowhere else.
+test_local_only_merged_to_configured_primary_allows() {
+  local case_dir rc wt_head
+  case_dir=$(make_case merged-primary)
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "adaptation work"
+  wt_head=$(git -C "$case_dir/wt" rev-parse HEAD)
+  git -C "$case_dir/project" update-ref refs/heads/dorofune "$wt_head"
+  printf '%s\n' dorofune > "$case_dir/config/primary-branch"
+
+  set +e
+  FM_HOME="$case_dir/project" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "merged-primary: teardown should accept work merged into the configured primary branch"
+  ! grep -q REFUSED "$case_dir/stderr" || fail "merged-primary: teardown printed a REFUSED line"
+  pass "local-only work merged into the home checkout's configured primary branch is landed"
+}
+
+test_local_only_primary_config_ignored_for_ordinary_project() {
+  local case_dir rc wt_head
+  case_dir=$(make_case primary-ordinary)
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "unlanded work"
+  wt_head=$(git -C "$case_dir/wt" rev-parse HEAD)
+  git -C "$case_dir/project" update-ref refs/heads/dorofune "$wt_head"
+  printf '%s\n' dorofune > "$case_dir/config/primary-branch"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "primary-ordinary: teardown must still refuse for a project that is not the home checkout"
+  grep -q REFUSED "$case_dir/stderr" || fail "primary-ordinary: no REFUSED line in stderr"
+  pass "config/primary-branch never relaxes the landed check for ordinary projects"
+}
+
 test_no_mistakes_origin_remote_allows() {
   local case_dir rc
   case_dir=$(make_case nm-origin)
@@ -1373,6 +1414,8 @@ test_teardown_prompts_tasks_axi_done_when_compatible
 test_teardown_manual_backend_prompts_hand_edit_even_when_tasks_axi_present
 test_local_only_truly_unpushed_refuses
 test_local_only_merged_to_local_main_allows
+test_local_only_merged_to_configured_primary_allows
+test_local_only_primary_config_ignored_for_ordinary_project
 test_no_mistakes_origin_remote_allows
 test_no_mistakes_truly_unpushed_refuses
 test_local_only_force_overrides_unpushed

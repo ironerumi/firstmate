@@ -9,6 +9,9 @@
 # auto-approves), and only as a clean fast-forward - it refuses a diverged branch
 # and tells you to have the crewmate rebase. See AGENTS.md prime directives,
 # project management, and task lifecycle.
+# When the task's project IS this home's primary Firstmate checkout, a valid
+# config/primary-branch (docs/configuration.md) names the landing branch;
+# ordinary projects always keep origin-default resolution.
 # Usage: fm-merge-local.sh <task-id>
 set -eu
 
@@ -16,6 +19,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
+# shellcheck source=bin/fm-tangle-lib.sh
+. "$SCRIPT_DIR/fm-tangle-lib.sh"
 "$FM_ROOT/bin/fm-guard.sh" || true
 ID=${1:?usage: fm-merge-local.sh <task-id>}
 META="$STATE/$ID.meta"
@@ -44,7 +49,9 @@ default_branch() {
 BRANCH="fm/$ID"
 git -C "$PROJ" rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null || { echo "error: branch $BRANCH does not exist in $PROJ" >&2; exit 1; }
 
-DEFAULT=$(default_branch) || { echo "error: cannot determine default branch for $PROJ; expected origin/HEAD, main, or master" >&2; exit 1; }
+DEFAULT=$(fm_home_primary_landing_branch "$FM_HOME" "$PROJ") \
+  || DEFAULT=$(default_branch) \
+  || { echo "error: cannot determine default branch for $PROJ; expected origin/HEAD, main, or master" >&2; exit 1; }
 
 # The project's main checkout must be on its default branch and clean, so the
 # fast-forward lands predictably (firstmate never writes here otherwise).

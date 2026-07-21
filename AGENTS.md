@@ -69,6 +69,7 @@ config/secondmate-harness  harness the PRIMARY uses to launch SECONDMATE agents,
 config/backlog-backend  backlog backend override; LOCAL, gitignored; absent or "tasks-axi" = default tasks-axi backend, "manual" = force routine backlog updates to hand-editing; inherited by secondmate homes (section 10)
 config/backend  runtime session-provider backend override for new tasks; LOCAL, gitignored; absent = falls through to runtime auto-detection (the runtime firstmate itself is executing inside), then tmux; tmux is the verified reference backend (docs/tmux-backend.md), while herdr, zellij, orca, and cmux are experimental spawn backends (docs/herdr-backend.md, docs/zellij-backend.md, docs/orca-backend.md, docs/cmux-backend.md) - herdr and cmux can also be selected by runtime auto-detection, zellij and orca never are (always explicit), and codex-app is not accepted; see docs/codex-app-backend.md; not inherited into secondmate homes
 config/herdr-presentation-spaces  optional presence flag for Herdr's default-off disposable single-task visual projection; LOCAL, gitignored; not inherited into secondmate homes; see docs/herdr-backend.md "Optional disposable single-task presentation spaces"
+config/primary-branch  optional branch intentionally kept in this home's primary Firstmate checkout instead of origin's default; LOCAL, gitignored; absent or invalid preserves the default-branch tangle guard
 config/cmux-socket-password  optional cmux control-socket password; LOCAL, gitignored; read fresh on every cmux CLI call and passed through without ever overriding an operator's own ambient CMUX_SOCKET_PASSWORD when absent (docs/cmux-backend.md "Setup")
 config/wedge-alarm  optional away-mode wedge-alarm active-alert directives; LOCAL, gitignored; absent means auto (macOS Notification Center when available); see docs/wedge-alarm.md
 config/x-mode.env    generated X-mode watcher cadence; LOCAL, gitignored; source before arming watcher when present
@@ -236,6 +237,7 @@ Load `diagnostic-reasoning` before scoping a reported bug and before acting on a
 Classify work as dispatchable when it does not overlap work under way, or queued and blocked when it touches the same project subsystem or depends on unlanded work.
 Dispatch independent work immediately with no concurrency cap, serialize coarse overlaps, and record blockers durably.
 Write the task-specific brief under section 11 before spawning.
+For a captain-initiated dispatch wave, scaffold every brief in that wave with `--source firstmate --batch <one-shared-id-per-wave>`.
 
 ### Dispatch and supervision handoff
 
@@ -266,6 +268,9 @@ With `yolo` off, the captain owns ask-user findings, PR merges, and local-only m
 With `yolo` on, firstmate decides those routine gates and merges only green or otherwise approved work, but still escalates destructive, irreversible, and security-sensitive choices.
 Never merge a red PR.
 Use `bin/fm-pr-merge.sh` for every task PR merge so merge metadata is recorded, and use `bin/fm-merge-local.sh` for approved local-only landing; never call a lower-level merge command around their guards.
+An administrator merge that overrides branch protection is carried only by an exact `bin/fm-pr-merge.sh` `--admin` invocation that firstmate runs or hands verbatim to the task's worker, never inferred from `yolo` or green CI alone and never issued as a raw worker merge command.
+It is authorized either by the captain's explicit authorization for that blocked PR, or by an explicit standing captain preference for routine admin merges that applies only when review is complete, CI is green, and the repository's required-review or branch-protection rule is the sole blocker.
+That standing authority stays merge-only and never answers an ask-user finding, a red or unresolved check, a conflict or behind-base uncertainty, a destructive or irreversible non-merge action, a release or tag, a security-sensitive change, or any bypass outside the recorded standing condition.
 After an autonomous merge, give the captain a one-line full-URL or local-main outcome.
 
 ### Validate
@@ -430,6 +435,7 @@ Preserve durable structured identifiers, dependencies, and completion artifact l
 `bin/fm-brief.sh` and its help own scaffold syntax, generated variants, status protocol, delivery-mode definitions of done, and exact safety mechanics.
 Use its scaffold as the contract, then replace every `{TASK}` placeholder with a clear task description, acceptance criteria, constraints, and necessary context before dispatch or seeding.
 Keep additions task-specific rather than repeating lifecycle instructions, and alter generated sections only when the task genuinely differs from the standard shape.
+Use `--skill-led` when one exact skill invocation owns implementation, review, testing, documentation, and delivery mechanics; the concise variant retains only Firstmate's supervision and safety envelope around that owner.
 
 Every ship brief must retain the worktree-isolation assertion and stop if launched in the primary checkout.
 If a ship task touches firstmate's shared tracked material, explicitly require `firstmate-coding-guidelines` before editing.
