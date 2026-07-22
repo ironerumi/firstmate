@@ -655,6 +655,9 @@ families_for_changed_path() {
       ;;
     bin/fm-tangle*)
       printf '%s\n' session-bootstrap
+      # fm-tangle-lib.sh also owns the primary landing-branch resolution, and the
+      # only tests covering it are pr-forge (fm-merge-local, fm-teardown), so a
+      # tangle-lib edit must select that family too.
       printf '%s\n' pr-forge
       ;;
     bin/fm-session-start.sh|bin/fm-bootstrap.sh|bin/fm-fleet-sync.sh|\
