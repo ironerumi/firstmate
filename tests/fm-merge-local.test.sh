@@ -12,6 +12,8 @@
 #   (d) an invalid config/primary-branch preserves the default-branch refusal
 #       when the home checkout sits on another branch
 #   (e) non-local-only tasks are refused
+#   (f) the test runner keeps this file in the pr-forge family, so --changed
+#       selection on bin/fm-merge-local.sh still runs it
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -181,8 +183,23 @@ test_non_local_only_mode_refused() {
   pass "fm-merge-local refuses tasks that are not mode=local-only"
 }
 
+# This file is the only test covering the local-only landing path, so it must
+# stay inside the runner's pr-forge family: bin/fm-merge-local.sh changes select
+# that family via families_for_changed_path, and an unclassified test would be
+# skipped by --changed selection. Upstream owns the family map, so a future
+# upstream merge could drop this entry silently; assert it here instead.
+test_runner_classifies_this_test_into_pr_forge() {
+  local listing
+  listing=$("$ROOT/bin/fm-test-run.sh" --list --family pr-forge) \
+    || fail "family-map: fm-test-run.sh --list --family pr-forge failed"
+  printf '%s\n' "$listing" | grep -Fqx 'tests/fm-merge-local.test.sh' \
+    || fail "family-map: fm-merge-local.test.sh is not in the pr-forge family; --changed selection would skip it"
+  pass "the test runner classifies fm-merge-local.test.sh into the pr-forge family"
+}
+
 test_baseline_ff_into_main
 test_home_checkout_lands_on_configured_primary
 test_ordinary_project_ignores_home_primary_config
 test_invalid_primary_config_keeps_default_refusal
 test_non_local_only_mode_refused
+test_runner_classifies_this_test_into_pr_forge
