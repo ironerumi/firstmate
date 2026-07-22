@@ -873,7 +873,7 @@ git -C "$SECOND_HOME_A" -c user.name='Firstmate Tests' -c user.email='tests@exam
 git -C "$SECOND_HOME_B" -c user.name='Firstmate Tests' -c user.email='tests@example.invalid' commit -qm init
 mkdir -p "$SECOND_HOME_A/bin"
 printf '# Firstmate secondmate fixture\n' > "$SECOND_HOME_A/AGENTS.md"
-printf 'Secondmate alpha charter.\n' > "$SECOND_HOME_A/data/charter.md"
+printf 'source: human\nbatch_id: test-fixture\nSecondmate alpha charter.\n' > "$SECOND_HOME_A/data/charter.md"
 
 # Primary flag only; real inheritance must push presence into both secondmate homes.
 [ -f "$HOME_DIR/config/herdr-presentation-spaces" ] \
@@ -920,12 +920,12 @@ assert_focus_is "$CAPTAIN_FOCUS" "multi-home captain focus"
 mkdir -p "$SECOND_HOME_A/data/a1" "$SECOND_HOME_A/data/a2" \
   "$SECOND_HOME_B/data/b1" "$SECOND_HOME_B/data/b2" \
   "$HOME_DIR/data/p1" "$HOME_DIR/data/p2"
-printf 'Primary multi-home fixture 1.\n' > "$HOME_DIR/data/p1/brief.md"
-printf 'Primary multi-home fixture 2.\n' > "$HOME_DIR/data/p2/brief.md"
-printf 'Secondmate A fixture 1.\n' > "$SECOND_HOME_A/data/a1/brief.md"
-printf 'Secondmate A fixture 2.\n' > "$SECOND_HOME_A/data/a2/brief.md"
-printf 'Secondmate B fixture 1.\n' > "$SECOND_HOME_B/data/b1/brief.md"
-printf 'Secondmate B fixture 2.\n' > "$SECOND_HOME_B/data/b2/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nPrimary multi-home fixture 1.\n' > "$HOME_DIR/data/p1/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nPrimary multi-home fixture 2.\n' > "$HOME_DIR/data/p2/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nSecondmate A fixture 1.\n' > "$SECOND_HOME_A/data/a1/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nSecondmate A fixture 2.\n' > "$SECOND_HOME_A/data/a2/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nSecondmate B fixture 1.\n' > "$SECOND_HOME_B/data/b1/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nSecondmate B fixture 2.\n' > "$SECOND_HOME_B/data/b2/brief.md"
 
 MULTI_FOCUS_START=$(focus_audit_line_count)
 spawn_task p1 "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/p1.out" 2> "$TMP_ROOT/p1.err" \
@@ -984,9 +984,9 @@ pass "real Herdr lab: primary and two secondmate homes each own a top-level cont
 
 # Concurrent cross-home wave under the one session lock.
 mkdir -p "$HOME_DIR/data/pcw" "$SECOND_HOME_A/data/acw" "$SECOND_HOME_B/data/bcw"
-printf 'Cross-home concurrent primary.\n' > "$HOME_DIR/data/pcw/brief.md"
-printf 'Cross-home concurrent A.\n' > "$SECOND_HOME_A/data/acw/brief.md"
-printf 'Cross-home concurrent B.\n' > "$SECOND_HOME_B/data/bcw/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nCross-home concurrent primary.\n' > "$HOME_DIR/data/pcw/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nCross-home concurrent A.\n' > "$SECOND_HOME_A/data/acw/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nCross-home concurrent B.\n' > "$SECOND_HOME_B/data/bcw/brief.md"
 WAVE_CROSS_FOCUS=$(focus_audit_line_count)
 spawn_task pcw "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/pcw.out" 2> "$TMP_ROOT/pcw.err" &
 PCW_PID=$!
@@ -1034,7 +1034,7 @@ CROSS_LOCK_PID=$!
 while [ ! -e "$CROSS_LOCK_READY" ] && kill -0 "$CROSS_LOCK_PID" 2>/dev/null; do sleep 0.01; done
 [ -e "$CROSS_LOCK_READY" ] || fail "could not hold the cross-home session presentation lock"
 mkdir -p "$SECOND_HOME_A/data/aflat"
-printf 'Flat fallback under session lock contention.\n' > "$SECOND_HOME_A/data/aflat/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nFlat fallback under session lock contention.\n' > "$SECOND_HOME_A/data/aflat/brief.md"
 if spawn_task aflat "$SECOND_HOME_A" "$PROJECT_DIR" > "$TMP_ROOT/aflat.out" 2> "$TMP_ROOT/aflat.err"; then
   AFLAT_STATUS=0
 else
@@ -1067,7 +1067,7 @@ FLAT_TAB_OUT=$(lab tab create --workspace "$(lab workspace list | jq -r '.result
   || fail "could not seed a flat secondmate child tab"
 FLAT_TAB_ID=$(printf '%s' "$FLAT_TAB_OUT" | jq -r '.result.tab.tab_id // empty')
 mkdir -p "$HOME_DIR/data/post-legacy"
-printf 'Post-legacy primary child.\n' > "$HOME_DIR/data/post-legacy/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nPost-legacy primary child.\n' > "$HOME_DIR/data/post-legacy/brief.md"
 spawn_task post-legacy "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/post-legacy.out" 2> "$TMP_ROOT/post-legacy.err" \
   || fail "post-legacy projected spawn failed: $(cat "$TMP_ROOT/post-legacy.err")"
 remember_meta_worktree "$HOME_DIR/state/post-legacy.meta" >/dev/null
