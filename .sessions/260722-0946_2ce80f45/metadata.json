@@ -1,0 +1,12 @@
+{
+  "session_id": "2ce80f45-95f3-4cf8-a46d-84d28e655b4b",
+  "session_start": "2026-07-22T09:46:44.725Z",
+  "session_end": "2026-07-22T09:55:19.056Z",
+  "duration_minutes": 8.6,
+  "forked_from": null,
+  "message_count": 119,
+  "external_tools": null,
+  "external_tool_count": 0,
+  "has_thinking": false,
+  "has_system_prompt": false
+}

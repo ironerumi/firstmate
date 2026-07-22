@@ -33,7 +33,8 @@ test_help_includes_entire_header() {
   local help
   help=$("$ROOT/bin/fm-brief.sh" --help)
   assert_contains "$help" "Refuses to overwrite an existing brief." "fm-brief.sh --help omitted its header terminator"
-  assert_contains "$help" "--skill-led writes a concise ship contract" "fm-brief.sh --help omitted the skill-led variant"
+  assert_contains "$help" "Ship tasks default to a concise skill-led contract" "fm-brief.sh --help omitted the skill-led default"
+  assert_contains "$help" "--free-form opts a ship task" "fm-brief.sh --help omitted the free-form opt-out"
   pass "fm-brief.sh: --help renders the complete header"
 }
 
@@ -61,7 +62,7 @@ test_ship_modes_generate_clean_briefs() {
   for id_proj in "brief-nomistakes-a1:no-registry-proj" "brief-directpr-a2:direct-proj" "brief-localonly-a3:local-proj"; do
     id=${id_proj%%:*}
     proj=${id_proj##*:}
-    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" >/dev/null 2>&1; status=$?
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" --free-form >/dev/null 2>&1; status=$?
     expect_code 0 "$status" "fm-brief.sh $id $proj should exit 0"
     brief="$home/data/$id/brief.md"
     assert_present "$brief" "$id: brief was not scaffolded"
@@ -87,7 +88,7 @@ test_ship_briefs_carry_guarded_merge_exception() {
   for id_proj in "brief-merge-nm-b1:no-registry-proj" "brief-merge-dp-b2:direct-proj"; do
     id=${id_proj%%:*}
     proj=${id_proj##*:}
-    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" >/dev/null 2>&1
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" --free-form >/dev/null 2>&1
     brief="$home/data/$id/brief.md"
     assert_present "$brief" "$id: brief was not scaffolded"
     assert_grep 'Never merge a PR on your own' "$brief" \
@@ -105,7 +106,7 @@ test_ship_briefs_carry_guarded_merge_exception() {
       "$id: brief exception lost the authorization conditions"
   done
   id='brief-merge-lo-b3'
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" local-proj >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" local-proj --free-form >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_no_grep 'fm-pr-merge.sh' "$brief" "local-only brief gained a PR merge exception"
   assert_grep 'Never push to any remote and never open a PR' "$brief" \
@@ -118,7 +119,7 @@ test_skill_led_ship_keeps_only_the_supervision_envelope() {
   home="$TMP_ROOT/skill-led-home"
   mkdir -p "$home/data"
   id="brief-skill-led-a4"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --skill-led >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_present "$brief" "skill-led brief was not scaffolded"
   assert_grep "both resolve to this isolated task worktree" "$brief" \
@@ -140,12 +141,23 @@ test_skill_led_ship_keeps_only_the_supervision_envelope() {
   lines=$(wc -l < "$brief" | tr -d ' ')
   [ "$lines" -le 45 ] || fail "skill-led brief is not concise ($lines lines, expected at most 45)"
 
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" bad-scout some-proj --scout --skill-led >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--skill-led combined with --scout must fail"
+  id="brief-free-form-a5"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --free-form >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_grep "# Project memory" "$brief" \
+    "--free-form ship did not preserve the full ship body"
+  assert_no_grep "Do not stack a second workflow or independent review" "$brief" \
+    "--free-form ship retained the skill-led anti-stack clause"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" bad-scout some-proj --scout --free-form >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--free-form combined with --scout must fail"
   status=0
-  FM_HOME="$home" FM_SECONDMATE_CHARTER=x "$ROOT/bin/fm-brief.sh" bad-mate --secondmate --no-projects --skill-led >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--skill-led combined with --secondmate must fail"
-  pass "fm-brief.sh: skill-led ship keeps a concise supervision envelope"
+  FM_HOME="$home" FM_SECONDMATE_CHARTER=x "$ROOT/bin/fm-brief.sh" bad-mate --secondmate --no-projects --free-form >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--free-form combined with --secondmate must fail"
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" removed-flag some-proj --skill-led >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "removed --skill-led flag must be rejected as unknown"
+  pass "fm-brief.sh: ship defaults to the concise skill-led envelope with a guarded free-form opt-out"
 }
 
 test_faster_paths_use_configured_authority_without_stacked_review() {
@@ -153,14 +165,14 @@ test_faster_paths_use_configured_authority_without_stacked_review() {
   home="$TMP_ROOT/configured-authority-home"
   write_registry "$home"
   id="brief-direct-authority-a4"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" direct-proj >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" direct-proj --free-form >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_grep "The configured merge authority decides whether to merge the PR; firstmate relays the outcome." "$brief" \
     "direct-PR brief lost configured merge authority"
   assert_no_grep "The captain reviews and merges the PR" "$brief" \
     "direct-PR brief hard-coded captain-only authority"
   id="brief-local-authority-a4"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" local-proj >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" local-proj --free-form >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_grep "The configured merge authority approves the ready branch, then firstmate merges it into local \`main\` through the guarded fast-forward path." "$brief" \
     "local-only brief lost configured merge authority and guarded landing"
@@ -178,7 +190,7 @@ test_no_mistakes_dod_wording() {
   home="$TMP_ROOT/wording-home"
   mkdir -p "$home/data"
   id="brief-wording-b1"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --free-form >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_present "$brief" "brief was not scaffolded"
   assert_grep "no-mistakes itself provides for the mechanics" "$brief" \
@@ -199,7 +211,7 @@ test_ship_project_memory_wording() {
   home="$TMP_ROOT/project-memory-home"
   mkdir -p "$home/data"
   id="brief-memory-c1"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --free-form >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_present "$brief" "brief was not scaffolded"
   assert_grep "Record only project knowledge useful to almost every future session." "$brief" \
@@ -351,7 +363,7 @@ test_pause_verb_override_renders_all_brief_scaffolds() {
     case "$kind" in
       ship)
         FM_HOME="$home" FM_CLASSIFY_PAUSED_VERB=awaiting \
-          "$ROOT/bin/fm-brief.sh" "$id" firstmate >/dev/null 2>&1
+          "$ROOT/bin/fm-brief.sh" "$id" firstmate --free-form >/dev/null 2>&1
         ;;
       scout)
         FM_HOME="$home" FM_CLASSIFY_PAUSED_VERB=awaiting \
@@ -454,10 +466,10 @@ test_provenance_stamps_all_variants() {
   home="$TMP_ROOT/provenance-variants-home"
   mkdir -p "$home/data"
 
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-ship-e3 alpha --source firstmate --batch wave-e3 >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-ship-e3 alpha --free-form --source firstmate --batch wave-e3 >/dev/null 2>&1
   brief="$home/data/prov-ship-e3/brief.md"
-  assert_grep "source: firstmate" "$brief" "ship variant missing source: stamp"
-  assert_grep "batch_id: wave-e3" "$brief" "ship variant missing batch_id: stamp"
+  assert_grep "source: firstmate" "$brief" "free-form ship variant missing source: stamp"
+  assert_grep "batch_id: wave-e3" "$brief" "free-form ship variant missing batch_id: stamp"
 
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-scout-e3 alpha --scout --source firstmate --batch wave-e3 >/dev/null 2>&1
   brief="$home/data/prov-scout-e3/brief.md"
@@ -470,7 +482,7 @@ test_provenance_stamps_all_variants() {
   assert_grep "source: firstmate" "$brief" "secondmate variant missing source: stamp"
   assert_grep "batch_id: wave-e3" "$brief" "secondmate variant missing batch_id: stamp"
 
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-skill-led-e3 alpha --skill-led --source firstmate --batch wave-e3 >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-skill-led-e3 alpha --source firstmate --batch wave-e3 >/dev/null 2>&1
   brief="$home/data/prov-skill-led-e3/brief.md"
   assert_grep "source: firstmate" "$brief" "skill-led variant missing source: stamp"
   assert_grep "batch_id: wave-e3" "$brief" "skill-led variant missing batch_id: stamp"
@@ -511,7 +523,7 @@ test_provenance_preserves_existing_template_body() {
   home="$TMP_ROOT/provenance-template-home"
   mkdir -p "$home/data"
   id="brief-provenance-template-e5"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --source firstmate --batch wave-e5 >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --free-form --source firstmate --batch wave-e5 >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_present "$brief" "brief was not scaffolded"
   assert_grep "# Definition of done" "$brief" "provenance flags regressed the Definition of done section"

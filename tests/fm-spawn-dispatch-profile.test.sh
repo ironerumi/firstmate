@@ -61,7 +61,7 @@ make_spawn_case() {
   touch "$home/state/.last-watcher-beat"
   for id in "$@"; do
     mkdir -p "$home/data/$id"
-    printf 'brief for %s\n' "$id" > "$home/data/$id/brief.md"
+    printf 'source: human\nbatch_id: test-fixture\nbrief for %s\n' "$id" > "$home/data/$id/brief.md"
   done
   printf '%s\n' "$case_dir|$home|$proj|$wt|$fakebin|$launchlog"
 }
@@ -77,7 +77,7 @@ make_seeded_secondmate_home() {
   mkdir -p "$home/bin" "$home/data"
   printf '# Firstmate\n' > "$home/AGENTS.md"
   printf '%s\n' "$id" > "$home/.fm-secondmate-home"
-  printf 'charter for %s\n' "$id" > "$home/data/charter.md"
+  printf 'source: human\nbatch_id: test-fixture\ncharter for %s\n' "$id" > "$home/data/charter.md"
 }
 
 run_spawn() {
@@ -121,6 +121,35 @@ test_no_profile_keeps_claude_launch_unchanged() {
   expected="CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions \"\$(cat '$HOME_DIR/data/$id/brief.md')\""
   [ "$launch" = "$expected" ] || fail "no-profile claude launch changed"$'\n'"expected: $expected"$'\n'"actual:   $launch"
   pass "no --model/--effort records defaults and keeps the claude launch byte-identical"
+}
+
+test_unstamped_brief_requires_explicit_bypass() {
+  local rec id out status
+  id=profile-unstamped-z17
+  rec=$(make_spawn_case profile-unstamped codex "$id")
+  read_case_record "$rec"
+  printf 'legacy brief without provenance\n' > "$HOME_DIR/data/$id/brief.md"
+
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR")
+  status=$?
+  expect_code 1 "$status" "unstamped brief should be refused"
+  assert_contains "$out" "error: unstamped brief at $HOME_DIR/data/$id/brief.md" \
+    "unstamped refusal did not identify the brief"
+  assert_contains "$out" "restamp before dispatch by appending these two lines" \
+    "unstamped refusal did not name the two-line restamp fix"
+  assert_contains "$out" "source: firstmate" \
+    "unstamped refusal did not show the source line"
+  assert_contains "$out" "batch_id: <shared-batch-id>" \
+    "unstamped refusal did not show the batch line"
+  assert_absent "$HOME_DIR/state/$id.meta" "unstamped refusal should happen before meta is written"
+
+  out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
+    "$id" "$PROJ_DIR" --allow-unstamped)
+  status=$?
+  expect_code 0 "$status" "--allow-unstamped should explicitly bypass the provenance preflight"
+  assert_contains "$out" "spawned $id harness=codex" \
+    "explicit unstamped bypass did not launch the task"
+  pass "unstamped briefs are refused with a two-line restamp fix and explicit bypass"
 }
 
 test_active_dispatch_profile_requires_explicit_harness_for_ship() {
@@ -385,6 +414,7 @@ test_active_dispatch_profile_does_not_block_secondmate_launch() {
 }
 
 test_no_profile_keeps_claude_launch_unchanged
+test_unstamped_brief_requires_explicit_bypass
 test_active_dispatch_profile_requires_explicit_harness_for_ship
 test_active_dispatch_profile_requires_explicit_harness_for_scout
 test_active_dispatch_profile_allows_explicit_harness
