@@ -6,15 +6,17 @@
 # description, acceptance criteria, and context, and may adjust other sections
 # when the task genuinely deviates (e.g. working an existing external PR instead
 # of shipping a new one).
-# Usage: fm-brief.sh <task-id> <repo-name> [--scout|--skill-led] [--herdr-lab]
+# Usage: fm-brief.sh <task-id> <repo-name> [--scout|--free-form] [--herdr-lab]
 #                     [--source firstmate|human] [--batch <id>]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #                     [--source firstmate|human] [--batch <id>]
 #   --scout writes the scout contract instead: the deliverable is a report at
 #   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is scratch.
-#   --skill-led writes a concise ship contract for an exact skill invocation that
-#   owns implementation, review, tests, and delivery mechanics. Firstmate keeps
+#   Ship tasks default to a concise skill-led contract for an exact skill invocation
+#   that owns implementation, review, tests, and delivery mechanics. Firstmate keeps
 #   only isolation, status, unlanded-work, and merge-authority safeguards around it.
+#   --free-form opts a ship task into the full delivery-mode-shaped contract when no
+#   exact owning skill applies.
 #   --secondmate writes a persistent secondmate charter. The project list
 #   is cloned into the secondmate home, while the natural-language scope
 #   tells the main firstmate when to route work there; routine churn stays in its own home;
@@ -30,7 +32,7 @@
 #   kaizen batch scanner (default human: misclassification undercounts firstmate,
 #   never pollutes it). --batch <id> stamps the shared batch grouping id for the
 #   same scanner (default sentinel "unknown" when omitted). Every generated
-#   variant (ship, scout, secondmate, and any skill-led ship template) carries
+#   variant (skill-led ship, free-form ship, scout, and secondmate) carries
 #   exactly one `source:` + `batch_id:` pair. Malformed or missing option values
 #   are rejected before any file is written.
 #   --herdr-lab is mandatory when the task will issue Herdr lifecycle commands.
@@ -83,7 +85,7 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 KIND=ship
-SKILL_LED=0
+FREE_FORM=0
 HERDR_LAB=0
 NO_PROJECTS=0
 SOURCE=human
@@ -92,7 +94,7 @@ POS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --scout) KIND=scout; shift ;;
-    --skill-led) SKILL_LED=1; shift ;;
+    --free-form) FREE_FORM=1; shift ;;
     --secondmate) KIND=secondmate; shift ;;
     --herdr-lab) HERDR_LAB=1; shift ;;
     --no-projects) NO_PROJECTS=1; shift ;;
@@ -111,13 +113,14 @@ while [ $# -gt 0 ]; do
       [ -n "$BATCH" ] || { echo "error: --batch value must not be empty" >&2; exit 1; }
       shift 2
       ;;
+    --*) echo "error: unknown option: $1" >&2; exit 1 ;;
     *) POS+=("$1"); shift ;;
   esac
 done
 ID=${POS[0]}
 
-if [ "$SKILL_LED" -eq 1 ] && [ "$KIND" != ship ]; then
-  echo "error: --skill-led applies only to ship briefs" >&2
+if [ "$FREE_FORM" -eq 1 ] && [ "$KIND" != ship ]; then
+  echo "error: --free-form applies only to ship briefs" >&2
   exit 1
 fi
 
@@ -311,7 +314,7 @@ echo "scaffolded: $BRIEF (scout; replace {TASK})"
 exit 0
 fi
 
-if [ "$SKILL_LED" -eq 1 ]; then
+if [ "$FREE_FORM" -eq 0 ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate.
 
@@ -468,4 +471,4 @@ Keep it proportionate: skip \`AGENTS.md\` edits for trivial tasks that produced 
 
 $DOD
 EOF
-echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK})"
+echo "scaffolded: $BRIEF (free-form ship, mode=$MODE; replace {TASK})"

@@ -444,16 +444,16 @@ mkdir -p "$HOME_DIR/state" "$HOME_DIR/config" \
 mkdir -p "$HOME_DIR/data/active-seeded" "$HOME_DIR/data/abort-a" "$HOME_DIR/data/abort-b" \
   "$HOME_DIR/data/lock-contended"
 touch "$HOME_DIR/state/.last-watcher-beat"
-printf 'Projection anchor fixture.\n' > "$HOME_DIR/data/anchor/brief.md"
-printf 'Projection E2E fixture.\n' > "$HOME_DIR/data/shape/brief.md"
-printf 'Projection ordering fixture A.\n' > "$HOME_DIR/data/order-a/brief.md"
-printf 'Projection ordering fixture B.\n' > "$HOME_DIR/data/order-b/brief.md"
-printf 'Projection ordering failure fixture.\n' > "$HOME_DIR/data/order-fail/brief.md"
-printf 'Projection restart fixture.\n' > "$HOME_DIR/data/restart1/brief.md"
-printf 'Projection active seeded fixture.\n' > "$HOME_DIR/data/active-seeded/brief.md"
-printf 'Projection abort fixture A.\n' > "$HOME_DIR/data/abort-a/brief.md"
-printf 'Projection abort fixture B.\n' > "$HOME_DIR/data/abort-b/brief.md"
-printf 'Projection lock contention fixture.\n' > "$HOME_DIR/data/lock-contended/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nProjection anchor fixture.\n' > "$HOME_DIR/data/anchor/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nProjection E2E fixture.\n' > "$HOME_DIR/data/shape/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nProjection ordering fixture A.\n' > "$HOME_DIR/data/order-a/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nProjection ordering fixture B.\n' > "$HOME_DIR/data/order-b/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nProjection ordering failure fixture.\n' > "$HOME_DIR/data/order-fail/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nProjection restart fixture.\n' > "$HOME_DIR/data/restart1/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nProjection active seeded fixture.\n' > "$HOME_DIR/data/active-seeded/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nProjection abort fixture A.\n' > "$HOME_DIR/data/abort-a/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nProjection abort fixture B.\n' > "$HOME_DIR/data/abort-b/brief.md"
+printf 'source: human\nbatch_id: test-fixture\nProjection lock contention fixture.\n' > "$HOME_DIR/data/lock-contended/brief.md"
 make_project "$PROJECT_DIR"
 
 # Keep one ordinary primary task live so the durable firstmate workspace is
@@ -789,8 +789,8 @@ pass "real Herdr lab: concurrent projected cleanup is serialized and leaves acti
 # proves the shared presentation lock keeps concurrent operations composable.
 for ROUND in 1 2 3; do
   mkdir -p "$HOME_DIR/data/focus-$ROUND-a" "$HOME_DIR/data/focus-$ROUND-b"
-  printf 'Projection focus wave %s fixture A.\n' "$ROUND" > "$HOME_DIR/data/focus-$ROUND-a/brief.md"
-  printf 'Projection focus wave %s fixture B.\n' "$ROUND" > "$HOME_DIR/data/focus-$ROUND-b/brief.md"
+  printf 'source: human\nbatch_id: test-fixture\nProjection focus wave %s fixture A.\n' "$ROUND" > "$HOME_DIR/data/focus-$ROUND-a/brief.md"
+  printf 'source: human\nbatch_id: test-fixture\nProjection focus wave %s fixture B.\n' "$ROUND" > "$HOME_DIR/data/focus-$ROUND-b/brief.md"
   WAVE_LOG_START=$(log_line_count)
   WAVE_FOCUS_START=$(focus_audit_line_count)
   spawn_task "focus-$ROUND-a" "$HOME_DIR" "$PROJECT_DIR" > "$TMP_ROOT/focus-$ROUND-a.out" 2> "$TMP_ROOT/focus-$ROUND-a.err" &

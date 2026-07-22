@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Spawn a direct report: a crewmate in a treehouse or Orca worktree, or a
 # secondmate in its isolated firstmate home.
-# Usage: fm-spawn.sh <task-id> <project-dir> [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] [--scout]
-#        fm-spawn.sh <task-id> [<firstmate-home>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] --secondmate
+# Usage: fm-spawn.sh <task-id> <project-dir> [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] [--scout] [--allow-unstamped]
+#        fm-spawn.sh <task-id> [<firstmate-home>] [--harness <name>|harness|launch-command] [--model <name>] [--effort <level>] [--backend <name>] [--allow-unstamped] --secondmate
 #   --harness <name> is the explicit per-spawn harness/profile adapter. The old
 #   positional harness arg still works for back-compat.
 #   --model <name> and --effort <low|medium|high|xhigh|max> are concrete profile
@@ -75,6 +75,9 @@
 #   --scout records kind=scout in the task's meta (report deliverable, scratch worktree;
 #   see AGENTS.md task lifecycle); --secondmate records kind=secondmate and launches in a
 #   provisioned firstmate home; the default is kind=ship.
+#   Every selected brief or charter must contain lines beginning `source:` and
+#   `batch_id:` before launch. --allow-unstamped is the explicit compatibility
+#   bypass for an intentionally reused legacy brief; normal dispatches restamp it.
 #   Before a secondmate launch, the home is locally fast-forwarded to the primary
 #   default-branch commit when safe; skipped syncs warn and launch unchanged.
 #   Ship/scout spawns refuse to launch unless the resolved task path is a real
@@ -143,6 +146,7 @@ HARNESS_ARG=
 MODEL=
 EFFORT=
 BACKEND_ARG=
+ALLOW_UNSTAMPED=0
 HARNESS_SET=0
 MODEL_SET=0
 EFFORT_SET=0
@@ -167,6 +171,7 @@ for a in "$@"; do
   case "$a" in
     --scout) KIND=scout ;;
     --secondmate) KIND=secondmate ;;
+    --allow-unstamped) ALLOW_UNSTAMPED=1 ;;
     --harness) want_value=harness ;;
     --harness=*) HARNESS_ARG=${a#--harness=}; HARNESS_SET=1 ;;
     --model) want_value=model ;;
@@ -338,6 +343,7 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
   [ -z "$MODEL" ] || shared_args+=(--model "$MODEL")
   [ -z "$EFFORT" ] || shared_args+=(--effort "$EFFORT")
   [ -z "$BACKEND_ARG" ] || shared_args+=(--backend "$BACKEND_ARG")
+  [ "$ALLOW_UNSTAMPED" -eq 0 ] || shared_args+=(--allow-unstamped)
   for pair in "${POS[@]}"; do
     case "$pair" in
       *=*) : ;;
@@ -689,6 +695,27 @@ if [ "$KIND" = secondmate ]; then
   [ -n "$FIRSTMATE_HOME" ] || { echo "error: no firstmate home supplied or registered for $ID" >&2; exit 1; }
   PROJ_ABS=$(validate_firstmate_home_for_spawn "$ID" "$FIRSTMATE_HOME")
   WT="$PROJ_ABS"
+  if [ -f "$PROJ_ABS/data/charter.md" ]; then
+    BRIEF="$PROJ_ABS/data/charter.md"
+  else
+    BRIEF="$DATA/$ID/brief.md"
+  fi
+else
+  PROJ_ABS="$(cd "$(resolve_project_dir_arg "$PROJ")" && pwd)"
+  WT=""
+  BRIEF="$DATA/$ID/brief.md"
+fi
+[ -f "$BRIEF" ] || { echo "error: no brief at $BRIEF" >&2; exit 1; }
+if [ "$ALLOW_UNSTAMPED" -eq 0 ] \
+   && { ! grep -q '^source:' "$BRIEF" || ! grep -q '^batch_id:' "$BRIEF"; }; then
+  echo "error: unstamped brief at $BRIEF; restamp before dispatch by appending these two lines:" >&2
+  echo "source: firstmate" >&2
+  echo "batch_id: <shared-batch-id>" >&2
+  echo "Use --allow-unstamped only for an intentional legacy-brief bypass." >&2
+  exit 1
+fi
+
+if [ "$KIND" = secondmate ]; then
   # Local-HEAD sync: before launch, fast-forward this secondmate's worktree to the
   # PRIMARY checkout's current default-branch commit, so a freshly spawned or
   # recovery-respawned secondmate always runs the primary's version (AGENTS.md
@@ -713,17 +740,7 @@ if [ "$KIND" = secondmate ]; then
   # surface into this secondmate home (fm-config-inherit-lib.sh).
   propagate_secondmate_inheritance "$FM_HOME" "$PROJ_ABS" "$CONFIG" "$DATA" \
     || echo "warning: secondmate $ID inheritance failed for $PROJ_ABS" >&2
-  if [ -f "$PROJ_ABS/data/charter.md" ]; then
-    BRIEF="$PROJ_ABS/data/charter.md"
-  else
-    BRIEF="$DATA/$ID/brief.md"
-  fi
-else
-  PROJ_ABS="$(cd "$(resolve_project_dir_arg "$PROJ")" && pwd)"
-  WT=""
-  BRIEF="$DATA/$ID/brief.md"
 fi
-[ -f "$BRIEF" ] || { echo "error: no brief at $BRIEF" >&2; exit 1; }
 
 # PROJ_ABS can still carry a symlinked path component (e.g. macOS's /tmp ->
 # /private/tmp) when it came from the ship/scout branch's logical `pwd` above.

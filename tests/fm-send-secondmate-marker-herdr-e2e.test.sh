@@ -87,6 +87,9 @@ git -C "$SECOND_HOME" checkout -q --detach HEAD
 mkdir -p "$SECOND_HOME/state" "$SECOND_HOME/data" "$SECOND_HOME/config" "$SECOND_HOME/projects"
 printf '%s\n' "$ID" > "$SECOND_HOME/.fm-secondmate-home"
 cat > "$SECOND_HOME/data/charter.md" <<'EOF'
+source: human
+batch_id: test-fixture
+
 # Isolated marker capture secondmate
 
 You are a task-local secondmate used only for the marker transport regression.
