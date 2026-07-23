@@ -7,7 +7,7 @@
 # when the task genuinely deviates (e.g. working an existing external PR instead
 # of shipping a new one).
 # Usage: fm-brief.sh <task-id> <repo-name> [--scout|--free-form] [--herdr-lab]
-#                     [--source firstmate|human] [--batch <id>]
+#                     [--source firstmate|human] [--batch <id>] [--no-narration]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #                     [--source firstmate|human] [--batch <id>]
 #   --scout writes the scout contract instead: the deliverable is a report at
@@ -19,6 +19,9 @@
 #   --free-form opts a direct-PR or local-only ship task into the full mode-shaped
 #   contract when no exact owning skill applies. On no-mistakes projects it is an
 #   idempotent compatibility flag and cannot restore skill-led review ownership.
+#   --no-narration explicitly arms the default-off narration experiment for a
+#   pipeline-led no-mistakes ship brief. That brief stamps exactly one machine-readable
+#   `narration_arm: on|off` line. The flag is rejected for every other brief shape.
 #   --secondmate writes a persistent secondmate charter. The project list
 #   is cloned into the secondmate home, while the natural-language scope
 #   tells the main firstmate when to route work there; routine churn stays in its own home;
@@ -90,6 +93,7 @@ KIND=ship
 FREE_FORM=0
 HERDR_LAB=0
 NO_PROJECTS=0
+NO_NARRATION=0
 SOURCE=human
 BATCH=unknown
 POS=()
@@ -100,6 +104,7 @@ while [ $# -gt 0 ]; do
     --secondmate) KIND=secondmate; shift ;;
     --herdr-lab) HERDR_LAB=1; shift ;;
     --no-projects) NO_PROJECTS=1; shift ;;
+    --no-narration) NO_NARRATION=1; shift ;;
     --source)
       [ $# -ge 2 ] || { echo "error: --source requires a value (firstmate|human)" >&2; exit 1; }
       SOURCE=$2
@@ -133,6 +138,11 @@ fi
 
 if [ "$NO_PROJECTS" -eq 1 ] && [ "$KIND" != secondmate ]; then
   echo "error: --no-projects applies only to --secondmate charters" >&2
+  exit 1
+fi
+
+if [ "$NO_NARRATION" -eq 1 ] && [ "$KIND" != ship ]; then
+  echo "error: --no-narration applies only to pipeline-led no-mistakes ship briefs" >&2
   exit 1
 fi
 
@@ -325,6 +335,11 @@ read -r MODE _ <<EOF
 $("$FM_ROOT/bin/fm-project-mode.sh" "$REPO")
 EOF
 
+if [ "$NO_NARRATION" -eq 1 ] && [ "$MODE" != no-mistakes ]; then
+  echo "error: --no-narration applies only to pipeline-led no-mistakes ship briefs" >&2
+  exit 1
+fi
+
 if [ "$MODE" != no-mistakes ] && [ "$FREE_FORM" -eq 0 ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate.
@@ -403,6 +418,10 @@ EOF
    raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden.
    Sole exception: one exact `bin/fm-pr-merge.sh '"$ID"' <PR url> ...` command that firstmate itself sends you; run it verbatim, changing nothing.
    Firstmate sends it only under captain authority to override branch protection - a per-PR authorization or an explicit standing preference - with review complete, CI green, and branch protection the only blocker.'
+    if [ "$NO_NARRATION" -eq 1 ]; then
+      RULE1="$RULE1
+1a. No-narration experiment arm: emit only status signals and the pipeline's required output; no meta-commentary between tool calls."
+    fi
     DOD=$(cat <<EOF
 # Definition of done
 The task is complete only when committed on your branch.
@@ -424,11 +443,18 @@ EOF
     ;;
 esac
 
+NARRATION_MARKER=
+if [ "$MODE" = no-mistakes ]; then
+  NARRATION_ARM=off
+  [ "$NO_NARRATION" -eq 0 ] || NARRATION_ARM=on
+  NARRATION_MARKER=$'\n'"narration_arm: $NARRATION_ARM"
+fi
+
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
 
 source: $SOURCE
-batch_id: $BATCH
+batch_id: $BATCH$NARRATION_MARKER
 
 # Task
 {TASK}
