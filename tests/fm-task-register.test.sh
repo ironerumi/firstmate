@@ -21,10 +21,11 @@ file_mode() {
 }
 
 make_case() {
-  local name=$1 case_dir
+  local name=$1 case_dir project_name
   case_dir="$TMP_ROOT/$name"
+  project_name=$(basename "$(cd "$ROOT" && pwd -P)")
   mkdir -p "$case_dir/home/data" "$case_dir/home/config" "$case_dir/state" "$case_dir/fakebin"
-  printf '%s\n' '- firstmate [no-mistakes +yolo] - test Firstmate home' > "$case_dir/home/data/projects.md"
+  printf '%s\n' "- $project_name [no-mistakes +yolo] - test Firstmate home" > "$case_dir/home/data/projects.md"
   touch "$case_dir/state/.last-watcher-beat"
   printf '%s\n' "$case_dir"
 }
