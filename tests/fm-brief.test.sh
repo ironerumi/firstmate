@@ -36,6 +36,8 @@ test_help_includes_entire_header() {
   assert_contains "$help" "Ship briefs route review ownership by delivery mode" "fm-brief.sh --help omitted delivery-mode routing"
   assert_contains "$help" "no-mistakes projects always" "fm-brief.sh --help omitted the pipeline-led no-mistakes route"
   assert_contains "$help" "--free-form opts a direct-PR or local-only ship task" "fm-brief.sh --help omitted the free-form opt-out"
+  assert_contains "$help" "--no-narration explicitly arms the default-off narration experiment" \
+    "fm-brief.sh --help omitted the narration experiment toggle"
   pass "fm-brief.sh: --help renders the complete header"
 }
 
@@ -176,6 +178,8 @@ test_ship_briefs_route_review_ownership_by_delivery_mode() {
     "--free-form direct-PR ship did not preserve the full ship body"
   assert_no_grep "Do not stack a second workflow or independent review" "$brief" \
     "--free-form direct-PR ship retained the skill-led anti-stack clause"
+  assert_no_grep "narration_arm:" "$brief" \
+    "--free-form direct-PR ship gained a pipeline-only experiment marker"
 
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" bad-scout some-proj --scout --free-form >/dev/null 2>&1 || status=$?
   expect_code 1 "$status" "--free-form combined with --scout must fail"
@@ -186,6 +190,70 @@ test_ship_briefs_route_review_ownership_by_delivery_mode() {
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" removed-flag some-proj --skill-led >/dev/null 2>&1 || status=$?
   expect_code 1 "$status" "removed --skill-led flag must be rejected as unknown"
   pass "fm-brief.sh: ship briefs route review ownership by delivery mode"
+}
+
+test_pipeline_narration_arm_is_explicit_and_diff_bounded() {
+  local off_home on_home state id off_brief on_brief diff changes status=0
+  off_home="$TMP_ROOT/narration-off-home"
+  on_home="$TMP_ROOT/narration-on-home"
+  state="$TMP_ROOT/narration-shared-state"
+  id="brief-narration-arm-a7"
+  write_registry "$off_home"
+  write_registry "$on_home"
+  mkdir -p "$state"
+
+  FM_HOME="$off_home" FM_STATE_OVERRIDE="$state" \
+    "$ROOT/bin/fm-brief.sh" "$id" nm-proj >/dev/null 2>&1
+  FM_HOME="$on_home" FM_STATE_OVERRIDE="$state" \
+    "$ROOT/bin/fm-brief.sh" "$id" nm-proj --no-narration >/dev/null 2>&1
+  off_brief="$off_home/data/$id/brief.md"
+  on_brief="$on_home/data/$id/brief.md"
+  diff="$TMP_ROOT/narration-arm.diff"
+
+  [ "$(grep -c '^narration_arm: off$' "$off_brief")" -eq 1 ] \
+    || fail "default pipeline-led brief did not carry exactly one off marker"
+  assert_no_grep "No-narration experiment arm" "$off_brief" \
+    "default pipeline-led brief enabled the clause without an explicit toggle"
+  [ "$(grep -c '^narration_arm: on$' "$on_brief")" -eq 1 ] \
+    || fail "toggled pipeline-led brief did not carry exactly one on marker"
+  assert_grep "emit only status signals and the pipeline's required output; no meta-commentary between tool calls" "$on_brief" \
+    "toggled pipeline-led brief did not carry the no-narration clause"
+
+  diff -u "$off_brief" "$on_brief" > "$diff" || status=$?
+  expect_code 1 "$status" "the on/off narration scaffolds must differ"
+  changes=$(grep -Ec '^[+-][^+-]' "$diff")
+  [ "$changes" -eq 3 ] \
+    || fail "narration arm changed $changes lines; expected only marker replacement plus clause insertion"
+  grep -qxF -- '-narration_arm: off' "$diff" \
+    || fail "narration arm diff did not remove only the off marker"
+  grep -qxF -- '+narration_arm: on' "$diff" \
+    || fail "narration arm diff did not add the on marker"
+  grep -qxF -- "+1a. No-narration experiment arm: emit only status signals and the pipeline's required output; no meta-commentary between tool calls." "$diff" \
+    || fail "narration arm diff did not add the exact clause"
+  pass "fm-brief.sh: narration arm is default-off, explicit, marked, and diff-bounded"
+}
+
+test_no_narration_rejects_non_pipeline_briefs() {
+  local home status
+  home="$TMP_ROOT/narration-misuse-home"
+  write_registry "$home"
+
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" narration-direct direct-proj --no-narration >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--no-narration on direct-PR must fail"
+  assert_absent "$home/data/narration-direct/brief.md" "rejected direct-PR toggle still wrote a brief"
+
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" narration-scout nm-proj --scout --no-narration >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--no-narration on a scout must fail"
+  assert_absent "$home/data/narration-scout/brief.md" "rejected scout toggle still wrote a brief"
+
+  status=0
+  FM_HOME="$home" FM_SECONDMATE_CHARTER=ops \
+    "$ROOT/bin/fm-brief.sh" narration-mate --secondmate --no-projects --no-narration >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "--no-narration on a secondmate charter must fail"
+  assert_absent "$home/data/narration-mate/brief.md" "rejected secondmate toggle still wrote a brief"
+  pass "fm-brief.sh: no non-pipeline brief can enable the narration experiment"
 }
 
 test_faster_paths_use_configured_authority_without_stacked_review() {
@@ -571,6 +639,8 @@ test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
 test_ship_briefs_carry_guarded_merge_exception
 test_ship_briefs_route_review_ownership_by_delivery_mode
+test_pipeline_narration_arm_is_explicit_and_diff_bounded
+test_no_narration_rejects_non_pipeline_briefs
 test_faster_paths_use_configured_authority_without_stacked_review
 test_no_mistakes_dod_wording
 test_ship_project_memory_wording
