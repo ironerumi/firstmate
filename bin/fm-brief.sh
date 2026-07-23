@@ -12,11 +12,13 @@
 #                     [--source firstmate|human] [--batch <id>]
 #   --scout writes the scout contract instead: the deliverable is a report at
 #   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is scratch.
-#   Ship tasks default to a concise skill-led contract for an exact skill invocation
-#   that owns implementation, review, tests, and delivery mechanics. Firstmate keeps
-#   only isolation, status, unlanded-work, and merge-authority safeguards around it.
-#   --free-form opts a ship task into the full delivery-mode-shaped contract when no
-#   exact owning skill applies.
+#   Ship briefs route review ownership by delivery mode. no-mistakes projects always
+#   receive the full pipeline-led contract, where the pipeline owns review. direct-PR
+#   and local-only projects default to a concise skill-led contract for an exact skill
+#   invocation that owns implementation, review, tests, and delivery mechanics.
+#   --free-form opts a direct-PR or local-only ship task into the full mode-shaped
+#   contract when no exact owning skill applies. On no-mistakes projects it is an
+#   idempotent compatibility flag and cannot restore skill-led review ownership.
 #   --secondmate writes a persistent secondmate charter. The project list
 #   is cloned into the secondmate home, while the natural-language scope
 #   tells the main firstmate when to route work there; routine churn stays in its own home;
@@ -32,7 +34,7 @@
 #   kaizen batch scanner (default human: misclassification undercounts firstmate,
 #   never pollutes it). --batch <id> stamps the shared batch grouping id for the
 #   same scanner (default sentinel "unknown" when omitted). Every generated
-#   variant (skill-led ship, free-form ship, scout, and secondmate) carries
+#   variant (pipeline-led ship, skill-led ship, free-form ship, scout, and secondmate) carries
 #   exactly one `source:` + `batch_id:` pair. Malformed or missing option values
 #   are rejected before any file is written.
 #   --herdr-lab is mandatory when the task will issue Herdr lifecycle commands.
@@ -316,7 +318,14 @@ echo "scaffolded: $BRIEF (scout; replace {TASK})"
 exit 0
 fi
 
-if [ "$FREE_FORM" -eq 0 ]; then
+# Review ownership follows the registered delivery mode. Resolve it before choosing
+# the ship template so no-mistakes projects cannot receive a review-owning skill brief.
+# yolo does not affect the brief (it governs firstmate's approval behaviour), so discard it.
+read -r MODE _ <<EOF
+$("$FM_ROOT/bin/fm-project-mode.sh" "$REPO")
+EOF
+
+if [ "$MODE" != no-mistakes ] && [ "$FREE_FORM" -eq 0 ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate.
 
@@ -354,12 +363,8 @@ echo "scaffolded: $BRIEF (skill-led ship; replace {TASK})"
 exit 0
 fi
 
-# Ship task: shape Setup / Rule 1 / Definition of done by the project's delivery mode.
-# yolo does not affect the brief (it governs firstmate's approval behaviour), so discard it.
-read -r MODE _ <<EOF
-$("$FM_ROOT/bin/fm-project-mode.sh" "$REPO")
-EOF
-
+# Pipeline-led no-mistakes briefs and explicit free-form briefs share the full
+# delivery-mode-shaped safety envelope below.
 case "$MODE" in
   direct-PR)
     SETUP2=""
@@ -473,4 +478,8 @@ Keep it proportionate: skip \`AGENTS.md\` edits for trivial tasks that produced 
 
 $DOD
 EOF
-echo "scaffolded: $BRIEF (free-form ship, mode=$MODE; replace {TASK})"
+if [ "$MODE" = no-mistakes ]; then
+  echo "scaffolded: $BRIEF (pipeline-led ship, mode=$MODE; replace {TASK})"
+else
+  echo "scaffolded: $BRIEF (free-form ship, mode=$MODE; replace {TASK})"
+fi

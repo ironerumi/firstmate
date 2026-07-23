@@ -33,8 +33,9 @@ test_help_includes_entire_header() {
   local help
   help=$("$ROOT/bin/fm-brief.sh" --help)
   assert_contains "$help" "Refuses to overwrite an existing brief." "fm-brief.sh --help omitted its header terminator"
-  assert_contains "$help" "Ship tasks default to a concise skill-led contract" "fm-brief.sh --help omitted the skill-led default"
-  assert_contains "$help" "--free-form opts a ship task" "fm-brief.sh --help omitted the free-form opt-out"
+  assert_contains "$help" "Ship briefs route review ownership by delivery mode" "fm-brief.sh --help omitted delivery-mode routing"
+  assert_contains "$help" "no-mistakes projects always" "fm-brief.sh --help omitted the pipeline-led no-mistakes route"
+  assert_contains "$help" "--free-form opts a direct-PR or local-only ship task" "fm-brief.sh --help omitted the free-form opt-out"
   pass "fm-brief.sh: --help renders the complete header"
 }
 
@@ -44,6 +45,7 @@ write_registry() {
   local home=$1
   mkdir -p "$home/data"
   cat > "$home/data/projects.md" <<'EOF'
+- nm-proj [no-mistakes] - fixture for no-mistakes mode (added 2026-07-01)
 - direct-proj [direct-PR] - fixture for direct-PR mode (added 2026-07-01)
 - local-proj [local-only] - fixture for local-only mode (added 2026-07-01)
 EOF
@@ -114,40 +116,66 @@ test_ship_briefs_carry_guarded_merge_exception() {
   pass "fm-brief.sh: ship briefs keep the default merge prohibition with the narrow firstmate-issued exception"
 }
 
-test_skill_led_ship_keeps_only_the_supervision_envelope() {
-  local home id brief lines status=0
-  home="$TMP_ROOT/skill-led-home"
-  mkdir -p "$home/data"
-  id="brief-skill-led-a4"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj >/dev/null 2>&1
-  brief="$home/data/$id/brief.md"
-  assert_present "$brief" "skill-led brief was not scaffolded"
-  assert_grep "both resolve to this isolated task worktree" "$brief" \
-    "skill-led brief lost the isolation assertion"
-  assert_grep "Invoke the named skill exactly as written" "$brief" \
-    "skill-led brief did not delegate mechanics to the owning skill"
-  assert_grep "Do not stack a second workflow or independent review" "$brief" \
-    "skill-led brief allowed a duplicate workflow"
-  assert_grep "Never discard, reset, or hide unlanded work" "$brief" \
-    "skill-led brief lost unlanded-work protection"
-  assert_grep "Merge only when the task text explicitly grants that authority" "$brief" \
-    "skill-led brief lost explicit merge authority"
-  assert_grep "corrected document path, ready branch, or full green PR URL" "$brief" \
-    "skill-led brief did not require a concrete terminal artifact"
-  assert_no_grep "no-mistakes doctor" "$brief" \
-    "skill-led brief stacked the standard no-mistakes setup"
-  assert_no_grep "# Project memory" "$brief" \
-    "skill-led brief retained the standard ship template's optional mechanics"
-  lines=$(wc -l < "$brief" | tr -d ' ')
-  [ "$lines" -le 45 ] || fail "skill-led brief is not concise ($lines lines, expected at most 45)"
+test_ship_briefs_route_review_ownership_by_delivery_mode() {
+  local home id brief lines output status=0
+  home="$TMP_ROOT/delivery-mode-routing-home"
+  write_registry "$home"
 
-  id="brief-free-form-a5"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --free-form >/dev/null 2>&1
+  id="brief-pipeline-led-a4"
+  output=$(FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" nm-proj 2>&1)
+  brief="$home/data/$id/brief.md"
+  assert_present "$brief" "pipeline-led brief was not scaffolded"
+  assert_contains "$output" "pipeline-led ship, mode=no-mistakes" \
+    "no-mistakes scaffold did not identify the pipeline-led route"
+  assert_grep "no-mistakes axi run --help" "$brief" \
+    "pipeline-led brief lost the axi-run contract"
+  assert_grep "# Project memory" "$brief" \
+    "pipeline-led brief lost the full ship safety envelope"
+  assert_no_grep "Invoke the named skill exactly as written" "$brief" \
+    "pipeline-led brief gave review ownership to a skill"
+  assert_no_grep "Do not stack a second workflow or independent review" "$brief" \
+    "pipeline-led brief retained the skill-led review-ownership clause"
+
+  id="brief-pipeline-led-free-form-a5"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" nm-proj --free-form >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_grep "no-mistakes axi run --help" "$brief" \
+    "--free-form changed the no-mistakes pipeline-led route"
+  assert_no_grep "Invoke the named skill exactly as written" "$brief" \
+    "--free-form resurrected skill-led review ownership on a no-mistakes project"
+
+  for mode_proj in "direct:direct-proj" "local:local-proj"; do
+    id="brief-skill-led-${mode_proj%%:*}"
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "${mode_proj##*:}" >/dev/null 2>&1
+    brief="$home/data/$id/brief.md"
+    assert_present "$brief" "$id: skill-led brief was not scaffolded"
+    assert_grep "both resolve to this isolated task worktree" "$brief" \
+      "$id: skill-led brief lost the isolation assertion"
+    assert_grep "Invoke the named skill exactly as written" "$brief" \
+      "$id: skill-led brief did not delegate mechanics to the owning skill"
+    assert_grep "Do not stack a second workflow or independent review" "$brief" \
+      "$id: skill-led brief allowed a duplicate workflow"
+    assert_grep "Never discard, reset, or hide unlanded work" "$brief" \
+      "$id: skill-led brief lost unlanded-work protection"
+    assert_grep "Merge only when the task text explicitly grants that authority" "$brief" \
+      "$id: skill-led brief lost explicit merge authority"
+    assert_grep "corrected document path, ready branch, or full green PR URL" "$brief" \
+      "$id: skill-led brief did not require a concrete terminal artifact"
+    assert_no_grep "no-mistakes doctor" "$brief" \
+      "$id: skill-led brief stacked the standard no-mistakes setup"
+    assert_no_grep "# Project memory" "$brief" \
+      "$id: skill-led brief retained the full ship template"
+    lines=$(wc -l < "$brief" | tr -d ' ')
+    [ "$lines" -le 45 ] || fail "$id: skill-led brief is not concise ($lines lines, expected at most 45)"
+  done
+
+  id="brief-free-form-a6"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" direct-proj --free-form >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_grep "# Project memory" "$brief" \
-    "--free-form ship did not preserve the full ship body"
+    "--free-form direct-PR ship did not preserve the full ship body"
   assert_no_grep "Do not stack a second workflow or independent review" "$brief" \
-    "--free-form ship retained the skill-led anti-stack clause"
+    "--free-form direct-PR ship retained the skill-led anti-stack clause"
 
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" bad-scout some-proj --scout --free-form >/dev/null 2>&1 || status=$?
   expect_code 1 "$status" "--free-form combined with --scout must fail"
@@ -157,7 +185,7 @@ test_skill_led_ship_keeps_only_the_supervision_envelope() {
   status=0
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" removed-flag some-proj --skill-led >/dev/null 2>&1 || status=$?
   expect_code 1 "$status" "removed --skill-led flag must be rejected as unknown"
-  pass "fm-brief.sh: ship defaults to the concise skill-led envelope with a guarded free-form opt-out"
+  pass "fm-brief.sh: ship briefs route review ownership by delivery mode"
 }
 
 test_faster_paths_use_configured_authority_without_stacked_review() {
@@ -464,12 +492,12 @@ test_provenance_explicit_values_stamp_ship_brief() {
 test_provenance_stamps_all_variants() {
   local home brief
   home="$TMP_ROOT/provenance-variants-home"
-  mkdir -p "$home/data"
+  write_registry "$home"
 
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-ship-e3 alpha --free-form --source firstmate --batch wave-e3 >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-ship-e3 nm-proj --source firstmate --batch wave-e3 >/dev/null 2>&1
   brief="$home/data/prov-ship-e3/brief.md"
-  assert_grep "source: firstmate" "$brief" "free-form ship variant missing source: stamp"
-  assert_grep "batch_id: wave-e3" "$brief" "free-form ship variant missing batch_id: stamp"
+  assert_grep "source: firstmate" "$brief" "pipeline-led ship variant missing source: stamp"
+  assert_grep "batch_id: wave-e3" "$brief" "pipeline-led ship variant missing batch_id: stamp"
 
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-scout-e3 alpha --scout --source firstmate --batch wave-e3 >/dev/null 2>&1
   brief="$home/data/prov-scout-e3/brief.md"
@@ -482,7 +510,7 @@ test_provenance_stamps_all_variants() {
   assert_grep "source: firstmate" "$brief" "secondmate variant missing source: stamp"
   assert_grep "batch_id: wave-e3" "$brief" "secondmate variant missing batch_id: stamp"
 
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-skill-led-e3 alpha --source firstmate --batch wave-e3 >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-skill-led-e3 direct-proj --source firstmate --batch wave-e3 >/dev/null 2>&1
   brief="$home/data/prov-skill-led-e3/brief.md"
   assert_grep "source: firstmate" "$brief" "skill-led variant missing source: stamp"
   assert_grep "batch_id: wave-e3" "$brief" "skill-led variant missing batch_id: stamp"
@@ -542,7 +570,7 @@ test_script_parses
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
 test_ship_briefs_carry_guarded_merge_exception
-test_skill_led_ship_keeps_only_the_supervision_envelope
+test_ship_briefs_route_review_ownership_by_delivery_mode
 test_faster_paths_use_configured_authority_without_stacked_review
 test_no_mistakes_dod_wording
 test_ship_project_memory_wording

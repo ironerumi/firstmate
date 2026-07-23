@@ -437,7 +437,8 @@ Preserve durable structured identifiers, dependencies, and completion artifact l
 `bin/fm-brief.sh` and its help own scaffold syntax, generated variants, status protocol, delivery-mode definitions of done, and exact safety mechanics.
 Use its scaffold as the contract, then replace every `{TASK}` placeholder with a clear task description, acceptance criteria, constraints, and necessary context before dispatch or seeding.
 Keep additions task-specific rather than repeating lifecycle instructions, and alter generated sections only when the task genuinely differs from the standard shape.
-Ship briefs default to the concise skill-led variant, which retains only Firstmate's supervision and safety envelope around one exact skill invocation that owns implementation, review, testing, documentation, and delivery mechanics; use `--free-form` only when no exact owning skill applies.
+Ship briefs route review ownership by delivery mode: `no-mistakes` projects receive the pipeline-led variant, while `direct-PR` and `local-only` projects default to the concise skill-led variant around one exact skill invocation that owns implementation, review, testing, documentation, and delivery mechanics.
+Use `--free-form` only for a `direct-PR` or `local-only` ship task with no exact owning skill; on a `no-mistakes` project it cannot restore skill-led review ownership.
 
 Every ship brief must retain the worktree-isolation assertion and stop if launched in the primary checkout.
 If a ship task touches firstmate's shared tracked material, explicitly require `firstmate-coding-guidelines` before editing.
