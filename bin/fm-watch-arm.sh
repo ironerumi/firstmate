@@ -32,6 +32,16 @@
 #   watcher: FAILED - cycle ended without an actionable reason
 #                                                        - a clean cycle ended with no wake and no
 #                                                          verified healthy successor
+# A cycle that ends unexplained is REPAIRED in place first: this script re-arms
+# up to FM_WATCH_REPAIR_RETRIES times (default 3, FM_WATCH_REPAIR_DELAY seconds
+# apart, 0 disables repair) and reports the repaired cycle's own outcome, so an
+# ordinary transient watcher death never reaches the captain as a blind-turn
+# banner. Repair is bounded on purpose: unbounded silent restarts would hide a
+# genuinely broken watcher behind the appearance of live supervision. Once the
+# budget is spent it prints the same typed FAILED line as before AND raises one
+# user-visible alert through bin/fm-alert-lib.sh, deduplicated per outage.
+# Retry progress goes to stderr, so stdout still ends with exactly one terminal
+# classification for the harness adapters that parse it.
 # It NEVER reports started/attached/healthy off a stale beacon or a dead/reused pid: a
 # stale-beacon or dead-pid holder either self-heals (the fresh child steals the
 # dead lock per the singleton self-eviction/steal path and is confirmed) or this
@@ -61,6 +71,8 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-alert-lib.sh
+. "$SCRIPT_DIR/fm-alert-lib.sh"
 
 WATCH="$SCRIPT_DIR/fm-watch.sh"
 WATCH_LOCK="$STATE/.watch.lock"
@@ -256,9 +268,26 @@ wait_for_healthy_successor() {
   done
 }
 
-fail_unexplained_cycle() {
-  echo "watcher: FAILED - cycle ended without an actionable reason"
-  return 1
+# An unexplained cycle end is REPAIR-ELIGIBLE, not an immediate failure: the
+# bounded repair loop at the foot of this script re-arms up to
+# FM_WATCH_REPAIR_RETRIES times before the failure becomes terminal. The typed
+# failure line and the dead child's own output are held here and emitted only
+# once the budget is spent, so stdout still ends with exactly one honest
+# terminal classification for the harness adapters that parse it.
+ARM_FAIL_MESSAGE='watcher: FAILED - cycle ended without an actionable reason'
+ARM_FAIL_STATUS=1
+ARM_FAIL_OUTPUT=
+
+fail_unexplained_cycle() {  # [message] [status]
+  # An explicitly empty message means the dead child already printed its own
+  # typed FAILED line, which capture_failed_output is holding.
+  ARM_FAIL_MESSAGE=${1-watcher: FAILED - cycle ended without an actionable reason}
+  ARM_FAIL_STATUS=${2:-1}
+  return 3
+}
+
+capture_failed_output() {  # <output-file>
+  ARM_FAIL_OUTPUT=$(cat "$1" 2>/dev/null || true)
 }
 
 # Stay alive across identity-matched healthy holders. If one cycle ends, attach
@@ -286,7 +315,7 @@ attach_and_wait() {
     fi
     cycle_log_append unknown unknown attached-cycle-ended none
     fail_unexplained_cycle
-    return 1
+    return $?
   done
 }
 
@@ -351,18 +380,6 @@ if [ "$mode" = restart ]; then
   fi
 fi
 
-# If a genuinely live+fresh watcher already holds the lock, do not start a second
-# one - attach to that cycle and wait until it ends so the harness notify fires
-# then, not as an immediate empty wake. (--restart skips this: it just stopped
-# this home's watcher and wants a fresh one.)
-if [ "$mode" = arm ] && healthy_watcher; then
-  cycle_mark_predecessor_successor "attached:$HEALTHY_PID"
-  cycle_begin "$HEALTHY_PID" attached
-  report_attached
-  attach_and_wait "$HEALTHY_PID"
-  exit $?
-fi
-
 # Start a watcher as a tracked child and confirm it before settling in. The child
 # stays our child for its whole life: we wait on it, so killing this arm (the
 # harness-tracked task) tears the watcher down too, and the watcher's eventual
@@ -391,21 +408,8 @@ handle_arm_signal() {
   exit "$rc"
 }
 
-trap 'handle_arm_signal HUP 129' HUP
-trap 'handle_arm_signal TERM 143' TERM
-trap 'handle_arm_signal INT 130' INT
-
-child_out=$(mktemp "$STATE/.watch-arm-output.XXXXXX") || {
-  echo "watcher: FAILED - no live watcher with a fresh beacon"
-  exit 1
-}
-"$WATCH" >"$child_out" &
-child=$!
-cycle_begin "$child" started
-child_done=0
-
 owned_child_finished() {
-  local rc=$1 signal reason_type status
+  local rc=$1 signal reason_type status message
   signal=$(cycle_signal_name "$rc")
   if [ "$rc" -eq 0 ] && watch_output_has_wake "$child_out"; then
     reason_type=$(watch_output_reason_type "$child_out")
@@ -431,68 +435,145 @@ owned_child_finished() {
       return $?
     fi
     cycle_log_append "$rc" "$signal" unexpected-clean-exit none
-    print_watch_output "$child_out"
+    capture_failed_output "$child_out"
     rm -f "$child_out" 2>/dev/null || true
     child=
     child_out=
     fail_unexplained_cycle
-    return 1
+    return $?
   fi
 
   reason_type="nonzero-exit"
   [ "$signal" = none ] || reason_type="signal-exit"
   cycle_log_append "$rc" "$signal" "$reason_type" none
-  print_watch_output "$child_out"
-  if ! grep -q '^watcher: FAILED' "$child_out" 2>/dev/null; then
-    echo "watcher: FAILED - watcher cycle exited $rc without an actionable reason"
+  capture_failed_output "$child_out"
+  message="watcher: FAILED - watcher cycle exited $rc without an actionable reason"
+  if grep -q '^watcher: FAILED' "$child_out" 2>/dev/null; then
+    message=
   fi
   rm -f "$child_out" 2>/dev/null || true
   child=
   child_out=
   status=$rc
   [ "$status" -gt 0 ] || status=1
-  return "$status"
+  fail_unexplained_cycle "$message" "$status"
+  return $?
 }
 
-# Verify the outcome: poll until this child is the confirmed healthy watcher, or
-# until some other watcher legitimately holds the singleton (a startup race), or
-# until the child gives up. Only then print the honest line.
-# date(1) exposes whole seconds. Keep the configured confirmation budget from
-# collapsing when startup begins just before the next second boundary.
-deadline=$(( $(date +%s) + CONFIRM_TIMEOUT + 1 ))
-while :; do
-  if healthy_watcher; then
-    if [ "$HEALTHY_PID" = "$child" ]; then
-      cycle_refresh_lock_before
-      cycle_mark_predecessor_successor "started:$child"
-      echo "watcher: started pid=$child (beacon fresh)"
+# One arm attempt: attach to a live healthy cycle, or start and verify a fresh
+# one, then follow it to its end. Returns 0 with the wake reason already printed,
+# 3 when the cycle ended unexplained and repair should be considered, or any
+# other non-zero for a terminal failure that repair cannot fix.
+arm_once() {
+  local deadline rc child_done
+  child=
+  child_out=
+
+  # If a genuinely live+fresh watcher already holds the lock, do not start a
+  # second one - attach to that cycle and wait until it ends so the harness
+  # notify fires then, not as an immediate empty wake. (--restart skips this on
+  # the first attempt: it just stopped this home's watcher and wants a fresh one.)
+  if [ "$mode" = arm ] && healthy_watcher; then
+    cycle_mark_predecessor_successor "attached:$HEALTHY_PID"
+    cycle_begin "$HEALTHY_PID" attached
+    report_attached
+    attach_and_wait "$HEALTHY_PID"
+    return $?
+  fi
+
+  trap 'handle_arm_signal HUP 129' HUP
+  trap 'handle_arm_signal TERM 143' TERM
+  trap 'handle_arm_signal INT 130' INT
+
+  child_out=$(mktemp "$STATE/.watch-arm-output.XXXXXX") || {
+    echo "watcher: FAILED - no live watcher with a fresh beacon"
+    return 1
+  }
+  "$WATCH" >"$child_out" &
+  child=$!
+  cycle_begin "$child" started
+  child_done=0
+
+  # Verify the outcome: poll until this child is the confirmed healthy watcher, or
+  # until some other watcher legitimately holds the singleton (a startup race), or
+  # until the child gives up. Only then print the honest line.
+  # date(1) exposes whole seconds. Keep the configured confirmation budget from
+  # collapsing when startup begins just before the next second boundary.
+  deadline=$(( $(date +%s) + CONFIRM_TIMEOUT + 1 ))
+  while :; do
+    if healthy_watcher; then
+      if [ "$HEALTHY_PID" = "$child" ]; then
+        cycle_refresh_lock_before
+        cycle_mark_predecessor_successor "started:$child"
+        echo "watcher: started pid=$child (beacon fresh)"
+        wait "$child"
+        rc=$?
+        owned_child_finished "$rc"
+        return $?
+      fi
+      # Another watcher won the singleton; our child stood down.
       wait "$child"
       rc=$?
       owned_child_finished "$rc"
-      exit $?
+      return $?
     fi
-    # Another watcher won the singleton; our child stood down.
-    wait "$child"
-    rc=$?
-    owned_child_finished "$rc"
-    exit $?
-  fi
-  if [ "$child_done" -eq 0 ] && ! fm_pid_alive "$child"; then
-    wait "$child"
-    rc=$?
-    child_done=1
-    owned_child_finished "$rc"
-    exit $?
-  fi
-  [ "$(date +%s)" -ge "$deadline" ] && break
-  sleep 0.2
-done
+    if [ "$child_done" -eq 0 ] && ! fm_pid_alive "$child"; then
+      wait "$child"
+      rc=$?
+      child_done=1
+      owned_child_finished "$rc"
+      return $?
+    fi
+    [ "$(date +%s)" -ge "$deadline" ] && break
+    sleep 0.2
+  done
 
-trap - HUP TERM INT
-print_watch_output "$child_out"
-cleanup_child
-wait "$child" 2>/dev/null
-rc=$?
-cycle_log_append "$rc" "$(cycle_signal_name "$rc")" confirmation-timeout none
-echo "watcher: FAILED - no live watcher with a fresh beacon"
-exit 1
+  trap - HUP TERM INT
+  capture_failed_output "$child_out"
+  cleanup_child
+  wait "$child" 2>/dev/null
+  rc=$?
+  cycle_log_append "$rc" "$(cycle_signal_name "$rc")" confirmation-timeout none
+  fail_unexplained_cycle "watcher: FAILED - no live watcher with a fresh beacon" 1
+  return $?
+}
+
+# --- bounded repair -----------------------------------------------------------
+#
+# A watcher child that dies without an actionable reason used to end the arm
+# immediately, which surfaced to the captain as a blind-supervision banner and a
+# manual re-arm. Repair that automatically, but BOUNDED: masking a genuinely
+# broken watcher behind endless silent restarts would recreate exactly the blind
+# state this layer exists to prevent. After the budget is spent the arm stops
+# retrying and raises one user-visible alert through the shared supervision
+# alert channels, then reports the same typed failure it always did.
+# The alert is one-shot per outage: a successful cycle re-arms it.
+REPAIR_RETRIES=${FM_WATCH_REPAIR_RETRIES:-3}
+case "$REPAIR_RETRIES" in ''|*[!0-9]*) REPAIR_RETRIES=3 ;; esac
+REPAIR_DELAY=${FM_WATCH_REPAIR_DELAY:-2}
+case "$REPAIR_DELAY" in ''|*[!0-9.]*) REPAIR_DELAY=2 ;; esac
+REPAIR_ALERT_MARKER="$STATE/.alert-watch-repair"
+
+repair_attempts=0
+while :; do
+  arm_once
+  arm_rc=$?
+  if [ "$arm_rc" -ne 3 ]; then
+    [ "$arm_rc" -eq 0 ] && fm_alert_clear_once "$REPAIR_ALERT_MARKER"
+    exit "$arm_rc"
+  fi
+  if [ "$repair_attempts" -lt "$REPAIR_RETRIES" ]; then
+    repair_attempts=$((repair_attempts + 1))
+    # A repair attempt is not a fresh captain-facing arm: it re-arms in place.
+    mode=arm
+    echo "watcher: repairing dead cycle (attempt $repair_attempts/$REPAIR_RETRIES)" >&2
+    sleep "$REPAIR_DELAY"
+    continue
+  fi
+  [ -n "$ARM_FAIL_OUTPUT" ] && printf '%s\n' "$ARM_FAIL_OUTPUT"
+  [ -n "$ARM_FAIL_MESSAGE" ] && printf '%s\n' "$ARM_FAIL_MESSAGE"
+  fm_alert_notify_once "$REPAIR_ALERT_MARKER" \
+    "firstmate: supervision is down" \
+    "The watcher could not be repaired after $REPAIR_RETRIES attempts in $FM_HOME. Supervision is off until it is restarted by hand." >/dev/null 2>&1 || true
+  exit "$ARM_FAIL_STATUS"
+done

@@ -41,6 +41,8 @@ The turn-end guard remains the final backstop rather than the normal continuity 
 An actionable child output returns that reason normally.
 A zero/empty child return rechecks the home lock and beacon, attaches to a verified healthy successor when one exists, or emits `watcher: FAILED - cycle ended without an actionable reason` and exits nonzero.
 An attached arm follows verified identity-matched successors and reports the same typed failure if that chain ends without one.
+A cycle that ends unexplained is repaired in place first, under a bounded retry budget, and only the exhausted budget produces that typed failure plus one user-visible alert; [`supervision-alerts.md`](supervision-alerts.md) owns that contract.
+Repair does not change the classification above, so stdout still ends with exactly one terminal line for the adapters that parse it.
 
 The arm layer appends one tab-separated record per observed cycle to `state/.watch-cycle-exits.log`.
 Each record includes arm and watcher PIDs, start and end timestamps, exit code and signal, classified reason, beacon age, lock identity before and after close, and successor disposition.

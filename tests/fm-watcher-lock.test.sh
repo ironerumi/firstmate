@@ -15,6 +15,12 @@ LIB="$ROOT/bin/fm-wake-lib.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-watcher-lock-tests)
 
+# This suite owns the arm layer's CLASSIFICATION contract: which cycle end is a
+# wake, an attach, or a typed failure. The bounded repair loop layered above that
+# classification is owned by tests/fm-supervision-alert.test.sh, so disable it
+# here and let each case observe the underlying outcome directly.
+export FM_WATCH_REPAIR_RETRIES=0
+
 mark_pr_check_migration_complete() {
   local state=$1
   printf '%s\n' fm-pr-check-migration-scan-v1 > "$state/.pr-check-migration-scan-v1"

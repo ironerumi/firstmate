@@ -26,6 +26,7 @@
   "readmeSetupTargets": [
     "docs/configuration.md",
     "docs/wedge-alarm.md",
+    "docs/supervision-alerts.md",
     "docs/tmux-backend.md",
     "docs/herdr-backend.md",
     "docs/zellij-backend.md",
@@ -75,6 +76,10 @@
     },
     {
       "source": "docs/wedge-alarm.md",
+      "target": "docs/verification/supervision.md"
+    },
+    {
+      "source": "docs/supervision-alerts.md",
       "target": "docs/verification/supervision.md"
     },
     {
@@ -314,6 +319,10 @@
     {
       "path": "docs/verification/supervision.md",
       "audience": "maintainer-verification"
+    },
+    {
+      "path": "docs/supervision-alerts.md",
+      "audience": "operator-current"
     },
     {
       "path": "docs/watcher-continuity.md",
