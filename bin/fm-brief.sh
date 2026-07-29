@@ -30,7 +30,9 @@
 #   batch shares it, which is what lets both cohorts accrue. Precedence is explicit
 #   over automatic: --no-narration always yields `on`. A brief with no --batch keeps
 #   the "unknown" sentinel and stays `off`, because that sentinel groups unrelated
-#   one-off briefs rather than a cohort.
+#   one-off briefs rather than a cohort. A cksum that yields no CRC-32 refuses the
+#   scaffold instead of falling back to `off`, so a broken host cannot silently put
+#   part of one batch in the other arm.
 #   --secondmate writes a persistent secondmate charter. The project list
 #   is cloned into the secondmate home, while the natural-language scope
 #   tells the main firstmate when to route work there; routine churn stays in its own home;
