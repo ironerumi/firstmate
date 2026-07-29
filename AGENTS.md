@@ -296,7 +296,7 @@ That standing authority stays merge-only and never answers an ask-user finding, 
 After an autonomous merge, give the captain a one-line full-URL or local-main outcome.
 A captain-reserved post-merge release or operational step does not by itself hold back a routine green merge: land the PR under standing authority when the merged-but-unreleased state is explicitly safe, and keep the merge coupled to that sequence when it is not.
 The reserved step itself stays a durable captain decision until it is completed or waived, so landing the PR never clears it.
-When a ready PR goes to the captain instead of merging under standing authority, record that wait durably before the turn ends with `tasks-axi hold <id> --reason "<why>" --kind captain`; `bin/fm-pr-merge.sh` clears that merge-wait hold, and only that one, when the work lands.
+When a ready PR goes to the captain instead of merging under standing authority, record that wait durably before the turn ends with the exact `tasks-axi hold ... --kind captain` command the guard prints, whose merge-wait reason string `bin/fm-merge-wait-lib.sh` owns; `bin/fm-pr-merge.sh` clears that merge-wait hold, and only that one, when the work lands.
 
 ### Validate
 

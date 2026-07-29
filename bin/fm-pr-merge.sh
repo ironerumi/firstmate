@@ -21,6 +21,10 @@
 # rule is the sole blocker (AGENTS.md section 7 owns the full merge-only scope).
 # Near-miss spellings (--admin=...) are refused rather than silently forwarded
 # without admin effect.
+#
+# A successful merge also clears the task's captain hold, but only when that
+# hold's recorded reason is the merge-wait reason owned by
+# bin/fm-merge-wait-lib.sh; any other captain hold survives the merge.
 # Usage: fm-pr-merge.sh <task-id> <pr-url> [-- <extra pr merge args>]
 set -eu
 

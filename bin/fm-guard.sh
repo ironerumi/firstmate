@@ -13,7 +13,8 @@
 # distinct staleness episode in this FM_HOME (keyed to beacon mtime or absence);
 # later guarded commands in the same episode print a one-line reminder instead.
 # Episode state lives only under state/.guard-watcher-stale-banner (volatile,
-# bounded). Independent alarms (queued wakes, worktree tangle) are never
+# bounded). Independent alarms (queued wakes, worktree tangle, a ready PR waiting
+# on the captain with no durable captain-kind hold recording that wait) are never
 # suppressed by that dedup. Normal wake handling (watcher briefly down between a
 # wake and the next supervision resume) stays inside the grace window and stays
 # silent. Always exits 0: the guard warns, it never blocks.
