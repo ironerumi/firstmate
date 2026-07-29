@@ -177,11 +177,46 @@ run_in_repo no-mistakes axi run
 assert_allowed "a failed run whose head is not this worktree's history"
 pass "a failed run outside this worktree's history never gates it"
 
+# A gate row in the steps table promotes an ACTIVE run to parked and nothing
+# else: a run that ended at its gate is finished, not answerable, so it must keep
+# the terminal behaviour its own status word states.
+set_run cancelled 01CANCELGATE '    review,awaiting_approval,3,900'
+: > "$STATUS_FILE"
+: > "$NM_FAKE_LOG"
+run_in_repo no-mistakes axi run
+assert_refused nm-unreported-failure "a replacement run after a cancellation at a gate"
+nm_called_with "axi run" && fail "the refused run must never reach the real binary"
+run_in_repo no-mistakes axi abort
+assert_allowed "an abort of a run already cancelled at its gate"
+printf 'blocked: run 01CANCELGATE cancelled at its review gate\n' >> "$STATUS_FILE"
+run_in_repo no-mistakes axi run
+assert_allowed "a replacement run once the cancellation was reported"
+pass "a run cancelled at a gate stays terminal and clears through the reporting path"
+
+set_run failed 01GATEELSEWHERE '    review,fix_review,2,400' 0000000000000000000000000000000000000000
+: > "$STATUS_FILE"
+run_in_repo no-mistakes axi run
+assert_allowed "a failed run at a gate outside this worktree's history"
+pass "a gate row never bypasses the failed-run code-identity test"
+
+set_run harvesting 01UNKNOWNGATE '    review,awaiting_approval,3,900'
+: > "$NM_FAKE_LOG"
+run_in_repo no-mistakes axi run
+assert_allowed "an unrecognized run word carrying a gate row"
+nm_called_with "axi run" || fail "an unrecognized run word must exec the real tool"
+run_in_repo git push origin fm/task-x
+assert_allowed "a push under an unrecognized run word carrying a gate row"
+pass "an unrecognized run word stays permissive even with a gate row"
+
 # --- 6. a conclusively terminal run never blocks the next one ---------------
 
 set_run completed 01DONE '    ci,completed,0,600'
 run_in_repo no-mistakes axi run
 assert_allowed "a new run after a completed run"
+set_run completed 01DONEGATE '    review,awaiting_approval,0,900'
+run_in_repo no-mistakes axi run
+assert_allowed "a new run after a completed run whose steps table kept a gate row"
+set_run completed 01DONE '    ci,completed,0,600'
 run_in_repo git push origin fm/task-x
 assert_allowed "a push after a completed run"
 pass "a genuinely new run and push after a terminal run are not interfered with"

@@ -59,6 +59,8 @@ Attribution is by branch identity: an active run on this branch is precisely the
 Code identity is applied only to a `failed` run, where the question is whether this worktree's work is the work that failed; a failed run whose head is not on this worktree's line of history does not gate it.
 
 Status words are classified from three explicit lists, and anything outside them is `unknown`.
+An `awaiting_approval` or `fix_review` row in the steps table promotes an `active` run to `parked`, because that is where a gate always appears while the run-level word still reads `running`.
+It promotes nothing else: a `failed`, `cancelled`, `completed`, or unrecognized run word is the run's own verdict, so a run that was cancelled or that failed at a gate stays terminal, keeps its code-identity attribution, and clears through the reporting path rather than becoming an unclearable live run.
 
 ## Fail open, always
 

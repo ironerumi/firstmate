@@ -171,8 +171,10 @@ fm_nm_run_state() {  # <worktree> [timeout-seconds]
   run_id=$(fm_nm_strip_quotes "$(fm_nm_field "$out" id)")
   state=$(fm_nm_classify_status "$(fm_nm_strip_quotes "$(fm_nm_field "$out" status)")")
   # A gate parks the run even when the run-level status word still reads active:
-  # the steps table is where awaiting_approval and fix_review always appear.
-  if [ "$state" != parked ]; then
+  # the steps table is where awaiting_approval and fix_review always appear. Only
+  # an active run is read that way: a terminal, failed or unrecognized run word is
+  # the run's own verdict, and it outranks a gate row the run left behind.
+  if [ "$state" = active ]; then
     if printf '%s\n' "$out" | grep -Eq '^[[:space:]]*[^,]+,[[:space:]]*"?(awaiting_approval|fix_review)"?[[:space:]]*,'; then
       state=parked
     fi
