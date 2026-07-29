@@ -92,10 +92,12 @@ Expected submit matrix: proven pending plus busy is accepted as queued; proven p
 ### Cleanup endpoint identity
 
 The cleanup identity boundary was validated on 2026-07-28 with tmux 3.6a and metadata fixtures for every supported backend.
+The ad-hoc carve-out is pinned in the same suite and was validated on 2026-07-29 from metadata fixtures alone, under stock macOS Bash 3.2.57.
 
 ```sh
 tests/fm-teardown-endpoint-safety.test.sh
 tests/fm-teardown.test.sh
+tests/fm-task-register.test.sh
 tests/fm-backend-herdr.test.sh
 tests/fm-backend-zellij.test.sh
 tests/fm-backend-orca.test.sh
@@ -106,15 +108,22 @@ Bounded output from the incident regression:
 
 ```text
 ok - fm-teardown: missing, empty, malformed, ambiguous, and task-mismatched endpoints refuse before every mutation or runtime call
+ok - cleanup identity: forged, drifted, and ambiguous kind=adhoc records refuse before every mutation or runtime call
+ok - cleanup identity: a registered kind=adhoc record clears its volatile state with no endpoint, worktree, or backlog work
 ok - cleanup identity: valid tmux, Herdr, Zellij, Orca, and cmux records validate while every empty backend target refuses
 ok - tmux backend: direct empty target returns nonzero without invoking tmux
 ok - process cleanup: creation-time PID identity removes only the exact child and preserves the control child
-ok - fm-teardown: dedicated-socket invalid cleanup preserves target/control and valid cleanup removes only the exact target
+ok - fm-teardown: exact tmux cleanup preserves invalid and prefix-matched neighbors while removing only the recorded target
+ok - a registered ad-hoc identity supports guarded merge recording and non-destructive cleanup
 ```
 
 The dedicated tmux cell removed ambient tmux variables, required a socket-bound wrapper, kept one target and one independent control window, and proved the wrapper was not called for invalid metadata or a direct empty target.
 Valid cleanup removed only the exact task-bound target and left the control window live.
 The metadata-only validation covers tmux, Herdr, Zellij, Orca, and cmux before backend dispatch.
+The ad-hoc fixtures exercised the only path allowed to skip that validation: the exact record `bin/fm-task-register.sh` writes cleared its own volatile state with no runtime command, no worktree change, and no backlog reminder, while a foreign, missing, or ambiguous harness, a missing project, and a forged `window=`, `worktree=`, or `tasktmp=` each refused with metadata, worktree, and temp root preserved.
+An ambiguous `kind=` refused through the ordinary endpoint gate rather than reaching the carve-out, and `--force` bypassed neither.
+Removing either the carve-out's shape validation or its forbidden-field check turned those refusals into successful teardowns, so the fixtures pin the boundary rather than restating it.
+[`configuration.md`](../configuration.md#runtime-backend-configbackend--fm_backend) owns the resulting contract.
 Claude, Codex, OpenCode, Pi, pi-signed, Grok, and Kimi share that backend cleanup boundary; their harness-specific hook files and token cleanup run only after it, so no harness needs a separate endpoint parser.
 
 ## Herdr

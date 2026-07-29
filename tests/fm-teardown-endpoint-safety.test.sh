@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Regression tests for cleanup endpoint identity validation.
+# Regression tests for cleanup endpoint identity validation, including the
+# kind=adhoc carve-out that is the only path allowed to skip it.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -91,6 +92,110 @@ test_invalid_endpoint_records_refuse_before_mutation() {
   assert_refused_without_mutation "$dir" "$id" "duplicate task binding"
 
   pass "fm-teardown: missing, empty, malformed, ambiguous, and task-mismatched endpoints refuse before every mutation or runtime call"
+}
+
+# Write a kind=adhoc record in the shape bin/fm-task-register.sh publishes, with
+# the three fields an ad-hoc task must not own left injectable so a forged
+# variant can be built. Extra key=val lines are appended verbatim.
+write_adhoc_meta() {  # <case> <id> <window> <worktree> <tasktmp> [key=val ...]
+  local dir=$1 id=$2 window=$3 worktree=$4 tasktmp=$5
+  shift 5
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=$window" "worktree=$worktree" "project=$dir/project" \
+    "kind=adhoc" "mode=no-mistakes" "yolo=off" "tasktmp=$tasktmp" \
+    "model=default" "effort=default" "home=$dir/home" "$@"
+}
+
+# bin/fm-teardown.sh's validate_adhoc_task_record is the only authorization that
+# skips fm_backend_validate_task_endpoint, so it must be no laxer: it may admit
+# only what bin/fm-task-register.sh writes and must refuse every drifted or
+# forged kind=adhoc record with task state preserved. These run through
+# run_case, so --force buys no way past the identity boundary either.
+test_forged_adhoc_records_refuse_before_mutation() {
+  local dir id=adhoc-task
+
+  dir=$(make_case adhoc-foreign-harness)
+  write_adhoc_meta "$dir" "$id" "" "" "" "harness=claude"
+  assert_refused_without_mutation "$dir" "$id" "ad-hoc record with a crew harness"
+  assert_grep 'non-ad-hoc harness identity' "$dir/stderr" \
+    "ad-hoc record with a crew harness: refusal did not name the harness identity"
+
+  dir=$(make_case adhoc-missing-harness)
+  write_adhoc_meta "$dir" "$id" "" "" ""
+  assert_refused_without_mutation "$dir" "$id" "ad-hoc record without a harness"
+
+  dir=$(make_case adhoc-ambiguous-harness)
+  write_adhoc_meta "$dir" "$id" "" "" "" "harness=adhoc" "harness=adhoc"
+  assert_refused_without_mutation "$dir" "$id" "ad-hoc record with an ambiguous harness"
+
+  dir=$(make_case adhoc-missing-project)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=" "worktree=" "harness=adhoc" "kind=adhoc" "mode=no-mistakes" \
+    "yolo=off" "tasktmp=" "home=$dir/home"
+  assert_refused_without_mutation "$dir" "$id" "ad-hoc record without a project"
+  assert_grep 'project identity' "$dir/stderr" \
+    "ad-hoc record without a project: refusal did not name the project identity"
+
+  # Each forged field below would otherwise reach a destructive branch with no
+  # endpoint validation behind it: an endpoint kill, a branch delete plus
+  # treehouse return, and rm -rf of the recorded per-task temp root.
+  dir=$(make_case adhoc-forged-window)
+  write_adhoc_meta "$dir" "$id" "firstmate:fm-$id" "" "" "harness=adhoc"
+  assert_refused_without_mutation "$dir" "$id" "ad-hoc record carrying a window"
+  assert_grep 'non-empty window' "$dir/stderr" \
+    "ad-hoc record carrying a window: refusal did not name the field it must not own"
+
+  dir=$(make_case adhoc-forged-worktree)
+  write_adhoc_meta "$dir" "$id" "" "$dir/worktree" "" "harness=adhoc"
+  assert_refused_without_mutation "$dir" "$id" "ad-hoc record carrying a worktree"
+  assert_grep 'non-empty worktree' "$dir/stderr" \
+    "ad-hoc record carrying a worktree: refusal did not name the field it must not own"
+
+  dir=$(make_case adhoc-forged-tasktmp)
+  mkdir -p "$dir/tasktmp"
+  : > "$dir/tasktmp/sentinel"
+  write_adhoc_meta "$dir" "$id" "" "" "$dir/tasktmp" "harness=adhoc"
+  assert_refused_without_mutation "$dir" "$id" "ad-hoc record carrying a tasktmp"
+  assert_present "$dir/tasktmp/sentinel" \
+    "ad-hoc record carrying a tasktmp: refusal removed the forged temp root"
+
+  # An ambiguous kind= is not ad-hoc, so the record stays on the endpoint gate
+  # and refuses there for its missing endpoint rather than taking the carve-out.
+  dir=$(make_case adhoc-ambiguous-kind)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=" "worktree=" "project=$dir/project" "harness=adhoc" \
+    "kind=ship" "kind=adhoc" "mode=no-mistakes" "yolo=off" "tasktmp=" \
+    "home=$dir/home"
+  assert_refused_without_mutation "$dir" "$id" "ad-hoc record with an ambiguous kind"
+  assert_grep 'window endpoint' "$dir/stderr" \
+    "ad-hoc record with an ambiguous kind: record did not fall back to the endpoint gate"
+
+  pass "cleanup identity: forged, drifted, and ambiguous kind=adhoc records refuse before every mutation or runtime call"
+}
+
+test_registered_adhoc_record_clears_only_volatile_state() {
+  local dir id=adhoc-registered
+  dir=$(make_case adhoc-registered)
+  touch "$dir/home/state/.last-watcher-beat"
+  write_adhoc_meta "$dir" "$id" "" "" "" "harness=adhoc"
+  : > "$dir/home/state/$id.status"
+  : > "$dir/home/state/$id.turn-ended"
+
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
+  FM_RUNTIME_LOG="$dir/runtime.log" PATH="$dir/fakebin:$PATH" \
+    "$TEARDOWN" "$id" > "$dir/stdout" 2> "$dir/stderr" \
+    || fail "registered ad-hoc record: cleanup failed: $(cat "$dir/stderr")"
+
+  assert_absent "$dir/home/state/$id.meta" "registered ad-hoc record: cleanup kept task metadata"
+  assert_absent "$dir/home/state/$id.status" "registered ad-hoc record: cleanup kept the status record"
+  assert_absent "$dir/home/state/$id.turn-ended" "registered ad-hoc record: cleanup kept the turn-end record"
+  assert_present "$dir/worktree/sentinel" "registered ad-hoc record: cleanup touched a worktree it does not own"
+  [ ! -s "$dir/runtime.log" ] || fail "registered ad-hoc record: cleanup ran a runtime command: $(cat "$dir/runtime.log")"
+  assert_grep "teardown $id complete" "$dir/stdout" \
+    "registered ad-hoc record: cleanup did not report completion"
+  assert_no_grep 'Backlog:' "$dir/stdout" \
+    "registered ad-hoc record: cleanup emitted a worker backlog reminder"
+  pass "cleanup identity: a registered kind=adhoc record clears its volatile state with no endpoint, worktree, or backlog work"
 }
 
 test_supported_backend_endpoint_records_validate() {
@@ -269,6 +374,8 @@ SH
 }
 
 test_invalid_endpoint_records_refuse_before_mutation
+test_forged_adhoc_records_refuse_before_mutation
+test_registered_adhoc_record_clears_only_volatile_state
 test_supported_backend_endpoint_records_validate
 test_tmux_empty_target_refuses_without_invocation
 test_recorded_process_identity_cleanup_is_exact
