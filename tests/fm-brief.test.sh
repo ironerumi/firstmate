@@ -376,12 +376,15 @@ test_pipeline_narration_arm_is_explicit_and_diff_bounded() {
   pass "fm-brief.sh: narration arm is unbatched-off, explicit, marked, and diff-bounded"
 }
 
-# The arm a batch id resolves to. Fails loudly rather than returning a default,
-# so a missing or duplicated marker can never be read as an arm.
+# The arm a batch id resolves to. Returns nonzero (never a default) when the
+# brief is missing or does not carry exactly one narration_arm marker, so a
+# missing or duplicated marker can never be read as an arm. Every call site runs
+# inside `$(...)`, where fail()'s exit would kill only the subshell, so each one
+# must check the status: `arm=$(narration_arm_of "$b") || fail ...`.
 narration_arm_of() {
   local brief=$1 marker
-  [ "$(grep -c '^narration_arm: ' "$brief")" -eq 1 ] \
-    || fail "$brief did not carry exactly one narration_arm marker"
+  [ -f "$brief" ] || return 1
+  [ "$(grep -c '^narration_arm: ' "$brief")" -eq 1 ] || return 1
   marker=$(grep '^narration_arm: ' "$brief")
   printf '%s\n' "${marker#narration_arm: }"
 }
@@ -390,7 +393,7 @@ narration_arm_of() {
 # both cohorts accrue on their own. The contract under test is the assignment's
 # determinism and batch scoping, not which arm any one id happens to draw.
 test_narration_arm_is_deterministic_and_batch_scoped() {
-  local home rerun_home id arm first seen_on=0 seen_off=0
+  local home rerun_home id arm rerun_arm first seen_on=0 seen_off=0
   home="$TMP_ROOT/narration-assign-home"
   rerun_home="$TMP_ROOT/narration-assign-rerun-home"
   write_registry "$home"
@@ -401,8 +404,11 @@ test_narration_arm_is_deterministic_and_batch_scoped() {
   for id in batch-a batch-b batch-c batch-d; do
     FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "assign-$id" nm-proj --source firstmate --batch "$id" >/dev/null 2>&1
     FM_HOME="$rerun_home" "$ROOT/bin/fm-brief.sh" "assign-$id" nm-proj --source firstmate --batch "$id" >/dev/null 2>&1
-    arm=$(narration_arm_of "$home/data/assign-$id/brief.md")
-    [ "$arm" = "$(narration_arm_of "$rerun_home/data/assign-$id/brief.md")" ] \
+    arm=$(narration_arm_of "$home/data/assign-$id/brief.md") \
+      || fail "batch id $id did not scaffold a brief carrying exactly one narration_arm marker"
+    rerun_arm=$(narration_arm_of "$rerun_home/data/assign-$id/brief.md") \
+      || fail "batch id $id did not carry exactly one narration_arm marker in the second home"
+    [ "$arm" = "$rerun_arm" ] \
       || fail "batch id $id drew a different arm on a repeated run"
     case "$arm" in
       on) seen_on=1 ;;
@@ -417,7 +423,8 @@ test_narration_arm_is_deterministic_and_batch_scoped() {
   first=""
   for id in 1 2 3; do
     FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "cohort-$id" nm-proj --source firstmate --batch shared-cohort >/dev/null 2>&1
-    arm=$(narration_arm_of "$home/data/cohort-$id/brief.md")
+    arm=$(narration_arm_of "$home/data/cohort-$id/brief.md") \
+      || fail "brief cohort-$id did not carry exactly one narration_arm marker"
     [ -n "$first" ] || first=$arm
     [ "$arm" = "$first" ] || fail "brief cohort-$id left its batch's arm ($arm, expected $first)"
   done
@@ -425,7 +432,9 @@ test_narration_arm_is_deterministic_and_batch_scoped() {
   # An id that resolves to `on` must carry the clause the arm exists to test,
   # exactly as the explicit toggle does.
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-armed nm-proj --batch batch-a >/dev/null 2>&1
-  [ "$(narration_arm_of "$home/data/auto-armed/brief.md")" = on ] \
+  arm=$(narration_arm_of "$home/data/auto-armed/brief.md") \
+    || fail "an automatically armed brief did not carry exactly one narration_arm marker"
+  [ "$arm" = on ] \
     || fail "the on-parity fixture batch id no longer resolves to the on arm"
   [ "$(grep -c '^narration_arm: ' "$home/data/auto-armed/brief.md")" -eq 1 ] \
     || fail "an automatically armed brief did not carry exactly one narration_arm stamp"
@@ -434,12 +443,16 @@ test_narration_arm_is_deterministic_and_batch_scoped() {
 
   # Explicit beats automatic: --no-narration arms an off-parity batch anyway.
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" explicit-over-auto nm-proj --batch batch-b --no-narration >/dev/null 2>&1
-  [ "$(narration_arm_of "$home/data/explicit-over-auto/brief.md")" = on ] \
+  arm=$(narration_arm_of "$home/data/explicit-over-auto/brief.md") \
+    || fail "an explicitly toggled brief did not carry exactly one narration_arm marker"
+  [ "$arm" = on ] \
     || fail "--no-narration lost to the automatic arm assignment"
 
   # No --batch means the "unknown" sentinel, which is not a cohort: it stays off.
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" unbatched nm-proj >/dev/null 2>&1
-  [ "$(narration_arm_of "$home/data/unbatched/brief.md")" = off ] \
+  arm=$(narration_arm_of "$home/data/unbatched/brief.md") \
+    || fail "an unbatched brief did not carry exactly one narration_arm marker"
+  [ "$arm" = off ] \
     || fail "an unbatched brief was automatically armed"
   assert_no_grep "No-narration experiment arm" "$home/data/unbatched/brief.md" \
     "an unbatched brief carried the no-narration clause"
@@ -449,17 +462,30 @@ test_narration_arm_is_deterministic_and_batch_scoped() {
 # batch-a resolves to the on arm (see the deterministic test above), so any
 # marker or clause here would be automatic arming of an ineligible shape.
 test_narration_arm_assignment_is_eligible_shape_only() {
-  local home id
+  local home id arm status
   home="$TMP_ROOT/narration-ineligible-home"
   write_registry "$home"
 
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-direct direct-proj --batch batch-a >/dev/null 2>&1
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-direct-freeform direct-proj --free-form --batch batch-a >/dev/null 2>&1
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-local local-proj --batch batch-a >/dev/null 2>&1
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-scout nm-proj --scout --batch batch-a >/dev/null 2>&1
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-direct direct-proj --batch batch-a >/dev/null 2>&1 || status=$?
+  expect_code 0 "$status" "auto-direct: an ineligible shape must still scaffold"
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-direct-freeform direct-proj --free-form --batch batch-a >/dev/null 2>&1 || status=$?
+  expect_code 0 "$status" "auto-direct-freeform: an ineligible shape must still scaffold"
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-local local-proj --batch batch-a >/dev/null 2>&1 || status=$?
+  expect_code 0 "$status" "auto-local: an ineligible shape must still scaffold"
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-scout nm-proj --scout --batch batch-a >/dev/null 2>&1 || status=$?
+  expect_code 0 "$status" "auto-scout: an ineligible shape must still scaffold"
+  status=0
   FM_HOME="$home" FM_SECONDMATE_CHARTER=ops \
-    "$ROOT/bin/fm-brief.sh" auto-mate --secondmate --no-projects --batch batch-a >/dev/null 2>&1
+    "$ROOT/bin/fm-brief.sh" auto-mate --secondmate --no-projects --batch batch-a >/dev/null 2>&1 || status=$?
+  expect_code 0 "$status" "auto-mate: an ineligible shape must still scaffold"
+  # Absence is evidence only when the brief exists: grep on a missing file exits
+  # 2, which assert_no_grep reads as "no match".
   for id in auto-direct auto-direct-freeform auto-local auto-scout auto-mate; do
+    assert_present "$home/data/$id/brief.md" "$id: brief was not scaffolded"
     assert_no_grep "narration_arm:" "$home/data/$id/brief.md" \
       "$id gained a pipeline-only experiment marker from its batch id"
     assert_no_grep "No-narration experiment arm" "$home/data/$id/brief.md" \
@@ -467,8 +493,12 @@ test_narration_arm_assignment_is_eligible_shape_only() {
   done
 
   # A free-form no-mistakes ship is the same pipeline-led shape, so it is armed.
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-nm-freeform nm-proj --free-form --batch batch-a >/dev/null 2>&1
-  [ "$(narration_arm_of "$home/data/auto-nm-freeform/brief.md")" = on ] \
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-nm-freeform nm-proj --free-form --batch batch-a >/dev/null 2>&1 || status=$?
+  expect_code 0 "$status" "auto-nm-freeform: the eligible free-form shape must scaffold"
+  arm=$(narration_arm_of "$home/data/auto-nm-freeform/brief.md") \
+    || fail "a free-form no-mistakes ship did not carry exactly one narration_arm marker"
+  [ "$arm" = on ] \
     || fail "a free-form no-mistakes ship was excluded from its batch's arm"
   pass "fm-brief.sh: only the eligible pipeline-led shape is armed from its batch id"
 }
@@ -494,7 +524,34 @@ test_batch_values_are_rejected_before_writing() {
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" batch-missing nm-proj --batch >/dev/null 2>&1 || status=$?
   expect_code 1 "$status" "a --batch flag with no value must fail"
   assert_absent "$home/data/batch-missing/brief.md" "rejected valueless --batch still wrote a brief"
+
+  # A swallowed following flag would silently drop that flag and pick the arm
+  # from its name, so --batch rejects a flag-shaped value exactly as --atomic does.
+  status=0
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" batch-swallow nm-proj --batch --source firstmate >/dev/null 2>&1 || status=$?
+  expect_code 1 "$status" "a --batch value that is itself a flag must fail"
+  assert_absent "$home/data/batch-swallow/brief.md" "rejected flag-shaped --batch still wrote a brief"
   pass "fm-brief.sh: malformed batch values are rejected before any brief is written"
+}
+
+# The arm must never fall back to the control cohort when the CRC cannot be
+# computed: a silent `off` is the stuck single-arm failure again, and would split
+# one batch across arms between a host with a working cksum and one without.
+test_batch_arm_refuses_without_a_usable_cksum() {
+  local home stub output status=0
+  home="$TMP_ROOT/narration-nocksum-home"
+  stub="$TMP_ROOT/narration-nocksum-bin"
+  write_registry "$home"
+  mkdir -p "$stub"
+  printf '%s\n' '#!/bin/sh' 'exit 127' > "$stub/cksum"
+  chmod +x "$stub/cksum"
+
+  output=$(PATH="$stub:$PATH" FM_HOME="$home" \
+    "$ROOT/bin/fm-brief.sh" nocksum nm-proj --batch batch-a 2>&1) || status=$?
+  expect_code 1 "$status" "a cksum that yields no CRC must fail the scaffold, not draw the control arm"
+  assert_contains "$output" "cksum" "the refusal did not name the missing cksum requirement"
+  assert_absent "$home/data/nocksum/brief.md" "a scaffold with no usable cksum still wrote a brief"
+  pass "fm-brief.sh: an unusable cksum refuses loudly instead of silently drawing the control arm"
 }
 
 test_no_narration_rejects_non_pipeline_briefs() {
@@ -1022,6 +1079,7 @@ test_no_narration_rejects_non_pipeline_briefs
 test_narration_arm_is_deterministic_and_batch_scoped
 test_narration_arm_assignment_is_eligible_shape_only
 test_batch_values_are_rejected_before_writing
+test_batch_arm_refuses_without_a_usable_cksum
 test_faster_paths_use_configured_authority_without_stacked_review
 test_change_sizing_defaults_to_sequential_parts
 test_atomic_requires_and_records_its_reason

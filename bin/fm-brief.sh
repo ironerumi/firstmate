@@ -150,6 +150,7 @@ while [ $# -gt 0 ]; do
       BATCH=$2
       [ -n "$BATCH" ] || { echo "error: --batch value must not be empty" >&2; exit 1; }
       case "$BATCH" in
+        --*) echo "error: --batch requires a value" >&2; exit 1 ;;
         *$'\n'*) echo "error: --batch value must be one line" >&2; exit 1 ;;
       esac
       shift 2
@@ -418,6 +419,14 @@ if [ "$MODE" = no-mistakes ]; then
     # awk, not a prefix strip: cksum output is one line of whitespace-separated
     # fields, and implementations differ on padding around the checksum.
     BATCH_CRC=$(printf '%s' "$BATCH" | cksum | awk '{print $1}')
+    # No usable CRC must never read as the control arm: that would be the stuck
+    # single-arm failure again, and would split one batch across arms by host.
+    case "$BATCH_CRC" in
+      ''|*[!0-9]*)
+        echo "error: cksum produced no CRC-32 for --batch '$BATCH' (got: '$BATCH_CRC'); the narration arm requires a working POSIX cksum" >&2
+        exit 1
+        ;;
+    esac
     [ $((BATCH_CRC % 2)) -eq 0 ] || NARRATION_ARM=on
   fi
 fi
