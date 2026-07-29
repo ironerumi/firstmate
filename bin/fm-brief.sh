@@ -20,9 +20,19 @@
 #   --free-form opts a direct-PR or local-only ship task into the full mode-shaped
 #   contract when no exact owning skill applies. On no-mistakes projects it is an
 #   idempotent compatibility flag and cannot restore skill-led review ownership.
-#   --no-narration explicitly arms the default-off narration experiment for a
-#   pipeline-led no-mistakes ship brief. That brief stamps exactly one machine-readable
-#   `narration_arm: on|off` line. The flag is rejected for every other brief shape.
+#   --no-narration explicitly arms the narration experiment for a pipeline-led
+#   no-mistakes ship brief. That brief stamps exactly one machine-readable
+#   `narration_arm: on|off` line. The flag is rejected for every other brief shape,
+#   and no other shape stamps the marker.
+#   Without the flag, that same shape is armed automatically from --batch: the arm
+#   is the parity of the batch id's POSIX CRC-32 (`printf '%s' <id> | cksum`, odd =
+#   on), so one batch id always resolves to the same arm and every brief of one
+#   batch shares it, which is what lets both cohorts accrue. Precedence is explicit
+#   over automatic: --no-narration always yields `on`. A brief with no --batch keeps
+#   the "unknown" sentinel and stays `off`, because that sentinel groups unrelated
+#   one-off briefs rather than a cohort. A cksum that yields no CRC-32 refuses the
+#   scaffold instead of falling back to `off`, so a broken host cannot silently put
+#   part of one batch in the other arm.
 #   --secondmate writes a persistent secondmate charter. The project list
 #   is cloned into the secondmate home, while the natural-language scope
 #   tells the main firstmate when to route work there; routine churn stays in its own home;
@@ -39,8 +49,9 @@
 #   never pollutes it). --batch <id> stamps the shared batch grouping id for the
 #   same scanner (default sentinel "unknown" when omitted). Every generated
 #   variant (pipeline-led ship, skill-led ship, free-form ship, scout, and secondmate) carries
-#   exactly one `source:` + `batch_id:` pair. Malformed or missing option values
-#   are rejected before any file is written.
+#   exactly one `source:` + `batch_id:` pair. Malformed or missing option values,
+#   including an empty or multi-line --batch id, are rejected before any file is
+#   written, so both stamps stay one machine-readable line each.
 #   Every ship brief carries a Change sizing section, and this scaffold is the
 #   single owner of that contract. The default is sequential: independent parts
 #   of a task are implemented and delivered one at a time, because a restarted
@@ -140,6 +151,10 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || { echo "error: --batch requires a value" >&2; exit 1; }
       BATCH=$2
       [ -n "$BATCH" ] || { echo "error: --batch value must not be empty" >&2; exit 1; }
+      case "$BATCH" in
+        --*) echo "error: --batch requires a value" >&2; exit 1 ;;
+        *$'\n'*) echo "error: --batch value must be one line" >&2; exit 1 ;;
+      esac
       shift 2
       ;;
     --*) echo "error: unknown option: $1" >&2; exit 1 ;;
@@ -389,6 +404,35 @@ if [ "$NO_NARRATION" -eq 1 ] && [ "$MODE" != no-mistakes ]; then
   exit 1
 fi
 
+# Narration-arm assignment for the one eligible shape: the pipeline-led
+# no-mistakes ship brief (the same shape --no-narration is accepted for, and the
+# only one that stamps narration_arm at all). Explicit --no-narration wins, so
+# every existing caller keeps its exact arm. Otherwise a real --batch id selects
+# the arm from the parity of its POSIX CRC-32, which `cksum` computes identically
+# on every supported platform: one id therefore always resolves to the same arm,
+# and every brief of one batch shares it, which is what lets both cohorts accrue
+# without a hand-passed flag. The "unknown" sentinel (no --batch) stays in the
+# control arm because it groups unrelated one-off briefs rather than a cohort.
+NARRATION_ARM=off
+if [ "$MODE" = no-mistakes ]; then
+  if [ "$NO_NARRATION" -eq 1 ]; then
+    NARRATION_ARM=on
+  elif [ "$BATCH" != unknown ]; then
+    # awk, not a prefix strip: cksum output is one line of whitespace-separated
+    # fields, and implementations differ on padding around the checksum.
+    BATCH_CRC=$(printf '%s' "$BATCH" | cksum | awk '{print $1}')
+    # No usable CRC must never read as the control arm: that would be the stuck
+    # single-arm failure again, and would split one batch across arms by host.
+    case "$BATCH_CRC" in
+      ''|*[!0-9]*)
+        echo "error: cksum produced no CRC-32 for --batch '$BATCH' (got: '$BATCH_CRC'); the narration arm requires a working POSIX cksum" >&2
+        exit 1
+        ;;
+    esac
+    [ $((BATCH_CRC % 2)) -eq 0 ] || NARRATION_ARM=on
+  fi
+fi
+
 if [ "$MODE" != no-mistakes ] && [ "$FREE_FORM" -eq 0 ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate.
@@ -467,7 +511,7 @@ EOF
    raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden.
    Sole exception: one exact `bin/fm-pr-merge.sh '"$ID"' <PR url> ...` command that firstmate itself sends you; run it verbatim, changing nothing.
    Firstmate sends it only under captain authority to override branch protection - a per-PR authorization or an explicit standing preference - with review complete, CI green, and branch protection the only blocker.'
-    if [ "$NO_NARRATION" -eq 1 ]; then
+    if [ "$NARRATION_ARM" = on ]; then
       RULE1="$RULE1
 1a. No-narration experiment arm: emit only status signals and the pipeline's required output; no meta-commentary between tool calls."
     fi
@@ -504,8 +548,6 @@ DOD=${DOD%$'\n'}
 
 NARRATION_MARKER=
 if [ "$MODE" = no-mistakes ]; then
-  NARRATION_ARM=off
-  [ "$NO_NARRATION" -eq 0 ] || NARRATION_ARM=on
   NARRATION_MARKER=$'\n'"narration_arm: $NARRATION_ARM"
 fi
 
