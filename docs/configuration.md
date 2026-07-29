@@ -482,7 +482,9 @@ FM_WEDGE_ALARM_EXEC=              # notifier seam: route every channel (osascrip
 FM_WEDGE_ALARM_TIMEOUT_SECS=10    # maximum seconds for each osascript, herdr, override, or command: notifier before its watchdog terminates it and continues to the next channel; invalid or zero values use 10
 FM_ALERT_CHANNEL=                  # override config/supervision-alert with one directive for the watcher-repair and parked-work alerts; off|auto|osascript|slack|command:<cmd>; absent = auto plus slack (docs/supervision-alerts.md)
 FM_ALERT_EXEC=                     # notifier seam: route every supervision-alert channel through this command as `<cmd> <channel> <title> <summary>`; "discard" fires nothing; unset in production; tests/wake-helpers.sh points it at a recorder so no suite posts a real notification or Slack message
-FM_ALERT_TIMEOUT_SECS=10           # maximum seconds for each supervision-alert notifier before it is terminated and the next channel runs; invalid or zero values use 10
+FM_ALERT_TIMEOUT_SECS=10           # maximum seconds for each supervision-alert notifier before its process group is terminated and the next channel runs; invalid or zero values use 10
+FM_ALERT_LOG_MAX_BYTES=131072      # size cap for the supervision-alert diagnostic log (state/.alert.log); the newest 200 lines are kept when it is trimmed
+FM_ALERT_SLACK_CURL_TIMEOUT=10     # curl --max-time for the supervision-alert Slack post, inside the FM_ALERT_TIMEOUT_SECS watchdog
 FM_WATCH_REPAIR_RETRIES=3          # bounded re-arms after an unexpectedly dead watcher cycle before the arm reports failure and alerts; 0 disables repair
 FM_WATCH_REPAIR_DELAY=2            # seconds between watcher repair attempts
 FM_PARK_ALERT_SECS=1800            # seconds a task may wait on a human decision or merge approval before one deduplicated park alert fires

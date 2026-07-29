@@ -439,10 +439,6 @@ age_of() {  # seconds since file mtime; "due immediately" if missing
 PARK_ALERT_SECS=${FM_PARK_ALERT_SECS:-1800}
 PARK_SCAN_INTERVAL=${FM_PARK_SCAN_INTERVAL:-300}
 
-park_meta_value() {  # <meta> <key>
-  grep "^$2=" "$1" 2>/dev/null | tail -1 | cut -d= -f2- || true
-}
-
 # Print the human-readable gate this task is parked on, or fail when it is not
 # parked on a person at all.
 park_gate() {  # <task-id>
@@ -450,7 +446,7 @@ park_gate() {  # <task-id>
   statusf="$STATE/$id.status"
   meta="$STATE/$id.meta"
   [ -f "$statusf" ] || return 1
-  case "$(park_meta_value "$meta" kind)" in
+  case "$(fm_merge_wait_meta_value "$meta" kind)" in
     secondmate) return 1 ;;
   esac
   last=$(last_status_line "$statusf")
@@ -458,7 +454,7 @@ park_gate() {  # <task-id>
   if fm_merge_wait_reported_ready "$statusf"; then
     # With yolo on firstmate merges under standing authority, so no human is
     # holding this work and there is nothing to alert about.
-    [ "$(park_meta_value "$meta" yolo)" = on ] && return 1
+    [ "$(fm_merge_wait_meta_value "$meta" yolo)" = on ] && return 1
     printf 'a finished PR is waiting for a merge decision'
     return 0
   fi
@@ -472,8 +468,14 @@ park_gate() {  # <task-id>
   printf 'a worker is waiting on a decision'
 }
 
+# One scan raises at most one alert. A parked batch is one situation for the
+# captain - the motivating incident was a whole batch waiting on one merge
+# session - so N newly parked tasks produce one banner and one Slack message
+# naming each task and its gate, not N of each. Deduplication stays per task:
+# each hit claims its own marker, so a task already reported never repeats while
+# a task that parks later still earns its own line in a later scan.
 park_alert_scan() {
-  local meta id gate age marker
+  local meta id gate age marker parked=0 summary=
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
     id=$(basename "$meta" .meta)
@@ -485,9 +487,12 @@ park_alert_scan() {
     fi
     age=$(age_of "$STATE/$id.status")
     [ "$age" -ge "$PARK_ALERT_SECS" ] || continue
-    fm_alert_notify_once "$marker" "firstmate: work is parked on you" \
-      "$id has been waiting $((age / 60)) minutes: $gate." >/dev/null 2>&1 || true
+    fm_alert_claim_once "$marker" || continue
+    summary="$summary$id has been waiting $((age / 60)) minutes: $gate."$'\n'
+    parked=$((parked + 1))
   done
+  [ "$parked" -gt 0 ] || return 0
+  fm_alert_notify "firstmate: work is parked on you" "${summary%$'\n'}" >/dev/null 2>&1 || true
 }
 
 # Layer 2 + 3 signal scan: status files and turn-end markers. Each file is

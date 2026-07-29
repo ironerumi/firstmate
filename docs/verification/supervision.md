@@ -240,6 +240,8 @@ ok - a merge decision parked past the threshold alerts exactly once
 ok - clearing the gate re-arms park alerting
 ok - a worker waiting on a decision past the threshold alerts once
 ok - a resolved decision stops counting as a park
+ok - a scan collapses every parked task into one alert per channel
+ok - per-task dedup survives collapsing, so a later park alerts on its own
 ok - working time, declared waits, idle secondmates, standing authority, and blockers never alert
 ok - an action-free queue item never alerts
 ok - fm-supervision-alert.test.sh

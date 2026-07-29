@@ -327,9 +327,18 @@ handle_attached_signal() {
   exit "$rc"
 }
 
-trap 'handle_attached_signal HUP 129' HUP
-trap 'handle_attached_signal TERM 143' TERM
-trap 'handle_attached_signal INT 130' INT
+# Signal handling must never lapse: the repair loop can spend seconds between
+# arm attempts, and an adapter that retires an unready arm SIGTERMs it exactly
+# then. A trapless window there kills the arm on the default disposition, which
+# loses the lifecycle record this layer owns. Every path that stops owning a
+# child restores these instead of clearing the traps.
+install_attached_traps() {
+  trap 'handle_attached_signal HUP 129' HUP
+  trap 'handle_attached_signal TERM 143' TERM
+  trap 'handle_attached_signal INT 130' INT
+}
+
+install_attached_traps
 
 watch_output_has_wake() {
   local out=$1
@@ -468,6 +477,11 @@ arm_once() {
   local deadline rc child_done
   child=
   child_out=
+  # Buffered failure output belongs to the attempt that captured it. A repair
+  # attempt starts clean so an earlier dead child's bytes can never be printed
+  # in front of a later cycle's typed FAILED line.
+  ARM_FAIL_OUTPUT=
+  install_attached_traps
 
   # If a genuinely live+fresh watcher already holds the lock, do not start a
   # second one - attach to that cycle and wait until it ends so the harness
@@ -528,12 +542,12 @@ arm_once() {
     sleep 0.2
   done
 
-  trap - HUP TERM INT
   capture_failed_output "$child_out"
   cleanup_child
   wait "$child" 2>/dev/null
   rc=$?
   cycle_log_append "$rc" "$(cycle_signal_name "$rc")" confirmation-timeout none
+  install_attached_traps
   fail_unexplained_cycle "watcher: FAILED - no live watcher with a fresh beacon" 1
   return $?
 }

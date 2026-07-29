@@ -16,6 +16,8 @@ Once the budget is spent the arm stops retrying, prints the same typed failure l
 The alert is one-shot per outage; a cycle that recovers re-arms it.
 
 `bin/fm-watch.sh` sweeps for parked work on a slow cadence (`FM_PARK_SCAN_INTERVAL`, default 300 seconds) and alerts once when a task has been waiting on a person for longer than `FM_PARK_ALERT_SECS` (default 1800).
+One sweep raises at most one alert: every task that newly crossed the threshold in that sweep is named, with its gate, in a single banner and a single Slack message, because a parked batch is one situation for the captain rather than N.
+Deduplication is still per task, so an already-reported park never repeats and a task that parks later still earns its own line in a later sweep.
 Only two gates count as a person's turn to act: a reported-ready PR on a task firstmate may not merge itself, and an open `needs-decision` that is still the crew's current state.
 Ordinary working and validation time, a declared external wait, an idle secondmate, a task firstmate merges under standing authority, a worker blocked on firstmate, and a queue item with no task of its own are all excluded.
 The scan never queues a wake: an idle fleet has no supervision work to do, and turning a park into a wake would spend a turn to say "still parked".
@@ -36,7 +38,7 @@ An absent `config/supervision-alert` behaves as `auto` plus `slack`.
 Slack stays inert until it is configured, so a home that never set it up sees no change.
 
 Each channel is best-effort and isolated: a missing binary, a missing credential, or a non-zero exit is logged to `state/.alert.log` and the next channel still runs.
-Every invocation is bounded by `FM_ALERT_TIMEOUT_SECS`, which defaults to 10 seconds.
+Every invocation is bounded by `FM_ALERT_TIMEOUT_SECS`, which defaults to 10 seconds, and each notifier runs in its own process group so an expired `command:` channel cannot leave its children behind.
 AppleScript receives the alert text as an argv item rather than interpolated source, so the text cannot alter the script.
 
 ## Slack channel and credential

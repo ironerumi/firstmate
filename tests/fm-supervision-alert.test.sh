@@ -289,6 +289,38 @@ test_park_open_decision() {
   pass "a resolved decision stops counting as a park"
 }
 
+test_park_batch_collapses() {
+  local home log id
+  home=$(park_home park-batch)
+  log="$home/alerts.log"
+  park_task "$home" ship-1 off ship 'done: PR https://x/1 checks green'
+  park_task "$home" ship-2 off ship 'done: PR https://x/2 checks green'
+  park_task "$home" ship-3 off ship 'needs-decision [key=api]: which shape?'
+  for id in ship-1 ship-2 ship-3; do
+    park_age "$home" "$id" 2400
+  done
+
+  park_scan "$home" "$log"
+  [ "$(alert_lines "$log" osascript)" = 1 ] || fail "a parked batch must raise one macOS alert"
+  [ "$(alert_lines "$log" slack)" = 1 ] || fail "a parked batch must raise one slack alert"
+  for id in ship-1 ship-2 ship-3; do
+    assert_contains "$(cat "$log")" "$id has been waiting" "the collapsed alert must name $id"
+  done
+  assert_contains "$(cat "$log")" "waiting for a merge decision" "the collapsed alert must name each gate"
+  assert_contains "$(cat "$log")" "waiting on a decision" "the collapsed alert must name each gate"
+  pass "a scan collapses every parked task into one alert per channel"
+
+  # A task that parks later still alerts, and the already-reported ones stay quiet.
+  : > "$log"
+  park_task "$home" ship-4 off ship 'done: PR https://x/4 checks green'
+  park_age "$home" ship-4 2400
+  park_scan "$home" "$log"
+  [ "$(alert_lines "$log" slack)" = 1 ] || fail "a newly parked task must still alert"
+  assert_contains "$(cat "$log")" "ship-4 has been waiting" "the later alert must name the new park"
+  assert_not_contains "$(cat "$log")" "ship-1" "an already-reported park must not repeat"
+  pass "per-task dedup survives collapsing, so a later park alerts on its own"
+}
+
 test_park_exclusions() {
   local home log
   home=$(park_home park-exclusions)
@@ -326,6 +358,7 @@ test_repair_succeeds
 test_repair_exhaustion_alerts
 test_park_alerts_once
 test_park_open_decision
+test_park_batch_collapses
 test_park_exclusions
 
 pass "fm-supervision-alert.test.sh"

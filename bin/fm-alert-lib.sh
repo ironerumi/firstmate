@@ -94,32 +94,47 @@ fm_alert_platform_default() {
 }
 
 # Run one notifier under a wall-clock bound so a hung channel cannot stall the
-# watcher poll that called it. Returns the notifier's exit code, or 124 on
-# timeout.
+# watcher poll that called it. The notifier runs in its own process group and
+# the whole group is signalled on timeout: a `command:` channel is `sh -c
+# "$cmd"`, so terminating only the wrapping shell would leave its children
+# running and leak one orphan per expired alert. Returns the notifier's exit
+# code, 124 on timeout, or 125 when the watchdog could not be armed at all -
+# without job control the group kill has nothing to signal and the wait below
+# would be unbounded, so not delivering is safer than wedging the caller.
 fm_alert_run_bounded() {  # <channel> <command...>
-  local channel=$1 timeout pid start elapsed rc
+  local channel=$1 timeout monitor_was_on=0 pid start elapsed rc
   shift
   timeout=${FM_ALERT_TIMEOUT_SECS:-$FM_ALERT_TIMEOUT_SECS_DEFAULT}
   case "$timeout" in
     ''|*[!0-9]*) timeout=$FM_ALERT_TIMEOUT_SECS_DEFAULT ;;
     *) [ "$timeout" -gt 0 ] 2>/dev/null || timeout=$FM_ALERT_TIMEOUT_SECS_DEFAULT ;;
   esac
+  case $- in *m*) monitor_was_on=1 ;; esac
+  set -m 2>/dev/null || true
+  case $- in
+    *m*) ;;
+    *)
+      fm_alert_log "alert: $channel notifier skipped because its watchdog could not start"
+      return 125 ;;
+  esac
   "$@" &
   pid=$!
   start=$SECONDS
-  while kill -0 "$pid" 2>/dev/null; do
+  while kill -0 "-$pid" 2>/dev/null; do
     elapsed=$((SECONDS - start))
     if [ "$elapsed" -ge "$timeout" ]; then
-      kill -TERM "$pid" 2>/dev/null || true
+      kill -TERM "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
       sleep 0.2
-      kill -KILL "$pid" 2>/dev/null || true
+      kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
       wait "$pid" 2>/dev/null || true
+      [ "$monitor_was_on" -eq 1 ] || set +m 2>/dev/null || true
       fm_alert_log "alert: $channel notifier timed out after ${elapsed}s (limit ${timeout}s)"
       return 124
     fi
     sleep 0.1
   done
   if wait "$pid"; then rc=0; else rc=$?; fi
+  [ "$monitor_was_on" -eq 1 ] || set +m 2>/dev/null || true
   return "$rc"
 }
 
@@ -289,15 +304,24 @@ EOF
   return "$delivered"
 }
 
+# Take a one-shot marker without delivering anything, so a caller that collapses
+# several conditions into one message keeps per-condition deduplication. The
+# marker is written before delivery is attempted: a channel that fails must not
+# turn into a retry storm, and the alert log records the failure.
+# Returns 0 when this call claimed the marker, 1 when it already existed.
+fm_alert_claim_once() {  # <marker-path>
+  local marker=$1
+  [ -e "$marker" ] && return 1
+  date +%s > "$marker" 2>/dev/null || true
+  return 0
+}
+
 # One-shot delivery guarded by a durable marker, so a condition that persists
-# across many watcher polls alerts once rather than every poll. The marker is
-# written before delivery is attempted: a channel that fails must not turn into
-# a retry storm, and the alert log records the failure.
+# across many watcher polls alerts once rather than every poll.
 # Returns 0 when this call fired, 1 when the marker already existed.
 fm_alert_notify_once() {  # <marker-path> <title> <summary>
   local marker=$1 title=$2 summary=$3
-  [ -e "$marker" ] && return 1
-  date +%s > "$marker" 2>/dev/null || true
+  fm_alert_claim_once "$marker" || return 1
   fm_alert_notify "$title" "$summary" || true
   return 0
 }
