@@ -127,20 +127,60 @@ FM_LOCK_LOG_PREFIX=teardown
 
 META="$STATE/$ID.meta"
 [ -f "$META" ] || { echo "error: no meta for task $ID at $META" >&2; exit 1; }
+# An ad-hoc primary-session ship (bin/fm-task-register.sh) deliberately records
+# no window, worktree, or runtime endpoint, so fm_backend_validate_task_endpoint
+# can never pass for it. This is the equivalent metadata-only authorization for
+# that shape: it admits only exactly what fm-task-register.sh writes, so a
+# drifted or forged kind=adhoc record cannot skip endpoint validation and still
+# reach the branch deletion and worktree return below. Same field semantics as
+# the endpoint gate (exact single non-empty value) and the same fail-closed,
+# preserve-state refusal.
+validate_adhoc_task_record() {  # <meta-file> <task-id>
+  local meta=$1 id=$2 harness project key
+  [ -f "$meta" ] && [ ! -L "$meta" ] || {
+    echo "REFUSED: task $id has no regular endpoint metadata at $meta; preserving task state." >&2
+    return 1
+  }
+  case "$id" in ''|*[!A-Za-z0-9._-]*)
+    echo "REFUSED: task endpoint identity has an invalid task id; preserving task state." >&2
+    return 1
+    ;;
+  esac
+  harness=$(fm_backend_meta_exact_value "$meta" harness) || harness=
+  [ "$harness" = adhoc ] || {
+    echo "REFUSED: task $id has a missing, ambiguous, or non-ad-hoc harness identity; preserving task state." >&2
+    return 1
+  }
+  project=$(fm_backend_meta_exact_value "$meta" project) || {
+    echo "REFUSED: task $id has a missing, empty, or ambiguous project identity; preserving task state." >&2
+    return 1
+  }
+  case "$project" in *$'\r'*|*$'\t'*)
+    echo "REFUSED: task $id has malformed endpoint metadata; preserving task state." >&2
+    return 1
+    ;;
+  esac
+  for key in window worktree tasktmp; do
+    if grep -q "^$key=." "$meta" 2>/dev/null; then
+      echo "REFUSED: ad-hoc task $id records a non-empty $key it must not own; preserving task state." >&2
+      return 1
+    fi
+  done
+}
+
 # This is the first cleanup authorization check. It is metadata-only and must
 # complete before fm-guard, a backend command, file removal, branch deletion,
 # worktree return, registry change, or process termination can run.
-# An ad-hoc primary-session ship (bin/fm-task-register.sh) deliberately records
-# no window, worktree, or runtime endpoint, so it has no endpoint to validate and
-# no backend command will ever run for it.
-if [ "$(fm_meta_get "$META" kind)" = adhoc ]; then
-  FM_BACKEND_VALIDATED_BACKEND=$(fm_meta_get "$META" harness)
-  FM_BACKEND_VALIDATED_TARGET=
+KIND_EXACT=$(fm_backend_meta_exact_value "$META" kind) || KIND_EXACT=
+if [ "$KIND_EXACT" = adhoc ]; then
+  validate_adhoc_task_record "$META" "$ID" || exit 1
+  BACKEND=adhoc
+  T=
 else
   fm_backend_validate_task_endpoint "$META" "$ID" || exit 1
+  BACKEND=$FM_BACKEND_VALIDATED_BACKEND
+  T=$FM_BACKEND_VALIDATED_TARGET
 fi
-BACKEND=$FM_BACKEND_VALIDATED_BACKEND
-T=$FM_BACKEND_VALIDATED_TARGET
 WT=$(fm_meta_get "$META" worktree)
 PROJ=$(fm_meta_get "$META" project)
 T_ORCA=
