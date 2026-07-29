@@ -109,6 +109,7 @@ state/               volatile runtime signals; gitignored
   .afk               durable away-mode flag; present = sub-supervisor may inject escalations (set by /afk, cleared on user return)
   .watch.lock .wake-queue.lock watcher singleton and queue serialization locks
   .claude-autoarm.lock .claude-autoarm-epoch .turnend-claude-blocks   Claude Stop auto-arm single-flight, epoch, and guard-budget records; never touch
+  .turnend-merge-wait  turn-end record of which unrecorded captain merge waits were already announced; never touch
   .hash-* .count-* .stale-* .stale-since-* .paused-* .wedge-escalations-* .seen-* .hb-surfaced-* .last-* .heartbeat-streak   watcher internals; never touch
   .watch-triage.log  watcher's absorbed-wake debug log (size-capped); never relied on, safe to delete
   .last-watcher-beat watcher liveness beacon, touched every poll (including while absorbing benign wakes); guard scripts read it
@@ -253,6 +254,7 @@ Load `diagnostic-reasoning` before scoping a reported bug and before acting on a
 Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately with no concurrency cap when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
 Write the task-specific brief under section 11 before spawning.
+`bin/fm-brief.sh` owns the dispatch sizing contract: independent parts of a task ship one at a time by default, and one atomic delivery requires `--atomic <reason>` stating why an intermediate state would be inconsistent.
 For a captain-initiated dispatch wave, scaffold every brief in that wave with `--source firstmate --batch <one-shared-id-per-wave>`.
 
 ### Dispatch and supervision handoff
@@ -292,6 +294,9 @@ An administrator merge that overrides branch protection is carried only by an ex
 It is authorized either by the captain's explicit authorization for that blocked PR, or by an explicit standing captain preference for routine admin merges that applies only when review is complete, CI is green, and the repository's required-review or branch-protection rule is the sole blocker.
 That standing authority stays merge-only and never answers an ask-user finding, a red or unresolved check, a conflict or behind-base uncertainty, a destructive or irreversible non-merge action, a release or tag, a security-sensitive change, or any bypass outside the recorded standing condition.
 After an autonomous merge, give the captain a one-line full-URL or local-main outcome.
+A captain-reserved post-merge release or operational step does not by itself hold back a routine green merge: land the PR under standing authority when the merged-but-unreleased state is explicitly safe, and keep the merge coupled to that sequence when it is not.
+The reserved step itself stays a durable captain decision until it is completed or waived, so landing the PR never clears it.
+When a ready PR goes to the captain instead of merging under standing authority, record that wait durably before the turn ends with `tasks-axi hold <id> --reason "<why>" --kind captain`; `bin/fm-pr-merge.sh` clears that merge-wait hold, and only that one, when the work lands.
 
 ### Validate
 
@@ -307,6 +312,7 @@ Resume fleet supervision immediately after the decision lands.
 Judge validation by the current-code-matched run step through `bin/fm-crew-state.sh`, not by shell liveness or the last status event.
 Running, fixing, or CI states remain working; parked approval or fix-review states require the worker to follow the active gate help; passed or checks-passed is done; failed or cancelled is failed.
 A worker hand-editing, committing, aborting, or restarting during an active validation run duplicates pipeline ownership; steer it back to the gate response flow.
+The worker's own session refuses the duplicating commands deterministically (`docs/nm-validation-owner-guard.md`), so a reported refusal is a signal to steer, and `FM_NM_GUARD_ALLOW=1` is the only exception, handed over only when firstmate has authorized that recovery.
 The worker reports the PR when CI first becomes green rather than waiting for merge monitoring to finish.
 
 ### PR ready, landing, and teardown

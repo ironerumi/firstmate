@@ -36,6 +36,18 @@ A fresh leftover beacon blocks when the lock is missing, dead, or identity-misma
 `FM_GUARD_GRACE` controls beacon freshness and defaults to 300 seconds.
 If `jq` is missing or hook stdin is empty, the guard exits 0 because it cannot safely read loop-guard fields.
 
+## Second block condition: an unrecorded captain merge wait
+
+The guard blocks for one further reason, checked before the supervision predicate and independent of it.
+When a task has reported a ready PR that the captain rather than firstmate must merge, and no captain-kind hold records that wait, the turn would end with real waiting work living only in chat.
+`bin/fm-merge-wait-lib.sh` is the single owner of that predicate, of the exact `tasks-axi hold` command the block names, and of the reason string that identifies such a hold; `bin/fm-guard.sh` carries the same reminder on its pull-based path.
+`bin/fm-pr-merge.sh` clears that hold when the work lands, and only that hold: a captain-reserved post-merge release or operational step is recorded the same way and must survive the merge that precedes it, which is what lets a safe merged-but-unreleased state land while the reserved step stays a durable captain decision.
+
+This condition never polls a forge and never measures how long a PR has been ready: the signal is the worker's own durable status line.
+It blocks once per distinct set of unrecorded waits, in every harness mode, keyed by `state/.turnend-merge-wait`.
+One announcement is the point, because the record must be written by the session rather than by the guard, so a session that ignores the block can still end its turn while a newly unrecorded wait blocks again.
+A missing library, an unusable `tasks-axi`, or a task with no backlog item to hold all resolve to no block.
+
 ## Harness integrations
 
 - Claude registers two `Stop` hooks in `.claude/settings.json`, both anchored through `CLAUDE_PROJECT_DIR`: `bin/fm-turnend-guard.sh --claude`, and `bin/fm-claude-stop-autoarm.sh` with `asyncRewake: true` and `timeout: 28800`.
@@ -91,6 +103,7 @@ That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it alwa
 ## Regression coverage
 
 `tests/fm-turnend-guard.test.sh` covers the predicate, main and secondmate primary scope, child-worktree exclusion, `FM_HOME` and `FM_STATE_OVERRIDE` precedence, the cooperative `--claude` claim wait, epoch allow, re-block budget, Pi logical-run latching, missing-`jq` behavior, all five primary registrations, Grok native and legacy selection, typed field precedence, malformed input, and exactly-one-path safety.
+`tests/fm-merge-wait.test.sh` covers the unrecorded-captain-merge-wait predicate and both of its surfaces, including the block-once-per-set behavior.
 `tests/fm-kimi-harness.test.sh` covers the separate Kimi crew hook's format preservation, idempotence, refusal cases, token guard, spawn registration, and teardown cleanup.
 `tests/fm-supervision-instructions.test.sh` covers recovery-line ownership and pi-signed's identity-preserving reuse of Pi's protocol.
 `FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh` is the opt-in isolated Pi path.

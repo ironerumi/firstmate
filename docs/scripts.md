@@ -64,6 +64,10 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-supervisor-target-lib.sh` | Resolve the shared supervisor target and backend for the daemon and launcher       |
 | `fm-supervise-daemon.sh` | Presence-gated away-mode sub-supervisor: self-handle routine wakes, escalate batched digests, alert on failed delivery |
 | `fm-crew-state.sh`       | Print one deterministic current-state line for a crew                                |
+| `fm-nm-status-lib.sh`    | Shared bounded read of a worktree's no-mistakes run: invocation, TOON field, code identity, run state |
+| `fm-nm-guard-lib.sh`     | Decide whether a worker command would take validation ownership from a live run (docs/nm-validation-owner-guard.md) |
+| `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
+| `fm-merge-wait-lib.sh`   | Shared predicate for a ready PR waiting on the captain with no durable record of that wait |
 | `fm-tangle-lib.sh`       | Shared default-branch resolution and primary-checkout tangle classification          |
 | `fm-supervision-lib.sh`  | Shared in-flight-work-without-fresh-watcher-beacon predicate                         |
 | `fm-ff-lib.sh`           | Shared guarded fast-forward helper for origin pulls and local secondmate syncs       |

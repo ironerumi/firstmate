@@ -1527,6 +1527,20 @@ fi
 # the env is set when the agent starts; the brief sleep lets the export land.
 spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
 sleep 0.3
+# Put firstmate's tool shims ahead of the real tools in the pane's PATH, and bind
+# them to this task's status file. The shims refuse only the commands that would
+# take validation ownership away from a live no-mistakes run - a second run, a
+# superseding push, an abandoned gate - and exec the real tool for everything
+# else (bin/fm-nm-guard-shim.sh; docs/nm-validation-owner-guard.md).
+#
+# Sent here, before the launch command, for the same reason GOTMPDIR is: the
+# harness starts inside this shell and every tool call it makes inherits the
+# environment, so ONE line covers every supported harness with no per-harness
+# hook, and it reaches every runtime backend because spawn_send_text_line is the
+# backend-agnostic text path.
+spawn_send_text_line "$T" \
+  "export FM_NM_GUARD_STATUS=$(shell_quote "$STATE_REAL/$ID.status") PATH=$(shell_quote "$FM_ROOT/bin/shims"):\$PATH"
+sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"
 sleep 0.3
 if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then

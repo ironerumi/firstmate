@@ -385,7 +385,42 @@ test_parses_pr_url_for_gh_axi() {
   pass "fm-pr-merge parses a GitHub PR URL into gh-axi number and --repo arguments"
 }
 
+# Landing a PR answers the wait for THAT merge and nothing else. A
+# captain-reserved post-merge release or operational step is recorded as a
+# captain hold in exactly the same way, and the captain's merge/release
+# decoupling only works if it survives the merge that precedes it.
+test_merge_clears_only_the_merge_wait_hold() {
+  local case_dir home
+  if ! command -v tasks-axi >/dev/null 2>&1; then
+    pass "SKIP (tasks-axi not found): merge clears only the merge-wait hold"
+    return
+  fi
+  case_dir=$(make_case merge-wait-hold)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  : > "$case_dir/gh-axi.log"
+  home="$case_dir/home"
+  mkdir -p "$home/data"
+  cp "$ROOT/.tasks.toml" "$home/.tasks.toml"
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
+  (cd "$home" && tasks-axi add task-x1 "sample ship" --repo sample --start) >/dev/null
+  (cd "$home" && tasks-axi hold task-x1 --reason "green PR waiting on the captain to merge" --kind captain) >/dev/null
+
+  FM_HOME="$home" run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/41 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "merge-wait-hold: fm-pr-merge failed"
+  (cd "$home" && tasks-axi show task-x1 --full) | grep -q '^  held: no' \
+    || fail "merge-wait-hold: landing the PR did not clear the merge-wait hold"
+
+  (cd "$home" && tasks-axi hold task-x1 --reason "captain-reserved production release after merge" --kind captain) >/dev/null
+  FM_HOME="$home" run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/41 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "merge-wait-hold: second fm-pr-merge failed"
+  (cd "$home" && tasks-axi show task-x1 --full) | grep -q '^  held: yes' \
+    || fail "merge-wait-hold: landing the PR cleared a captain-reserved post-merge step"
+  pass "fm-pr-merge clears the merge-wait hold and preserves a reserved post-merge step"
+}
+
 test_records_pr_and_head_before_merging
+test_merge_clears_only_the_merge_wait_hold
 test_admin_flag_routes_through_gh
 test_admin_variant_refused_before_recording
 test_admin_with_repo_override_refused

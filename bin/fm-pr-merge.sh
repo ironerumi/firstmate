@@ -124,3 +124,18 @@ if caller_has_admin "$@"; then
   merge_cli=gh
 fi
 "$merge_cli" pr merge "$PR_NUMBER" --repo "$PR_OWNER/$PR_REPO" "${merge_args[@]+"${merge_args[@]}"}" "$@"
+
+# The work landed, so a captain hold that recorded the wait for THIS merge is
+# answered, and clearing it here is what keeps that durable record honest rather
+# than accumulating resolved waits. It runs only after the merge succeeded, and
+# only for a hold whose recorded reason is that merge wait: a captain-reserved
+# post-merge release or operational step is held the same way and must survive
+# the merge that precedes it. bin/fm-merge-wait-lib.sh owns both the reason that
+# identifies a merge wait and the test above.
+if [ -f "$SCRIPT_DIR/fm-merge-wait-lib.sh" ]; then
+  # shellcheck source=bin/fm-merge-wait-lib.sh
+  . "$SCRIPT_DIR/fm-merge-wait-lib.sh"
+  if fm_merge_wait_hold_is_merge_wait "$FM_HOME" "$ID"; then
+    (cd "$FM_HOME" && tasks-axi unhold "$ID" >/dev/null 2>&1) || true
+  fi
+fi
