@@ -134,7 +134,11 @@ META="$STATE/$ID.meta"
 # drifted or forged kind=adhoc record cannot skip endpoint validation and still
 # reach the branch deletion and worktree return below. Same field semantics as
 # the endpoint gate (exact single non-empty value) and the same fail-closed,
-# preserve-state refusal.
+# preserve-state refusal. It deliberately lives at this call site instead of
+# teaching the shared fm_backend_validate_task_endpoint about kind=adhoc, so the
+# carve-out stays in a file this fork already changes and does not re-conflict on
+# every upstream merge. docs/configuration.md "Runtime backend" states the
+# resulting contract.
 validate_adhoc_task_record() {  # <meta-file> <task-id>
   local meta=$1 id=$2 harness project key
   [ -f "$meta" ] && [ ! -L "$meta" ] || {
