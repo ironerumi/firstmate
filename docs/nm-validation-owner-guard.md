@@ -99,7 +99,7 @@ Nothing is written into the worktree, and nothing is written into any project re
 
 The threat model is a worker's mistake under pressure, the same as every other firstmate seatbelt:
 
-- An absolute path (`/usr/bin/git push`) or an explicit `command`/`env` invocation that resolves past PATH is not intercepted.
+- An invocation that resolves past the pane's PATH is not intercepted: an absolute path (`/usr/bin/git push`), `command -p`, or `env -i`. Plain `command git push` and `env git push` still search the inherited PATH and are intercepted.
 - A login shell that rebuilds PATH from scratch would drop the shim entry; the fleet's harnesses inherit the exported PATH rather than rebuilding it.
 - The pipeline's own push, and its own fix agents, run as children of the shared no-mistakes daemon and never inherit this PATH, so the guard cannot interfere with the pipeline doing its own work.
 
