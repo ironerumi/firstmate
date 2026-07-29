@@ -62,6 +62,8 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$SCRIPT_DIR/fm-classify-lib.sh"
+# shellcheck source=bin/fm-nm-status-lib.sh
+. "$SCRIPT_DIR/fm-nm-status-lib.sh"
 
 ID=${1:-}
 [ -n "$ID" ] || { echo "usage: fm-crew-state.sh <id>" >&2; exit 2; }
@@ -193,40 +195,19 @@ crew_pane_is_busy() {  # <target>
 
 # --- no-mistakes run lookup (authoritative when a run matches this branch) --
 
-trim() {
-  local s=${1:-}
-  s="${s#"${s%%[![:space:]]*}"}"
-  s="${s%"${s##*[![:space:]]}"}"
-  printf '%s' "$s"
-}
-strip_quotes() {
-  local s
-  s=$(trim "${1:-}")
-  case "$s" in
-    \"*\") s=${s#\"}; s=${s%\"} ;;
-  esac
-  trim "$s"
-}
-
-# Bounded no-mistakes call in the worktree; stdout only, never fails the script.
-HAVE_TIMEOUT=none
-if command -v timeout >/dev/null 2>&1; then HAVE_TIMEOUT=timeout
-elif command -v gtimeout >/dev/null 2>&1; then HAVE_TIMEOUT=gtimeout
-elif command -v perl >/dev/null 2>&1; then HAVE_TIMEOUT=perl
-fi
+# The bounded no-mistakes call, the TOON scalar read, and the code-identity test
+# are owned once by bin/fm-nm-status-lib.sh, shared with the worker-side
+# validation-owner guard so the two readers of the same pipeline cannot drift.
+trim() { fm_nm_trim "${1:-}"; }
+strip_quotes() { fm_nm_strip_quotes "${1:-}"; }
 nm_run() {  # <args...>
-  case "$HAVE_TIMEOUT" in
-    timeout)  ( cd "$WT" && timeout "$NM_TIMEOUT" no-mistakes "$@" ) 2>/dev/null || true ;;
-    gtimeout) ( cd "$WT" && gtimeout "$NM_TIMEOUT" no-mistakes "$@" ) 2>/dev/null || true ;;
-    perl)     ( cd "$WT" && perl -e 'my $t = shift; my $pid = fork; die "fork failed" unless defined $pid; if (!$pid) { setpgrp(0, 0); exec @ARGV } local $SIG{ALRM} = sub { kill "TERM", -$pid; select undef, undef, undef, 0.2; kill "KILL", -$pid; exit 124 }; alarm $t; waitpid $pid, 0; exit($? >> 8)' "$NM_TIMEOUT" no-mistakes "$@" ) 2>/dev/null || true ;;
-    *)        true ;;
-  esac
+  fm_nm_call "$WT" "$NM_TIMEOUT" "$@"
 }
 
 # Scalar value of a TOON key in the captured run output ($RUN_OUT).
 RUN_OUT=""
 nm_field() {  # <key>
-  printf '%s\n' "$RUN_OUT" | sed -n "s/^[[:space:]]*$1:[[:space:]]*\(.*\)/\1/p" | head -1
+  fm_nm_field "$RUN_OUT" "$1"
 }
 # Finding count from a findings[N]{...} table header; empty when none.
 nm_findings_count() {
@@ -419,31 +400,14 @@ CREW_BRANCH=$(git -C "$WT" symbolic-ref --quiet --short HEAD 2>/dev/null || true
 #     advanced outside the run)
 #   - diverged / run head not in this worktree: no match (rewritten branch tip)
 nm_run_head_matches_worktree() {
-  local run_head local_full run_full
-  run_head=$(strip_quotes "$(nm_field head)")
-  [ -n "$run_head" ] || return 1
-  local_full=$(git -C "$WT" rev-parse HEAD 2>/dev/null) || return 1
-  run_full=$(git -C "$WT" rev-parse --verify "${run_head}^{commit}" 2>/dev/null) || return 1
-  [ "$run_full" = "$local_full" ] && return 0
-  if git -C "$WT" merge-base --is-ancestor "$local_full" "$run_full" 2>/dev/null; then
-    return 0
-  fi
-  return 1
+  fm_nm_head_matches "$WT" "$(strip_quotes "$(nm_field head)")"
 }
 
 # Coarse runs-list rows are "<status> <branch> <short-sha> ...". 0 if the short
 # sha for this branch row matches the worktree head under the same rules as
 # nm_run_head_matches_worktree (equal, or local is ancestor of run tip).
 nm_coarse_head_matches_worktree() {  # <short-sha>
-  local run_head=$1 local_full run_full
-  [ -n "$run_head" ] || return 1
-  local_full=$(git -C "$WT" rev-parse HEAD 2>/dev/null) || return 1
-  run_full=$(git -C "$WT" rev-parse --verify "${run_head}^{commit}" 2>/dev/null) || return 1
-  [ "$run_full" = "$local_full" ] && return 0
-  if git -C "$WT" merge-base --is-ancestor "$local_full" "$run_full" 2>/dev/null; then
-    return 0
-  fi
-  return 1
+  fm_nm_head_matches "$WT" "$1"
 }
 
 HAVE_RUN=0

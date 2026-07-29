@@ -68,6 +68,7 @@ The drain script calls that guard after emptying the queue, which avoids repeati
 It leads with a prominent bordered tangle banner, while `bin/fm-guard.sh` owns the stale-watcher banner/reminder policy so repeated guarded commands stay noisy without reprinting the full watcher-down banner in the same episode.
 On every verified primary harness, tracked hook integration gives the primary session a push-based backstop: when work is in flight and no identity-matched watcher lock with a fresh beacon is live, direct Stop hooks block and passive turn-end hooks force one bounded follow-up.
 The guard covers the main primary and genuinely marked secondmate homes, exempts child crewmate/scout worktrees, is loop-safe per harness, and is documented in [turnend-guard.md](turnend-guard.md).
+Both guards carry one further condition, a task-reported ready PR waiting on the captain with no durable captain-kind hold recording that wait; [turnend-guard.md](turnend-guard.md) owns it and `bin/fm-merge-wait-lib.sh` owns its predicate.
 
 A presence-gated sub-supervisor (`bin/fm-supervise-daemon.sh`) extends this for walk-away supervision: the `/afk` skill starts it through the tracked foreground helper `bin/fm-afk-start.sh`, after which the watcher reverts to daemon-managed one-shot mode and the daemon self-handles routine wakes in bash.
 The watcher and daemon share `bin/fm-classify-lib.sh` for captain-relevant status verbs, declared-external-wait vocabulary, and status-scan primitives.

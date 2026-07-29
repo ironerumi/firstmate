@@ -133,6 +133,49 @@ budget_reset() {
   rm -f "$BUDGET_FILE" 2>/dev/null || true
 }
 
+# --- green PR waiting on the captain with no durable record ------------------
+# A merge decision that went to the captain is real waiting work, and it must be
+# recorded where the fleet keeps captain-gated threads before the turn that
+# escalated it ends. bin/fm-merge-wait-lib.sh owns the predicate and the exact
+# recording command; this is only the turn-end enforcement of it.
+#
+# It blocks once per distinct set of unrecorded waits, in every harness mode.
+# One announcement is the whole point - the record has to be written by the
+# session, not by this guard - and a marker keyed to the id set means a session
+# that ignores the block can still end its turn while a NEW unrecorded wait
+# blocks again. Nothing here polls a forge or measures elapsed time.
+MERGE_WAIT_MARKER="$STATE/.turnend-merge-wait"
+MERGE_WAIT=""
+if [ -f "$SCRIPT_DIR/fm-merge-wait-lib.sh" ]; then
+  # shellcheck source=bin/fm-merge-wait-lib.sh
+  . "$SCRIPT_DIR/fm-merge-wait-lib.sh"
+  MERGE_WAIT=$(fm_merge_wait_unrecorded "$STATE" "$FM_HOME" 2>/dev/null || true)
+fi
+if [ -n "$MERGE_WAIT" ]; then
+  MERGE_WAIT_KEY=$(printf '%s\n' "$MERGE_WAIT" | LC_ALL=C sort | paste -sd, -)
+  MERGE_WAIT_SEEN=$(cat "$MERGE_WAIT_MARKER" 2>/dev/null || true)
+  MERGE_WAIT_SEEN=${MERGE_WAIT_SEEN%$'\n'}
+  if [ "$MERGE_WAIT_SEEN" != "$MERGE_WAIT_KEY" ]; then
+    printf '%s\n' "$MERGE_WAIT_KEY" > "$MERGE_WAIT_MARKER" 2>/dev/null || true
+    rule='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+    {
+      printf '●%s\n' "$rule"
+      printf '●  A CAPTAIN MERGE DECISION IS WAITING WITH NOTHING RECORDING IT\n'
+      while IFS= read -r wait_id; do
+        [ -n "$wait_id" ] || continue
+        printf '●  %s: %s\n' "$wait_id" "$(fm_merge_wait_record_command "$wait_id")"
+      done <<EOF
+$MERGE_WAIT
+EOF
+      printf '●  Record the wait before this turn ends, then clear it when the work lands.\n'
+      printf '●%s\n' "$rule"
+    } >&2
+    exit 2
+  fi
+else
+  rm -f "$MERGE_WAIT_MARKER" 2>/dev/null || true
+fi
+
 fm_supervision_status "$STATE" "$GRACE"
 if [ "$CLAUDE_MODE" -eq 1 ]; then
   if [ "$FM_SUP_NEEDED" = false ]; then

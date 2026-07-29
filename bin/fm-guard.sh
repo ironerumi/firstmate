@@ -13,7 +13,8 @@
 # distinct staleness episode in this FM_HOME (keyed to beacon mtime or absence);
 # later guarded commands in the same episode print a one-line reminder instead.
 # Episode state lives only under state/.guard-watcher-stale-banner (volatile,
-# bounded). Independent alarms (queued wakes, worktree tangle) are never
+# bounded). Independent alarms (queued wakes, worktree tangle, a ready PR waiting
+# on the captain with no durable captain-kind hold recording that wait) are never
 # suppressed by that dedup. Normal wake handling (watcher briefly down between a
 # wake and the next supervision resume) stays inside the grace window and stays
 # silent. Always exits 0: the guard warns, it never blocks.
@@ -216,5 +217,25 @@ if "$queue_pending"; then
   else
     echo "WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else." >&2
   fi
+fi
+
+# A PR that is ready and needs the captain to merge it is a wait that must live
+# somewhere durable, not only in chat. The predicate and the recording command
+# are owned by bin/fm-merge-wait-lib.sh; this is the pull-based reminder, and
+# bin/fm-turnend-guard.sh is the push-based one.
+merge_wait=""
+if [ -f "$SCRIPT_DIR/fm-merge-wait-lib.sh" ]; then
+  # shellcheck source=bin/fm-merge-wait-lib.sh
+  . "$SCRIPT_DIR/fm-merge-wait-lib.sh"
+  merge_wait=$(fm_merge_wait_unrecorded "$STATE" "$FM_HOME" 2>/dev/null || true)
+fi
+if [ -n "$merge_wait" ]; then
+  while IFS= read -r wait_id; do
+    [ -n "$wait_id" ] || continue
+    printf 'WARNING: %s has a PR waiting on the captain with nothing durable recording that wait - %s\n' \
+      "$wait_id" "$(fm_merge_wait_record_command "$wait_id")" >&2
+  done <<EOF
+$merge_wait
+EOF
 fi
 exit 0

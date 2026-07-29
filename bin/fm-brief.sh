@@ -8,6 +8,7 @@
 # of shipping a new one).
 # Usage: fm-brief.sh <task-id> <repo-name> [--scout|--free-form] [--herdr-lab]
 #                     [--source firstmate|human] [--batch <id>] [--no-narration]
+#                     [--atomic <reason>]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #                     [--source firstmate|human] [--batch <id>]
 #   --scout writes the scout contract instead: the deliverable is a report at
@@ -40,6 +41,15 @@
 #   variant (pipeline-led ship, skill-led ship, free-form ship, scout, and secondmate) carries
 #   exactly one `source:` + `batch_id:` pair. Malformed or missing option values
 #   are rejected before any file is written.
+#   Every ship brief carries a Change sizing section, and this scaffold is the
+#   single owner of that contract. The default is sequential: independent parts
+#   of a task are implemented and delivered one at a time, because a restarted
+#   pipeline run costs the whole batch rather than the part that failed. There is
+#   deliberately NO line-count or todo-count cap - size alone never decides.
+#   --atomic <reason> writes the one-change variant instead, and exists to make
+#   the concrete reason mandatory: an atomic brief cannot be scaffolded without
+#   stating why an intermediate state would be inconsistent, and the reason is
+#   written into the brief the worker reads. It applies only to ship briefs.
 #   --herdr-lab is mandatory when the task will issue Herdr lifecycle commands.
 #   It adds the hard isolation contract backed by bin/fm-herdr-lab.sh.
 #   The flag must be explicit because {TASK} is filled after scaffolding and the
@@ -94,6 +104,8 @@ FREE_FORM=0
 HERDR_LAB=0
 NO_PROJECTS=0
 NO_NARRATION=0
+ATOMIC_REASON=""
+ATOMIC=0
 SOURCE=human
 BATCH=unknown
 POS=()
@@ -105,6 +117,16 @@ while [ $# -gt 0 ]; do
     --herdr-lab) HERDR_LAB=1; shift ;;
     --no-projects) NO_PROJECTS=1; shift ;;
     --no-narration) NO_NARRATION=1; shift ;;
+    --atomic)
+      [ $# -ge 2 ] || { echo "error: --atomic requires the concrete reason an intermediate state would be inconsistent" >&2; exit 1; }
+      ATOMIC_REASON=$2
+      ATOMIC=1
+      case "$ATOMIC_REASON" in
+        ''|--*) echo "error: --atomic requires the concrete reason an intermediate state would be inconsistent" >&2; exit 1 ;;
+        *$'\n'*) echo "error: --atomic reason must be one line" >&2; exit 1 ;;
+      esac
+      shift 2
+      ;;
     --source)
       [ $# -ge 2 ] || { echo "error: --source requires a value (firstmate|human)" >&2; exit 1; }
       SOURCE=$2
@@ -144,6 +166,30 @@ fi
 if [ "$NO_NARRATION" -eq 1 ] && [ "$KIND" != ship ]; then
   echo "error: --no-narration applies only to pipeline-led no-mistakes ship briefs" >&2
   exit 1
+fi
+
+if [ "$ATOMIC" -eq 1 ] && [ "$KIND" != ship ]; then
+  echo "error: --atomic applies only to ship briefs" >&2
+  exit 1
+fi
+
+# The one sizing contract every ship brief carries. Sequential is the default
+# because independent parts that ship together share one failure: a restarted
+# pipeline run re-reviews and re-tests the whole batch. Neither variant names a
+# line or todo count - the test is whether the parts are independent, not how
+# large they are - and the atomic variant cannot exist without the concrete
+# reason --atomic required above.
+if [ "$ATOMIC" -eq 1 ]; then
+  SIZING_SECTION="# Change sizing
+This task ships as ONE atomic change, because an intermediate state would be inconsistent: $ATOMIC_REASON
+Deliver it whole, and keep everything not covered by that reason as small as it can coherently be.
+If that reason turns out not to hold once you are inside the code, say so in a \`needs-decision:\` line rather than splitting the delivery on your own."
+else
+  SIZING_SECTION="# Change sizing
+Parts of this task that can be implemented and verified independently ship one at a time: take the smallest coherent part, carry it through the definition of done below, and only then start the next.
+Do not batch independent parts into one delivery to save round trips - they then share one failure, and a restarted validation run re-reviews and re-tests all of them.
+Size alone never decides this: there is no line count or item count that makes a change too large, only whether its parts are independent.
+If the parts turn out not to be independent - an intermediate state would be inconsistent - say so in a \`needs-decision:\` line with the concrete reason before delivering them together."
 fi
 
 BRIEF="$DATA/$ID/brief.md"
@@ -355,6 +401,8 @@ batch_id: $BATCH
 
 $HERDR_SECTION
 
+$SIZING_SECTION
+
 # Safety envelope
 Verify that \`pwd -P\` and \`git rev-parse --show-toplevel\` both resolve to this isolated task worktree, never the primary project copy.
 Stop before writing if that assertion fails.
@@ -433,6 +481,11 @@ You drive no-mistakes by responding to its gates, not by implementing fixes.
 Follow the guidance no-mistakes itself provides for the mechanics: it loads when you invoke /no-mistakes, and \`no-mistakes axi run --help\` plus the \`help\` lines in each \`axi\` response are authoritative and version-matched to the installed binary.
 Do not hand-edit, commit, or fix findings yourself while a run is active - the pipeline applies every fix.
 
+One run owns validation of this branch at a time, and starting a second one, pushing over it, or abandoning it cancels it and re-runs every step it had already finished.
+While a run is live: inspect it with \`no-mistakes axi status\`, \`no-mistakes axi logs --step {step}\`, or \`no-mistakes attach\`, and continue it with \`no-mistakes axi respond\` - never a second \`no-mistakes axi run\` or \`rerun\`, never \`git push\` (the pipeline pushes at its own push step), and never an abort of a gate you could answer.
+If a step fails and the run cannot be driven forward, append \`blocked:\` naming the run id and the failing step, and stop - whether to spend a replacement run is firstmate's call, not yours.
+Those exact commands are refused while a run is live; a refusal is the signal to report, never to retry another way.
+
 Two firstmate-specific rules layer on top of that guidance:
 - ask-user findings are never yours to answer: escalate to firstmate (rule 6) and stop.
   Firstmate applies the authority contract in its \`AGENTS.md\` and obtains any required captain decision.
@@ -466,6 +519,8 @@ batch_id: $BATCH$NARRATION_MARKER
 {TASK}
 
 $HERDR_SECTION
+
+$SIZING_SECTION
 
 # Setup
 You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.

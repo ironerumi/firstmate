@@ -26,7 +26,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-test-run.sh`         | Behavior-test runner: selection, portable lanes, proven-isolated `--jobs`, coverage guard, timing/JSON |
 | `fm-test-isolation-proof.sh` | Concurrent isolation proof and proven-isolated candidate set owner |
 | `fm-ensure-agents-md.sh` | Ensure a project's real `AGENTS.md`, its `CLAUDE.md` symlink, and the canonical self-governance section |
-| `fm-guard.sh`            | Warn on primary-checkout tangles, pending queued wakes, and stale watcher liveness   |
+| `fm-guard.sh`            | Warn on primary-checkout tangles, pending queued wakes, stale watcher liveness, and unrecorded captain merge waits |
 | `fm-primary-scope-lib.sh` | Shared marker-or-plain-checkout primary-home predicate for tracked hooks             |
 | `fm-session-lock-lib.sh` | Shared session-lock harness identity (ancestry walk and holder liveness) for fm-lock.sh and the Claude Stop auto-arm |
 | `fm-claude-stop-autoarm.sh` | Claude Stop `asyncRewake` hook owning tokenless watcher continuity with single-flight exit-2 rewake (docs/watcher-continuity.md) |
@@ -64,6 +64,10 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-supervisor-target-lib.sh` | Resolve the shared supervisor target and backend for the daemon and launcher       |
 | `fm-supervise-daemon.sh` | Presence-gated away-mode sub-supervisor: self-handle routine wakes, escalate batched digests, alert on failed delivery |
 | `fm-crew-state.sh`       | Print one deterministic current-state line for a crew                                |
+| `fm-nm-status-lib.sh`    | Shared bounded read of a worktree's no-mistakes run: invocation, TOON field, code identity, run state |
+| `fm-nm-guard-lib.sh`     | Decide whether a worker command would take validation ownership from a live run (docs/nm-validation-owner-guard.md) |
+| `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
+| `fm-merge-wait-lib.sh`   | Shared predicate for a ready PR waiting on the captain with no durable record of that wait |
 | `fm-tangle-lib.sh`       | Shared default-branch resolution and primary-checkout tangle classification          |
 | `fm-supervision-lib.sh`  | Shared in-flight-work-without-fresh-watcher-beacon predicate                         |
 | `fm-ff-lib.sh`           | Shared guarded fast-forward helper for origin pulls and local secondmate syncs       |

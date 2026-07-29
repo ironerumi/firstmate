@@ -420,6 +420,74 @@ test_faster_paths_use_configured_authority_without_stacked_review() {
   pass "fm-brief.sh: faster paths use configured authority without stacked review"
 }
 
+# Sizing is a dispatch decision this scaffold owns, and the captain's rule has
+# two halves that must both survive: sequential per part by default, and one
+# atomic delivery only when the concrete reason is stated. Neither half may
+# reintroduce a size cap.
+test_change_sizing_defaults_to_sequential_parts() {
+  local home id brief
+  home="$TMP_ROOT/sizing-home"
+  write_registry "$home"
+  for id_proj in "brief-sizing-nm-s1:nm-proj" "brief-sizing-direct-s2:direct-proj" "brief-sizing-local-s3:local-proj"; do
+    id=${id_proj%%:*}
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "${id_proj#*:}" >/dev/null 2>&1
+    brief="$home/data/$id/brief.md"
+    assert_grep "# Change sizing" "$brief" "every ship brief must carry the sizing contract"
+    assert_grep "ship one at a time" "$brief" "the default sizing contract must be sequential"
+    assert_grep "there is no line count or item count that makes a change too large" "$brief" \
+      "the sizing contract must refuse a blanket size cap"
+    assert_no_grep "ONE atomic change" "$brief" "the default must not claim atomicity"
+  done
+  pass "fm-brief.sh: every ship brief defaults to sequential per-part delivery with no size cap"
+}
+
+test_atomic_requires_and_records_its_reason() {
+  local home id brief out status
+  home="$TMP_ROOT/atomic-home"
+  write_registry "$home"
+  id="brief-atomic-s4"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" nm-proj \
+    --atomic "both tabs read one view and disagree until both land" >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_grep "This task ships as ONE atomic change" "$brief" "an atomic brief must say so"
+  assert_grep "both tabs read one view and disagree until both land" "$brief" \
+    "an atomic brief must carry the concrete reason it was given"
+  assert_no_grep "ship one at a time" "$brief" "an atomic brief must not also carry the sequential default"
+
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-brief.sh" brief-atomic-s5 nm-proj --atomic 2>&1); status=$?
+  expect_code 1 "$status" "--atomic without a reason must be refused"
+  assert_contains "$out" "concrete reason" "the refusal must name what is missing"
+  assert_absent "$home/data/brief-atomic-s5/brief.md" "a refused --atomic must write no brief"
+
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-brief.sh" brief-atomic-s6 nm-proj --atomic --herdr-lab 2>&1); status=$?
+  expect_code 1 "$status" "--atomic must not swallow the next flag as its reason"
+
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-brief.sh" brief-atomic-s7 nm-proj --scout --atomic "x" 2>&1); status=$?
+  expect_code 1 "$status" "--atomic must be refused for a scout"
+  assert_contains "$out" "only to ship briefs" "the scout refusal must name the applicable shape"
+  pass "fm-brief.sh: one atomic delivery is only possible with a stated concrete reason"
+}
+
+test_pipeline_brief_carries_validation_ownership_rules() {
+  local home id brief
+  home="$TMP_ROOT/validation-owner-home"
+  write_registry "$home"
+  id="brief-validation-owner-s8"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" nm-proj >/dev/null 2>&1
+  brief="$home/data/$id/brief.md"
+  assert_grep "One run owns validation of this branch at a time" "$brief" \
+    "the pipeline-led brief must state single validation ownership"
+  # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
+  assert_grep 'never a second `no-mistakes axi run`' "$brief" \
+    "the pipeline-led brief must forbid a second run"
+  # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
+  assert_grep 'continue it with `no-mistakes axi respond`' "$brief" \
+    "the pipeline-led brief must name the permitted continuation path"
+  assert_grep "naming the run id and the failing step" "$brief" \
+    "the pipeline-led brief must require the failure to be reported instead of replaced"
+  pass "fm-brief.sh: the pipeline-led brief states one validation owner and its continuation path"
+}
+
 # Pin the specific line the bug lived on: the no-mistakes DOD's no-mistakes
 # reference must render as plain prose with no dangling apostrophe artifact.
 test_no_mistakes_dod_wording() {
@@ -829,6 +897,9 @@ test_ship_briefs_route_review_ownership_by_delivery_mode
 test_pipeline_narration_arm_is_explicit_and_diff_bounded
 test_no_narration_rejects_non_pipeline_briefs
 test_faster_paths_use_configured_authority_without_stacked_review
+test_change_sizing_defaults_to_sequential_parts
+test_atomic_requires_and_records_its_reason
+test_pipeline_brief_carries_validation_ownership_rules
 test_no_mistakes_dod_wording
 test_ship_project_memory_wording
 test_herdr_lab_contract_is_explicit_and_complete
