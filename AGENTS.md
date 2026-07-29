@@ -73,6 +73,7 @@ config/herdr-presentation-spaces  optional presence flag for Herdr's default-off
 config/primary-branch  optional branch intentionally kept in this home's primary Firstmate checkout instead of origin's default; LOCAL, gitignored; absent or invalid preserves the default-branch tangle guard
 config/cmux-socket-password  optional cmux control-socket password; LOCAL, gitignored; read fresh on every cmux CLI call and passed through without ever overriding an operator's own ambient CMUX_SOCKET_PASSWORD when absent (docs/cmux-backend.md "Setup")
 config/wedge-alarm  optional away-mode wedge-alarm active-alert directives; LOCAL, gitignored; absent means auto (macOS Notification Center when available); see docs/wedge-alarm.md
+config/supervision-alert config/alert-slack  optional channel directives and Slack channel/token source for the unrepairable-watcher and parked-work alerts; LOCAL, gitignored; see docs/supervision-alerts.md
 config/x-mode.env    generated X-mode watcher cadence; LOCAL, gitignored; source before arming watcher when present
 data/                personal fleet records; LOCAL, gitignored as a whole
   backlog.md         task queue, dependencies, history
@@ -113,6 +114,7 @@ state/               volatile runtime signals; gitignored
   .hash-* .count-* .stale-* .stale-since-* .paused-* .wedge-escalations-* .seen-* .hb-surfaced-* .last-* .heartbeat-streak   watcher internals; never touch
   .watch-triage.log  watcher's absorbed-wake debug log (size-capped); never relied on, safe to delete
   .last-watcher-beat watcher liveness beacon, touched every poll (including while absorbing benign wakes); guard scripts read it
+  .alert.log .alert-watch-repair .park-alerted-<id> .last-park-scan  supervision-alert diagnostics, one-shot markers, and park-sweep cadence; never touch (docs/supervision-alerts.md)
   .subsuper-* .supervise-daemon.*   sub-supervisor internals; never touch
 .no-mistakes/        local validation state and evidence; gitignored
 ```

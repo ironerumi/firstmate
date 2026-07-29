@@ -126,6 +126,16 @@ An absent file means `auto`, i.e. default-on on macOS: the alarm exists precisel
 A missing or failing channel logs and falls through to the next, never crashing the daemon.
 See [`wedge-alarm.md`](wedge-alarm.md) for the current channel reference, [`verification/supervision.md`](verification/supervision.md#wedge-alarm-channels) for active evidence, and [`examples/wedge-alarm`](examples/wedge-alarm) for a copyable config.
 
+## Supervision alert channels (config/supervision-alert, config/alert-slack)
+
+Two supervision failures cannot reach the captain through a wake: a watcher cycle that could not be repaired, and work parked on a human decision.
+`config/supervision-alert` (local, gitignored) lists channel directives for both, one per non-empty, non-comment line; every listed non-`off` channel fires, best-effort.
+`FM_ALERT_CHANNEL` overrides the file with a single directive.
+Directives are `off`, `auto`/`default`, `osascript`, `slack`, and `command:<cmd>`.
+An absent file means `auto` plus `slack`, and the Slack channel stays inert until it is configured.
+`config/alert-slack` (local, gitignored) takes `channel=<slack-channel-id>` and `token_file=<path>`; the bot token is parsed from that file rather than assumed to be exported, and never reaches a log, a state file, or a command line.
+See [`supervision-alerts.md`](supervision-alerts.md) for the current channel and credential reference and [`verification/supervision.md`](verification/supervision.md#supervision-alerts) for active evidence.
+
 ## Gate defaults (.no-mistakes.yaml)
 
 The tracked `.no-mistakes.yaml` keeps test evidence outside the repo and pins `commands.lint` to `bin/fm-lint.sh` so local lint matches CI.
@@ -470,6 +480,15 @@ FM_MAX_DEFER_SECS=300              # max buffered escalation age before retry pl
 FM_WEDGE_ALARM_CHANNEL=            # override config/wedge-alarm with one active-alert directive for the wedge alarm; off|auto|osascript|herdr|command:<cmd>; absent = auto (macOS -> an OS notification)
 FM_WEDGE_ALARM_EXEC=              # notifier seam: route every channel (osascript, herdr, command:) through this command as `<cmd> <channel> <summary>`; "discard" fires nothing; unset in production; the daemon defaults it to "discard" when sourced so no test posts a real notification (docs/wedge-alarm.md)
 FM_WEDGE_ALARM_TIMEOUT_SECS=10    # maximum seconds for each osascript, herdr, override, or command: notifier before its watchdog terminates it and continues to the next channel; invalid or zero values use 10
+FM_ALERT_CHANNEL=                  # override config/supervision-alert with one directive for the watcher-repair and parked-work alerts; off|auto|osascript|slack|command:<cmd>; absent = auto plus slack (docs/supervision-alerts.md)
+FM_ALERT_EXEC=                     # notifier seam: route every supervision-alert channel through this command as `<cmd> <channel> <title> <summary>`; "discard" fires nothing; unset in production; tests/wake-helpers.sh points it at a recorder so no suite posts a real notification or Slack message
+FM_ALERT_TIMEOUT_SECS=10           # maximum seconds for each supervision-alert notifier before its process group is terminated and the next channel runs; invalid or zero values use 10
+FM_ALERT_LOG_MAX_BYTES=131072      # size cap for the supervision-alert diagnostic log (state/.alert.log); the newest 200 lines are kept when it is trimmed
+FM_ALERT_SLACK_CURL_TIMEOUT=10     # curl --max-time for the supervision-alert Slack post, inside the FM_ALERT_TIMEOUT_SECS watchdog
+FM_WATCH_REPAIR_RETRIES=3          # bounded re-arms after an unexpectedly dead watcher cycle before the arm reports failure and alerts; 0 disables repair
+FM_WATCH_REPAIR_DELAY=2            # seconds between watcher repair attempts
+FM_PARK_ALERT_SECS=1800            # seconds a task may wait on a human decision or merge approval before one deduplicated park alert fires
+FM_PARK_SCAN_INTERVAL=300          # seconds between the watcher's wake-free park sweeps
 FM_INJECT_FAIL_SLEEP=30            # seconds to back off when the supervisor pane is unavailable
 FM_INJECT_CONFIRM_RETRIES=3        # daemon Enter-retry attempts after typing a digest once
 FM_INJECT_CONFIRM_SLEEP=0.5        # seconds between daemon submit checks

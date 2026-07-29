@@ -18,5 +18,7 @@ config/calm
 config/x-mode.env
 config/cmux-socket-password
 config/wedge-alarm
+config/supervision-alert
+config/alert-slack
 config/herdr-presentation-spaces
 .sessions/

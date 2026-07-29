@@ -197,3 +197,52 @@ Observed output:
 ```
 
 The safe command-channel contract is covered without a notification by `tests/fm-daemon.test.sh`: the summary reaches both `$1` and stdin, every channel is process-group bounded, and a failed channel falls through.
+
+## Supervision alerts
+
+The unrepairable-watcher and parked-work alerts of [`../supervision-alerts.md`](../supervision-alerts.md) were verified on 2026-07-30 on macOS 15.7.7.
+
+The macOS channel uses the same argv-safe form, with the title supplied as an argv item so each alert can name its own outcome:
+
+```sh
+/usr/bin/osascript \
+  -e 'on run argv' \
+  -e 'display notification (item 1 of argv) with title (item 2 of argv) sound name "Basso"' \
+  -e 'end run' \
+  'FIRSTMATE TEST - IGNORE (supervision-alert channel verification)' \
+  'FIRSTMATE TEST - IGNORE'
+```
+
+Observed output: no stdout, exit 0, and one banner with the supplied body and title.
+
+No live Slack message was posted to prove the Slack channel, because a real post to a shared channel is not an acceptable test artifact.
+The transport is verified instead against a fake `curl` in `tests/fm-supervision-alert.test.sh`, which proves the three properties that matter: the bot token never appears in any process's arguments, it does reach curl through the stdin `--config` header, and the configured channel id is what gets posted to.
+
+The behavioral guarantees run as an ordinary suite:
+
+```sh
+tests/fm-supervision-alert.test.sh
+```
+
+Observed output on 2026-07-30:
+
+```
+ok - alert channels resolve from config and fail independently
+ok - off disables every channel without reporting a failure
+ok - the slack token is read, used on stdin, and never exposed
+ok - an unavailable slack credential degrades to a logged skip
+ok - an unexpected watcher death self-repairs without a blind-turn failure
+ok - retry exhaustion stops retrying and alerts once through both channels
+ok - a continuing watcher outage alerts once, not once per re-arm
+ok - a recovered watcher re-arms the outage alert
+ok - work waiting less than the threshold is not a park
+ok - a merge decision parked past the threshold alerts exactly once
+ok - clearing the gate re-arms park alerting
+ok - a worker waiting on a decision past the threshold alerts once
+ok - a resolved decision stops counting as a park
+ok - a scan collapses every parked task into one alert per channel
+ok - per-task dedup survives collapsing, so a later park alerts on its own
+ok - working time, declared waits, idle secondmates, standing authority, and blockers never alert
+ok - an action-free queue item never alerts
+ok - fm-supervision-alert.test.sh
+```

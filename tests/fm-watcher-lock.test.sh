@@ -15,6 +15,12 @@ LIB="$ROOT/bin/fm-wake-lib.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-watcher-lock-tests)
 
+# This suite owns the arm layer's CLASSIFICATION contract: which cycle end is a
+# wake, an attach, or a typed failure. The bounded repair loop layered above that
+# classification is owned by tests/fm-supervision-alert.test.sh, so disable it
+# here and let each case observe the underlying outcome directly.
+export FM_WATCH_REPAIR_RETRIES=0
+
 mark_pr_check_migration_complete() {
   local state=$1
   printf '%s\n' fm-pr-check-migration-scan-v1 > "$state/.pr-check-migration-scan-v1"
@@ -444,8 +450,19 @@ test_watch_restart_attaches_to_healthy_peer() {
   fakebin="$dir/fakebin"
   out="$dir/restart.out"
   mark_pr_check_migration_complete "$state"
-  node -e 'process.on("SIGTERM", () => {}); setTimeout(() => {}, 300000)' &
+  # The peer only becomes TERM-resistant once node has actually installed the
+  # handler, which happens well after the fork. Wait for it to say so: without
+  # this the --restart TERM below can land during node's startup, kill the peer
+  # on the default disposition, and make the arm correctly start a fresh watcher
+  # instead of attaching - a false failure of the guarantee under test.
+  node -e 'process.on("SIGTERM", () => {}); require("fs").writeFileSync(process.argv[1], "ready"); setTimeout(() => {}, 300000)' "$dir/peer.ready" &
   peer=$!
+  i=0
+  while [ "$i" -lt 100 ] && [ ! -s "$dir/peer.ready" ]; do
+    sleep 0.1
+    i=$((i + 1))
+  done
+  [ -s "$dir/peer.ready" ] || fail "the TERM-resistant peer never reported ready"
   identity=$(FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$peer") || fail "could not identify peer pid"
   mkdir "$state/.watch.lock"
   printf '%s\n' "$peer" > "$state/.watch.lock/pid"

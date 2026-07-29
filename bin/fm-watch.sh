@@ -66,6 +66,13 @@ mkdir -p "$STATE"
 # cheap when no records exist and never scrapes secondmate conversation.
 # shellcheck source=bin/fm-pending-reply-lib.sh
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
+# Park alerting reuses the merge-wait readiness predicate (the same `done: PR`
+# event that already defines "waiting on the captain") and the shared
+# supervision alert channels. Both are function-only sources.
+# shellcheck source=bin/fm-merge-wait-lib.sh
+. "$SCRIPT_DIR/fm-merge-wait-lib.sh"
+# shellcheck source=bin/fm-alert-lib.sh
+. "$SCRIPT_DIR/fm-alert-lib.sh"
 
 WATCH_LOCK="$STATE/.watch.lock"
 WATCH_PATH="$SCRIPT_DIR/fm-watch.sh"
@@ -405,6 +412,89 @@ age_of() {  # seconds since file mtime; "due immediately" if missing
   echo $(( $(date +%s) - m ))
 }
 
+# --- park alerting -----------------------------------------------------------
+#
+# The wake queue reaches a captain who is present. It cannot reach one who is
+# not, which is how a batch whose work is FINISHED and whose only remaining step
+# is a human decision sits parked overnight: the fleet is idle, nothing is
+# stale, no wake is owed, and the calendar cost is invisible. This scan answers
+# one narrow question on a slow cadence - which task has been waiting on a
+# person for longer than FM_PARK_ALERT_SECS - and raises exactly one alert per
+# park episode through the shared supervision alert channels.
+#
+# It deliberately does NOT wake firstmate: an idle fleet has no supervision work
+# to do, and turning a park into a wake would spend a turn to say "still parked".
+#
+# Only two gates count as a person's turn to act, both read from records
+# firstmate already writes:
+#   - a reported-ready PR on a task firstmate may not merge itself (yolo off),
+#     which is the captain's merge decision; and
+#   - an open needs-decision that is still the crew's current state.
+# Everything else is excluded on purpose. Ordinary working and validation time
+# never matches, because the last status line is not one of those two. A
+# declared external wait (paused:) is a scheduled delay that clears on its own. A
+# secondmate is idle by contract, so its quiet endpoint is health, not a park. A
+# blocked: line needs firstmate, not the captain, and already surfaces as a wake.
+# A queue item with no task of its own has nothing waiting on anyone.
+PARK_ALERT_SECS=${FM_PARK_ALERT_SECS:-1800}
+PARK_SCAN_INTERVAL=${FM_PARK_SCAN_INTERVAL:-300}
+
+# Print the human-readable gate this task is parked on, or fail when it is not
+# parked on a person at all.
+park_gate() {  # <task-id>
+  local id=$1 statusf meta last
+  statusf="$STATE/$id.status"
+  meta="$STATE/$id.meta"
+  [ -f "$statusf" ] || return 1
+  case "$(fm_merge_wait_meta_value "$meta" kind)" in
+    secondmate) return 1 ;;
+  esac
+  last=$(last_status_line "$statusf")
+  status_is_paused "$last" && return 1
+  if fm_merge_wait_reported_ready "$statusf"; then
+    # With yolo on firstmate merges under standing authority, so no human is
+    # holding this work and there is nothing to alert about.
+    [ "$(fm_merge_wait_meta_value "$meta" yolo)" = on ] && return 1
+    printf 'a finished PR is waiting for a merge decision'
+    return 0
+  fi
+  case "$(status_line_verb "$last")" in
+    needs-decision) ;;
+    *) return 1 ;;
+  esac
+  # The durable open-set, not the last line alone, decides whether the decision
+  # is still open.
+  [ -n "$(status_open_decisions "$statusf")" ] || return 1
+  printf 'a worker is waiting on a decision'
+}
+
+# One scan raises at most one alert. A parked batch is one situation for the
+# captain - the motivating incident was a whole batch waiting on one merge
+# session - so N newly parked tasks produce one banner and one Slack message
+# naming each task and its gate, not N of each. Deduplication stays per task:
+# each hit claims its own marker, so a task already reported never repeats while
+# a task that parks later still earns its own line in a later scan.
+park_alert_scan() {
+  local meta id gate age marker parked=0 summary=
+  for meta in "$STATE"/*.meta; do
+    [ -e "$meta" ] || continue
+    id=$(basename "$meta" .meta)
+    marker="$STATE/.park-alerted-$id"
+    if ! gate=$(park_gate "$id"); then
+      # The gate cleared, so the next park on this task alerts again.
+      fm_alert_clear_once "$marker"
+      continue
+    fi
+    age=$(age_of "$STATE/$id.status")
+    [ "$age" -ge "$PARK_ALERT_SECS" ] || continue
+    fm_alert_claim_once "$marker" || continue
+    summary="$summary$id has been waiting $((age / 60)) minutes: $gate."$'\n'
+    parked=$((parked + 1))
+  done
+  [ "$parked" -gt 0 ] || return 0
+  fm_alert_notify "firstmate: work is parked on you" "${summary%$'\n'}" >/dev/null 2>&1 || true
+}
+
 # Layer 2 + 3 signal scan: status files and turn-end markers. Each file is
 # compared against a persisted size:mtime signature (.seen-*) rather than
 # mtime-vs-a-startup-touch, so signals that land while no watcher is running
@@ -698,6 +788,14 @@ while :; do
   # repost after grace, and escalate once if the recovery turn is also missed.
   # No conversation scraping; unresolved records are never silently expired.
   fm_pending_reply_tick "$STATE" || true
+
+  # Park alerting: a slow, wake-free sweep for work that has been waiting on a
+  # person past the threshold. Cadence lives in a file mtime so it survives
+  # watcher restarts, exactly like the check and heartbeat schedules.
+  if [ "$(age_of "$STATE/.last-park-scan")" -ge "$PARK_SCAN_INTERVAL" ]; then
+    touch "$STATE/.last-park-scan"
+    park_alert_scan
+  fi
 
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
   # Time-based via .last-check mtime so the cadence survives watcher restarts.
