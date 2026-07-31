@@ -33,6 +33,8 @@ A no-mistakes run can spend more than an hour in automated review, tests, and CI
 The same pane scan therefore ticks a keep-warm evaluation on each confirmed-idle pane: after `FM_NM_KEEPWARM_SECS` of quiet, a crew whose `bin/fm-crew-state.sh` line reports `working` from an attributed `run-step` receives one ordinary line through `bin/fm-send.sh` asking it to inspect its own run and keep waiting.
 The quiet clock reads `state/<id>.turn-ended`, the crew's own Stop-hook turn boundary, rather than pane repaints, because terminal activity is not a model turn.
 A parked gate, a terminal run, a crew with no attributed run, a secondmate, and every harness outside `FM_NM_KEEPWARM_HARNESSES` are all no-ops, the activation never queues a wake or reaches the captain, and the per-task marker makes a watcher restart resume the cadence instead of replaying it.
+Because an idle-looking pane may be a dead shell, a prompt awaiting a keypress, or a half-typed line, the last gate before typing is the same confirmed-empty `fm_backend_composer_state` guard the away-mode daemon uses for its unattended injection; anything else defers untouched.
+Only a delivered activation restarts the full interval — a deferral or a refused send re-anchors for `FM_NM_KEEPWARM_RETRY_SECS`, doubled per consecutive miss and capped at the interval, so one bad evaluation costs a retry rather than a second interval of silence and a permanently unreachable pane still settles at one evaluation per interval.
 `bin/fm-nm-keepwarm-lib.sh` owns that contract.
 
 Crew status files are append-only wake-event logs, not current-state fields.

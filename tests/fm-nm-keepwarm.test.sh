@@ -45,6 +45,16 @@ SH
 chmod +x "$TMP/fake-crew-state.sh"
 export FM_CREW_STATE_BIN="$TMP/fake-crew-state.sh"
 
+# Stub composer state: prints whatever FAKE_COMPOSER holds, the same verdict
+# vocabulary bin/fm-backend.sh's fm_backend_composer_state emits.
+cat > "$TMP/fake-composer.sh" <<'SH'
+#!/usr/bin/env bash
+printf '%s' "${FAKE_COMPOSER:-empty}"
+SH
+chmod +x "$TMP/fake-composer.sh"
+export FM_NM_KEEPWARM_COMPOSER_HOOK="$TMP/fake-composer.sh"
+export FAKE_COMPOSER=empty
+
 NOW=1800000000
 WORKING='state: working · source: run-step · nm run r1 step ci running'
 PARKED='state: parked · source: run-step · nm run r1 awaiting_approval: 2 findings'
@@ -209,13 +219,82 @@ out=$(tick seeded $((NOW + 1800)))
 [ "$out" = sent ] || fail "the seeded clock must activate one interval later (got '$out')"
 pass "a first sighting seeds the clock rather than activating immediately"
 
-# A refused send re-anchors too, so a broken send path cannot loop every poll.
+# A refused send re-anchors too, so a broken send path cannot loop every poll -
+# but only for the retry delay, because nothing was delivered.
 make_task refused
 out=$(FAKE_SEND_RC=1 tick refused $((NOW + 1800)))
 [ "$out" = send-failed ] || fail "a refused send must be reported (got '$out')"
 out=$(FAKE_SEND_RC=1 tick refused $((NOW + 1801)))
 [ "$out" = not-due ] || fail "a refused send must re-anchor rather than retry every poll (got '$out')"
-pass "a refused send re-anchors instead of retrying on every poll"
+before=$(sent_count refused)
+out=$(tick refused $((NOW + 2099)))
+[ "$out" = not-due ] || fail "the retry delay must be waited out (got '$out')"
+[ "$(sent_count refused)" = "$before" ] || fail "no send may be attempted before the retry falls due"
+out=$(tick refused $((NOW + 2100)))
+[ "$out" = sent ] || fail "a refused send must be retried after the retry delay, not a full interval (got '$out')"
+pass "a refused send retries after the bounded delay, not another full interval"
+
+# A delivered activation is the only outcome that restarts the full interval,
+# and it clears the miss streak, so the next failure starts from the base delay.
+out=$(tick refused $((NOW + 3899)))
+[ "$out" = not-due ] || fail "a delivered activation must restart the full interval (got '$out')"
+out=$(FAKE_SEND_RC=1 tick refused $((NOW + 3900)))
+[ "$out" = send-failed ] || fail "the next interval must attempt again (got '$out')"
+out=$(tick refused $((NOW + 4200)))
+[ "$out" = sent ] || fail "a delivered activation must reset the retry streak (got '$out')"
+pass "only a delivered activation restarts the full interval"
+
+# --- composer safety gate ---------------------------------------------------
+#
+# A confirmed-idle pane is not automatically a pane that can be typed into: a
+# crew-state verdict stays authoritative after the pane closes, and the
+# watcher's idle check reads busy signatures only. So a dead-shell prompt, an
+# interactive prompt, and a half-typed line all arrive here looking idle, and
+# each one would be executed, answered, or corrupted by an unguarded send.
+for composer in pending pending-unproven unknown; do
+  make_task "composer-$composer"
+  out=$(FAKE_COMPOSER=$composer tick "composer-$composer" $((NOW + 1800)))
+  [ "$out" = deferred ] || fail "composer '$composer' must defer instead of typing (got '$out')"
+  [ "$(sent_count "composer-$composer")" = 0 ] || \
+    fail "composer '$composer' must receive no keystrokes"
+done
+pass "only a confirmed-empty composer is typed into"
+
+# A deferral is a miss, not a delivery: the crew is retried after the bounded
+# delay, so a transient composer state costs one retry, not a silent hour.
+make_task deferretry
+out=$(FAKE_COMPOSER=pending tick deferretry $((NOW + 1800)))
+[ "$out" = deferred ] || fail "the deferral fixture must defer (got '$out')"
+out=$(FAKE_COMPOSER=pending tick deferretry $((NOW + 2099)))
+[ "$out" = not-due ] || fail "a deferral must not re-evaluate every poll (got '$out')"
+out=$(tick deferretry $((NOW + 2100)))
+[ "$out" = sent ] || fail "a cleared composer must activate at the retry, not a full interval later (got '$out')"
+pass "a deferral retries after the bounded delay"
+
+# With no hook, the guard resolves the endpoint from meta: an endpoint that
+# cannot be read is `unknown`, which is a refusal and not a fallback to typing.
+make_task unresolvable
+out=$(FM_NM_KEEPWARM_COMPOSER_HOOK='' tick unresolvable $((NOW + 1800)))
+[ "$out" = deferred ] || fail "an unreadable endpoint must defer (got '$out')"
+[ "$(sent_count unresolvable)" = 0 ] || fail "an unreadable endpoint must receive no keystrokes"
+pass "an endpoint that cannot be read is never typed into"
+
+# --- bounded retry backoff --------------------------------------------------
+#
+# Retries double so a permanently unreachable crew settles back to one
+# evaluation per interval instead of probing at the short delay forever.
+make_task backoff
+export FAKE_CREW_STATE=''
+for probe in "1800 no-active-run" "2099 not-due" "2100 no-active-run" \
+             "2699 not-due" "2700 no-active-run" "3899 not-due" \
+             "3900 no-active-run" "5699 not-due" "5700 no-active-run"; do
+  at=${probe%% *}; want=${probe#* }
+  out=$(tick backoff $((NOW + at)))
+  [ "$out" = "$want" ] || fail "backoff at +${at}s expected '$want' (got '$out')"
+done
+[ "$(sent_count backoff)" = 0 ] || fail "a crew with no run must never be activated"
+pass "the retry delay doubles and is capped at one interval"
+export FAKE_CREW_STATE="$WORKING"
 
 # --- non-Claude and non-crewmate no-op --------------------------------------
 

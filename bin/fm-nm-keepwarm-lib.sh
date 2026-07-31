@@ -35,6 +35,17 @@
 # never interrupted. Nothing here queues a wake, writes a status line, or
 # otherwise reaches the captain.
 #
+# Idle is not the same as ready to receive, so the last gate before typing is
+# the same composer guard the away-mode daemon's unattended injection enforces
+# (bin/fm-supervise-daemon.sh): fm_backend_composer_state must read exactly
+# `empty`. A crew-state verdict stays authoritative even after its pane has
+# closed, and the watcher's idle check reads only busy signatures, so a pane
+# that has dropped to a login shell, sits on an interactive prompt, or holds a
+# half-typed line all reach this point looking idle - and typing into any of
+# them either executes the line in a shell, answers a prompt with Enter, or
+# corrupts pending text. fm-send.sh detects the bad shape only AFTER the
+# keystrokes land, so the guard has to happen here, before them.
+#
 # Ownership. This adds no loop and no process: bin/fm-watch.sh calls the tick
 # from the pane scan it already runs. All state is one marker file per task, so
 # a watcher restart resumes the cadence instead of resetting or replaying it.
@@ -50,11 +61,25 @@ _FM_NM_KEEPWARM_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/nul
 # FM_CREW_STATE_BIN, the overridable current-state reader, is defined here.
 # shellcheck source=bin/fm-classify-lib.sh
 . "$_FM_NM_KEEPWARM_LIB_DIR/fm-classify-lib.sh"
+# Endpoint resolution from meta plus fm_backend_composer_state, the shared
+# pre-submit input guard.
+# shellcheck source=bin/fm-backend.sh
+. "$_FM_NM_KEEPWARM_LIB_DIR/fm-backend.sh"
 
 # Maximum quiet interval, in seconds, during an active no-mistakes run. 1800
 # keeps every gap under Claude's one-hour extended cache window with room for a
 # missed poll. 0 disables keep-warm entirely.
 FM_NM_KEEPWARM_SECS_DEFAULT=1800
+
+# First retry delay, in seconds, after an evaluation that did not deliver an
+# activation. Only a delivered activation restarts the full interval; a refused
+# send, an unusable composer, or a run that was not active is retried after
+# this delay instead of after another full interval, which is what keeps the
+# worst-case quiet gap at one interval plus one retry rather than two intervals.
+# The delay doubles per consecutive miss and is capped at the interval, so a
+# permanently unreachable pane settles back to one evaluation per interval
+# instead of probing forever at the short delay.
+FM_NM_KEEPWARM_RETRY_SECS_DEFAULT=300
 
 # Harnesses whose crewmates get keep-warm activation, space separated and
 # matched as a prefix (so `claude` covers a versioned `claude-*` recording).
@@ -76,15 +101,21 @@ fm_nm_keepwarm_now() {
   date +%s
 }
 
-# Portable mtime, or nothing when the path does not exist.
-fm_nm_keepwarm_mtime() {  # <path>
-  [ -e "$1" ] || return 1
-  if [ "$(uname)" = Darwin ]; then
+# Portable mtime, or nothing when the path does not exist. The platform is
+# resolved once at source time rather than per call: this runs inside the
+# watcher's per-poll pane scan, which is the one place a per-call `uname` fork
+# is measurable (bin/fm-watch.sh resolves its own stat flavor the same way).
+if [ "$(uname)" = Darwin ]; then
+  fm_nm_keepwarm_mtime() {  # <path>
+    [ -e "$1" ] || return 1
     stat -f %m "$1" 2>/dev/null
-  else
+  }
+else
+  fm_nm_keepwarm_mtime() {  # <path>
+    [ -e "$1" ] || return 1
     stat -c %Y "$1" 2>/dev/null
-  fi
-}
+  }
+fi
 
 fm_nm_keepwarm_interval_secs() {
   local v=${FM_NM_KEEPWARM_SECS:-$FM_NM_KEEPWARM_SECS_DEFAULT}
@@ -92,9 +123,17 @@ fm_nm_keepwarm_interval_secs() {
   printf '%s' "$v"
 }
 
-# The per-task attempt marker. It records, as an epoch line, the last keep-warm
-# evaluation that decided the crew was not due, could not be activated, or was
-# activated - every one of which is a point the quiet clock restarts from.
+fm_nm_keepwarm_retry_secs() {
+  local v=${FM_NM_KEEPWARM_RETRY_SECS:-$FM_NM_KEEPWARM_RETRY_SECS_DEFAULT}
+  case "$v" in ''|*[!0-9]*|0) v=$FM_NM_KEEPWARM_RETRY_SECS_DEFAULT ;; esac
+  printf '%s' "$v"
+}
+
+# The per-task attempt marker. Line 1 is the epoch the quiet clock currently
+# runs from; line 2 is the consecutive-miss count that sets the retry delay.
+# A delivered activation records the real epoch; a miss records the epoch that
+# makes the next evaluation fall due one retry delay later, so both cadences
+# ride the same single anchor and a watcher restart resumes either one.
 # The recorded epoch, not the file mtime, is authoritative so the cadence obeys
 # one controllable clock.
 fm_nm_keepwarm_marker() {  # <state> <id>
@@ -109,10 +148,36 @@ fm_nm_keepwarm_marker_epoch() {  # <state> <id>
   case "$v" in ''|*[!0-9]*) fm_nm_keepwarm_mtime "$f" ;; *) printf '%s' "$v" ;; esac
 }
 
-# Record an evaluation at <epoch>. Idempotent: the same evaluation replayed
-# after a watcher restart rewrites the same anchor rather than adding state.
-fm_nm_keepwarm_record() {  # <state> <id> <epoch>
-  printf '%s\n' "$3" > "$(fm_nm_keepwarm_marker "$1" "$2")" 2>/dev/null
+fm_nm_keepwarm_marker_misses() {  # <state> <id>
+  local f v
+  f=$(fm_nm_keepwarm_marker "$1" "$2")
+  [ -f "$f" ] || { printf '0'; return 0; }
+  v=$(sed -n 2p "$f" 2>/dev/null | tr -d '[:space:]')
+  case "$v" in ''|*[!0-9]*) printf '0' ;; *) printf '%s' "$v" ;; esac
+}
+
+# Record an evaluation at <epoch> with <misses> consecutive non-deliveries.
+# Idempotent: the same evaluation replayed after a watcher restart rewrites the
+# same anchor rather than adding state.
+fm_nm_keepwarm_record() {  # <state> <id> <epoch> [misses]
+  printf '%s\n%s\n' "$3" "${4:-0}" > "$(fm_nm_keepwarm_marker "$1" "$2")" 2>/dev/null
+}
+
+# Record a non-delivery: anchor the clock so the next evaluation falls due one
+# retry delay from <now> instead of one full interval, with the delay doubled
+# per consecutive miss and capped at the interval.
+fm_nm_keepwarm_record_miss() {  # <state> <id> <now> <interval>
+  local misses retry
+  misses=$(fm_nm_keepwarm_marker_misses "$1" "$2")
+  misses=$((misses + 1))
+  retry=$(fm_nm_keepwarm_retry_secs)
+  local n=1
+  while [ "$n" -lt "$misses" ] && [ "$retry" -lt "$4" ]; do
+    retry=$((retry * 2))
+    n=$((n + 1))
+  done
+  [ "$retry" -le "$4" ] || retry=$4
+  fm_nm_keepwarm_record "$1" "$2" "$(($3 - $4 + retry))" "$misses"
 }
 
 fm_nm_keepwarm_meta_value() {  # <meta> <key>
@@ -175,6 +240,26 @@ fm_nm_keepwarm_run_active() {  # <home> <id>
   [ "$src" = run-step ]
 }
 
+# The recorded endpoint's composer verdict: empty|pending|pending-unproven|
+# unknown, exactly as bin/fm-backend.sh classifies it. An endpoint that cannot
+# be resolved at all is `unknown`, which is a refusal here, not a fallback.
+fm_nm_keepwarm_composer_state() {  # <state> <id>
+  local meta=$1/$2.meta backend target verdict
+  if [ -n "${FM_NM_KEEPWARM_COMPOSER_HOOK:-}" ]; then
+    # Hook receives: state id
+    verdict=$(eval "$FM_NM_KEEPWARM_COMPOSER_HOOK" "$(printf '%q' "$1")" \
+      "$(printf '%q' "$2")" 2>/dev/null)
+    printf '%s' "${verdict:-unknown}"
+    return 0
+  fi
+  [ -f "$meta" ] || { printf 'unknown'; return 0; }
+  backend=$(fm_backend_of_meta "$meta")
+  target=$(fm_backend_target_of_meta "$meta")
+  [ -n "$target" ] || { printf 'unknown'; return 0; }
+  verdict=$(fm_backend_composer_state "$backend" "$target" 2>/dev/null)
+  printf '%s' "${verdict:-unknown}"
+}
+
 fm_nm_keepwarm_send() {  # <home> <id>
   if [ -n "${FM_NM_KEEPWARM_SEND_HOOK:-}" ]; then
     # Hook receives: home id message
@@ -194,14 +279,18 @@ fm_nm_keepwarm_send() {  # <home> <id>
 #   seeded        first sighting with no prior signal; the clock starts now
 #   not-due       still inside the quiet interval
 #   no-active-run no attributed, actively-working no-mistakes run to keep warm
+#   deferred      the pane is not a confirmed-empty composer, so nothing was typed
 #   sent          activation delivered
 #   send-failed   the send path refused or could not confirm submission
-# Every terminal outcome except ineligible/disabled/not-due re-anchors the
-# marker, so a failed or skipped evaluation waits out another full interval
-# instead of retrying on every poll, and a watcher restart resumes the same
-# cadence from the same file.
+# Only `sent` restarts the full interval. Every other non-delivering outcome
+# except ineligible/disabled/not-due re-anchors the marker for a retry delay
+# instead, so a transient refusal costs one retry rather than a second full
+# interval of silence, while the doubling in fm_nm_keepwarm_record_miss keeps a
+# permanently unreachable pane at one evaluation per interval instead of a
+# per-poll retry storm. A watcher restart resumes the same cadence from the
+# same file either way.
 fm_nm_keepwarm_tick() {  # <home> <state> <id>
-  local home=$1 state=$2 id=$3 interval last now
+  local home=$1 state=$2 id=$3 interval last now composer
   [ -n "$id" ] || { printf 'ineligible'; return 1; }
   fm_nm_keepwarm_eligible "$state" "$id" || { printf 'ineligible'; return 1; }
   interval=$(fm_nm_keepwarm_interval_secs)
@@ -217,16 +306,22 @@ fm_nm_keepwarm_tick() {  # <home> <state> <id>
     return 1
   fi
   if ! fm_nm_keepwarm_run_active "$home" "$id"; then
-    fm_nm_keepwarm_record "$state" "$id" "$now"
+    fm_nm_keepwarm_record_miss "$state" "$id" "$now" "$interval"
     printf 'no-active-run'
     return 1
   fi
+  composer=$(fm_nm_keepwarm_composer_state "$state" "$id")
+  if [ "$composer" != empty ]; then
+    fm_nm_keepwarm_record_miss "$state" "$id" "$now" "$interval"
+    printf 'deferred'
+    return 1
+  fi
   if fm_nm_keepwarm_send "$home" "$id"; then
-    fm_nm_keepwarm_record "$state" "$id" "$now"
+    fm_nm_keepwarm_record "$state" "$id" "$now" 0
     printf 'sent'
     return 0
   fi
-  fm_nm_keepwarm_record "$state" "$id" "$now"
+  fm_nm_keepwarm_record_miss "$state" "$id" "$now" "$interval"
   printf 'send-failed'
   return 1
 }
