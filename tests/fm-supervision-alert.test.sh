@@ -11,6 +11,13 @@
 # Every alert here goes through the FM_ALERT_EXEC recorder installed by
 # tests/wake-helpers.sh, so no case can post a real notification or a real Slack
 # message. The Slack transport is exercised against a fake curl, never a network.
+#
+# Cases that assert which channels fired pin config/supervision-alert to
+# `osascript slack` rather than leaning on the absent-config default: `auto`
+# resolves to the platform's OS channel, which is osascript on macOS and nothing
+# at all elsewhere, so an unpinned expectation is a host assertion, not a
+# behavior one. Channel resolution itself is covered by
+# test_channels_and_isolation.
 set -u
 
 # shellcheck source=tests/wake-helpers.sh
@@ -133,7 +140,8 @@ CURL
 arm_lab() {  # <name> <fail-count> -> lab dir
   local name=$1 fail_count=$2 lab
   lab="$TMP_ROOT/$name"
-  mkdir -p "$lab/bin" "$lab/state"
+  mkdir -p "$lab/bin" "$lab/state" "$lab/config"
+  printf 'osascript\nslack\n' > "$lab/config/supervision-alert"
   cp -f "$ROOT/bin/fm-watch-arm.sh" "$ROOT/bin/fm-wake-lib.sh" "$ROOT/bin/fm-alert-lib.sh" "$lab/bin/"
   printf '0\n' > "$lab/launches"
   cat > "$lab/bin/fm-watch.sh" <<WATCH
@@ -210,6 +218,7 @@ park_home() {  # <name>
   local home
   home=$(new_home "$1")
   mkdir -p "$home/config"
+  printf 'osascript\nslack\n' > "$home/config/supervision-alert"
   printf '%s\n' "$home"
 }
 

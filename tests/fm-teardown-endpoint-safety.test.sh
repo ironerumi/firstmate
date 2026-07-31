@@ -180,6 +180,7 @@ test_registered_adhoc_record_clears_only_volatile_state() {
   write_adhoc_meta "$dir" "$id" "" "" "" "harness=adhoc"
   : > "$dir/home/state/$id.status"
   : > "$dir/home/state/$id.turn-ended"
+  : > "$dir/home/state/.keepwarm-$id"
 
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
   FM_RUNTIME_LOG="$dir/runtime.log" PATH="$dir/fakebin:$PATH" \
@@ -189,6 +190,7 @@ test_registered_adhoc_record_clears_only_volatile_state() {
   assert_absent "$dir/home/state/$id.meta" "registered ad-hoc record: cleanup kept task metadata"
   assert_absent "$dir/home/state/$id.status" "registered ad-hoc record: cleanup kept the status record"
   assert_absent "$dir/home/state/$id.turn-ended" "registered ad-hoc record: cleanup kept the turn-end record"
+  assert_absent "$dir/home/state/.keepwarm-$id" "registered ad-hoc record: cleanup kept the keep-warm marker"
   assert_present "$dir/worktree/sentinel" "registered ad-hoc record: cleanup touched a worktree it does not own"
   [ ! -s "$dir/runtime.log" ] || fail "registered ad-hoc record: cleanup ran a runtime command: $(cat "$dir/runtime.log")"
   assert_grep "teardown $id complete" "$dir/stdout" \
