@@ -1,0 +1,232 @@
+# shellcheck shell=bash
+# fm-nm-keepwarm-lib.sh - bounded keep-warm activation for a Claude crewmate
+# whose no-mistakes validation has gone quiet.
+# Usage: . bin/fm-nm-keepwarm-lib.sh
+#
+# Why this exists. A no-mistakes run can spend well over an hour in automated
+# review, tests, and CI. Throughout that stretch the crewmate is correctly
+# silent: the pipeline owns the work, the crew's status log stays sparse by
+# contract, and the watcher absorbs the resulting stale wakes as
+# provably-working (bin/fm-watch.sh's absorb-only-when-provably-working path).
+# Nothing in that path ever reaches the worker, so a Claude Code crewmate can go
+# from its last model turn to the pipeline's next gate without making a single
+# turn in between. Its prompt cache expires in that gap, so the continuation
+# re-reads the whole conversation prefix at full price and latency.
+#
+# What warms the cache is a MODEL TURN, not terminal activity: a repainted pane,
+# a spinner, or a keystroke that never submits leaves the cache untouched. So
+# both halves of this library are anchored on model-turn evidence:
+#
+#   - The quiet clock reads state/<id>.turn-ended, which the Claude crewmate's
+#     own Stop hook touches at every turn boundary (bin/fm-spawn.sh installs it),
+#     plus the status log and this library's own attempt marker. Pane churn is
+#     deliberately NOT an activation: it is exactly the terminal-only signal that
+#     would make an unwarmed session look warm.
+#   - The activation itself is one ordinary line delivered through bin/fm-send.sh
+#     - the same verified-submit path the pending-reply recovery re-send already
+#     uses to revive an idle worker - so it produces a real turn rather than a
+#     cosmetic one.
+#
+# Safety. The activation is benign by construction: it asks the worker to
+# inspect its existing run and keep waiting. It is sent only while
+# bin/fm-crew-state.sh reports `working` from an attributed `run-step`, so a
+# parked gate, a terminal run, and a crew with no run at all are all excluded,
+# and callers only reach the tick on a confirmed-idle pane so an active turn is
+# never interrupted. Nothing here queues a wake, writes a status line, or
+# otherwise reaches the captain.
+#
+# Ownership. This adds no loop and no process: bin/fm-watch.sh calls the tick
+# from the pane scan it already runs. All state is one marker file per task, so
+# a watcher restart resumes the cadence instead of resetting or replaying it.
+#
+# Coverage. The crew harness decides eligibility and only claude opts in, so
+# codex, opencode, pi, pi-signed, grok, and kimi crews keep their current
+# behavior exactly. The primary harness is irrelevant: every supervision
+# protocol drives the same watcher loop. So is the runtime backend - the tick
+# reads only task metadata and the state directory, and delivery goes through
+# fm-send.sh's ordinary text path, which every spawn-capable backend supports.
+
+_FM_NM_KEEPWARM_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)" || _FM_NM_KEEPWARM_LIB_DIR="."
+# FM_CREW_STATE_BIN, the overridable current-state reader, is defined here.
+# shellcheck source=bin/fm-classify-lib.sh
+. "$_FM_NM_KEEPWARM_LIB_DIR/fm-classify-lib.sh"
+
+# Maximum quiet interval, in seconds, during an active no-mistakes run. 1800
+# keeps every gap under Claude's one-hour extended cache window with room for a
+# missed poll. 0 disables keep-warm entirely.
+FM_NM_KEEPWARM_SECS_DEFAULT=1800
+
+# Harnesses whose crewmates get keep-warm activation, space separated and
+# matched as a prefix (so `claude` covers a versioned `claude-*` recording).
+# Claude is the only harness with evidence that a quiet validation costs a cold
+# prompt cache; every other harness is a deliberate no-op until it has its own.
+FM_NM_KEEPWARM_HARNESSES_DEFAULT='claude'
+
+# The activation text. One line, read-only, and explicitly fenced against every
+# action the crew must not take while the pipeline owns the branch: no second
+# run, no push, no gate answer, and no status line (which would surface routine
+# progress to the captain).
+FM_NM_KEEPWARM_MESSAGE='Keep-warm check while your no-mistakes run is still active: run no-mistakes axi status to confirm it is still progressing, then keep waiting. Do not start or restart a run, do not push, do not abort or answer a gate on your own, and do not append a status line for this check.'
+
+fm_nm_keepwarm_now() {
+  if [ -n "${FM_NM_KEEPWARM_NOW:-}" ]; then
+    printf '%s' "$FM_NM_KEEPWARM_NOW"
+    return 0
+  fi
+  date +%s
+}
+
+# Portable mtime, or nothing when the path does not exist.
+fm_nm_keepwarm_mtime() {  # <path>
+  [ -e "$1" ] || return 1
+  if [ "$(uname)" = Darwin ]; then
+    stat -f %m "$1" 2>/dev/null
+  else
+    stat -c %Y "$1" 2>/dev/null
+  fi
+}
+
+fm_nm_keepwarm_interval_secs() {
+  local v=${FM_NM_KEEPWARM_SECS:-$FM_NM_KEEPWARM_SECS_DEFAULT}
+  case "$v" in ''|*[!0-9]*) v=$FM_NM_KEEPWARM_SECS_DEFAULT ;; esac
+  printf '%s' "$v"
+}
+
+# The per-task attempt marker. It records, as an epoch line, the last keep-warm
+# evaluation that decided the crew was not due, could not be activated, or was
+# activated - every one of which is a point the quiet clock restarts from.
+# The recorded epoch, not the file mtime, is authoritative so the cadence obeys
+# one controllable clock.
+fm_nm_keepwarm_marker() {  # <state> <id>
+  printf '%s/.keepwarm-%s' "$1" "$2"
+}
+
+fm_nm_keepwarm_marker_epoch() {  # <state> <id>
+  local f v
+  f=$(fm_nm_keepwarm_marker "$1" "$2")
+  [ -f "$f" ] || return 1
+  v=$(head -1 "$f" 2>/dev/null | tr -d '[:space:]')
+  case "$v" in ''|*[!0-9]*) fm_nm_keepwarm_mtime "$f" ;; *) printf '%s' "$v" ;; esac
+}
+
+# Record an evaluation at <epoch>. Idempotent: the same evaluation replayed
+# after a watcher restart rewrites the same anchor rather than adding state.
+fm_nm_keepwarm_record() {  # <state> <id> <epoch>
+  printf '%s\n' "$3" > "$(fm_nm_keepwarm_marker "$1" "$2")" 2>/dev/null
+}
+
+fm_nm_keepwarm_meta_value() {  # <meta> <key>
+  grep "^$2=" "$1" 2>/dev/null | tail -1 | cut -d= -f2- || true
+}
+
+# 0 when task <id> is a crewmate whose recorded harness opts into keep-warm.
+# A secondmate is idle by charter, so its quiet pane is healthy and never a
+# cache-warming case.
+fm_nm_keepwarm_eligible() {  # <state> <id>
+  local state=$1 id=$2 meta harness kind h
+  meta="$state/$id.meta"
+  [ -f "$meta" ] || return 1
+  kind=$(fm_nm_keepwarm_meta_value "$meta" kind)
+  [ "$kind" != secondmate ] || return 1
+  harness=$(fm_nm_keepwarm_meta_value "$meta" harness)
+  [ -n "$harness" ] || return 1
+  for h in ${FM_NM_KEEPWARM_HARNESSES:-$FM_NM_KEEPWARM_HARNESSES_DEFAULT}; do
+    case "$harness" in "$h"*) return 0 ;; esac
+  done
+  return 1
+}
+
+# Epoch of this crew's most recent qualifying activation, or nothing when the
+# task has left no signal at all yet. Turn-end (a real model turn), the status
+# log (a crew-authored event), and the attempt marker are all restart points.
+fm_nm_keepwarm_last_activation() {  # <state> <id>
+  local state=$1 id=$2 newest='' m f
+  for f in "$state/$id.turn-ended" "$state/$id.status"; do
+    m=$(fm_nm_keepwarm_mtime "$f") || continue
+    case "$m" in ''|*[!0-9]*) continue ;; esac
+    { [ -n "$newest" ] && [ "$m" -le "$newest" ]; } && continue
+    newest=$m
+  done
+  if m=$(fm_nm_keepwarm_marker_epoch "$state" "$id"); then
+    case "$m" in
+      ''|*[!0-9]*) ;;
+      *) { [ -n "$newest" ] && [ "$m" -le "$newest" ]; } || newest=$m ;;
+    esac
+  fi
+  [ -n "$newest" ] || return 1
+  printf '%s' "$newest"
+}
+
+# 0 when bin/fm-crew-state.sh reports an attributed no-mistakes run that is
+# actively working. `parked` (a gate awaiting a decision), the terminal states,
+# and a `pane`-sourced working verdict all fail this on purpose: only a run the
+# crew is genuinely waiting out earns an activation.
+# The home is passed explicitly because bin/fm-crew-state.sh resolves its state
+# directory from FM_HOME: a watcher that inherited no exported home would
+# otherwise read another home's records to decide whether to steer this crew.
+fm_nm_keepwarm_run_active() {  # <home> <id>
+  local home=$1 id=$2 line state src
+  line=$(env FM_HOME="$home" "$FM_CREW_STATE_BIN" "$id" 2>/dev/null) || return 1
+  case "$line" in state:*) ;; *) return 1 ;; esac
+  state=${line#state: }; state=${state%% *}
+  [ "$state" = working ] || return 1
+  case "$line" in *"source: "*) ;; *) return 1 ;; esac
+  src=${line#*source: }; src=${src%% *}
+  [ "$src" = run-step ]
+}
+
+fm_nm_keepwarm_send() {  # <home> <id>
+  if [ -n "${FM_NM_KEEPWARM_SEND_HOOK:-}" ]; then
+    # Hook receives: home id message
+    # shellcheck disable=SC2086
+    eval "$FM_NM_KEEPWARM_SEND_HOOK" "$(printf '%q' "$1")" "$(printf '%q' "$2")" \
+      "$(printf '%q' "$FM_NM_KEEPWARM_MESSAGE")"
+    return $?
+  fi
+  env FM_HOME="$1" "$_FM_NM_KEEPWARM_LIB_DIR/fm-send.sh" "$2" "$FM_NM_KEEPWARM_MESSAGE" >/dev/null 2>&1
+}
+
+# One keep-warm evaluation for task <id>, called from the watcher's pane scan
+# once the pane is confirmed idle. Prints exactly one outcome word and returns 0
+# only when an activation was delivered:
+#   ineligible    not a keep-warm harness, or not an ordinary crewmate
+#   disabled      keep-warm turned off for this home
+#   seeded        first sighting with no prior signal; the clock starts now
+#   not-due       still inside the quiet interval
+#   no-active-run no attributed, actively-working no-mistakes run to keep warm
+#   sent          activation delivered
+#   send-failed   the send path refused or could not confirm submission
+# Every terminal outcome except ineligible/disabled/not-due re-anchors the
+# marker, so a failed or skipped evaluation waits out another full interval
+# instead of retrying on every poll, and a watcher restart resumes the same
+# cadence from the same file.
+fm_nm_keepwarm_tick() {  # <home> <state> <id>
+  local home=$1 state=$2 id=$3 interval last now
+  [ -n "$id" ] || { printf 'ineligible'; return 1; }
+  fm_nm_keepwarm_eligible "$state" "$id" || { printf 'ineligible'; return 1; }
+  interval=$(fm_nm_keepwarm_interval_secs)
+  [ "$interval" -gt 0 ] || { printf 'disabled'; return 1; }
+  now=$(fm_nm_keepwarm_now)
+  if ! last=$(fm_nm_keepwarm_last_activation "$state" "$id"); then
+    fm_nm_keepwarm_record "$state" "$id" "$now"
+    printf 'seeded'
+    return 1
+  fi
+  if [ $((now - last)) -lt "$interval" ]; then
+    printf 'not-due'
+    return 1
+  fi
+  if ! fm_nm_keepwarm_run_active "$home" "$id"; then
+    fm_nm_keepwarm_record "$state" "$id" "$now"
+    printf 'no-active-run'
+    return 1
+  fi
+  if fm_nm_keepwarm_send "$home" "$id"; then
+    fm_nm_keepwarm_record "$state" "$id" "$now"
+    printf 'sent'
+    return 0
+  fi
+  fm_nm_keepwarm_record "$state" "$id" "$now"
+  printf 'send-failed'
+  return 1
+}

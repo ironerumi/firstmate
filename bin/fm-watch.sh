@@ -39,6 +39,10 @@
 #                          running a check or removing poll artifacts
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
+# A confirmed-idle pane also gets one keep-warm tick, which prints no reason and
+# never queues a wake: it only decides whether a Claude crew waiting out its own
+# no-mistakes run has been quiet long enough to need a benign activation.
+# bin/fm-nm-keepwarm-lib.sh owns that contract.
 # For normal supervision, resume the session-start primary-harness protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
@@ -73,6 +77,10 @@ mkdir -p "$STATE"
 . "$SCRIPT_DIR/fm-merge-wait-lib.sh"
 # shellcheck source=bin/fm-alert-lib.sh
 . "$SCRIPT_DIR/fm-alert-lib.sh"
+# Keep-warm activation for a Claude crew whose no-mistakes run has gone quiet.
+# Function-only source; the tick below is the single call site.
+# shellcheck source=bin/fm-nm-keepwarm-lib.sh
+. "$SCRIPT_DIR/fm-nm-keepwarm-lib.sh"
 
 WATCH_LOCK="$STATE/.watch.lock"
 WATCH_PATH="$SCRIPT_DIR/fm-watch.sh"
@@ -957,6 +965,16 @@ EOF
       # verified harness renders its busy indicator) so busy-looking strings
       # in displayed content cannot suppress stale detection.
       if [ "$n" -ge 2 ] && ! window_is_busy "$w" "$tail40"; then
+        # Keep-warm: this confirmed-idle pane is the only point that knows a
+        # crew is quiet without an active turn to interrupt. The tick is a
+        # cheap timestamp compare on every poll and reads crew state only once
+        # per quiet interval; it never touches triage, the wake queue, or the
+        # captain. bin/fm-nm-keepwarm-lib.sh owns the whole contract.
+        kw=$(fm_nm_keepwarm_tick "$FM_HOME" "$STATE" "$task") || true
+        case "$kw" in
+          ineligible|disabled|not-due) : ;;
+          *) triage_log "keep-warm $kw: $w" ;;
+        esac
         # The pane is idle/stale at hash $h. Triage decides whether this wakes
         # firstmate. Detection itself is unchanged from above.
         if [ "$kind" = secondmate ]; then

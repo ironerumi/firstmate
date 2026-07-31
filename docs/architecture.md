@@ -28,6 +28,13 @@ After each drain, `fm-wake-drain.sh` runs the same liveness guard as the supervi
 Routine watcher polling, supervision no-ops, elapsed waiting time, and absorbed benign wakes stay silent.
 A declared external wait trades that silence for one bounded recheck per pause window, so a forgotten pause cannot remain invisible indefinitely.
 Work waiting on the captain instead of on firstmate stays wake-free: a slow park sweep in the same watcher loop alerts the captain directly rather than spending a turn to report an idle fleet, and [`supervision-alerts.md`](supervision-alerts.md) owns which gates count and how long they may wait.
+One case needs the opposite of silence.
+A no-mistakes run can spend more than an hour in automated review, tests, and CI, and the absorb path above deliberately leaves the crew alone for all of it, so a Claude crewmate can go that whole stretch without a model turn and lose its prompt cache.
+The same pane scan therefore ticks a keep-warm evaluation on each confirmed-idle pane: after `FM_NM_KEEPWARM_SECS` of quiet, a crew whose `bin/fm-crew-state.sh` line reports `working` from an attributed `run-step` receives one ordinary line through `bin/fm-send.sh` asking it to inspect its own run and keep waiting.
+The quiet clock reads `state/<id>.turn-ended`, the crew's own Stop-hook turn boundary, rather than pane repaints, because terminal activity is not a model turn.
+A parked gate, a terminal run, a crew with no attributed run, a secondmate, and every harness outside `FM_NM_KEEPWARM_HARNESSES` are all no-ops, the activation never queues a wake or reaches the captain, and the per-task marker makes a watcher restart resume the cadence instead of replaying it.
+`bin/fm-nm-keepwarm-lib.sh` owns that contract.
+
 Crew status files are append-only wake-event logs, not current-state fields.
 `bin/fm-crew-state.sh <id>` is the cheap current-state read for an actionable heartbeat review: it attributes a no-mistakes run, active or terminal, only when it matches the crew's branch and current code identity, then keeps that run-step authoritative even if the pane has closed.
 The script header owns the exact run-head ancestry rules.

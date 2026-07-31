@@ -1,0 +1,254 @@
+#!/usr/bin/env bash
+# tests/fm-nm-keepwarm.test.sh - a Claude crew waiting out a long no-mistakes
+# run gets one benign activation per quiet interval, and nothing else does.
+#
+# Every case drives bin/fm-nm-keepwarm-lib.sh's tick with a controlled clock
+# (FM_NM_KEEPWARM_NOW) and controlled file timestamps, so the 30-minute boundary
+# is exercised without any test waiting 30 minutes. The crew-state reader and
+# the send path are both stubbed: this suite owns the cadence and the safety
+# gates, not the backend or the pipeline.
+set -u
+
+# shellcheck source=tests/lib.sh
+# shellcheck disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+TMP=$(fm_test_tmproot fm-nm-keepwarm)
+
+# shellcheck disable=SC1091
+. "$ROOT/bin/fm-nm-keepwarm-lib.sh"
+
+HOME_DIR="$TMP/home"
+STATE="$HOME_DIR/state"
+mkdir -p "$STATE"
+SENT_LOG="$TMP/sent.log"
+: > "$SENT_LOG"
+
+# Stub send: records one line per delivered activation. The exit code is driven
+# by FAKE_SEND_RC so the refused-send case is a real non-zero return.
+cat > "$TMP/fake-send.sh" <<'SH'
+#!/usr/bin/env bash
+printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$SENT_LOG"
+exit "${FAKE_SEND_RC:-0}"
+SH
+chmod +x "$TMP/fake-send.sh"
+export SENT_LOG
+export FM_NM_KEEPWARM_SEND_HOOK="$TMP/fake-send.sh"
+
+# Stub crew state: prints whatever FAKE_CREW_STATE holds, the same one-line
+# contract bin/fm-crew-state.sh emits.
+cat > "$TMP/fake-crew-state.sh" <<'SH'
+#!/usr/bin/env bash
+[ -n "${FAKE_CREW_STATE:-}" ] || exit 1
+printf '%s\n' "$FAKE_CREW_STATE"
+SH
+chmod +x "$TMP/fake-crew-state.sh"
+export FM_CREW_STATE_BIN="$TMP/fake-crew-state.sh"
+
+NOW=1800000000
+WORKING='state: working · source: run-step · nm run r1 step ci running'
+PARKED='state: parked · source: run-step · nm run r1 awaiting_approval: 2 findings'
+DONE='state: done · source: run-step · nm run r1 checks-passed'
+
+# --- fixtures ---------------------------------------------------------------
+
+# make_task <id> [harness] [kind]: a crewmate whose last model turn was <NOW>.
+make_task() {  # <id> [harness] [kind]
+  local id=$1 harness=${2:-claude} kind=${3:-ship}
+  fm_write_meta "$STATE/$id.meta" \
+    "window=firstmate:fm-$id" \
+    "worktree=$TMP/wt-$id" \
+    "project=$TMP/projects/sample" \
+    "harness=$harness" \
+    "kind=$kind" \
+    "mode=no-mistakes" \
+    "yolo=off"
+  : > "$STATE/$id.turn-ended"
+  set_turn_end "$id" "$NOW"
+  rm -f "$STATE/.keepwarm-$id"
+}
+
+# set_file_time <path> <epoch>: pin a signal file to a controlled timestamp.
+set_file_time() {  # <path> <epoch>
+  local stamp
+  if [ "$(uname)" = Darwin ]; then
+    stamp=$(date -r "$2" +%Y%m%d%H%M.%S)
+  else
+    stamp=$(date -d "@$2" +%Y%m%d%H%M.%S)
+  fi
+  touch -t "$stamp" "$1"
+}
+
+# set_turn_end <id> <epoch>: the crew's last real model turn, as its Stop hook
+# would have left it.
+set_turn_end() {  # <id> <epoch>
+  set_file_time "$STATE/$1.turn-ended" "$2"
+}
+
+# tick <id> <now-epoch>: one keep-warm evaluation at a controlled clock.
+tick() {  # <id> <now>
+  FM_NM_KEEPWARM_NOW=$2 fm_nm_keepwarm_tick "$HOME_DIR" "$STATE" "$1" || true
+}
+
+sent_count() {  # <id>
+  grep -c -F "	$1	" "$SENT_LOG" 2>/dev/null || true
+}
+
+# --- 30-minute boundary -----------------------------------------------------
+
+export FAKE_CREW_STATE="$WORKING"
+
+make_task boundary
+out=$(tick boundary $((NOW + 1799)))
+[ "$out" = not-due ] || fail "one second before the interval must not activate (got '$out')"
+[ "$(sent_count boundary)" = 0 ] || fail "no activation may be sent before the interval elapses"
+pass "quiet just under 30 minutes sends nothing"
+
+out=$(tick boundary $((NOW + 1800)))
+[ "$out" = sent ] || fail "the 30-minute boundary must activate (got '$out')"
+[ "$(sent_count boundary)" = 1 ] || fail "exactly one activation at the boundary"
+assert_grep "$FM_NM_KEEPWARM_MESSAGE" "$SENT_LOG" "the activation must carry the benign keep-warm text"
+pass "quiet reaching 30 minutes sends exactly one activation"
+
+# --- no early duplicate -----------------------------------------------------
+
+out=$(tick boundary $((NOW + 1801)))
+[ "$out" = not-due ] || fail "a second poll right after an activation must not re-send (got '$out')"
+out=$(tick boundary $((NOW + 3599)))
+[ "$out" = not-due ] || fail "the next activation is due a full interval later (got '$out')"
+[ "$(sent_count boundary)" = 1 ] || fail "no duplicate activation inside the interval"
+out=$(tick boundary $((NOW + 3600)))
+[ "$out" = sent ] || fail "the next interval must activate again (got '$out')"
+[ "$(sent_count boundary)" = 2 ] || fail "one activation per elapsed interval"
+pass "an activation resets the cadence; no duplicate before the next interval"
+
+# --- a real worker turn resets the cadence ----------------------------------
+
+make_task turnreset
+set_turn_end turnreset $((NOW + 1500))   # the crew took its own turn mid-wait
+out=$(tick turnreset $((NOW + 1800)))
+[ "$out" = not-due ] || fail "a fresh worker turn must restart the quiet clock (got '$out')"
+[ "$(sent_count turnreset)" = 0 ] || fail "a crew that just took a turn needs no activation"
+out=$(tick turnreset $((NOW + 3299)))
+[ "$out" = not-due ] || fail "the clock runs from the worker turn, not the previous tick (got '$out')"
+out=$(tick turnreset $((NOW + 3300)))
+[ "$out" = sent ] || fail "30 minutes after the worker's own turn must activate (got '$out')"
+pass "a normal worker turn resets the cadence"
+
+# A status line the crew writes is the other qualifying activation.
+make_task statusreset
+printf 'working: still validating\n' > "$STATE/statusreset.status"
+set_file_time "$STATE/statusreset.status" $((NOW + 1500))
+out=$(tick statusreset $((NOW + 1800)))
+[ "$out" = not-due ] || fail "a fresh status event must restart the quiet clock (got '$out')"
+pass "a crew-authored status event resets the cadence"
+
+# --- active-turn suppression ------------------------------------------------
+#
+# The watcher only reaches the tick on a pane that stayed identical across polls
+# with no busy signature, so an active turn never gets here. The library's own
+# backstop is the crew-state gate: a `pane`-sourced working verdict is not an
+# attributed run and must not be activated.
+make_task activeturn
+export FAKE_CREW_STATE='state: working · source: pane · busy signature'
+out=$(tick activeturn $((NOW + 3600)))
+[ "$out" = no-active-run ] || fail "a busy pane without an attributed run must not be activated (got '$out')"
+[ "$(sent_count activeturn)" = 0 ] || fail "no activation may be sent to a working pane"
+pass "an active turn without an attributed run is suppressed"
+
+# --- parked-decision suppression --------------------------------------------
+
+make_task parked
+export FAKE_CREW_STATE="$PARKED"
+out=$(tick parked $((NOW + 3600)))
+[ "$out" = no-active-run ] || fail "a parked gate must never be activated (got '$out')"
+[ "$(sent_count parked)" = 0 ] || fail "no activation may reach a crew parked on a decision"
+pass "a parked decision is suppressed"
+
+# --- terminal run behavior --------------------------------------------------
+
+make_task terminal
+export FAKE_CREW_STATE="$DONE"
+out=$(tick terminal $((NOW + 3600)))
+[ "$out" = no-active-run ] || fail "a finished run must not be kept warm (got '$out')"
+[ "$(sent_count terminal)" = 0 ] || fail "no activation may reach a crew whose run is terminal"
+# The refusal re-anchors, so a finished crew is not re-evaluated every poll.
+out=$(tick terminal $((NOW + 3601)))
+[ "$out" = not-due ] || fail "a terminal refusal must re-anchor the clock (got '$out')"
+pass "a terminal run is never kept warm"
+
+# A crew with no attributed run at all (pre-validation) is the same no-op.
+make_task norun
+export FAKE_CREW_STATE=''
+out=$(tick norun $((NOW + 3600)))
+[ "$out" = no-active-run ] || fail "a crew with no run must not be activated (got '$out')"
+pass "a crew with no run is never kept warm"
+
+# --- restart and retry idempotency ------------------------------------------
+
+export FAKE_CREW_STATE="$WORKING"
+make_task restart
+out=$(tick restart $((NOW + 1800)))
+[ "$out" = sent ] || fail "restart fixture must activate once (got '$out')"
+before=$(cat "$STATE/.keepwarm-restart")
+# A watcher restart re-reads the same marker: the replayed poll is a no-op and
+# the recorded anchor is unchanged.
+out=$(tick restart $((NOW + 1800)))
+[ "$out" = not-due ] || fail "a replayed poll after a restart must not re-send (got '$out')"
+[ "$(cat "$STATE/.keepwarm-restart")" = "$before" ] || fail "a replayed poll must not move the anchor"
+[ "$(sent_count restart)" = 1 ] || fail "a restart must not duplicate the activation"
+pass "restart replays the same anchor without duplicating the activation"
+
+# A first sighting with no signal at all seeds the clock instead of activating.
+make_task seeded
+rm -f "$STATE/seeded.turn-ended"
+out=$(tick seeded "$NOW")
+[ "$out" = seeded ] || fail "a task with no prior signal must seed the clock (got '$out')"
+[ "$(sent_count seeded)" = 0 ] || fail "seeding must not activate"
+out=$(tick seeded $((NOW + 1800)))
+[ "$out" = sent ] || fail "the seeded clock must activate one interval later (got '$out')"
+pass "a first sighting seeds the clock rather than activating immediately"
+
+# A refused send re-anchors too, so a broken send path cannot loop every poll.
+make_task refused
+out=$(FAKE_SEND_RC=1 tick refused $((NOW + 1800)))
+[ "$out" = send-failed ] || fail "a refused send must be reported (got '$out')"
+out=$(FAKE_SEND_RC=1 tick refused $((NOW + 1801)))
+[ "$out" = not-due ] || fail "a refused send must re-anchor rather than retry every poll (got '$out')"
+pass "a refused send re-anchors instead of retrying on every poll"
+
+# --- non-Claude and non-crewmate no-op --------------------------------------
+
+for harness in codex opencode pi pi-signed grok kimi; do
+  make_task "h-$harness" "$harness"
+  out=$(tick "h-$harness" $((NOW + 7200)))
+  [ "$out" = ineligible ] || fail "$harness must keep current behavior (got '$out')"
+  [ "$(sent_count "h-$harness")" = 0 ] || fail "$harness must receive no activation"
+  assert_absent "$STATE/.keepwarm-h-$harness" "$harness must leave no keep-warm state"
+done
+pass "every non-Claude harness is an untouched no-op"
+
+make_task secondmate claude secondmate
+out=$(tick secondmate $((NOW + 7200)))
+[ "$out" = ineligible ] || fail "an idle secondmate must not be kept warm (got '$out')"
+pass "a secondmate's idle-by-charter pane is never kept warm"
+
+make_task disabled
+out=$(FM_NM_KEEPWARM_SECS=0 tick disabled $((NOW + 7200)))
+[ "$out" = disabled ] || fail "FM_NM_KEEPWARM_SECS=0 must disable keep-warm (got '$out')"
+[ "$(sent_count disabled)" = 0 ] || fail "a disabled home must send nothing"
+pass "keep-warm can be disabled for a home"
+
+out=$(tick unknown-task $((NOW + 7200)))
+[ "$out" = ineligible ] || fail "a task with no metadata must be a no-op (got '$out')"
+pass "a task with no metadata is a no-op"
+
+# --- watcher wiring ---------------------------------------------------------
+
+assert_grep 'fm_nm_keepwarm_tick' "$ROOT/bin/fm-watch.sh" \
+  "the watcher must own the single keep-warm call site"
+[ "$(grep -c 'fm_nm_keepwarm_tick' "$ROOT/bin/fm-watch.sh")" = 1 ] || \
+  fail "keep-warm must have exactly one call site, not a second polling path"
+assert_grep 'fm-nm-keepwarm-lib.sh' "$ROOT/bin/fm-watch.sh" \
+  "the watcher must source the keep-warm library"
+pass "keep-warm rides the existing watcher loop with one call site"
