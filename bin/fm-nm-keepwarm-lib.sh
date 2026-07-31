@@ -53,9 +53,14 @@
 # Coverage. The crew harness decides eligibility and only claude opts in, so
 # codex, opencode, pi, pi-signed, grok, and kimi crews keep their current
 # behavior exactly. The primary harness is irrelevant: every supervision
-# protocol drives the same watcher loop. So is the runtime backend - the tick
-# reads only task metadata and the state directory, and delivery goes through
-# fm-send.sh's ordinary text path, which every spawn-capable backend supports.
+# protocol drives the same watcher loop. The runtime backend is NOT irrelevant,
+# because the composer guard has to read the live input row: tmux, herdr, orca,
+# and cmux each expose a named classifier through fm_backend_composer_state,
+# but zellij has none and reports `unknown` there (bin/fm-backend.sh), which is
+# a refusal here. So a zellij-backed Claude crew defers on every evaluation and
+# keep-warm is an unsupported no-op for it until zellij grows a verified
+# composer classifier - deliberately, because refusing is the only safe answer
+# for a pane whose input row cannot be read.
 
 _FM_NM_KEEPWARM_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)" || _FM_NM_KEEPWARM_LIB_DIR="."
 # FM_CREW_STATE_BIN, the overridable current-state reader, is defined here.
@@ -76,9 +81,13 @@ FM_NM_KEEPWARM_SECS_DEFAULT=1800
 # send, an unusable composer, or a run that was not active is retried after
 # this delay instead of after another full interval, which is what keeps the
 # worst-case quiet gap at one interval plus one retry rather than two intervals.
-# The delay doubles per consecutive miss and is capped at the interval, so a
-# permanently unreachable pane settles back to one evaluation per interval
-# instead of probing forever at the short delay.
+# The delay doubles per consecutive miss of the SAME kind and is capped at the
+# interval, so a permanently unreachable pane settles back to one evaluation per
+# interval instead of probing forever at the short delay. A crew with no run to
+# keep warm and a crew that could not be reached back off independently, and a
+# real crew turn clears both histories: neither is evidence about the other, and
+# a delay inherited from an unrelated earlier condition would spend the very
+# interval this retry exists to protect.
 FM_NM_KEEPWARM_RETRY_SECS_DEFAULT=300
 
 # Harnesses whose crewmates get keep-warm activation, space separated and
@@ -130,7 +139,11 @@ fm_nm_keepwarm_retry_secs() {
 }
 
 # The per-task attempt marker. Line 1 is the epoch the quiet clock currently
-# runs from; line 2 is the consecutive-miss count that sets the retry delay.
+# runs from; line 2 counts consecutive evaluations that reached the crew but
+# could not deliver, and line 3 counts consecutive evaluations that found no run
+# to keep warm. The two never mix: "the pane refused the line" and "there was
+# nothing to send yet" are different facts, and one must not lengthen the
+# other's retry.
 # A delivered activation records the real epoch; a miss records the epoch that
 # makes the next evaluation fall due one retry delay later, so both cadences
 # ride the same single anchor and a watcher restart resumes either one.
@@ -148,36 +161,52 @@ fm_nm_keepwarm_marker_epoch() {  # <state> <id>
   case "$v" in ''|*[!0-9]*) fm_nm_keepwarm_mtime "$f" ;; *) printf '%s' "$v" ;; esac
 }
 
-fm_nm_keepwarm_marker_misses() {  # <state> <id>
+fm_nm_keepwarm_marker_misses() {  # <state> <id> <undelivered|no-run>
   local f v
   f=$(fm_nm_keepwarm_marker "$1" "$2")
   [ -f "$f" ] || { printf '0'; return 0; }
-  v=$(sed -n 2p "$f" 2>/dev/null | tr -d '[:space:]')
+  case "$3" in
+    no-run) v=$(sed -n 3p "$f" 2>/dev/null | tr -d '[:space:]') ;;
+    *) v=$(sed -n 2p "$f" 2>/dev/null | tr -d '[:space:]') ;;
+  esac
   case "$v" in ''|*[!0-9]*) printf '0' ;; *) printf '%s' "$v" ;; esac
 }
 
-# Record an evaluation at <epoch> with <misses> consecutive non-deliveries.
+# Record an evaluation at <epoch> with the two consecutive-miss counts.
 # Idempotent: the same evaluation replayed after a watcher restart rewrites the
 # same anchor rather than adding state.
-fm_nm_keepwarm_record() {  # <state> <id> <epoch> [misses]
-  printf '%s\n%s\n' "$3" "${4:-0}" > "$(fm_nm_keepwarm_marker "$1" "$2")" 2>/dev/null
+fm_nm_keepwarm_record() {  # <state> <id> <epoch> [undelivered] [no-run]
+  printf '%s\n%s\n%s\n' "$3" "${4:-0}" "${5:-0}" \
+    > "$(fm_nm_keepwarm_marker "$1" "$2")" 2>/dev/null
 }
 
-# Record a non-delivery: anchor the clock so the next evaluation falls due one
+# Record a miss of <kind>: anchor the clock so the next evaluation falls due one
 # retry delay from <now> instead of one full interval, with the delay doubled
-# per consecutive miss and capped at the interval.
-fm_nm_keepwarm_record_miss() {  # <state> <id> <now> <interval>
-  local misses retry
-  misses=$(fm_nm_keepwarm_marker_misses "$1" "$2")
-  misses=$((misses + 1))
+# per consecutive miss of that kind and capped at the interval. <fresh>=1 drops
+# both prior counts first, for a clock the crew itself restarted: the streak is
+# only consecutive as long as nothing happened in between.
+fm_nm_keepwarm_record_miss() {  # <state> <id> <now> <interval> <kind> <fresh>
+  local state=$1 id=$2 now=$3 interval=$4 kind=$5 fresh=$6
+  local undelivered no_run misses retry n
+  undelivered=$(fm_nm_keepwarm_marker_misses "$state" "$id" undelivered)
+  no_run=$(fm_nm_keepwarm_marker_misses "$state" "$id" no-run)
+  if [ "$fresh" = 1 ]; then
+    undelivered=0
+    no_run=0
+  fi
+  case "$kind" in
+    no-run) no_run=$((no_run + 1)); misses=$no_run ;;
+    *) undelivered=$((undelivered + 1)); misses=$undelivered ;;
+  esac
   retry=$(fm_nm_keepwarm_retry_secs)
-  local n=1
-  while [ "$n" -lt "$misses" ] && [ "$retry" -lt "$4" ]; do
+  n=1
+  while [ "$n" -lt "$misses" ] && [ "$retry" -lt "$interval" ]; do
     retry=$((retry * 2))
     n=$((n + 1))
   done
-  [ "$retry" -le "$4" ] || retry=$4
-  fm_nm_keepwarm_record "$1" "$2" "$(($3 - $4 + retry))" "$misses"
+  [ "$retry" -le "$interval" ] || retry=$interval
+  fm_nm_keepwarm_record "$state" "$id" "$((now - interval + retry))" \
+    "$undelivered" "$no_run"
 }
 
 fm_nm_keepwarm_meta_value() {  # <meta> <key>
@@ -290,7 +319,7 @@ fm_nm_keepwarm_send() {  # <home> <id>
 # per-poll retry storm. A watcher restart resumes the same cadence from the
 # same file either way.
 fm_nm_keepwarm_tick() {  # <home> <state> <id>
-  local home=$1 state=$2 id=$3 interval last now composer
+  local home=$1 state=$2 id=$3 interval last now composer marker fresh=0
   [ -n "$id" ] || { printf 'ineligible'; return 1; }
   fm_nm_keepwarm_eligible "$state" "$id" || { printf 'ineligible'; return 1; }
   interval=$(fm_nm_keepwarm_interval_secs)
@@ -305,23 +334,25 @@ fm_nm_keepwarm_tick() {  # <home> <state> <id>
     printf 'not-due'
     return 1
   fi
+  marker=$(fm_nm_keepwarm_marker_epoch "$state" "$id") || marker=''
+  [ "$last" = "$marker" ] || fresh=1
   if ! fm_nm_keepwarm_run_active "$home" "$id"; then
-    fm_nm_keepwarm_record_miss "$state" "$id" "$now" "$interval"
+    fm_nm_keepwarm_record_miss "$state" "$id" "$now" "$interval" no-run "$fresh"
     printf 'no-active-run'
     return 1
   fi
   composer=$(fm_nm_keepwarm_composer_state "$state" "$id")
   if [ "$composer" != empty ]; then
-    fm_nm_keepwarm_record_miss "$state" "$id" "$now" "$interval"
+    fm_nm_keepwarm_record_miss "$state" "$id" "$now" "$interval" undelivered "$fresh"
     printf 'deferred'
     return 1
   fi
   if fm_nm_keepwarm_send "$home" "$id"; then
-    fm_nm_keepwarm_record "$state" "$id" "$now" 0
+    fm_nm_keepwarm_record "$state" "$id" "$now" 0 0
     printf 'sent'
     return 0
   fi
-  fm_nm_keepwarm_record_miss "$state" "$id" "$now" "$interval"
+  fm_nm_keepwarm_record_miss "$state" "$id" "$now" "$interval" undelivered "$fresh"
   printf 'send-failed'
   return 1
 }

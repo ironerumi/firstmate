@@ -62,9 +62,10 @@ DONE='state: done · source: run-step · nm run r1 checks-passed'
 
 # --- fixtures ---------------------------------------------------------------
 
-# make_task <id> [harness] [kind]: a crewmate whose last model turn was <NOW>.
-make_task() {  # <id> [harness] [kind]
-  local id=$1 harness=${2:-claude} kind=${3:-ship}
+# make_task <id> [harness] [kind] [backend]: a crewmate whose last model turn
+# was <NOW>. An absent backend is tmux, the meta compatibility contract.
+make_task() {  # <id> [harness] [kind] [backend]
+  local id=$1 harness=${2:-claude} kind=${3:-ship} backend=${4:-}
   fm_write_meta "$STATE/$id.meta" \
     "window=firstmate:fm-$id" \
     "worktree=$TMP/wt-$id" \
@@ -72,6 +73,7 @@ make_task() {  # <id> [harness] [kind]
     "harness=$harness" \
     "kind=$kind" \
     "mode=no-mistakes" \
+    ${backend:+"backend=$backend"} \
     "yolo=off"
   : > "$STATE/$id.turn-ended"
   set_turn_end "$id" "$NOW"
@@ -279,6 +281,15 @@ out=$(FM_NM_KEEPWARM_COMPOSER_HOOK='' tick unresolvable $((NOW + 1800)))
 [ "$(sent_count unresolvable)" = 0 ] || fail "an unreadable endpoint must receive no keystrokes"
 pass "an endpoint that cannot be read is never typed into"
 
+# zellij has no composer classifier, so it can never prove a pane safe to type
+# into: keep-warm is an unsupported no-op there until it grows one. This pins
+# the exclusion the library header and docs/architecture.md document.
+make_task zellij claude ship zellij
+out=$(FM_NM_KEEPWARM_COMPOSER_HOOK='' tick zellij $((NOW + 1800)))
+[ "$out" = deferred ] || fail "a zellij-backed crew must defer, not type blind (got '$out')"
+[ "$(sent_count zellij)" = 0 ] || fail "a zellij-backed crew must receive no keystrokes"
+pass "a backend with no composer classifier is never typed into"
+
 # --- bounded retry backoff --------------------------------------------------
 #
 # Retries double so a permanently unreachable crew settles back to one
@@ -294,7 +305,41 @@ for probe in "1800 no-active-run" "2099 not-due" "2100 no-active-run" \
 done
 [ "$(sent_count backoff)" = 0 ] || fail "a crew with no run must never be activated"
 pass "the retry delay doubles and is capped at one interval"
+
+# A miss streak is only consecutive while nothing else happened: a real model
+# turn is exactly that something, so the crew that follows it starts from the
+# base delay instead of inheriting a saturated one from an earlier condition.
+make_task streakreset
+for at in 1800 2100 2700; do
+  out=$(tick streakreset $((NOW + at)))
+  [ "$out" = no-active-run ] || fail "streak fixture at +${at}s expected no-active-run (got '$out')"
+done
+set_turn_end streakreset $((NOW + 4000))
 export FAKE_CREW_STATE="$WORKING"
+out=$(FAKE_COMPOSER=pending tick streakreset $((NOW + 5800)))
+[ "$out" = deferred ] || fail "the run that follows a real turn must be evaluated (got '$out')"
+out=$(tick streakreset $((NOW + 6099)))
+[ "$out" = not-due ] || fail "the base retry delay must still be waited out (got '$out')"
+out=$(tick streakreset $((NOW + 6100)))
+[ "$out" = sent ] || fail "a real turn must clear the miss history, so the retry is the base delay (got '$out')"
+pass "a real worker turn clears the miss history"
+
+# The two histories are independent: hours of ordinary idling must not spend
+# the short retry that the first active run depends on.
+make_task idlestreak
+export FAKE_CREW_STATE=''
+for at in 1800 2100 2700 3900; do
+  out=$(tick idlestreak $((NOW + at)))
+  [ "$out" = no-active-run ] || fail "idle fixture at +${at}s expected no-active-run (got '$out')"
+done
+export FAKE_CREW_STATE="$WORKING"
+out=$(FAKE_COMPOSER=pending tick idlestreak $((NOW + 5700)))
+[ "$out" = deferred ] || fail "the newly active run must be evaluated (got '$out')"
+out=$(tick idlestreak $((NOW + 5999)))
+[ "$out" = not-due ] || fail "the base retry delay must still be waited out (got '$out')"
+out=$(tick idlestreak $((NOW + 6000)))
+[ "$out" = sent ] || fail "an idle stretch must not lengthen the first delivery retry (got '$out')"
+pass "having no run to keep warm never consumes the delivery retry"
 
 # --- non-Claude and non-crewmate no-op --------------------------------------
 
