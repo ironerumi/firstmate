@@ -39,6 +39,14 @@ The `/calm` command replaces the file atomically before changing live presentati
 The extension reloads this preference on every Pi `session_start`, including startup, new, resume, fork, and reload reasons.
 This preference is local to each Firstmate home and is not part of secondmate inherited configuration.
 
+## AWS SSO refresh (config/aws-sso-refresh.json)
+
+The optional local, gitignored `config/aws-sso-refresh.json` stores private saved-account and attached-browser selection for `bin/fm-aws-sso-refresh.sh`.
+It is local to each Firstmate home and is not inherited into secondmate homes; a home may instead provide the command's explicit invocation inputs.
+The command's header and `--help` are the single owner of its schema, precedence, browser safety, locking, verification, and outcome codes.
+The `aws-sso-refresh` agent-only skill owns the conditional procedure used when already-authorized AWS work reaches an expired IAM Identity Center session.
+Current browser-tool evidence and the bounded live maintainer check are recorded in [`verification/aws-sso-refresh.md`](verification/aws-sso-refresh.md).
+
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 
 The tracked `.tasks.toml` pins the default `tasks-axi` markdown backend to `data/backlog.md`, with `done_keep = 10` and an archive at `data/done-archive.md`.

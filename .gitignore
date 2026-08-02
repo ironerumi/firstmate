@@ -15,6 +15,7 @@ config/backlog-backend
 config/backend
 config/primary-branch
 config/calm
+config/aws-sso-refresh.json
 config/x-mode.env
 config/cmux-socket-password
 config/wedge-alarm

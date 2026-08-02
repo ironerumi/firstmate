@@ -362,7 +362,7 @@ The report is the only thing that survives, so anything worth keeping must be in
 # Rules
 1. Never push to any remote and never open a PR.
 2. Stay inside this worktree; the only files you may write outside it are the report and the status file below.
-3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
+3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations. For an expired AWS SSO session during already-authorized AWS work, use \`$FM_ROOT/bin/fm-aws-sso-refresh.sh\` instead of a project browser recipe.
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
    States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
@@ -457,6 +457,7 @@ Invoke the named skill exactly as written and let it own implementation, review,
 Do not stack a second workflow or independent review around the owning skill.
 Never discard, reset, or hide unlanded work.
 Never stop, restart, or update the shared no-mistakes daemon.
+For an expired AWS SSO session during already-authorized AWS work, use \`$FM_ROOT/bin/fm-aws-sso-refresh.sh\` instead of a project browser recipe.
 
 # Supervisor channel
 Append sparse, actionable events to $STATUS_FILE using one of: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
@@ -576,7 +577,7 @@ If the top-level path is the primary checkout or not the worktree you were launc
 # Rules
 $RULE1
 2. Stay inside this worktree; modify nothing outside it.
-3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
+3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations. For an expired AWS SSO session during already-authorized AWS work, use \`$FM_ROOT/bin/fm-aws-sso-refresh.sh\` instead of a project browser recipe.
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
    States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
