@@ -213,6 +213,8 @@ test_ship_modes_generate_clean_briefs() {
     expect_code 0 "$status" "fm-brief.sh $id $proj should exit 0"
     brief="$home/data/$id/brief.md"
     assert_present "$brief" "$id: brief was not scaffolded"
+    assert_grep "$ROOT/bin/fm-aws-sso-refresh.sh" "$brief" \
+      "$id: full ship brief did not expose the common AWS SSO refresh command"
     assert_grep "# Definition of done" "$brief" "$id: brief missing Definition of done section"
     assert_grep "{TASK}" "$brief" "$id: brief missing the {TASK} placeholder"
     assert_grep "mid-task \`working:\` line (including setup complete) is nonterminal" "$brief" \
@@ -298,6 +300,8 @@ test_ship_briefs_route_review_ownership_by_delivery_mode() {
       "$id: skill-led brief lost the isolation assertion"
     assert_grep "Invoke the named skill exactly as written" "$brief" \
       "$id: skill-led brief did not delegate mechanics to the owning skill"
+    assert_grep "$ROOT/bin/fm-aws-sso-refresh.sh" "$brief" \
+      "$id: skill-led brief did not expose the common AWS SSO refresh command"
     assert_grep "Do not stack a second workflow or independent review" "$brief" \
       "$id: skill-led brief allowed a duplicate workflow"
     assert_grep "Never discard, reset, or hide unlanded work" "$brief" \
@@ -947,6 +951,8 @@ test_scout_and_secondmate_scaffold() {
   assert_present "$brief" "scout brief was not scaffolded"
   assert_grep "SCOUT task" "$brief" "scout brief must declare itself a scout task"
   assert_grep "report.md" "$brief" "scout brief must point at the report deliverable"
+  assert_grep "$ROOT/bin/fm-aws-sso-refresh.sh" "$brief" \
+    "scout brief did not expose the common AWS SSO refresh command"
 
   FM_SECONDMATE_CHARTER='Supervise the alpha domain.' \
     FM_HOME="$BRIEF_HOME" "$ROOT/bin/fm-brief.sh" brief-sm-q6 --secondmate alpha >/dev/null 2>&1 \
