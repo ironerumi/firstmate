@@ -413,6 +413,323 @@ PY
   pass "AWS SSO: browser-harness is preferred and its embedded target-scoped adapter compiles"
 }
 
+# The embedded driver body (BROWSER_HARNESS_PROGRAM) is the part that actually
+# touches a browser, so it is executed here against a deterministic in-process
+# CDP double instead of only being compiled. The double records every CDP method
+# the driver issues, so origin checks, saved-account selection, the
+# confirm-then-allow order, ambiguity refusals, background-tab ownership, and the
+# absence of any pointer/keyboard input are observed from the real code path.
+# No Chrome is started or attached and no browser-harness daemon is contacted.
+write_fake_cdp_helpers() {
+  cat > "$1" <<'PY'
+# Test double for browser_harness.helpers: serves a scripted page sequence to
+# the embedded adapter and records what it asked the browser to do.
+import json
+import os
+import re
+
+_state = os.environ["FAKE_CDP_STATE"]
+with open(os.environ["FAKE_CDP_SCENARIO"], encoding="utf-8") as _handle:
+    _scenario = json.load(_handle)
+_pages = _scenario["pages"]
+_current = [0]
+
+# The verification URL must reach the adapter through the private mode-0600
+# file, never argv or the environment; capture both for the caller to assert.
+_request_path = os.environ.get("FM_AWS_SSO_REQUEST_FILE", "")
+if _request_path and os.path.exists(_request_path):
+    with open(_request_path, encoding="utf-8") as _handle:
+        _payload = _handle.read()
+    with open(os.path.join(_state, "adapter-request.json"), "w", encoding="utf-8") as _handle:
+        _handle.write(_payload)
+    with open(os.path.join(_state, "adapter-request.mode"), "w", encoding="utf-8") as _handle:
+        _handle.write("%o\n" % (os.stat(_request_path).st_mode & 0o777))
+
+
+def _record(name, payload):
+    with open(os.path.join(_state, name), "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _evaluate(expression):
+    page = _pages[_current[0]]
+    match = re.search(r"controls\[(\d+)\]", expression)
+    if match and "e.click()" in expression:
+        index = int(match.group(1))
+        controls = page.get("controls", [])
+        if index >= len(controls):
+            return False
+        _record("clicks.jsonl", {"page": _current[0], "control": controls[index].get("text", "")})
+        target = page.get("clicks", {}).get(str(index))
+        if target is not None:
+            _current[0] = target
+        return True
+    return json.dumps({
+        "url": page["url"],
+        "ready": page.get("ready", "complete"),
+        "text": page.get("text", ""),
+        "controls": [dict(control, i=index) for index, control in enumerate(page.get("controls", []))],
+    })
+
+
+def cdp(method, session_id=None, **params):
+    _record("cdp-calls.jsonl", {"method": method, "session": session_id, "params": params})
+    if method == "Browser.getVersion":
+        return _scenario.get("version", {
+            "product": "Chrome/141.0.7390.65",
+            "userAgent": "Mozilla/5.0 (Macintosh) Chrome/141.0.7390.65 Safari/537.36",
+            "jsVersion": "14.1",
+        })
+    if method == "SystemInfo.getProcessInfo":
+        return {"processInfo": [{"id": int(os.environ["FAKE_CDP_BROWSER_PID"]), "type": "browser"}]}
+    if method == "Target.createTarget":
+        return {"targetId": "fm-owned-target"}
+    if method == "Target.attachToTarget":
+        return {"sessionId": "fm-owned-session"}
+    if method == "Runtime.evaluate":
+        return {"result": {"value": _evaluate(params.get("expression", ""))}}
+    return {}
+PY
+}
+
+setup_embedded_driver_case() {
+  local name=$1 dir tool
+  dir=$(make_case "$name")
+  rm -f "$dir/fakebin/browser-adapter"
+  cat > "$dir/fakebin/browser-harness" <<'EOF'
+#!/usr/bin/env python3
+import sys
+if len(sys.argv) == 2 and sys.argv[1] == "doctor":
+    print("  [ok  ] daemon alive")
+    print("  [ok  ] active browser connections - 1")
+    raise SystemExit(0)
+raise SystemExit(99)
+EOF
+  chmod +x "$dir/fakebin/browser-harness"
+  # Physical-control tripwires: no pointer mover, global keystroke sender, or
+  # app launcher may be reached from the driver.
+  for tool in osascript cliclick open; do
+    cat > "$dir/fakebin/$tool" <<EOF
+#!/bin/sh
+printf '%s\n' "$tool \$*" >> "$dir/state/physical-control-invoked"
+exit 0
+EOF
+    chmod +x "$dir/fakebin/$tool"
+  done
+  mkdir -p "$dir/fakepkg/browser_harness"
+  : > "$dir/fakepkg/browser_harness/__init__.py"
+  cp "$TMP_ROOT/fake-cdp-helpers.py" "$dir/fakepkg/browser_harness/helpers.py"
+  printf '%s\n' "$dir"
+}
+
+run_embedded_driver() {
+  local dir=$1 rc=0
+  env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+    PATH="$dir/fakebin:$PATH" AWS_CONFIG_FILE="$dir/aws-config" AWS_PROFILE=example-admin \
+    FM_AWS_SSO_AWS_BIN=aws FM_AWS_SSO_LOCK_DIR="$dir/locks" FAKE_AWS_STATE="$dir/state" \
+    PYTHONPATH="$dir/fakepkg" FAKE_CDP_STATE="$dir/state" FAKE_CDP_SCENARIO="$dir/scenario.json" \
+    FAKE_CDP_BROWSER_PID="$FAKE_CHROME_PID" \
+    "$SUBJECT" --config "$dir/local.json" --browser-driver browser-harness --timeout "${CASE_TIMEOUT:-15}" \
+      > "$dir/out" 2> "$dir/err" || rc=$?
+  printf '%s\n' "$rc"
+}
+
+# Safety invariants that hold for every embedded-driver scenario, whatever the
+# page said: no pointer/keyboard injection, no focus or active-tab takeover, no
+# physical control tool, and no leftover private request file.
+assert_embedded_driver_safety() {
+  local dir=$1
+  assert_absent "$dir/state/physical-control-invoked" "the embedded driver reached for a physical control tool"
+  if [ -f "$dir/state/cdp-calls.jsonl" ]; then
+    assert_no_grep '"method": "Input.' "$dir/state/cdp-calls.jsonl" \
+      "the embedded driver injected pointer or keyboard input"
+    assert_no_grep '"method": "Target.activateTarget"' "$dir/state/cdp-calls.jsonl" \
+      "the embedded driver took over the operator's active tab"
+    assert_no_grep '"method": "Page.bringToFront"' "$dir/state/cdp-calls.jsonl" \
+      "the embedded driver took over the operator's window focus"
+  fi
+  if compgen -G "$dir/locks/browser-request-*.json" > /dev/null; then
+    fail "the private device-request file survived the embedded driver run"
+  fi
+  assert_clean_output "$dir"
+}
+
+test_embedded_browser_driver_runs_against_fake_cdp() {
+  local dir rc chrome_dir clicks
+
+  write_fake_cdp_helpers "$TMP_ROOT/fake-cdp-helpers.py"
+  # A stand-in for the operator's already-running Chrome. It is never launched
+  # by the command: the darwin process-identity check only inspects it by pid.
+  chrome_dir="$TMP_ROOT/fake-chrome/Google Chrome.app/Contents/MacOS"
+  mkdir -p "$chrome_dir"
+  cat > "$chrome_dir/Google Chrome" <<'EOF'
+#!/bin/sh
+for _ in $(seq 1 60); do sleep 1; done
+EOF
+  chmod +x "$chrome_dir/Google Chrome"
+  "$chrome_dir/Google Chrome" &
+  FAKE_CHROME_PID=$!
+
+  dir=$(setup_embedded_driver_case cdp-approved)
+  cat > "$dir/scenario.json" <<'EOF'
+{
+  "pages": [
+    {
+      "url": "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH",
+      "text": "Choose a saved account to continue. Code ABCD-EFGH",
+      "controls": [
+        {"tag": "a", "text": "Unrelated help link"},
+        {"tag": "button", "text": "saved-account-example"}
+      ],
+      "clicks": {"1": 1}
+    },
+    {
+      "url": "https://device.sso.us-east-1.amazonaws.com/confirm?user_code=ABCD-EFGH",
+      "text": "Authorize request. Request ID ABCD-EFGH",
+      "controls": [{"tag": "button", "text": "Confirm and continue"}],
+      "clicks": {"0": 2}
+    },
+    {
+      "url": "https://device.sso.us-east-1.amazonaws.com/approve",
+      "text": "Grant access to the AWS CLI",
+      "controls": [{"tag": "button", "text": "Allow"}],
+      "clicks": {"0": 3}
+    },
+    {"url": "https://device.sso.us-east-1.amazonaws.com/approved", "text": "Request approved", "controls": []}
+  ]
+}
+EOF
+  rc=$(run_embedded_driver "$dir")
+  expect_code 0 "$rc" "the embedded driver should approve the device request (stderr: $(cat "$dir/err"))"
+  assert_grep "AWS SSO refreshed and identity verified: account=111122223333" "$dir/out" \
+    "the fake-CDP happy path did not report the non-secret verified identity"
+  clicks=$(python3 -c 'import json,sys;print(",".join(json.loads(l)["control"] for l in open(sys.argv[1])))' \
+    "$dir/state/clicks.jsonl")
+  [ "$clicks" = "saved-account-example,Confirm and continue,Allow" ] || \
+    fail "the embedded driver did not select the saved account then confirm-and-continue then allow (got: $clicks)"
+  assert_grep '"method": "Target.createTarget", "params": {"background": true, "url": "about:blank"}' \
+    "$dir/state/cdp-calls.jsonl" "the embedded driver did not open an owned background tab"
+  assert_grep '"method": "Target.closeTarget", "params": {"targetId": "fm-owned-target"}' \
+    "$dir/state/cdp-calls.jsonl" "the embedded driver did not close only its own tab"
+  [ "$(cat "$dir/state/adapter-request.mode")" = "600" ] || \
+    fail "the device request reached the embedded driver through a non-private file"
+  assert_grep "saved-account-example" "$dir/state/adapter-request.json" \
+    "the private saved-account selector did not reach the driver through the private request file"
+  assert_embedded_driver_safety "$dir"
+
+  # Every refusal below must happen inside the driver, before or instead of the
+  # next click, and surface as the deterministic human-action outcome.
+  dir=$(setup_embedded_driver_case cdp-unexpected-origin)
+  cat > "$dir/scenario.json" <<'EOF'
+{
+  "pages": [
+    {
+      "url": "https://login.example.net/oauth/consent",
+      "text": "Continue to the requesting application",
+      "controls": [{"tag": "button", "text": "Allow"}]
+    }
+  ]
+}
+EOF
+  rc=$(run_embedded_driver "$dir")
+  expect_code 10 "$rc" "an unexpected page origin should require human action"
+  assert_grep "unexpected origin" "$dir/err" "the driver's origin refusal was not reported"
+  assert_absent "$dir/state/clicks.jsonl" "the embedded driver clicked on an unexpected origin"
+  assert_embedded_driver_safety "$dir"
+
+  dir=$(setup_embedded_driver_case cdp-account-ambiguous)
+  cat > "$dir/scenario.json" <<'EOF'
+{
+  "pages": [
+    {
+      "url": "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH",
+      "text": "Choose a saved account to continue",
+      "controls": [
+        {"tag": "button", "text": "saved-account-example (production)"},
+        {"tag": "button", "text": "saved-account-example (sandbox)"}
+      ]
+    }
+  ]
+}
+EOF
+  rc=$(run_embedded_driver "$dir")
+  expect_code 10 "$rc" "two accounts matching the saved selector should require human action"
+  assert_grep "saved-account selection is ambiguous" "$dir/err" "the driver's ambiguity refusal was not reported"
+  assert_absent "$dir/state/clicks.jsonl" "the embedded driver guessed between ambiguous saved accounts"
+  assert_embedded_driver_safety "$dir"
+
+  dir=$(setup_embedded_driver_case cdp-request-ambiguous)
+  cat > "$dir/scenario.json" <<'EOF'
+{
+  "pages": [
+    {
+      "url": "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH",
+      "text": "Choose a saved account to continue",
+      "controls": [{"tag": "button", "text": "saved-account-example"}],
+      "clicks": {"0": 1}
+    },
+    {
+      "url": "https://device.sso.us-east-1.amazonaws.com/confirm?user_code=ABCD-EFGH",
+      "text": "Authorize request",
+      "controls": [
+        {"tag": "button", "text": "Confirm and continue"},
+        {"tag": "button", "text": "Allow"}
+      ]
+    }
+  ]
+}
+EOF
+  rc=$(run_embedded_driver "$dir")
+  expect_code 10 "$rc" "an unverified device-request state should require human action"
+  assert_grep "device request state is ambiguous" "$dir/err" "the driver's request-state refusal was not reported"
+  assert_no_grep "Allow" "$dir/state/clicks.jsonl" "the embedded driver approved an ambiguous device request"
+  assert_embedded_driver_safety "$dir"
+
+  dir=$(setup_embedded_driver_case cdp-credential-form)
+  cat > "$dir/scenario.json" <<'EOF'
+{
+  "pages": [
+    {
+      "url": "https://example.awsapps.com/start/signin",
+      "text": "Enter your password to continue",
+      "controls": [
+        {"tag": "input", "type": "password", "text": "", "placeholder": "Password"},
+        {"tag": "button", "text": "Sign in"}
+      ]
+    }
+  ]
+}
+EOF
+  rc=$(run_embedded_driver "$dir")
+  expect_code 10 "$rc" "a credential form should require human action"
+  assert_grep "requires credential entry" "$dir/err" "the driver's credential refusal was not reported"
+  assert_absent "$dir/state/clicks.jsonl" "the embedded driver interacted with a credential form"
+  assert_embedded_driver_safety "$dir"
+
+  dir=$(setup_embedded_driver_case cdp-not-chrome)
+  cat > "$dir/scenario.json" <<'EOF'
+{
+  "version": {"product": "Arc/1.60.0", "userAgent": "Mozilla/5.0 (Macintosh) Arc/1.60.0", "jsVersion": "14.1"},
+  "pages": [
+    {
+      "url": "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH",
+      "text": "Authorize request",
+      "controls": [{"tag": "button", "text": "Allow"}]
+    }
+  ]
+}
+EOF
+  rc=$(run_embedded_driver "$dir")
+  expect_code 10 "$rc" "a non-Chrome attachment should require human action"
+  assert_grep "not verified as Google Chrome" "$dir/err" "the driver's browser-identity refusal was not reported"
+  assert_no_grep '"method": "Target.createTarget"' "$dir/state/cdp-calls.jsonl" \
+    "the embedded driver opened a tab in an unverified browser"
+  assert_embedded_driver_safety "$dir"
+
+  kill "$FAKE_CHROME_PID" 2>/dev/null || true
+  pass "AWS SSO: the embedded browser driver executes, selects, confirms-then-allows, and refuses unsafe pages"
+}
+
 test_missing_browser_attachment_refuses_focus_takeover() {
   local dir rc
   dir=$(make_case no-attachment)
@@ -604,6 +921,7 @@ test_invalid_invocation_never_echoes_argv
 test_still_valid_credentials_skip_login_and_browser
 test_human_action_boundaries
 test_browser_harness_is_preferred_and_embedded_adapter_compiles
+test_embedded_browser_driver_runs_against_fake_cdp
 test_missing_browser_attachment_refuses_focus_takeover
 test_timeout_is_bounded_and_cleans_children
 test_same_session_serializes_and_distinct_sessions_overlap
