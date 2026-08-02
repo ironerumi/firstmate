@@ -47,12 +47,19 @@
 # identity can be verified without browser-local selection.
 #
 # The command first verifies cached credentials with sts get-caller-identity. It
-# starts `aws sso login --no-browser` only for a recognized expired-session error.
+# starts `aws sso login --no-browser --use-device-code` only for a recognized
+# expired-session error. --use-device-code is explicit because a modern named
+# sso_session otherwise routes the CLI through the PKCE authorization-code flow,
+# which prints one /authorize URL with no device request to approve; only the
+# device-code flow exposes the exact confirm-then-allow request this command is
+# allowed to act on. An announced /authorize URL therefore stops for a human
+# rather than being driven.
 # AWS runs on a private PTY, so its decisive device state is drained immediately
 # rather than hidden by a pipe or buffered background log. Only newline-complete
 # output is parsed, and only the code-carrying verificationUriComplete is used;
-# the bare verificationUri the CLI prints first lands on a code-entry page.
-# Raw login output is
+# the bare verificationUri the CLI prints first lands on a code-entry page. Once
+# the login itself exits 0, the account/role identity check decides the outcome
+# instead of leftover output. Raw login output is
 # never relayed or persisted; device URLs/codes and token-shaped text stay inside
 # the process. The verification URL reaches the browser adapter through a private
 # mode-0600 file or stdin, never argv or an environment value.
@@ -154,6 +161,7 @@ PUBLIC_REASONS = {
     "account-not-saved": "the configured saved account is unavailable",
     "account-selection-unconfigured": "no private saved-account selector is configured",
     "agent-browser-no-background-tab": "agent-browser has no verified no-focus background-tab channel",
+    "authorization-code-flow": "AWS used the browser authorization-code flow instead of the device request",
     "browser-application-unverified": "the attached browser is not verified as Google Chrome",
     "browser-attachment-required": "the signed-in Chrome attachment is unavailable",
     "browser-driver-missing": "no supported browser driver is installed",
@@ -839,7 +847,7 @@ def spawn_login(aws_bin, profile, env, cwd):
     child_env["AWS_CLI_AUTO_PROMPT"] = "off"
     child_env["AWS_PAGER"] = ""
     proc = subprocess.Popen(
-        aws_command(aws_bin, profile, "sso", "login", "--no-browser"),
+        aws_command(aws_bin, profile, "sso", "login", "--no-browser", "--use-device-code"),
         cwd=cwd,
         env=child_env,
         stdin=subprocess.DEVNULL,
@@ -865,11 +873,14 @@ def device_url_kind(candidate):
     parsed = urlparse(candidate)
     if parsed.scheme != "https" or not DEVICE_HOST_PATTERN.fullmatch((parsed.hostname or "").lower()):
         return None
-    code = parse_qs(parsed.query).get("user_code", [""])[0]
+    query = parse_qs(parsed.query)
+    if (parsed.path or "").rstrip("/").endswith("/authorize") and query.get("response_type") == ["code"]:
+        return "authorize"
+    code = query.get("user_code", [""])[0]
     return "complete" if USER_CODE_PATTERN.fullmatch(code) else "bare"
 
 
-def verification_url(buffer, ended):
+def verification_url(buffer, ended, classify_end=True):
     """Pick the AWS verificationUriComplete out of newline-complete login output.
 
     The CLI prints the bare verificationUri first and the code-carrying
@@ -877,7 +888,9 @@ def verification_url(buffer, ended):
     page the adapter cannot recognize, so only a valid user_code query counts.
     Classification of anything else waits for a positively announced URL or for
     the end of output, so incidental URLs in AWS notices are not mistaken for
-    the verification URL.
+    the verification URL. classify_end=False suppresses only that end-of-output
+    fallback, so a login that already exited 0 is settled by identity
+    verification rather than by leftover output.
     """
     text = buffer.decode("utf-8", errors="replace")
     if not ended:
@@ -902,6 +915,11 @@ def verification_url(buffer, ended):
         kinds = [device_url_kind(candidate) for candidate in candidates]
         if complete is None and "complete" in kinds:
             complete = candidates[kinds.index("complete")]
+        if announced and "authorize" in kinds and complete is None:
+            # --use-device-code is always requested, so an announced PKCE
+            # authorization-code URL means the CLI ignored it. That page has no
+            # device request to approve, so it is never driven.
+            raise Outcome(HUMAN, "authorization-code-flow")
         if any(kind for kind in kinds):
             saw_device = True
         elif announced:
@@ -909,7 +927,7 @@ def verification_url(buffer, ended):
         announced = False
     if complete:
         return complete
-    if not ended:
+    if not ended or not classify_end:
         return None
     if saw_device:
         raise Outcome(HUMAN, "request-state-ambiguous")
@@ -1134,10 +1152,14 @@ def refresh_login(aws_bin, profile, env, cwd, settings, lock_root, deadline):
                     raw.extend(chunk)
                 os.close(master)
                 master = None
+            if login_status is not None:
+                login_succeeded = login_status == 0
             # `master is None` means no further output can arrive, so this is the
             # end-of-output pass that may classify a missing or wrong device URL.
+            # A login that already exited 0 skips that fallback and is settled by
+            # the caller's account/role identity check instead.
             if found_url is None:
-                found_url = verification_url(raw, master is None)
+                found_url = verification_url(raw, master is None, not login_succeeded)
                 if found_url:
                     request = {
                         "verificationUrl": found_url,
@@ -1158,9 +1180,7 @@ def refresh_login(aws_bin, profile, env, cwd, settings, lock_root, deadline):
                 if browser_state["status"] == "tool-error":
                     raise Outcome(TOOL, "browser adapter could not verify the request")
             if login_status is not None and not login_succeeded:
-                if login_status != 0:
-                    raise Outcome(TOOL, "AWS SSO login failed after the browser flow")
-                login_succeeded = True
+                raise Outcome(TOOL, "AWS SSO login failed after the browser flow")
             if login_succeeded:
                 # A truly silent AWS success is allowed as a disconfirming
                 # counterfactual and is still identity-checked by the caller.

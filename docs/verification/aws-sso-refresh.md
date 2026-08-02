@@ -13,6 +13,8 @@ The earliest meaningful divergence from the proven path is the browser session s
 Both paths use interactive IAM Identity Center login after silent refresh has expired.
 The proven path reached the already-authenticated Chrome session, while the failing path reached an isolated profile.
 The common command preserves `--no-browser` only to prevent AWS CLI from activating an operator tab, drains the CLI through a PTY, and sends the captured verification URL to one owned background CDP target.
+It also passes `--use-device-code`, because awscli 2.33.16 `customizations/sso/utils.py:97` routes any profile with a named `sso_session` through `SSOTokenFetcherAuth` (PKCE) unless that flag is set, and `botocore/utils.py:3673-3677` then emits a single `/authorize` URL with `userCode: None`.
+That PKCE page has no device request to confirm and allow, so it is outside the approved autonomous action set; an announced `/authorize` URL is reported as human-action-required instead of being driven, and the exact confirm-then-allow gate is unchanged.
 
 The smallest safe counterfactuals are deterministic stubs in `tests/fm-aws-sso-refresh.test.sh`.
 A still-valid identity skips login and browser work, an expired identity proceeds through saved-account approval and identity verification, and an unexpected origin or credential/MFA state stops before further page action.

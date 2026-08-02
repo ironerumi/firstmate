@@ -52,8 +52,10 @@ EOF
 set -u
 profile=default
 previous=
+use_device_code=0
 for arg in "$@"; do
   if [ "$previous" = --profile ]; then profile=$arg; fi
+  if [ "$arg" = --use-device-code ]; then use_device_code=1; fi
   previous=$arg
 done
 safe_profile=$(printf '%s' "$profile" | tr -c 'A-Za-z0-9._-' '_')
@@ -69,6 +71,16 @@ if [ "${1:-}" = sts ] && [ "${2:-}" = get-caller-identity ]; then
 fi
 if [ "${1:-}" = sso ] && [ "${2:-}" = login ]; then
   printf '%s\n' "login:$profile" >> "$FAKE_AWS_STATE/login-count"
+  printf '%s\n' "$*" >> "$FAKE_AWS_STATE/login-argv"
+  # Every fixture profile uses a named sso_session, so real awscli routes login
+  # through the PKCE authorization-code flow unless --use-device-code is passed:
+  # one /authorize URL, no user code, then a block on the local redirect.
+  if [ "$use_device_code" = 0 ] || [ "${FAKE_IGNORE_DEVICE_CODE:-0}" = 1 ]; then
+    printf 'Browser will not be automatically opened.\nPlease visit the following URL:\n\n'
+    printf '%s\n' "${FAKE_AUTHORIZE_URL:-https://oidc.us-east-1.amazonaws.com/authorize?response_type=code&client_id=fake&redirect_uri=http%3A%2F%2F127.0.0.1%3A50123%2Foauth%2Fcallback&state=fake-state&code_challenge=fake-challenge&code_challenge_method=S256}"
+    sleep "${FAKE_PKCE_BLOCK:-30}"
+    exit 1
+  fi
   # Real awscli PrintOnlyHandler shape: an optional notice, the BARE
   # verificationUri first, then the code-carrying verificationUriComplete.
   if [ -n "${FAKE_NOTICE_URL:-}" ]; then
@@ -220,13 +232,56 @@ assert request["verificationUrl"] == "https://device.sso.us-east-1.amazonaws.com
 PY
   assert_clean_output "$dir"
 
-  dir=$(make_case bare-url-only)
-  rc=$(run_refresh "$dir" env FAKE_OMIT_COMPLETE_URL=1 FAKE_BROWSER_MODE=approved)
+  dir=$(make_case bare-url-only-failed-login)
+  rc=$(run_refresh "$dir" env FAKE_OMIT_COMPLETE_URL=1 FAKE_LOGIN_RC=1 FAKE_BROWSER_MODE=approved)
   expect_code 10 "$rc" "a bare verificationUri with no user_code should stop instead of driving the browser"
   assert_absent "$dir/browser-requests" "the code-entry-only bare verificationUri was handed to the browser adapter"
   assert_grep "device request state is ambiguous" "$dir/err" "bare-only device URL returned the wrong public reason"
   assert_clean_output "$dir"
   pass "AWS SSO: only the code-carrying device URL from complete output reaches the browser"
+}
+
+# --use-device-code is mandatory: a named sso_session profile would otherwise
+# take the PKCE authorization-code flow, whose single /authorize URL carries no
+# device request this command is allowed to approve.
+test_device_code_flow_is_forced_and_pkce_is_never_driven() {
+  local dir rc
+  dir=$(make_case device-code-forced)
+  rc=$(run_refresh "$dir" env FAKE_BROWSER_MODE=approved)
+  expect_code 0 "$rc" "the named-session refresh should run the device-code flow"
+  assert_grep "--use-device-code" "$dir/state/login-argv" "aws sso login did not force the device-code flow"
+  assert_present "$dir/browser-requests" "the forced device-code flow never reached the browser adapter"
+  assert_clean_output "$dir"
+
+  dir=$(make_case pkce-not-driven)
+  CASE_TIMEOUT=6
+  rc=$(run_refresh "$dir" env FAKE_IGNORE_DEVICE_CODE=1 FAKE_BROWSER_MODE=approved)
+  unset CASE_TIMEOUT
+  expect_code 10 "$rc" "an authorization-code URL should stop for a human rather than stalling or being driven"
+  assert_absent "$dir/browser-requests" "the PKCE /authorize URL was handed to the browser adapter"
+  assert_grep "authorization-code flow" "$dir/err" "PKCE flow returned the wrong public reason"
+  assert_clean_output "$dir"
+  pass "AWS SSO: the device-code flow is forced and a PKCE authorize URL is never driven"
+}
+
+# A login that exits 0 is settled by the account/role identity check, not by
+# whatever device URL happened to be left in its output.
+test_successful_login_is_settled_by_identity_not_leftover_output() {
+  local dir rc
+  dir=$(make_case identity-first)
+  rc=$(run_refresh "$dir" env FAKE_OMIT_COMPLETE_URL=1 FAKE_BROWSER_MODE=approved)
+  expect_code 0 "$rc" "a login that exited 0 should be verified by identity instead of reported as human action"
+  assert_grep "AWS SSO refreshed and identity verified: account=111122223333" "$dir/out" \
+    "identity-first success did not report the non-secret verified identity"
+  assert_absent "$dir/browser-requests" "an unusable bare device URL was still handed to the browser adapter"
+  assert_clean_output "$dir"
+
+  dir=$(make_case identity-first-mismatch)
+  rc=$(run_refresh "$dir" env FAKE_OMIT_COMPLETE_URL=1 FAKE_ACCOUNT=999988887777 FAKE_BROWSER_MODE=approved)
+  expect_code 12 "$rc" "identity-first completion must still enforce the expected account"
+  assert_grep "account does not match" "$dir/err" "account mismatch after a successful login was not enforced"
+  assert_clean_output "$dir"
+  pass "AWS SSO: a successful login exit is decided by verified identity, still account/role gated"
 }
 
 # argparse's own error text echoes argv, which would print the private selector.
@@ -445,8 +500,8 @@ test_same_session_serializes_and_distinct_sessions_overlap() {
       PATH="$dir_a/fakebin:$PATH" AWS_CONFIG_FILE="$dir_a/aws-config" AWS_PROFILE=profile-a \
       FM_AWS_SSO_AWS_BIN=aws FM_AWS_SSO_BROWSER_ADAPTER="$dir_a/fakebin/browser-adapter" \
       FM_AWS_SSO_LOCK_DIR="$shared/locks" FAKE_AWS_STATE="$shared/state" \
-      FAKE_LOGIN_SLEEP=2 FAKE_BROWSER_MODE=approved \
-      "$SUBJECT" --config "$dir_a/local.json" --timeout 8 > "$dir_a/out" 2> "$dir_a/err"
+      FAKE_LOGIN_SLEEP=4 FAKE_BROWSER_MODE=approved \
+      "$SUBJECT" --config "$dir_a/local.json" --timeout 14 > "$dir_a/out" 2> "$dir_a/err"
   ) &
   p1=$!
   (
@@ -455,15 +510,17 @@ test_same_session_serializes_and_distinct_sessions_overlap() {
       PATH="$dir_b/fakebin:$PATH" AWS_CONFIG_FILE="$dir_b/aws-config" AWS_PROFILE=profile-b \
       FM_AWS_SSO_AWS_BIN=aws FM_AWS_SSO_BROWSER_ADAPTER="$dir_b/fakebin/browser-adapter" \
       FM_AWS_SSO_LOCK_DIR="$shared/locks" FAKE_AWS_STATE="$shared/state" \
-      FAKE_LOGIN_SLEEP=2 FAKE_BROWSER_MODE=approved \
-      "$SUBJECT" --config "$dir_b/local.json" --timeout 8 > "$dir_b/out" 2> "$dir_b/err"
+      FAKE_LOGIN_SLEEP=4 FAKE_BROWSER_MODE=approved \
+      "$SUBJECT" --config "$dir_b/local.json" --timeout 14 > "$dir_b/out" 2> "$dir_b/err"
   ) &
   p2=$!
   wait "$p1" || fail "distinct session A failed"
   wait "$p2" || fail "distinct session B failed"
   elapsed=$(( $(date +%s) - start ))
   [ -f "$shared/state/overlap-observed" ] || fail "distinct SSO sessions did not run concurrently"
-  [ "$elapsed" -lt 4 ] || fail "distinct SSO sessions serialized unexpectedly (${elapsed}s)"
+  # Serialized would cost both 4s logins (>=8s); concurrent costs one plus
+  # startup. 7s separates them with room on each side for ordinary host load.
+  [ "$elapsed" -lt 7 ] || fail "distinct SSO sessions serialized unexpectedly (${elapsed}s)"
   assert_clean_output "$dir_a"
   assert_clean_output "$dir_b"
   pass "AWS SSO: same session serializes while distinct Identity Center sessions remain concurrent"
@@ -541,6 +598,8 @@ EOF
 
 test_expired_session_refreshes_and_verifies_saved_selection
 test_device_url_selection_survives_real_cli_output_shape
+test_device_code_flow_is_forced_and_pkce_is_never_driven
+test_successful_login_is_settled_by_identity_not_leftover_output
 test_invalid_invocation_never_echoes_argv
 test_still_valid_credentials_skip_login_and_browser
 test_human_action_boundaries
