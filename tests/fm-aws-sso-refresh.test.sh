@@ -69,9 +69,27 @@ if [ "${1:-}" = sts ] && [ "${2:-}" = get-caller-identity ]; then
 fi
 if [ "${1:-}" = sso ] && [ "${2:-}" = login ]; then
   printf '%s\n' "login:$profile" >> "$FAKE_AWS_STATE/login-count"
-  printf 'Browser approval is required.\n'
-  printf '%s\n' "${FAKE_DEVICE_URL:-https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH}"
-  printf 'Then enter the code ABCD-EFGH. token=SECRET-TOKEN-VALUE\n'
+  # Real awscli PrintOnlyHandler shape: an optional notice, the BARE
+  # verificationUri first, then the code-carrying verificationUriComplete.
+  if [ -n "${FAKE_NOTICE_URL:-}" ]; then
+    printf 'Note: a newer AWS CLI release is described at %s\n' "$FAKE_NOTICE_URL"
+  fi
+  printf 'Browser will not be automatically opened.\nPlease visit the following URL:\n\n'
+  printf '%s\n' "${FAKE_BARE_URL:-https://device.sso.us-east-1.amazonaws.com/}"
+  printf '\nThen enter the code:\n\nABCD-EFGH\n'
+  if [ "${FAKE_OMIT_COMPLETE_URL:-0}" != 1 ]; then
+    printf '\nAlternatively, you may visit the following URL which will autofill the code upon loading:\n'
+    complete=${FAKE_DEVICE_URL:-https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH}
+    if [ "${FAKE_SPLIT_URL:-0}" = 1 ]; then
+      # Flush a chunk that ends mid-URL, after a complete hostname and query key.
+      printf '%s' "${complete%%=*}="
+      sleep 0.4
+      printf '%s\n' "${complete#*=}"
+    else
+      printf '%s\n' "$complete"
+    fi
+  fi
+  printf 'token=SECRET-TOKEN-VALUE\n'
   if [ "${FAKE_LOGIN_MODE:-normal}" = child-hang ]; then
     sleep 30 &
     child=$!
@@ -166,10 +184,68 @@ import json, sys
 request = json.loads(sys.argv[1])
 assert request["accountSelector"] == "saved-account-example"
 assert request["expectedStartUrl"] == "https://example.awsapps.com/start"
-assert request["verificationUrl"].startswith("https://device.sso.us-east-1.amazonaws.com/")
+# The bare verificationUri prints first; only the code-carrying complete URL is usable.
+assert request["verificationUrl"] == "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH", request
 PY
   assert_clean_output "$dir"
   pass "AWS SSO: expired operator path self-refreshes, requests saved-account approval, and verifies identity"
+}
+
+# The AWS CLI prints the bare verificationUri first, may emit unrelated URLs
+# before it, and can flush a chunk that ends mid-URL. None of that may reach the
+# browser adapter or abort an otherwise healthy login.
+test_device_url_selection_survives_real_cli_output_shape() {
+  local dir rc request
+
+  dir=$(make_case notice-url)
+  rc=$(run_refresh "$dir" env FAKE_NOTICE_URL=https://docs.aws.amazon.com/cli/latest/userguide/ \
+    FAKE_BROWSER_MODE=approved)
+  expect_code 0 "$rc" "an incidental non-device URL before the device URL should not abort the login"
+  request=$(cat "$dir/browser-requests")
+  python3 - "$request" <<'PY'
+import json, sys
+request = json.loads(sys.argv[1])
+assert request["verificationUrl"] == "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH", request
+PY
+  assert_clean_output "$dir"
+
+  dir=$(make_case split-url)
+  rc=$(run_refresh "$dir" env FAKE_SPLIT_URL=1 FAKE_BROWSER_MODE=approved)
+  expect_code 0 "$rc" "a device URL split across PTY chunks should still refresh"
+  request=$(cat "$dir/browser-requests")
+  python3 - "$request" <<'PY'
+import json, sys
+request = json.loads(sys.argv[1])
+assert request["verificationUrl"] == "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH", request
+PY
+  assert_clean_output "$dir"
+
+  dir=$(make_case bare-url-only)
+  rc=$(run_refresh "$dir" env FAKE_OMIT_COMPLETE_URL=1 FAKE_BROWSER_MODE=approved)
+  expect_code 10 "$rc" "a bare verificationUri with no user_code should stop instead of driving the browser"
+  assert_absent "$dir/browser-requests" "the code-entry-only bare verificationUri was handed to the browser adapter"
+  assert_grep "device request state is ambiguous" "$dir/err" "bare-only device URL returned the wrong public reason"
+  assert_clean_output "$dir"
+  pass "AWS SSO: only the code-carrying device URL from complete output reaches the browser"
+}
+
+# argparse's own error text echoes argv, which would print the private selector.
+test_invalid_invocation_never_echoes_argv() {
+  local dir rc output
+  dir=$(make_case invalid-argv)
+  rc=0
+  env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+    PATH="$dir/fakebin:$PATH" AWS_CONFIG_FILE="$dir/aws-config" AWS_PROFILE=example-admin \
+    FM_AWS_SSO_AWS_BIN=aws FM_AWS_SSO_LOCK_DIR="$dir/locks" FAKE_AWS_STATE="$dir/state" \
+    "$SUBJECT" --config "$dir/local.json" --account-selectr saved-account-private \
+      > "$dir/out" 2> "$dir/err" || rc=$?
+  expect_code 12 "$rc" "a mistyped flag should be the deterministic tool/configuration outcome"
+  output=$(cat "$dir/out" "$dir/err")
+  assert_contains "$output" "invalid invocation" "invalid invocation reason missing"
+  assert_not_contains "$output" "saved-account-private" "private saved-account selector leaked through argv echo"
+  assert_not_contains "$output" "account-selectr" "argparse echoed the offending argument"
+  assert_not_contains "$output" "usage:" "argparse emitted its own usage text"
+  pass "AWS SSO: invalid invocation reports an authored constant without echoing argv"
 }
 
 # Still-valid credentials are the smallest disconfirming counterfactual: no
@@ -191,10 +267,17 @@ test_still_valid_credentials_skip_login_and_browser() {
 test_human_action_boundaries() {
   local dir rc mode expected
   dir=$(make_case wrong-device-origin)
-  rc=$(run_refresh "$dir" env FAKE_DEVICE_URL=https://evil.example/device)
+  rc=$(run_refresh "$dir" env FAKE_BARE_URL=https://evil.example/device FAKE_DEVICE_URL=https://evil.example/device)
   expect_code 10 "$rc" "wrong device origin should require human review"
   assert_absent "$dir/browser-requests" "wrong-origin URL was handed to the browser adapter"
   assert_grep "unexpected origin" "$dir/err" "wrong origin reason was not deterministic"
+  assert_clean_output "$dir"
+
+  dir=$(make_case wrong-complete-origin)
+  rc=$(run_refresh "$dir" env FAKE_DEVICE_URL=https://evil.example/device)
+  expect_code 10 "$rc" "a wrong origin announced as the autofill URL should require human review"
+  assert_absent "$dir/browser-requests" "wrong-origin autofill URL was handed to the browser adapter"
+  assert_grep "unexpected origin" "$dir/err" "wrong autofill origin reason was not deterministic"
   assert_clean_output "$dir"
 
   for row in "ambiguous:saved-account selection is ambiguous" \
@@ -457,6 +540,8 @@ EOF
 }
 
 test_expired_session_refreshes_and_verifies_saved_selection
+test_device_url_selection_survives_real_cli_output_shape
+test_invalid_invocation_never_echoes_argv
 test_still_valid_credentials_skip_login_and_browser
 test_human_action_boundaries
 test_browser_harness_is_preferred_and_embedded_adapter_compiles

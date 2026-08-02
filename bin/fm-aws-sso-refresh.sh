@@ -49,7 +49,10 @@
 # The command first verifies cached credentials with sts get-caller-identity. It
 # starts `aws sso login --no-browser` only for a recognized expired-session error.
 # AWS runs on a private PTY, so its decisive device state is drained immediately
-# rather than hidden by a pipe or buffered background log. Raw login output is
+# rather than hidden by a pipe or buffered background log. Only newline-complete
+# output is parsed, and only the code-carrying verificationUriComplete is used;
+# the bare verificationUri the CLI prints first lands on a code-entry page.
+# Raw login output is
 # never relayed or persisted; device URLs/codes and token-shaped text stay inside
 # the process. The verification URL reaches the browser adapter through a private
 # mode-0600 file or stdin, never argv or an environment value.
@@ -130,7 +133,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 SUCCESS = 0
 HUMAN = 10
@@ -464,8 +467,18 @@ for handled_signal in (signal.SIGTERM, signal.SIGHUP):
     signal.signal(handled_signal, interrupted)
 
 
+class QuietArgumentParser(argparse.ArgumentParser):
+    # argparse's own usage/error text echoes the offending argv, which would put
+    # the private saved-account selector into operator-visible output.
+    def error(self, message):
+        raise Outcome(TOOL, "invalid invocation")
+
+    def exit(self, status=0, message=None):
+        raise Outcome(TOOL, "invalid invocation")
+
+
 def parser():
-    p = argparse.ArgumentParser(add_help=False)
+    p = QuietArgumentParser(add_help=False)
     p.add_argument("--profile")
     p.add_argument("--direnv-root")
     p.add_argument("--config")
@@ -475,10 +488,7 @@ def parser():
     p.add_argument("--account-selector")
     p.add_argument("--browser-driver", choices=("auto", "browser-harness", "agent-browser"))
     p.add_argument("--timeout", type=float, default=180.0)
-    try:
-        args = p.parse_args()
-    except SystemExit as exc:
-        raise Outcome(TOOL, "invalid invocation") from exc
+    args = p.parse_args()
     if not (1 <= args.timeout <= 900):
         raise Outcome(TOOL, "timeout must be between 1 and 900 seconds")
     return args
@@ -843,25 +853,75 @@ def spawn_login(aws_bin, profile, env, cwd):
     return proc, master
 
 
-def verification_url(buffer):
+URL_PATTERN = re.compile(r"https://[^\s\x00-\x20<>\"']+")
+DEVICE_HOST_PATTERN = re.compile(r"(?:device\.sso|oidc)\.[a-z0-9-]+\.amazonaws\.com")
+USER_CODE_PATTERN = re.compile(r"[A-Za-z0-9._~-]{1,64}")
+# The AWS CLI's no-browser handler announces each URL on its own line, so the
+# line that follows one of these is positively the verification URL.
+VERIFICATION_MARKERS = ("please visit the following url", "autofill the code upon loading")
+
+
+def device_url_kind(candidate):
+    parsed = urlparse(candidate)
+    if parsed.scheme != "https" or not DEVICE_HOST_PATTERN.fullmatch((parsed.hostname or "").lower()):
+        return None
+    code = parse_qs(parsed.query).get("user_code", [""])[0]
+    return "complete" if USER_CODE_PATTERN.fullmatch(code) else "bare"
+
+
+def verification_url(buffer, ended):
+    """Pick the AWS verificationUriComplete out of newline-complete login output.
+
+    The CLI prints the bare verificationUri first and the code-carrying
+    verificationUriComplete only afterwards; the bare one lands on a code-entry
+    page the adapter cannot recognize, so only a valid user_code query counts.
+    Classification of anything else waits for a positively announced URL or for
+    the end of output, so incidental URLs in AWS notices are not mistaken for
+    the verification URL.
+    """
     text = buffer.decode("utf-8", errors="replace")
-    for raw in re.findall(r"https://[^\s\x00-\x20<>\"']+", text):
-        candidate = raw.rstrip(".,);]")
-        parsed = urlparse(candidate)
-        host = (parsed.hostname or "").lower()
-        if re.fullmatch(r"(?:device\.sso|oidc)\.[a-z0-9-]+\.amazonaws\.com", host):
-            return candidate
-    # A URL was present but was not an AWS device endpoint. Treat that as an
-    # unexpected origin instead of ever handing it to a browser.
-    if "https://" in text:
+    if not ended:
+        cut = text.rfind("\n")
+        if cut < 0:
+            return None
+        text = text[: cut + 1]
+    complete = None
+    saw_device = False
+    saw_url = False
+    announced = False
+    for line in text.splitlines():
+        candidates = [found.rstrip(".,);]") for found in URL_PATTERN.findall(line)]
+        if not candidates:
+            stripped = line.strip().lower()
+            if any(marker in stripped for marker in VERIFICATION_MARKERS):
+                announced = True
+            elif stripped:
+                announced = False
+            continue
+        saw_url = True
+        kinds = [device_url_kind(candidate) for candidate in candidates]
+        if complete is None and "complete" in kinds:
+            complete = candidates[kinds.index("complete")]
+        if any(kind for kind in kinds):
+            saw_device = True
+        elif announced:
+            raise Outcome(HUMAN, "unexpected-origin")
+        announced = False
+    if complete:
+        return complete
+    if not ended:
+        return None
+    if saw_device:
+        raise Outcome(HUMAN, "request-state-ambiguous")
+    if saw_url:
         raise Outcome(HUMAN, "unexpected-origin")
     return None
 
 
 def adapter_result(proc):
-    stdout, _stderr = proc.communicate(timeout=1)
+    stdout, _ = proc.communicate(timeout=1)
     try:
-        lines = stdout.decode("utf-8", errors="replace").splitlines()
+        lines = stdout[-65536:].decode("utf-8", errors="replace").splitlines()
         data = None
         for line in reversed(lines):
             try:
@@ -969,7 +1029,7 @@ def spawn_browser_adapter(request, settings, env, lock_root, deadline):
             env=env,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
         proc.stdin.write(json.dumps(request, separators=(",", ":")).encode("utf-8"))
@@ -998,7 +1058,7 @@ def spawn_browser_adapter(request, settings, env, lock_root, deadline):
                 env=adapter_env,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
             return proc, request_path
@@ -1009,22 +1069,9 @@ def spawn_browser_adapter(request, settings, env, lock_root, deadline):
 
     if wanted in ("auto", "agent-browser"):
         if agent_browser:
-            try:
-                help_proc = subprocess.run(
-                    [agent_browser, "--help"],
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=remaining(deadline, 8),
-                )
-                help_text = (help_proc.stdout + help_proc.stderr).decode("utf-8", errors="replace").lower()
-            except subprocess.TimeoutExpired:
-                help_text = ""
             # Current agent-browser can attach with --cdp but tab new activates
-            # the tab. No documented background/no-focus primitive means refusal.
-            if "background-tab" not in help_text and "--background" not in help_text:
-                raise Outcome(HUMAN, "agent-browser-no-background-tab")
+            # the tab. No verified background/no-focus primitive means refusal;
+            # only a separately implemented and verified adapter can lift this.
             raise Outcome(HUMAN, "agent-browser-no-background-tab")
         if wanted == "agent-browser":
             raise Outcome(TOOL, "agent-browser is not installed")
@@ -1049,11 +1096,16 @@ def refresh_login(aws_bin, profile, env, cwd, settings, lock_root, deadline):
             now = time.monotonic()
             if now >= deadline:
                 raise Outcome(TIMEOUT, "AWS SSO login timed out")
-            if master is not None:
+            if master is None:
+                # Nothing left to select on; idle briefly instead of spinning
+                # while the adapter finishes or the deadline arrives.
+                time.sleep(min(0.05, deadline - now))
+            else:
                 try:
                     readable, _, _ = select.select([master], [], [], min(0.1, deadline - now))
                 except (OSError, ValueError):
                     readable = []
+                    time.sleep(min(0.05, deadline - now))
                 if readable:
                     try:
                         chunk = os.read(master, 8192)
@@ -1069,8 +1121,23 @@ def refresh_login(aws_bin, profile, env, cwd, settings, lock_root, deadline):
                     else:
                         os.close(master)
                         master = None
+            login_status = login.poll()
+            if login_status is not None and master is not None:
+                # Drain the PTY after process exit without exposing its contents.
+                for _ in range(8):
+                    try:
+                        chunk = os.read(master, 8192)
+                    except OSError:
+                        break
+                    if not chunk:
+                        break
+                    raw.extend(chunk)
+                os.close(master)
+                master = None
+            # `master is None` means no further output can arrive, so this is the
+            # end-of-output pass that may classify a missing or wrong device URL.
             if found_url is None:
-                found_url = verification_url(raw)
+                found_url = verification_url(raw, master is None)
                 if found_url:
                     request = {
                         "verificationUrl": found_url,
@@ -1090,20 +1157,7 @@ def refresh_login(aws_bin, profile, env, cwd, settings, lock_root, deadline):
                     raise Outcome(TIMEOUT, "browser approval timed out")
                 if browser_state["status"] == "tool-error":
                     raise Outcome(TOOL, "browser adapter could not verify the request")
-            login_status = login.poll()
             if login_status is not None and not login_succeeded:
-                # Drain the PTY after process exit without exposing its contents.
-                if master is not None:
-                    for _ in range(8):
-                        try:
-                            chunk = os.read(master, 8192)
-                        except OSError:
-                            break
-                        if not chunk:
-                            break
-                        raw.extend(chunk)
-                    os.close(master)
-                    master = None
                 if login_status != 0:
                     raise Outcome(TOOL, "AWS SSO login failed after the browser flow")
                 login_succeeded = True

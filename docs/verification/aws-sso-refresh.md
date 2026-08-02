@@ -40,6 +40,7 @@ Stop that verification immediately for a credential form, MFA prompt, unexpected
 The installed `agent-browser` package reported version `0.5.0` from `package.json`.
 Its executable rejected the version-matched discovery command `agent-browser skills get core`, and current `agent-browser --help` exposed `--cdp <port>` plus activating tab commands but no background-tab or no-focus primitive.
 It therefore did not satisfy the mandatory independent browser-local channel and remains a deterministic human-action-required result rather than a fallback.
+That refusal is unconditional in the command: this recorded version evidence gates it, not a runtime help probe, because a new help flag alone could not prove a background no-focus target path.
 
 The established physical-browser route was not run.
 It remains bounded legacy evidence only because physical application control cannot prove the command's no-pointer, no-global-keyboard, no-focus guarantee.
