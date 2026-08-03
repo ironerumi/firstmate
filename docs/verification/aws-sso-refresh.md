@@ -46,11 +46,19 @@ That attachment established one fact the deterministic suite could not: the harn
 The adapter therefore clears the daemon's default session for its browser-identity checks alone and restores it immediately, which is what makes the process-identity check reachable rather than assumed.
 `tests/fm-aws-sso-refresh.test.sh` reproduces that refusal and asserts the restore, so a regression to an unroutable identity check fails deterministically.
 
-A bounded end-to-end run on 2026-08-04 used an isolated `HOME` holding only a copy of the non-secret profile shape, so the working AWS token cache was neither read as authority nor modified; its files were byte-identical before and after.
-The command recognized this tenant's portal-hosted verification URL, opened one owned background target, and navigated it to the portal device page, confirming that the earlier pre-browser refusal is gone.
-The portal immediately redirected that page to its own client-authorization view, and the adapter did not match a saved-account, confirm, or allow control there within its four-second unrecognized-page budget, so it stopped with the ambiguous-request outcome and closed its own target.
-No credential or MFA page was reached, no credential was entered, the operator's active tab and pointer did not move, and the run left an AWS client registration but no approved token.
-The remaining unverified guarantee is therefore the adapter's control matching on this portal's client-authorization view, not URL recognition, browser attachment, browser identity, or origin safety.
+Bounded end-to-end runs on 2026-08-04 used an isolated `HOME` holding only a copy of the non-secret profile shape, so the working AWS token cache was never written by the command; the first run left it byte-identical across all ten files.
+The command recognized this tenant's portal-hosted verification URL, opened one owned background target, navigated it to the portal device page, selected nothing it was not configured to select, confirmed the request, granted access, and verified the expected account and an `AdministratorAccess`-derived role.
+No credential or MFA page was reached, no credential was entered, and the operator's active tab and pointer did not move.
+
+Two facts about this portal's device flow were established from its live pages and are now fixture-backed.
+The device view renders blank-but-complete for about one second before its content appears, which is well inside the driver's four-second unrecognized-page budget, so that budget needed no change.
+After the confirm step the portal routes to its own client-authorization view whose grant control is labeled `アクセスを許可`, beside a `アクセスを拒否` control, so a driver matching only `許可` stopped there with the ambiguous-request outcome.
+The exact-label set now covers `allow`, `許可`, `allow access`, and `アクセスを許可`; matching stays exact rather than substring precisely because the deny control shares a substring with the grant control.
+
+One shared-cache behavior was observed directly and is worth recording, because it looks alarming and is not.
+During the successful run, the shared token for this session was refreshed in place by a concurrent consumer running under the ordinary home.
+That refresh carried the ordinary home's own client registration, which the isolated home never held, while the isolated run wrote its own token under its own registration in the isolated path.
+Concurrent workers therefore refresh a shared IAM Identity Center token rather than invalidating each other, and an isolated-home verification run cannot overwrite the working cache.
 
 The installed `agent-browser` package reported version `0.5.0` from `package.json`.
 Its executable rejected the version-matched discovery command `agent-browser skills get core`, and current `agent-browser --help` exposed `--cdp <port>` plus activating tab commands but no background-tab or no-focus primitive.
@@ -80,6 +88,7 @@ A login that printed an unrecognized verification URL reports that the login pri
 The embedded browser driver is executed, not merely compiled.
 One case replaces `browser_harness.helpers` with an in-process CDP double that serves a scripted page sequence and records every method the driver issues, so the real driver body runs with no Chrome, no attachment, and no daemon.
 It covers the approved path (saved-account selection, then `Confirm and continue`, then `Allow`, in that order), unexpected page origin, ambiguous saved accounts, an ambiguous device-request state, a credential form, and a non-Chrome (Arc) attachment.
+A further scenario transcribes this Identity Center portal's own device flow from its live pages, including the blank-but-complete first render, the absence of a saved-account step on an already signed-in portal session, and the `アクセスを許可` grant beside its `アクセスを拒否` neighbor, and asserts that the driver confirms and grants without ever clicking the deny control.
 It also asserts the safety invariants from inside that code path: an owned `Target.createTarget` with `background: true`, no `Input.*` pointer or keyboard injection, no `Target.activateTarget` or `Page.bringToFront`, no physical-control tool on `PATH` (`osascript`, `cliclick`, `open` tripwires), close of only the owned target, and a mode-0600 request file that is unlinked afterwards.
 A mutation of the driver's confirm-button match was rejected by this case alone, which is the evidence that it exercises the driver rather than a stub.
 The remaining unverified surface is the binding between the real `browser_harness.helpers.cdp` and a live Chrome, which no deterministic test can cover.

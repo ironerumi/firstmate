@@ -443,8 +443,11 @@ try:
             time.sleep(0.4)
             continue
 
+        # Exact labels only. An Identity Center portal labels its final grant
+        # "Allow access"/"アクセスを許可" beside a "Deny access"/"アクセスを拒否"
+        # control, so substring matching would be the unsafe way to cover it.
         confirm_matches = exact_matching_controls(page, ["confirm and continue", "確認して続行"])
-        allow_matches = exact_matching_controls(page, ["allow", "許可"])
+        allow_matches = exact_matching_controls(page, ["allow", "許可", "allow access", "アクセスを許可"])
         if len(confirm_matches) > 1 or len(allow_matches) > 1:
             emit("human-action-required", "request-state-ambiguous")
             break

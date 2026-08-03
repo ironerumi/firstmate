@@ -506,12 +506,14 @@ write_fake_cdp_helpers() {
 import json
 import os
 import re
+import time
 
 _state = os.environ["FAKE_CDP_STATE"]
 with open(os.environ["FAKE_CDP_SCENARIO"], encoding="utf-8") as _handle:
     _scenario = json.load(_handle)
 _pages = _scenario["pages"]
 _current = [0]
+_first_seen = {}
 
 # The verification URL must reach the adapter through the private mode-0600
 # file, never argv or the environment; capture both for the caller to assert.
@@ -557,6 +559,14 @@ def _evaluate(expression):
         if target is not None:
             _current[0] = target
         return True
+    # A portal view can render blank-but-complete before its content appears;
+    # advance_after models that without making the driver click anything.
+    delay = page.get("advance_after")
+    if delay is not None:
+        first = _first_seen.setdefault(_current[0], time.monotonic())
+        if time.monotonic() - first >= delay:
+            _current[0] += 1
+            page = _pages[_current[0]]
     return json.dumps({
         "url": page["url"],
         "ready": page.get("ready", "complete"),
@@ -624,6 +634,8 @@ run_embedded_driver() {
     FM_AWS_SSO_AWS_BIN=aws FM_AWS_SSO_LOCK_DIR="$dir/locks" FAKE_AWS_STATE="$dir/state" \
     PYTHONPATH="$dir/fakepkg" FAKE_CDP_STATE="$dir/state" FAKE_CDP_SCENARIO="$dir/scenario.json" \
     FAKE_CDP_BROWSER_PID="$FAKE_CHROME_PID" \
+    FAKE_BARE_URL="${CASE_BARE_URL:-$REGIONAL_BARE_URL}" \
+    FAKE_DEVICE_URL="${CASE_DEVICE_URL:-$REGIONAL_DEVICE_URL}" \
     "$SUBJECT" --config "$dir/local.json" --browser-driver browser-harness --timeout "${CASE_TIMEOUT:-15}" \
       > "$dir/out" 2> "$dir/err" || rc=$?
   printf '%s\n' "$rc"
@@ -717,6 +729,56 @@ EOF
     fail "the device request reached the embedded driver through a non-private file"
   assert_grep "saved-account-example" "$dir/state/adapter-request.json" \
     "the private saved-account selector did not reach the driver through the private request file"
+  assert_embedded_driver_safety "$dir"
+
+  # The Identity Center portal's own device flow, transcribed from the live
+  # pages: it renders blank-but-complete for about a second, needs no
+  # saved-account step when the portal session is already signed in, and labels
+  # its final grant "アクセスを許可" next to an "アクセスを拒否" control. A driver
+  # that matched only "許可" stopped here as an ambiguous request state.
+  dir=$(setup_embedded_driver_case cdp-portal-approved)
+  cat > "$dir/scenario.json" <<'EOF'
+{
+  "pages": [
+    {
+      "url": "https://example.awsapps.com/start/#/device?user_code=ABCD-EFGH",
+      "text": "",
+      "controls": [],
+      "advance_after": 1.0
+    },
+    {
+      "url": "https://example.awsapps.com/start/#/device?user_code=ABCD-EFGH",
+      "text": "認証がリクエストされました このコードが指定されたものと一致しているか確認してください。",
+      "controls": [
+        {"tag": "button", "type": "submit", "text": "確認して続行"},
+        {"tag": "button", "type": "submit", "text": "キャンセル"}
+      ],
+      "clicks": {"0": 2}
+    },
+    {
+      "url": "https://example.awsapps.com/start/#/?clientId=fake-client-id",
+      "text": "botocore-client-example がデータにアクセスすることを許可しますか？",
+      "controls": [
+        {"tag": "a", "role": "button", "text": "詳細を表示"},
+        {"tag": "button", "type": "submit", "text": "アクセスを拒否"},
+        {"tag": "button", "type": "submit", "text": "アクセスを許可"}
+      ],
+      "clicks": {"2": 3}
+    },
+    {"url": "https://example.awsapps.com/start/#/", "text": "リクエストが承認されました", "controls": []}
+  ]
+}
+EOF
+  CASE_DEVICE_URL="$PORTAL_DEVICE_URL"
+  CASE_BARE_URL="$PORTAL_BARE_URL"
+  rc=$(run_embedded_driver "$dir")
+  unset CASE_DEVICE_URL CASE_BARE_URL
+  expect_code 0 "$rc" "the portal's own device flow should approve (stderr: $(cat "$dir/err"))"
+  clicks=$(python3 -c 'import json,sys;print(",".join(json.loads(l)["control"] for l in open(sys.argv[1])))' \
+    "$dir/state/clicks.jsonl")
+  [ "$clicks" = "確認して続行,アクセスを許可" ] || \
+    fail "the driver did not confirm then grant on the portal's own labels (got: $clicks)"
+  assert_no_grep "アクセスを拒否" "$dir/state/clicks.jsonl" "the driver clicked the portal's deny control"
   assert_embedded_driver_safety "$dir"
 
   # Every refusal below must happen inside the driver, before or instead of the
