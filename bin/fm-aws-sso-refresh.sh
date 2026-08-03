@@ -181,16 +181,39 @@ PUBLIC_REASONS = {
 }
 
 BROWSER_HARNESS_PROGRAM = r"""
-import json, os, re, subprocess, sys, time
+import json, os, re, signal, subprocess, sys, time
 from urllib.parse import urlparse
 
 request_path = os.environ.get("FM_AWS_SSO_REQUEST_FILE", "")
 owned_target = None
 result = {"status": "tool-error", "reason": "request-state-ambiguous"}
+TERMINATION_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
 
 def emit(status, reason=""):
     global result
     result = {"status": status, "reason": reason}
+
+# The parent terminates this adapter's process group on any failure of its own,
+# so a default-disposition SIGTERM would skip the cleanup below and leave the
+# operator's harness session cleared and the owned tab open. Raising instead
+# routes termination through the existing finally blocks.
+def terminated(_signum, _frame):
+    raise KeyboardInterrupt
+
+for handled_signal in TERMINATION_SIGNALS:
+    signal.signal(handled_signal, terminated)
+
+def restore_session(send, saved):
+    # Best effort and itself uninterruptible: a termination signal is held
+    # pending so it cannot abort the restore, and a failed restore never
+    # replaces the status/reason already emitted.
+    blocked = signal.pthread_sigmask(signal.SIG_BLOCK, TERMINATION_SIGNALS)
+    try:
+        send({"meta": "set_session", "session_id": saved})
+    except BaseException:
+        pass
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
 
 # Send a browser-target CDP call past the harness daemon's default page session.
 # The daemon attaches a page session at startup and routes every non-Target.*
@@ -208,7 +231,7 @@ def browser_target_call(method, **params):
     try:
         return cdp(method, **params)
     finally:
-        send({"meta": "set_session", "session_id": saved})
+        restore_session(send, saved)
 
 def runtime_value(session_id, expression):
     response = cdp(
@@ -328,7 +351,8 @@ try:
     if portal.scheme != "https" or not (portal.hostname or "").lower().endswith(".awsapps.com"):
         emit("human-action-required", "unexpected-origin")
         raise SystemExit
-    portal_hosted = url_origin(verification) is not None and url_origin(verification) == url_origin(portal)
+    verification_origin = url_origin(verification)
+    portal_hosted = verification_origin is not None and verification_origin == url_origin(portal)
     if verification.scheme != "https" or not (
         allowed_verification_host((verification.hostname or "").lower()) or portal_hosted
     ):

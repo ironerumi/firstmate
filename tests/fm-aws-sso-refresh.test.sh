@@ -506,6 +506,7 @@ write_fake_cdp_helpers() {
 import json
 import os
 import re
+import signal
 import time
 
 _state = os.environ["FAKE_CDP_STATE"]
@@ -586,6 +587,10 @@ def cdp(method, session_id=None, **params):
     if method == "SystemInfo.getProcessInfo" and _session[0] is not None:
         raise RuntimeError("SystemInfo.getProcessInfo is only supported on the browser target")
     if method == "SystemInfo.getProcessInfo":
+        # The parent terminates the adapter's process group whenever its own
+        # login fails, which can land inside this cleared-session window.
+        if _scenario.get("terminate_in_cleared_window"):
+            os.kill(os.getpid(), signal.SIGTERM)
         return {"processInfo": [{"id": int(os.environ["FAKE_CDP_BROWSER_PID"]), "type": "browser"}]}
     if method == "Target.createTarget":
         return {"targetId": "fm-owned-target"}
@@ -888,6 +893,30 @@ EOF
   assert_grep "not verified as Google Chrome" "$dir/err" "the driver's browser-identity refusal was not reported"
   assert_no_grep '"method": "Target.createTarget"' "$dir/state/cdp-calls.jsonl" \
     "the embedded driver opened a tab in an unverified browser"
+  assert_embedded_driver_safety "$dir"
+
+  # A termination signal that lands while the daemon's default page session is
+  # cleared must still restore it and close the owned tab, so the operator's
+  # harness is never left unroutable by a killed adapter.
+  dir=$(setup_embedded_driver_case cdp-terminated-mid-check)
+  cat > "$dir/scenario.json" <<'EOF'
+{
+  "terminate_in_cleared_window": true,
+  "pages": [
+    {
+      "url": "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH",
+      "text": "Authorize request",
+      "controls": [{"tag": "button", "text": "Allow"}]
+    }
+  ]
+}
+EOF
+  rc=$(run_embedded_driver "$dir")
+  expect_code 12 "$rc" "an adapter terminated mid-identity-check should surface the tool outcome"
+  [ "$(python3 -c 'import json,sys;print(json.loads(open(sys.argv[1]).readlines()[-1]).get("session_id"))' \
+    "$dir/state/daemon-meta.jsonl")" = "operator-page-session" ] || \
+    fail "a terminated driver left the operator's harness session cleared"
+  assert_absent "$dir/state/clicks.jsonl" "the terminated driver still drove a page"
   assert_embedded_driver_safety "$dir"
 
   kill "$FAKE_CHROME_PID" 2>/dev/null || true
