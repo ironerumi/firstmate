@@ -227,8 +227,8 @@ def browser_target_call(method, **params):
     saved = send({"meta": "session"}).get("session_id")
     if not saved:
         return cdp(method, **params)
-    send({"meta": "set_session", "session_id": None})
     try:
+        send({"meta": "set_session", "session_id": None})
         return cdp(method, **params)
     finally:
         restore_session(send, saved)

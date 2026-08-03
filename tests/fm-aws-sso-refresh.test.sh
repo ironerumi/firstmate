@@ -579,6 +579,11 @@ def _evaluate(expression):
 def cdp(method, session_id=None, **params):
     _record("cdp-calls.jsonl", {"method": method, "session": session_id, "params": params})
     if method == "Browser.getVersion":
+        # The parent terminates the adapter's process group whenever its own
+        # login fails, which can land inside this cleared-session window. This
+        # is the first browser-level call and is issued on every platform.
+        if _scenario.get("terminate_in_cleared_window") and _session[0] is None:
+            os.kill(os.getpid(), signal.SIGTERM)
         return _scenario.get("version", {
             "product": "Chrome/141.0.7390.65",
             "userAgent": "Mozilla/5.0 (Macintosh) Chrome/141.0.7390.65 Safari/537.36",
@@ -587,10 +592,6 @@ def cdp(method, session_id=None, **params):
     if method == "SystemInfo.getProcessInfo" and _session[0] is not None:
         raise RuntimeError("SystemInfo.getProcessInfo is only supported on the browser target")
     if method == "SystemInfo.getProcessInfo":
-        # The parent terminates the adapter's process group whenever its own
-        # login fails, which can land inside this cleared-session window.
-        if _scenario.get("terminate_in_cleared_window"):
-            os.kill(os.getpid(), signal.SIGTERM)
         return {"processInfo": [{"id": int(os.environ["FAKE_CDP_BROWSER_PID"]), "type": "browser"}]}
     if method == "Target.createTarget":
         return {"targetId": "fm-owned-target"}
