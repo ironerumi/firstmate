@@ -37,12 +37,28 @@ The operator's ordinary Chrome process was running without a reachable endpoint 
 A separate Chrome endpoint on port 9333 belonged to an isolated test profile used by concurrent project work, so it was deliberately not attached or reused.
 This means the live signed-in-Chrome path was not verified on this date.
 
-Re-checked on 2026-08-03: `browser-harness doctor` still reported `[FAIL] active browser connections — 0`.
-The operator's ordinary Chrome (pid without `--user-data-dir`) now holds a listener on port 9222, but `/json/version` returned HTTP 404, so no DevTools protocol endpoint is exposed there; port 9223 still refused the connection.
-Port 9333 answered `Chrome/151.0.7922.72` and still belonged to the isolated `--user-data-dir` profile of concurrent project work, which this command rejects by design, so it was again not attached or reused.
-No eligible signed-in Chrome attachment existed, so the live happy path remains unverified; establishing one would require enabling remote debugging on the operator's browser, which this command must never do.
-The maintainer verification step is to enable Chrome's own remote-debugging attachment, establish a healthy named browser-harness connection, confirm no concurrent AWS/browser login work, and run the command against an already-expired non-production SSO profile while observing that the active tab and macOS pointer do not move.
-Stop that verification immediately for a credential form, MFA prompt, unexpected origin, ambiguous account, or any focus/cursor takeover.
+Re-checked on 2026-08-04 against the operator's ordinary signed-in Chrome, with `browser-harness` 0.1.0 (git).
+That Chrome records `user-enabled` remote debugging in its own `Local State` and writes `DevToolsActivePort` for port 9222, so no browser start, restart, or reconfiguration is needed to attach.
+`/json/version` on that port returns HTTP 404 because current Chrome disables HTTP discovery on the default user-data-dir, and the daemon connects through the WebSocket path recorded alongside the port instead.
+A named connection was established read-only, and `SystemInfo.getProcessInfo` resolved the attached browser to the ordinary Chrome process with no `--user-data-dir`.
+
+That attachment established one fact the deterministic suite could not: the harness daemon attaches a page session at startup and routes every non-`Target.*` call to it, so Chrome answers `SystemInfo.getProcessInfo is only supported on the browser target`.
+The adapter therefore clears the daemon's default session for its browser-identity checks alone and restores it immediately, which is what makes the process-identity check reachable rather than assumed.
+`tests/fm-aws-sso-refresh.test.sh` reproduces that refusal and asserts the restore, including when a termination signal lands while the default session is cleared, so a regression to an unroutable identity check or to an abandoned operator session fails deterministically.
+
+Bounded end-to-end runs on 2026-08-04 used an isolated `HOME` holding only a copy of the non-secret profile shape, so the working AWS token cache was never written by the command; the first run left it byte-identical across all ten files.
+The command recognized this tenant's portal-hosted verification URL, opened one owned background target, navigated it to the portal device page, selected nothing it was not configured to select, confirmed the request, granted access, and verified the expected account and an `AdministratorAccess`-derived role.
+No credential or MFA page was reached, no credential was entered, and the operator's active tab and pointer did not move.
+
+Two facts about this portal's device flow were established from its live pages and are now fixture-backed.
+The device view renders blank-but-complete for about one second before its content appears, which is well inside the driver's four-second unrecognized-page budget, so that budget needed no change.
+After the confirm step the portal routes to its own client-authorization view whose grant control is labeled `アクセスを許可`, beside a `アクセスを拒否` control, so a driver matching only `許可` stopped there with the ambiguous-request outcome.
+The exact-label set now covers `allow`, `許可`, `allow access`, and `アクセスを許可`; matching stays exact rather than substring precisely because the deny control shares a substring with the grant control.
+
+One shared-cache behavior was observed directly and is worth recording, because it looks alarming and is not.
+During the successful run, the shared token for this session was refreshed in place by a concurrent consumer running under the ordinary home.
+That refresh carried the ordinary home's own client registration, which the isolated home never held, while the isolated run wrote its own token under its own registration in the isolated path.
+Concurrent workers therefore refresh a shared IAM Identity Center token rather than invalidating each other, and an isolated-home verification run cannot overwrite the working cache.
 
 The installed `agent-browser` package reported version `0.5.0` from `package.json`.
 Its executable rejected the version-matched discovery command `agent-browser skills get core`, and current `agent-browser --help` exposed `--cdp <port>` plus activating tab commands but no background-tab or no-focus primitive.
@@ -62,11 +78,17 @@ It performs no network call, real login, AWS action, or browser control.
 bin/fm-test-run.sh tests/fm-aws-sso-refresh.test.sh
 ```
 
-Result on 2026-08-03: all cases passed for refresh success, still-valid credentials, saved-account request data, approval, wrong origin, ambiguity, credential and MFA stops, missing attachment, timeout, same-session serialization, distinct-session concurrency, child cleanup, output redaction, repository-local direnv configuration, ordinary profiles, and static-credential refusal.
+Result on 2026-08-04: all cases passed for refresh success, still-valid credentials, saved-account request data, approval, unrecognized login output, ambiguity, credential and MFA stops, missing attachment, timeout, same-session serialization, distinct-session concurrency, child cleanup, output redaction, repository-local direnv configuration, ordinary profiles, and static-credential refusal.
+
+Both device-verification URL families are covered from named fixtures rather than one hardcoded shape.
+A regional `device.sso` URL and a portal-hosted `/start/#/device?user_code=...` URL each reach the adapter and refresh, while a portal device page carrying no code, and a device URL on a different Identity Center portal, both stop before the adapter.
+Acceptance of the portal family is derived from the validated `expectedStartUrl` origin alone, and a mutation that neutralizes that derivation in both the login-output parser and the adapter turns the portal case red, which is the evidence that the case tests the derivation rather than passing incidentally.
+A login that printed an unrecognized verification URL reports that the login printed an unrecognized verification page, distinct from the browser-side unexpected-origin outcome, so a parse failure can no longer name a subsystem that was never reached.
 
 The embedded browser driver is executed, not merely compiled.
 One case replaces `browser_harness.helpers` with an in-process CDP double that serves a scripted page sequence and records every method the driver issues, so the real driver body runs with no Chrome, no attachment, and no daemon.
 It covers the approved path (saved-account selection, then `Confirm and continue`, then `Allow`, in that order), unexpected page origin, ambiguous saved accounts, an ambiguous device-request state, a credential form, and a non-Chrome (Arc) attachment.
+A further scenario transcribes this Identity Center portal's own device flow from its live pages, including the blank-but-complete first render, the absence of a saved-account step on an already signed-in portal session, and the `アクセスを許可` grant beside its `アクセスを拒否` neighbor, and asserts that the driver confirms and grants without ever clicking the deny control.
 It also asserts the safety invariants from inside that code path: an owned `Target.createTarget` with `background: true`, no `Input.*` pointer or keyboard injection, no `Target.activateTarget` or `Page.bringToFront`, no physical-control tool on `PATH` (`osascript`, `cliclick`, `open` tripwires), close of only the owned target, and a mode-0600 request file that is unlinked afterwards.
 A mutation of the driver's confirm-button match was rejected by this case alone, which is the evidence that it exercises the driver rather than a stub.
 The remaining unverified surface is the binding between the real `browser_harness.helpers.cdp` and a live Chrome, which no deterministic test can cover.
