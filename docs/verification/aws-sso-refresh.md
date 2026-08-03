@@ -44,7 +44,7 @@ A named connection was established read-only, and `SystemInfo.getProcessInfo` re
 
 That attachment established one fact the deterministic suite could not: the harness daemon attaches a page session at startup and routes every non-`Target.*` call to it, so Chrome answers `SystemInfo.getProcessInfo is only supported on the browser target`.
 The adapter therefore clears the daemon's default session for its browser-identity checks alone and restores it immediately, which is what makes the process-identity check reachable rather than assumed.
-`tests/fm-aws-sso-refresh.test.sh` reproduces that refusal and asserts the restore, so a regression to an unroutable identity check fails deterministically.
+`tests/fm-aws-sso-refresh.test.sh` reproduces that refusal and asserts the restore, including when a termination signal lands while the default session is cleared, so a regression to an unroutable identity check or to an abandoned operator session fails deterministically.
 
 Bounded end-to-end runs on 2026-08-04 used an isolated `HOME` holding only a copy of the non-secret profile shape, so the working AWS token cache was never written by the command; the first run left it byte-identical across all ten files.
 The command recognized this tenant's portal-hosted verification URL, opened one owned background target, navigated it to the portal device page, selected nothing it was not configured to select, confirmed the request, granted access, and verified the expected account and an `AdministratorAccess`-derived role.

@@ -31,7 +31,7 @@ Read the command's header or `--help` before first use because it owns configura
 Do not add its mechanics to project instructions.
 
 Continue the authorized AWS task after exit 0.
-Exit 10 means the signed-in Chrome path reached a real human boundary such as credential entry, MFA, an ambiguous saved account, an unexpected page, or missing safe attachment; report the concrete boundary to Firstmate without entering or guessing anything.
+Exit 10 means a real human boundary such as credential entry, MFA, an ambiguous saved account, an unexpected page the owned tab reached, a login verification page the command does not recognize, or missing safe attachment; report the concrete boundary to Firstmate without entering or guessing anything.
 Exit 11 is a bounded timeout and exit 12 is a tool or configuration failure; report the concrete outcome rather than reclassifying either as a new AWS approval decision.
 Never use Arc, static credentials, an isolated browser profile, or physical cursor and global-keyboard control around the command.
 

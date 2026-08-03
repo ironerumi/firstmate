@@ -65,11 +65,10 @@
 # fragment, and a portal device page with no code stays bare. A verification URL
 # on any other origin is the login-side login-url-unrecognized outcome, distinct
 # from the browser-side unexpected-origin outcome for a page the owned tab
-# actually reached. Once
-# the login itself exits 0, the account/role identity check decides the outcome
-# instead of leftover output. Raw login output is
-# never relayed or persisted; device URLs/codes and token-shaped text stay inside
-# the process. The verification URL reaches the browser adapter through a private
+# actually reached. Once the login itself exits 0, the account/role identity
+# check decides the outcome instead of leftover output. Raw login output is never
+# relayed or persisted; device URLs/codes and token-shaped text stay inside the
+# process. The verification URL reaches the browser adapter through a private
 # mode-0600 file or stdin, never argv or an environment value.
 #
 # browser-harness is evaluated first. It is used only when its read-only doctor
@@ -77,10 +76,16 @@
 # Browser Harness Python helpers directly, bypassing the CLI's auto-start and
 # repair path so an attachment race cannot open or focus Chrome. The adapter
 # creates one background tab, drives it with target-scoped CDP/DOM calls without
-# Target.activateTarget, and closes only that owned tab. It never starts Chrome, enables remote debugging,
-# moves the macOS pointer, emits global keyboard input, or changes the operator's
-# active tab/window. It rejects Arc, unexpected origins, unverified request state,
-# credential or MFA forms, and ambiguous saved-account choices.
+# Target.activateTarget, and closes only that owned tab. Its browser-application
+# and process-identity checks need browser-target CDP calls, which the harness
+# daemon's default page session would misroute, so the adapter clears that
+# default session for those calls alone and restores it immediately, including
+# when a termination signal lands mid-check; an unavailable session bridge is a
+# tool failure rather than an assumed browser identity. It never starts Chrome,
+# enables remote debugging, moves the macOS pointer, emits global keyboard input,
+# or changes the operator's active tab/window. It rejects Arc, unexpected
+# origins, unverified request state, credential or MFA forms, and ambiguous
+# saved-account choices.
 #
 # The installed agent-browser is evaluated second. Its current version-matched
 # help exposes no verified background-tab/no-focus primitive, so this command
@@ -96,13 +101,15 @@
 # credential session serializes while distinct sessions remain concurrent even
 # when they share one Identity Center portal.
 # Waits are bounded. Signals and terminal outcomes stop the owned AWS/browser
-# process groups and close only the owned tab; no browser, daemon, or unrelated
-# login is killed or hijacked.
+# process groups, close only the owned tab, and leave the harness daemon's
+# default session as it was found; no browser, daemon, or unrelated login is
+# killed or hijacked.
 #
 # Deterministic outcomes:
 #   0   success (already valid or refreshed, account and role verified)
 #   10  genuine human action required (credentials, MFA, ambiguous/wrong page,
-#       missing safe attachment, or no verified no-focus browser channel)
+#       unrecognized login verification page, missing safe attachment, or no
+#       verified no-focus browser channel)
 #   11  timeout (lock, login, browser approval, or identity verification)
 #   12  tool/configuration failure (missing/unsafe tools or config, non-SSO
 #       profile, unexpected AWS failure, malformed output, or identity mismatch)
