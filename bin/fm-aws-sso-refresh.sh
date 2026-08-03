@@ -57,7 +57,15 @@
 # AWS runs on a private PTY, so its decisive device state is drained immediately
 # rather than hidden by a pipe or buffered background log. Only newline-complete
 # output is parsed, and only the code-carrying verificationUriComplete is used;
-# the bare verificationUri the CLI prints first lands on a code-entry page. Once
+# the bare verificationUri the CLI prints first lands on a code-entry page. A
+# verification URL is recognized on a regional device.sso/oidc AWS host or on an
+# origin exactly equal to the validated expectedStartUrl portal origin, because
+# an Identity Center portal announces its device page as .../start/#/device with
+# the user_code in the fragment; the code is read from either the query or that
+# fragment, and a portal device page with no code stays bare. A verification URL
+# on any other origin is the login-side login-url-unrecognized outcome, distinct
+# from the browser-side unexpected-origin outcome for a page the owned tab
+# actually reached. Once
 # the login itself exits 0, the account/role identity check decides the outcome
 # instead of leftover output. Raw login output is
 # never relayed or persisted; device URLs/codes and token-shaped text stay inside
@@ -166,6 +174,7 @@ PUBLIC_REASONS = {
     "browser-attachment-required": "the signed-in Chrome attachment is unavailable",
     "browser-driver-missing": "no supported browser driver is installed",
     "credential-form": "the browser requires credential entry",
+    "login-url-unrecognized": "AWS printed a verification page this command does not recognize",
     "mfa-required": "the browser requires MFA",
     "request-state-ambiguous": "the AWS device request state is ambiguous",
     "unexpected-origin": "the browser reached an unexpected origin",
@@ -182,6 +191,24 @@ result = {"status": "tool-error", "reason": "request-state-ambiguous"}
 def emit(status, reason=""):
     global result
     result = {"status": status, "reason": reason}
+
+# Send a browser-target CDP call past the harness daemon's default page session.
+# The daemon attaches a page session at startup and routes every non-Target.*
+# call to it, which Chrome refuses for browser-only domains such as SystemInfo.
+# The default session is cleared for these identity checks alone and restored
+# immediately, so the operator's own harness state is unchanged. An unavailable
+# bridge raises, which is the tool-error outcome: the attached browser's
+# identity is never assumed.
+def browser_target_call(method, **params):
+    from browser_harness.helpers import _send as send
+    saved = send({"meta": "session"}).get("session_id")
+    if not saved:
+        return cdp(method, **params)
+    send({"meta": "set_session", "session_id": None})
+    try:
+        return cdp(method, **params)
+    finally:
+        send({"meta": "set_session", "session_id": saved})
 
 def runtime_value(session_id, expression):
     response = cdp(
@@ -272,6 +299,16 @@ def exact_matching_controls(page, labels):
 def allowed_verification_host(host):
     return bool(re.fullmatch(r"(?:device\.sso|oidc)\.[a-z0-9-]+\.amazonaws\.com", host or ""))
 
+def url_origin(parsed):
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    host = (parsed.hostname or "").lower()
+    if not host or parsed.username or parsed.password:
+        return None
+    return "%s://%s%s" % ((parsed.scheme or "").lower(), host, ":%d" % port if port else "")
+
 def allowed_page_host(host, verification_host, portal_host):
     if host in (verification_host, portal_host):
         return True
@@ -286,20 +323,25 @@ try:
         request = json.load(handle)
     verification = urlparse(request["verificationUrl"])
     portal = urlparse(request["expectedStartUrl"])
-    if verification.scheme != "https" or not allowed_verification_host((verification.hostname or "").lower()):
-        emit("human-action-required", "unexpected-origin")
-        raise SystemExit
+    # The portal is validated first because the verification URL may be accepted
+    # only by deriving its allowed origin from that already-validated portal.
     if portal.scheme != "https" or not (portal.hostname or "").lower().endswith(".awsapps.com"):
         emit("human-action-required", "unexpected-origin")
         raise SystemExit
+    portal_hosted = url_origin(verification) is not None and url_origin(verification) == url_origin(portal)
+    if verification.scheme != "https" or not (
+        allowed_verification_host((verification.hostname or "").lower()) or portal_hosted
+    ):
+        emit("human-action-required", "unexpected-origin")
+        raise SystemExit
 
-    version = cdp("Browser.getVersion")
+    version = browser_target_call("Browser.getVersion")
     version_text = " ".join(str(version.get(k, "")) for k in ("product", "userAgent", "jsVersion"))
     if "arc" in version_text.lower() or not str(version.get("product", "")).startswith("Chrome/"):
         emit("human-action-required", "browser-application-unverified")
         raise SystemExit
     if sys.platform == "darwin":
-        process_info = cdp("SystemInfo.getProcessInfo").get("processInfo", [])
+        process_info = browser_target_call("SystemInfo.getProcessInfo").get("processInfo", [])
         browser_pids = [str(p.get("id")) for p in process_info if p.get("type") == "browser" and p.get("id")]
         if len(browser_pids) != 1:
             emit("human-action-required", "browser-application-unverified")
@@ -869,18 +911,47 @@ USER_CODE_PATTERN = re.compile(r"[A-Za-z0-9._~-]{1,64}")
 VERIFICATION_MARKERS = ("please visit the following url", "autofill the code upon loading")
 
 
-def device_url_kind(candidate):
-    parsed = urlparse(candidate)
-    if parsed.scheme != "https" or not DEVICE_HOST_PATTERN.fullmatch((parsed.hostname or "").lower()):
+def parent_url_origin(parsed):
+    try:
+        port = parsed.port
+    except ValueError:
         return None
-    query = parse_qs(parsed.query)
+    host = (parsed.hostname or "").lower()
+    if not host or parsed.username or parsed.password:
+        return None
+    return "%s://%s%s" % ((parsed.scheme or "").lower(), host, ":%d" % port if port else "")
+
+
+def device_query(parsed):
+    """Read device parameters from the query and from a fragment's query part.
+
+    An Identity Center portal announces its device page as a client-routed
+    fragment, /start/#/device?user_code=..., so the code lives outside the
+    ordinary query. A real query value still wins over a fragment value.
+    """
+    values = parse_qs(parsed.query)
+    marker = (parsed.fragment or "").find("?")
+    if marker >= 0:
+        for key, found in parse_qs(parsed.fragment[marker + 1:]).items():
+            values.setdefault(key, found)
+    return values
+
+
+def device_url_kind(candidate, portal_origin=None):
+    parsed = urlparse(candidate)
+    portal_hosted = bool(portal_origin) and parent_url_origin(parsed) == portal_origin
+    if parsed.scheme != "https" or not (
+        DEVICE_HOST_PATTERN.fullmatch((parsed.hostname or "").lower()) or portal_hosted
+    ):
+        return None
+    query = device_query(parsed)
     if (parsed.path or "").rstrip("/").endswith("/authorize") and query.get("response_type") == ["code"]:
         return "authorize"
     code = query.get("user_code", [""])[0]
     return "complete" if USER_CODE_PATTERN.fullmatch(code) else "bare"
 
 
-def verification_url(buffer, ended, classify_end=True):
+def verification_url(buffer, ended, classify_end=True, portal_origin=None):
     """Pick the AWS verificationUriComplete out of newline-complete login output.
 
     The CLI prints the bare verificationUri first and the code-carrying
@@ -912,7 +983,7 @@ def verification_url(buffer, ended, classify_end=True):
                 announced = False
             continue
         saw_url = True
-        kinds = [device_url_kind(candidate) for candidate in candidates]
+        kinds = [device_url_kind(candidate, portal_origin) for candidate in candidates]
         if complete is None and "complete" in kinds:
             complete = candidates[kinds.index("complete")]
         if announced and "authorize" in kinds and complete is None:
@@ -923,7 +994,7 @@ def verification_url(buffer, ended, classify_end=True):
         if any(kind for kind in kinds):
             saw_device = True
         elif announced:
-            raise Outcome(HUMAN, "unexpected-origin")
+            raise Outcome(HUMAN, "login-url-unrecognized")
         announced = False
     if complete:
         return complete
@@ -932,7 +1003,7 @@ def verification_url(buffer, ended, classify_end=True):
     if saw_device:
         raise Outcome(HUMAN, "request-state-ambiguous")
     if saw_url:
-        raise Outcome(HUMAN, "unexpected-origin")
+        raise Outcome(HUMAN, "login-url-unrecognized")
     return None
 
 
@@ -1108,6 +1179,7 @@ def refresh_login(aws_bin, profile, env, cwd, settings, lock_root, deadline):
     found_url = None
     browser_state = None
     login_succeeded = False
+    portal_origin = parent_url_origin(urlparse(settings["expected_start"]))
     try:
         login, master = spawn_login(aws_bin, profile, env, cwd)
         while True:
@@ -1159,7 +1231,7 @@ def refresh_login(aws_bin, profile, env, cwd, settings, lock_root, deadline):
             # A login that already exited 0 skips that fallback and is settled by
             # the caller's account/role identity check instead.
             if found_url is None:
-                found_url = verification_url(raw, master is None, not login_succeeded)
+                found_url = verification_url(raw, master is None, not login_succeeded, portal_origin)
                 if found_url:
                     request = {
                         "verificationUrl": found_url,

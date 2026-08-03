@@ -10,6 +10,16 @@ set -u
 SUBJECT="$ROOT/bin/fm-aws-sso-refresh.sh"
 TMP_ROOT=$(fm_test_tmproot fm-aws-sso-refresh)
 
+# Both device-verification URL families this command must accept. AWS announces
+# the regional one; an Identity Center portal announces its own device page with
+# the user code in the URL fragment. Every fixture below names one of these
+# instead of hardcoding a shape, so neither family can silently lose coverage.
+REGIONAL_BARE_URL="https://device.sso.us-east-1.amazonaws.com/"
+REGIONAL_DEVICE_URL="https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH"
+PORTAL_BARE_URL="https://example.awsapps.com/start/#/device"
+PORTAL_DEVICE_URL="https://example.awsapps.com/start/#/device?user_code=ABCD-EFGH"
+FOREIGN_PORTAL_DEVICE_URL="https://other-tenant.awsapps.com/start/#/device?user_code=ABCD-EFGH"
+
 make_case() {
   local name=$1 profile=${2:-example-admin} session=${3:-example-session} portal=${4:-https://example.awsapps.com/start}
   local dir="$TMP_ROOT/$name"
@@ -47,8 +57,12 @@ EOF
   }
 }
 EOF
-  cat > "$dir/fakebin/aws" <<'EOF'
+  cat > "$dir/fakebin/aws" <<EOF
 #!/usr/bin/env bash
+: "\${FAKE_BARE_URL:=$REGIONAL_BARE_URL}"
+: "\${FAKE_DEVICE_URL:=$REGIONAL_DEVICE_URL}"
+EOF
+  cat >> "$dir/fakebin/aws" <<'EOF'
 set -u
 profile=default
 previous=
@@ -87,11 +101,11 @@ if [ "${1:-}" = sso ] && [ "${2:-}" = login ]; then
     printf 'Note: a newer AWS CLI release is described at %s\n' "$FAKE_NOTICE_URL"
   fi
   printf 'Browser will not be automatically opened.\nPlease visit the following URL:\n\n'
-  printf '%s\n' "${FAKE_BARE_URL:-https://device.sso.us-east-1.amazonaws.com/}"
+  printf '%s\n' "$FAKE_BARE_URL"
   printf '\nThen enter the code:\n\nABCD-EFGH\n'
   if [ "${FAKE_OMIT_COMPLETE_URL:-0}" != 1 ]; then
     printf '\nAlternatively, you may visit the following URL which will autofill the code upon loading:\n'
-    complete=${FAKE_DEVICE_URL:-https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH}
+    complete=$FAKE_DEVICE_URL
     if [ "${FAKE_SPLIT_URL:-0}" = 1 ]; then
       # Flush a chunk that ends mid-URL, after a complete hostname and query key.
       printf '%s' "${complete%%=*}="
@@ -165,9 +179,18 @@ run_refresh() {
     FM_AWS_SSO_LOCK_DIR="$dir/locks" \
     FAKE_AWS_STATE="$dir/state" \
     FAKE_BROWSER_REQUEST_LOG="$dir/browser-requests" \
-    "$@" "$SUBJECT" --config "$dir/local.json" --timeout "${CASE_TIMEOUT:-10}" \
+    "$@" "${CASE_SUBJECT:-$SUBJECT}" --config "$dir/local.json" --timeout "${CASE_TIMEOUT:-10}" \
       > "$dir/out" 2> "$dir/err" || rc=$?
   printf '%s\n' "$rc"
+}
+
+# The device URL that reaches the browser adapter is the decisive contract: the
+# adapter is only ever allowed to drive a code-carrying URL the parent accepted.
+assert_requested_verification_url() {
+  local dir=$1 expected=$2 actual
+  actual=$(python3 -c 'import json,sys;print(json.loads(open(sys.argv[1]).readline())["verificationUrl"])' \
+    "$dir/browser-requests") || fail "no device request reached the browser adapter"
+  [ "$actual" = "$expected" ] || fail "browser adapter received $actual instead of $expected"
 }
 
 assert_clean_output() {
@@ -196,9 +219,9 @@ import json, sys
 request = json.loads(sys.argv[1])
 assert request["accountSelector"] == "saved-account-example"
 assert request["expectedStartUrl"] == "https://example.awsapps.com/start"
-# The bare verificationUri prints first; only the code-carrying complete URL is usable.
-assert request["verificationUrl"] == "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH", request
 PY
+  # The bare verificationUri prints first; only the code-carrying complete URL is usable.
+  assert_requested_verification_url "$dir" "$REGIONAL_DEVICE_URL"
   assert_clean_output "$dir"
   pass "AWS SSO: expired operator path self-refreshes, requests saved-account approval, and verifies identity"
 }
@@ -207,29 +230,19 @@ PY
 # before it, and can flush a chunk that ends mid-URL. None of that may reach the
 # browser adapter or abort an otherwise healthy login.
 test_device_url_selection_survives_real_cli_output_shape() {
-  local dir rc request
+  local dir rc
 
   dir=$(make_case notice-url)
   rc=$(run_refresh "$dir" env FAKE_NOTICE_URL=https://docs.aws.amazon.com/cli/latest/userguide/ \
     FAKE_BROWSER_MODE=approved)
   expect_code 0 "$rc" "an incidental non-device URL before the device URL should not abort the login"
-  request=$(cat "$dir/browser-requests")
-  python3 - "$request" <<'PY'
-import json, sys
-request = json.loads(sys.argv[1])
-assert request["verificationUrl"] == "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH", request
-PY
+  assert_requested_verification_url "$dir" "$REGIONAL_DEVICE_URL"
   assert_clean_output "$dir"
 
   dir=$(make_case split-url)
   rc=$(run_refresh "$dir" env FAKE_SPLIT_URL=1 FAKE_BROWSER_MODE=approved)
   expect_code 0 "$rc" "a device URL split across PTY chunks should still refresh"
-  request=$(cat "$dir/browser-requests")
-  python3 - "$request" <<'PY'
-import json, sys
-request = json.loads(sys.argv[1])
-assert request["verificationUrl"] == "https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH", request
-PY
+  assert_requested_verification_url "$dir" "$REGIONAL_DEVICE_URL"
   assert_clean_output "$dir"
 
   dir=$(make_case bare-url-only-failed-login)
@@ -239,6 +252,65 @@ PY
   assert_grep "device request state is ambiguous" "$dir/err" "bare-only device URL returned the wrong public reason"
   assert_clean_output "$dir"
   pass "AWS SSO: only the code-carrying device URL from complete output reaches the browser"
+}
+
+# An Identity Center portal announces its device page on the portal's own origin
+# with the user code in the URL fragment, so both that family and the regional
+# AWS family must be driven. Acceptance is derived from the validated
+# expectedStartUrl origin alone: a different portal, and a portal page carrying
+# no code, must still stop before the browser.
+test_portal_hosted_and_regional_device_url_families() {
+  local dir rc mutated mutations
+
+  dir=$(make_case regional-family)
+  rc=$(run_refresh "$dir" env FAKE_BARE_URL="$REGIONAL_BARE_URL" FAKE_DEVICE_URL="$REGIONAL_DEVICE_URL" \
+    FAKE_BROWSER_MODE=approved)
+  expect_code 0 "$rc" "the regional AWS device URL should still refresh (stderr: $(cat "$dir/err"))"
+  assert_requested_verification_url "$dir" "$REGIONAL_DEVICE_URL"
+  assert_clean_output "$dir"
+
+  dir=$(make_case portal-family)
+  rc=$(run_refresh "$dir" env FAKE_BARE_URL="$PORTAL_BARE_URL" FAKE_DEVICE_URL="$PORTAL_DEVICE_URL" \
+    FAKE_BROWSER_MODE=approved)
+  expect_code 0 "$rc" "the portal-hosted device URL should refresh (stderr: $(cat "$dir/err"))"
+  assert_requested_verification_url "$dir" "$PORTAL_DEVICE_URL"
+  assert_grep "AWS SSO refreshed and identity verified: account=111122223333" "$dir/out" \
+    "the portal-hosted device path did not report the non-secret verified identity"
+  assert_clean_output "$dir"
+
+  dir=$(make_case portal-bare-only)
+  rc=$(run_refresh "$dir" env FAKE_BARE_URL="$PORTAL_BARE_URL" FAKE_OMIT_COMPLETE_URL=1 FAKE_LOGIN_RC=1 \
+    FAKE_BROWSER_MODE=approved)
+  expect_code 10 "$rc" "a portal device page carrying no user code should stop instead of being driven"
+  assert_absent "$dir/browser-requests" "the code-entry-only portal device page was handed to the browser adapter"
+  assert_grep "device request state is ambiguous" "$dir/err" "bare portal device page returned the wrong public reason"
+  assert_clean_output "$dir"
+
+  dir=$(make_case portal-foreign-origin)
+  rc=$(run_refresh "$dir" env FAKE_DEVICE_URL="$FOREIGN_PORTAL_DEVICE_URL" FAKE_BROWSER_MODE=approved)
+  expect_code 10 "$rc" "a device URL on a different Identity Center portal should require human review"
+  assert_absent "$dir/browser-requests" "a foreign portal device URL was handed to the browser adapter"
+  assert_grep "printed a verification page this command does not recognize" "$dir/err" \
+    "a foreign portal origin returned the wrong public reason"
+  assert_clean_output "$dir"
+
+  # Mutation check: the portal case must be what proves the derived-origin
+  # acceptance rather than passing incidentally. Neutralizing that acceptance in
+  # both the login-output parser and the browser adapter must break it.
+  mutated="$TMP_ROOT/mutated-derived-portal-origin.sh"
+  sed -E 's/^([[:space:]]*)portal_hosted = .*/\1portal_hosted = False/' "$SUBJECT" > "$mutated"
+  chmod +x "$mutated"
+  mutations=$(grep -c 'portal_hosted = False' "$mutated")
+  [ "$mutations" -eq 2 ] || \
+    fail "the derived-portal-origin mutation did not reach both acceptance points (matched: $mutations)"
+  dir=$(make_case portal-mutation)
+  CASE_SUBJECT="$mutated"
+  rc=$(run_refresh "$dir" env FAKE_BARE_URL="$PORTAL_BARE_URL" FAKE_DEVICE_URL="$PORTAL_DEVICE_URL" \
+    FAKE_BROWSER_MODE=approved)
+  unset CASE_SUBJECT
+  expect_code 10 "$rc" "removing the derived portal-origin acceptance must break the portal-hosted path"
+  assert_absent "$dir/browser-requests" "the mutated command still drove the portal-hosted device URL"
+  pass "AWS SSO: portal-fragment and regional device URLs both drive, and foreign/code-less origins stop"
 }
 
 # --use-device-code is mandatory: a named sso_session profile would otherwise
@@ -317,22 +389,29 @@ test_still_valid_credentials_skip_login_and_browser() {
   pass "AWS SSO: still-valid credentials are a no-login/no-browser counterfactual"
 }
 
-# Unexpected device origins are stopped before any browser adapter receives the
-# URL, while ambiguous accounts and credential/MFA pages use the human outcome.
+# Unrecognized device origins are stopped before any browser adapter receives
+# the URL, while ambiguous accounts and credential/MFA pages use the human
+# outcome. A login that printed an unusable URL names the login, not the
+# browser: no tab was ever opened, so "unexpected origin" would point at the
+# wrong subsystem and did once cost a full investigation.
 test_human_action_boundaries() {
   local dir rc mode expected
   dir=$(make_case wrong-device-origin)
   rc=$(run_refresh "$dir" env FAKE_BARE_URL=https://evil.example/device FAKE_DEVICE_URL=https://evil.example/device)
   expect_code 10 "$rc" "wrong device origin should require human review"
   assert_absent "$dir/browser-requests" "wrong-origin URL was handed to the browser adapter"
-  assert_grep "unexpected origin" "$dir/err" "wrong origin reason was not deterministic"
+  assert_grep "printed a verification page this command does not recognize" "$dir/err" \
+    "unrecognized login output reason was not deterministic"
+  assert_no_grep "unexpected origin" "$dir/err" "a login-side parse failure was blamed on the browser"
   assert_clean_output "$dir"
 
   dir=$(make_case wrong-complete-origin)
   rc=$(run_refresh "$dir" env FAKE_DEVICE_URL=https://evil.example/device)
   expect_code 10 "$rc" "a wrong origin announced as the autofill URL should require human review"
   assert_absent "$dir/browser-requests" "wrong-origin autofill URL was handed to the browser adapter"
-  assert_grep "unexpected origin" "$dir/err" "wrong autofill origin reason was not deterministic"
+  assert_grep "printed a verification page this command does not recognize" "$dir/err" \
+    "unrecognized autofill URL reason was not deterministic"
+  assert_no_grep "unexpected origin" "$dir/err" "a login-side parse failure was blamed on the browser"
   assert_clean_output "$dir"
 
   for row in "ambiguous:saved-account selection is ambiguous" \
@@ -364,7 +443,7 @@ PY
     "unconfigured private account selection returned the wrong public reason"
   assert_absent "$dir/browser-requests" "browser ran without a configured private account selection"
   assert_clean_output "$dir"
-  pass "AWS SSO: wrong origin, ambiguity, credentials, MFA, and missing saved account stop safely"
+  pass "AWS SSO: unrecognized login URLs, ambiguity, credentials, MFA, and missing saved account stop safely"
 }
 
 # browser-harness must already be attached; agent-browser's current --cdp/tab
@@ -446,6 +525,20 @@ if _request_path and os.path.exists(_request_path):
         _handle.write("%o\n" % (os.stat(_request_path).st_mode & 0o777))
 
 
+# The real daemon attaches a page session at startup and routes every
+# non-Target.* call to it, so Chrome refuses browser-only domains unless that
+# default session is cleared first. Reproduce that exactly, including the
+# restore, so the driver cannot regress to an unroutable identity check.
+_session = ["operator-page-session"]
+
+
+def _send(request):
+    _record("daemon-meta.jsonl", request)
+    if request.get("meta") == "set_session":
+        _session[0] = request.get("session_id")
+    return {"session_id": _session[0]}
+
+
 def _record(name, payload):
     with open(os.path.join(_state, name), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
@@ -480,6 +573,8 @@ def cdp(method, session_id=None, **params):
             "userAgent": "Mozilla/5.0 (Macintosh) Chrome/141.0.7390.65 Safari/537.36",
             "jsVersion": "14.1",
         })
+    if method == "SystemInfo.getProcessInfo" and _session[0] is not None:
+        raise RuntimeError("SystemInfo.getProcessInfo is only supported on the browser target")
     if method == "SystemInfo.getProcessInfo":
         return {"processInfo": [{"id": int(os.environ["FAKE_CDP_BROWSER_PID"]), "type": "browser"}]}
     if method == "Target.createTarget":
@@ -611,6 +706,13 @@ EOF
     "$dir/state/cdp-calls.jsonl" "the embedded driver did not open an owned background tab"
   assert_grep '"method": "Target.closeTarget", "params": {"targetId": "fm-owned-target"}' \
     "$dir/state/cdp-calls.jsonl" "the embedded driver did not close only its own tab"
+  # The browser-identity check only reaches the browser target when the daemon's
+  # default page session is cleared, and the operator's session must be restored.
+  assert_grep '"meta": "set_session", "session_id": null' "$dir/state/daemon-meta.jsonl" \
+    "the driver never routed its browser-identity check to the browser target"
+  [ "$(python3 -c 'import json,sys;print(json.loads(open(sys.argv[1]).readlines()[-1]).get("session_id"))' \
+    "$dir/state/daemon-meta.jsonl")" = "operator-page-session" ] || \
+    fail "the driver left the operator's harness session cleared"
   [ "$(cat "$dir/state/adapter-request.mode")" = "600" ] || \
     fail "the device request reached the embedded driver through a non-private file"
   assert_grep "saved-account-example" "$dir/state/adapter-request.json" \
@@ -915,6 +1017,7 @@ EOF
 
 test_expired_session_refreshes_and_verifies_saved_selection
 test_device_url_selection_survives_real_cli_output_shape
+test_portal_hosted_and_regional_device_url_families
 test_device_code_flow_is_forced_and_pkce_is_never_driven
 test_successful_login_is_settled_by_identity_not_leftover_output
 test_invalid_invocation_never_echoes_argv

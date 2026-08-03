@@ -37,12 +37,20 @@ The operator's ordinary Chrome process was running without a reachable endpoint 
 A separate Chrome endpoint on port 9333 belonged to an isolated test profile used by concurrent project work, so it was deliberately not attached or reused.
 This means the live signed-in-Chrome path was not verified on this date.
 
-Re-checked on 2026-08-03: `browser-harness doctor` still reported `[FAIL] active browser connections — 0`.
-The operator's ordinary Chrome (pid without `--user-data-dir`) now holds a listener on port 9222, but `/json/version` returned HTTP 404, so no DevTools protocol endpoint is exposed there; port 9223 still refused the connection.
-Port 9333 answered `Chrome/151.0.7922.72` and still belonged to the isolated `--user-data-dir` profile of concurrent project work, which this command rejects by design, so it was again not attached or reused.
-No eligible signed-in Chrome attachment existed, so the live happy path remains unverified; establishing one would require enabling remote debugging on the operator's browser, which this command must never do.
-The maintainer verification step is to enable Chrome's own remote-debugging attachment, establish a healthy named browser-harness connection, confirm no concurrent AWS/browser login work, and run the command against an already-expired non-production SSO profile while observing that the active tab and macOS pointer do not move.
-Stop that verification immediately for a credential form, MFA prompt, unexpected origin, ambiguous account, or any focus/cursor takeover.
+Re-checked on 2026-08-04 against the operator's ordinary signed-in Chrome, with `browser-harness` 0.1.0 (git).
+That Chrome records `user-enabled` remote debugging in its own `Local State` and writes `DevToolsActivePort` for port 9222, so no browser start, restart, or reconfiguration is needed to attach.
+`/json/version` on that port returns HTTP 404 because current Chrome disables HTTP discovery on the default user-data-dir, and the daemon connects through the WebSocket path recorded alongside the port instead.
+A named connection was established read-only, and `SystemInfo.getProcessInfo` resolved the attached browser to the ordinary Chrome process with no `--user-data-dir`.
+
+That attachment established one fact the deterministic suite could not: the harness daemon attaches a page session at startup and routes every non-`Target.*` call to it, so Chrome answers `SystemInfo.getProcessInfo is only supported on the browser target`.
+The adapter therefore clears the daemon's default session for its browser-identity checks alone and restores it immediately, which is what makes the process-identity check reachable rather than assumed.
+`tests/fm-aws-sso-refresh.test.sh` reproduces that refusal and asserts the restore, so a regression to an unroutable identity check fails deterministically.
+
+A bounded end-to-end run on 2026-08-04 used an isolated `HOME` holding only a copy of the non-secret profile shape, so the working AWS token cache was neither read as authority nor modified; its files were byte-identical before and after.
+The command recognized this tenant's portal-hosted verification URL, opened one owned background target, and navigated it to the portal device page, confirming that the earlier pre-browser refusal is gone.
+The portal immediately redirected that page to its own client-authorization view, and the adapter did not match a saved-account, confirm, or allow control there within its four-second unrecognized-page budget, so it stopped with the ambiguous-request outcome and closed its own target.
+No credential or MFA page was reached, no credential was entered, the operator's active tab and pointer did not move, and the run left an AWS client registration but no approved token.
+The remaining unverified guarantee is therefore the adapter's control matching on this portal's client-authorization view, not URL recognition, browser attachment, browser identity, or origin safety.
 
 The installed `agent-browser` package reported version `0.5.0` from `package.json`.
 Its executable rejected the version-matched discovery command `agent-browser skills get core`, and current `agent-browser --help` exposed `--cdp <port>` plus activating tab commands but no background-tab or no-focus primitive.
@@ -62,7 +70,12 @@ It performs no network call, real login, AWS action, or browser control.
 bin/fm-test-run.sh tests/fm-aws-sso-refresh.test.sh
 ```
 
-Result on 2026-08-03: all cases passed for refresh success, still-valid credentials, saved-account request data, approval, wrong origin, ambiguity, credential and MFA stops, missing attachment, timeout, same-session serialization, distinct-session concurrency, child cleanup, output redaction, repository-local direnv configuration, ordinary profiles, and static-credential refusal.
+Result on 2026-08-04: all cases passed for refresh success, still-valid credentials, saved-account request data, approval, unrecognized login output, ambiguity, credential and MFA stops, missing attachment, timeout, same-session serialization, distinct-session concurrency, child cleanup, output redaction, repository-local direnv configuration, ordinary profiles, and static-credential refusal.
+
+Both device-verification URL families are covered from named fixtures rather than one hardcoded shape.
+A regional `device.sso` URL and a portal-hosted `/start/#/device?user_code=...` URL each reach the adapter and refresh, while a portal device page carrying no code, and a device URL on a different Identity Center portal, both stop before the adapter.
+Acceptance of the portal family is derived from the validated `expectedStartUrl` origin alone, and a mutation that neutralizes that derivation in both the login-output parser and the adapter turns the portal case red, which is the evidence that the case tests the derivation rather than passing incidentally.
+A login that printed an unrecognized verification URL reports that the login printed an unrecognized verification page, distinct from the browser-side unexpected-origin outcome, so a parse failure can no longer name a subsystem that was never reached.
 
 The embedded browser driver is executed, not merely compiled.
 One case replaces `browser_harness.helpers` with an in-process CDP double that serves a scripted page sequence and records every method the driver issues, so the real driver body runs with no Chrome, no attachment, and no daemon.
