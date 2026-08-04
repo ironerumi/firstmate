@@ -476,7 +476,7 @@ try:
                 emit("human-action-required", "credential-form")
                 break
             if len(username_inputs) != 1:
-                emit("human-action-required", "account-not-saved")
+                emit("human-action-required", "credential-form" if signin_page else "account-not-saved")
                 break
             if account_input_clicked:
                 if time.monotonic() - account_input_clicked_at < 2:

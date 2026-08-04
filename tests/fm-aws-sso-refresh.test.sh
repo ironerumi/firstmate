@@ -507,6 +507,7 @@ import json
 import os
 import re
 import signal
+import subprocess
 import time
 
 _state = os.environ["FAKE_CDP_STATE"]
@@ -515,6 +516,94 @@ with open(os.environ["FAKE_CDP_SCENARIO"], encoding="utf-8") as _handle:
 _pages = _scenario["pages"]
 _current = [0]
 _first_seen = {}
+_last_controls = {}
+
+# A page given as "dom" element specs is rendered by running the driver's own
+# in-page expressions under node against this shim, so the accessible-name and
+# visibility logic that only exists in the browser is executed rather than
+# hand-supplied as finished control records.
+_DOM_SHIM = r"""
+const _fx = JSON.parse(process.env.FM_SNAPSHOT_FIXTURE);
+class El {
+  constructor(spec) {
+    this.spec = spec;
+    this.attrs = Object.assign({}, spec.attrs || {});
+    if (spec.for) this.attrs.for = spec.for;
+    this.tagName = String(spec.tag || '').toUpperCase();
+    this.id = spec.id || '';
+    this.htmlFor = spec.for || '';
+    this.innerText = spec.text || '';
+    this.value = spec.value || '';
+    this.parent = null;
+    this.clicked = false;
+  }
+  getAttribute(name) { return name in this.attrs ? this.attrs[name] : null; }
+  getBoundingClientRect() {
+    const shown = !this.spec.hidden;
+    return { width: shown ? 120 : 0, height: shown ? 24 : 0 };
+  }
+  matches(selector) {
+    return selector.split(',').some((part) => {
+      const m = part.trim().match(/^([a-z]*)(?:\[([^=\]]+)(?:="([^"]*)")?\])?$/);
+      if (!m || (!m[1] && !m[2])) return false;
+      if (m[1] && this.tagName.toLowerCase() !== m[1]) return false;
+      if (m[2]) {
+        const value = this.getAttribute(m[2]);
+        if (value === null) return false;
+        if (m[3] !== undefined && String(value) !== m[3]) return false;
+      }
+      return true;
+    });
+  }
+  closest(selector) {
+    let node = this;
+    while (node) {
+      if (node.matches(selector)) return node;
+      node = node.parent;
+    }
+    return null;
+  }
+  click() { this.clicked = true; }
+}
+const _elements = _fx.elements.map((spec) => new El(spec));
+_fx.elements.forEach((spec, index) => {
+  if (typeof spec.parent === 'number') _elements[index].parent = _elements[spec.parent];
+});
+globalThis.getComputedStyle = (e) => ({
+  visibility: e.spec.hidden ? 'hidden' : 'visible',
+  display: e.spec.hidden ? 'none' : 'block',
+});
+globalThis.location = { href: _fx.url };
+globalThis.document = {
+  readyState: _fx.ready,
+  body: { innerText: _fx.text },
+  querySelectorAll: (selector) => _elements.filter((e) => e.matches(selector)),
+};
+"""
+
+
+def _render(expression, page):
+    fixture = json.dumps({
+        "url": page["url"],
+        "ready": page.get("ready", "complete"),
+        "text": page.get("text", ""),
+        "elements": page["dom"],
+    })
+    program = os.path.join(_state, "page-program.js")
+    with open(program, "w", encoding="utf-8") as handle:
+        handle.write(_DOM_SHIM + "\nprocess.stdout.write(JSON.stringify({value: (" + expression + ")}));\n")
+    completed = subprocess.run(
+        ["node", program],
+        env=dict(os.environ, FM_SNAPSHOT_FIXTURE=fixture),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if completed.returncode != 0:
+        with open(os.path.join(_state, "node-errors.txt"), "a", encoding="utf-8") as handle:
+            handle.write(completed.stderr)
+        raise RuntimeError("in-page expression failed under node")
+    return json.loads(completed.stdout)["value"]
 
 # The verification URL must reach the adapter through the private mode-0600
 # file, never argv or the environment; capture both for the caller to assert.
@@ -543,8 +632,10 @@ def _send(request):
 
 
 def _record(name, payload):
+    # Verbatim, not \u-escaped: the recordings are asserted against the pages'
+    # own Japanese labels, and an escaped record would make those greps vacuous.
     with open(os.path.join(_state, name), "a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+        handle.write(json.dumps(payload, sort_keys=True, ensure_ascii=False) + "\n")
 
 
 def _evaluate(expression):
@@ -552,10 +643,19 @@ def _evaluate(expression):
     match = re.search(r"controls\[(\d+)\]", expression)
     if match and "e.click()" in expression:
         index = int(match.group(1))
-        controls = page.get("controls", [])
-        if index >= len(controls):
-            return False
-        _record("clicks.jsonl", {"page": _current[0], "control": controls[index].get("text", "")})
+        if page.get("dom") is not None:
+            if not _render(expression, page):
+                return False
+            controls = _last_controls.get(_current[0], [])
+        else:
+            controls = page.get("controls", [])
+            if index >= len(controls):
+                return False
+        _record("clicks.jsonl", {
+            "page": _current[0],
+            "control": controls[index].get("text", ""),
+            "label": controls[index].get("label", ""),
+        })
         target = page.get("clicks", {}).get(str(index))
         if target is not None:
             _current[0] = target
@@ -568,6 +668,11 @@ def _evaluate(expression):
         if time.monotonic() - first >= delay:
             _current[0] += 1
             page = _pages[_current[0]]
+    if page.get("dom") is not None:
+        rendered = _render(expression, page)
+        _last_controls[_current[0]] = json.loads(rendered).get("controls", [])
+        _record("snapshots.jsonl", json.loads(rendered))
+        return rendered
     return json.dumps({
         "url": page["url"],
         "ready": page.get("ready", "complete"),
@@ -668,7 +773,7 @@ assert_embedded_driver_safety() {
 }
 
 test_embedded_browser_driver_runs_against_fake_cdp() {
-  local dir rc chrome_dir clicks
+  local dir rc chrome_dir clicks labels
 
   write_fake_cdp_helpers "$TMP_ROOT/fake-cdp-helpers.py"
   # A stand-in for the operator's already-running Chrome. It is never launched
@@ -882,17 +987,26 @@ EOF
   # password field and names its input only through an associated <label>.
   # Without that label the page matched nothing and the run timed out into the
   # ambiguous-request outcome instead of naming the sign-in it needs.
+  # This page is given as DOM elements rather than finished control records, so
+  # the driver's own in-page naming and visibility expressions are executed
+  # against it: the username input is named only by its associated <label>, and
+  # dropping that extraction from the driver returns this case to the ambiguous
+  # device-request outcome the live run reported.
+  command -v node > /dev/null 2>&1 || fail "node is required to run the driver's in-page expressions"
   dir=$(setup_embedded_driver_case cdp-signin-username-step)
   cat > "$dir/scenario.json" <<'EOF'
 {
   "pages": [
     {
       "url": "https://ap-northeast-1.signin.aws/platform/d-example/login",
-      "text": "サインイン先 example ユーザー名 次へ",
-      "controls": [
-        {"tag": "label", "text": "ユーザー名"},
-        {"tag": "input", "type": "text", "text": "", "label": "ユーザー名"},
-        {"tag": "button", "type": "submit", "text": "次へ"}
+      "text": "サインイン先 example ユーザー名 次へ この端末を記憶する",
+      "dom": [
+        {"tag": "label", "for": "awsui-input-0", "text": "ユーザー名"},
+        {"tag": "input", "id": "awsui-input-0", "attrs": {"type": "text"}},
+        {"tag": "label", "text": "この端末を記憶する"},
+        {"tag": "input", "attrs": {"type": "checkbox"}, "parent": 2},
+        {"tag": "input", "id": "csrf", "attrs": {"type": "hidden"}, "hidden": true},
+        {"tag": "button", "attrs": {"type": "submit"}, "text": "次へ"}
       ]
     }
   ]
@@ -901,9 +1015,17 @@ EOF
   rc=$(run_embedded_driver "$dir")
   expect_code 10 "$rc" "an AWS sign-in username step should require human action"
   assert_grep "requires credential entry" "$dir/err" \
-    "the driver did not report the sign-in step as credential entry"
+    "the driver did not report the sign-in step as credential entry (stderr: $(cat "$dir/err"))"
   assert_no_grep "device request state is ambiguous" "$dir/err" \
     "the driver still reported a sign-in step as an ambiguous device request"
+  labels=$(python3 -c 'import json,sys;p=json.loads(open(sys.argv[1],encoding="utf-8").readline());print("|".join("%s=%s" % (c.get("tag"), c.get("label", "")) for c in p["controls"]))' \
+    "$dir/state/snapshots.jsonl")
+  [ "$labels" = "label=ユーザー名|input=ユーザー名|label=この端末を記憶する|input=この端末を記憶する|button=" ] || \
+    fail "the in-page snapshot did not name controls from their associated labels (got: $labels)"
+  clicks=$(python3 -c 'import json,sys;print(",".join(json.loads(l)["control"] or json.loads(l)["label"] for l in open(sys.argv[1],encoding="utf-8")))' \
+    "$dir/state/clicks.jsonl")
+  [ "$clicks" = "ユーザー名" ] || \
+    fail "the driver touched more than the label-named username field on a sign-in page (got: $clicks)"
   assert_no_grep "次へ" "$dir/state/clicks.jsonl" "the embedded driver submitted a sign-in form"
   assert_embedded_driver_safety "$dir"
 
