@@ -195,6 +195,7 @@ request_path = os.environ.get("FM_AWS_SSO_REQUEST_FILE", "")
 owned_target = None
 result = {"status": "tool-error", "reason": "request-state-ambiguous"}
 TERMINATION_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
+SIGNIN_TOKENS = ("sign in", "signin", "サインイン")
 
 def emit(status, reason=""):
     global result
@@ -259,6 +260,16 @@ def snapshot(session_id):
         const r = e.getBoundingClientRect();
         return s.visibility !== 'hidden' && s.display !== 'none' && r.width > 0 && r.height > 0;
       };
+      // A field's only accessible name can live in an associated <label>: the
+      // AWS sign-in step names its username input that way and leaves the input
+      // itself with no inner text, aria-label, or placeholder.
+      const labelsFor = [...document.querySelectorAll('label[for]')];
+      const labelText = (e) => {
+        const parts = labelsFor.filter((l) => l.htmlFor && l.htmlFor === e.id).map((l) => l.innerText || '');
+        const ancestor = e.closest ? e.closest('label') : null;
+        if (ancestor) parts.push(ancestor.innerText || '');
+        return parts.join(' ').trim();
+      };
       const controls = [...document.querySelectorAll('button,[role="button"],input,label,a')]
         .filter(visible)
         .map((e, i) => ({
@@ -268,7 +279,8 @@ def snapshot(session_id):
           role: (e.getAttribute('role') || '').toLowerCase(),
           text: (e.innerText || e.value || e.getAttribute('aria-label') || e.getAttribute('placeholder') || '').trim(),
           aria: (e.getAttribute('aria-label') || '').trim(),
-          placeholder: (e.getAttribute('placeholder') || '').trim()
+          placeholder: (e.getAttribute('placeholder') || '').trim(),
+          label: labelText(e)
         }));
       return JSON.stringify({
         url: location.href,
@@ -425,6 +437,7 @@ try:
 
         text = normalized(page.get("text"))
         controls = page.get("controls", [])
+        signin_page = any(token in text for token in SIGNIN_TOKENS)
         visible_password = [c for c in controls if c.get("tag") == "input" and c.get("type") == "password"]
         if visible_password:
             emit("human-action-required", "credential-form")
@@ -450,7 +463,12 @@ try:
         for control in controls:
             if control.get("tag") != "input" or control.get("type") not in ("", "text", "email"):
                 continue
-            label = normalized(" ".join((control.get("text", ""), control.get("aria", ""), control.get("placeholder", ""))))
+            label = normalized(" ".join((
+                control.get("text", ""),
+                control.get("aria", ""),
+                control.get("placeholder", ""),
+                control.get("label", ""),
+            )))
             if any(token in label for token in ("user", "email", "account", "username", "ユーザー", "アカウント")):
                 username_inputs.append(control)
         if username_inputs and not account_selected:
@@ -458,13 +476,16 @@ try:
                 emit("human-action-required", "credential-form")
                 break
             if len(username_inputs) != 1:
-                emit("human-action-required", "account-not-saved")
+                emit("human-action-required", "credential-form" if signin_page else "account-not-saved")
                 break
             if account_input_clicked:
                 if time.monotonic() - account_input_clicked_at < 2:
                     time.sleep(0.25)
                     continue
-                emit("human-action-required", "account-not-saved")
+                # No saved account surfaced. A page that also announces sign-in
+                # is asking for credential entry, which is the exact boundary to
+                # report instead of an unavailable saved account.
+                emit("human-action-required", "credential-form" if signin_page else "account-not-saved")
                 break
             if not click_control(session_id, username_inputs[0]["i"]):
                 raise RuntimeError("saved account input click failed")
@@ -506,7 +527,7 @@ try:
             emit("approved")
             break
 
-        if any(token in text for token in ("sign in", "signin", "サインイン")) and username_inputs:
+        if signin_page and username_inputs:
             emit("human-action-required", "credential-form")
             break
         if unrecognized_since is None:
