@@ -55,6 +55,15 @@ The device view renders blank-but-complete for about one second before its conte
 After the confirm step the portal routes to its own client-authorization view whose grant control is labeled `アクセスを許可`, beside a `アクセスを拒否` control, so a driver matching only `許可` stopped there with the ambiguous-request outcome.
 The exact-label set now covers `allow`, `許可`, `allow access`, and `アクセスを許可`; matching stays exact rather than substring precisely because the deny control shares a substring with the grant control.
 
+A later bounded run on 2026-08-04 reached a third live state and established the current credential boundary.
+Once this tenant's own portal session had expired in the operator's ordinary Chrome, the device verification URL redirected the owned background tab to the regional AWS sign-in step at `<region>.signin.aws/platform/<directory-id>/login`, and a read-only background visit to the portal start URL alone reached that same page.
+The initiating trigger is therefore the expired portal browser session, not the expired CLI token that started the refresh.
+The masking condition is that page's own markup: its first stage shows no password field, and it names its username input only through an associated `label[for]` element with no inner text, `aria-label`, or placeholder.
+Both credential detectors read only the input's own text, `aria-label`, and placeholder, so neither saw the field, the page matched nothing, and the four-second unrecognized-page budget produced the ambiguous-device-request outcome instead of naming the sign-in it needs.
+The driver now reads a control's associated `<label>` text when naming inputs, and reports a sign-in page whose configured saved account never surfaces as credential entry rather than as an unavailable saved account.
+The rerun of the exact repository-local command then stopped at the true boundary, reporting that the browser requires credential entry, which is a genuine human action no in-scope automation may complete.
+No credential was entered, the sign-in form was never submitted, and the operator's active tab and pointer did not move.
+
 One shared-cache behavior was observed directly and is worth recording, because it looks alarming and is not.
 During the successful run, the shared token for this session was refreshed in place by a concurrent consumer running under the ordinary home.
 That refresh carried the ordinary home's own client registration, which the isolated home never held, while the isolated run wrote its own token under its own registration in the isolated path.
@@ -78,7 +87,7 @@ It performs no network call, real login, AWS action, or browser control.
 bin/fm-test-run.sh tests/fm-aws-sso-refresh.test.sh
 ```
 
-Result on 2026-08-04: all cases passed for refresh success, still-valid credentials, saved-account request data, approval, unrecognized login output, ambiguity, credential and MFA stops, missing attachment, timeout, same-session serialization, distinct-session concurrency, child cleanup, output redaction, repository-local direnv configuration, ordinary profiles, and static-credential refusal.
+Result on 2026-08-04: all cases passed for refresh success, still-valid credentials, saved-account request data, approval, unrecognized login output, ambiguity, credential and MFA stops, the AWS sign-in username step, missing attachment, timeout, same-session serialization, distinct-session concurrency, child cleanup, output redaction, repository-local direnv configuration, ordinary profiles, and static-credential refusal.
 
 Both device-verification URL families are covered from named fixtures rather than one hardcoded shape.
 A regional `device.sso` URL and a portal-hosted `/start/#/device?user_code=...` URL each reach the adapter and refresh, while a portal device page carrying no code, and a device URL on a different Identity Center portal, both stop before the adapter.
@@ -90,7 +99,9 @@ One case replaces `browser_harness.helpers` with an in-process CDP double that s
 It covers the approved path (saved-account selection, then `Confirm and continue`, then `Allow`, in that order), unexpected page origin, ambiguous saved accounts, an ambiguous device-request state, a credential form, and a non-Chrome (Arc) attachment.
 A further scenario transcribes this Identity Center portal's own device flow from its live pages, including the blank-but-complete first render, the absence of a saved-account step on an already signed-in portal session, and the `アクセスを許可` grant beside its `アクセスを拒否` neighbor, and asserts that the driver confirms and grants without ever clicking the deny control.
 It also asserts the safety invariants from inside that code path: an owned `Target.createTarget` with `background: true`, no `Input.*` pointer or keyboard injection, no `Target.activateTarget` or `Page.bringToFront`, no physical-control tool on `PATH` (`osascript`, `cliclick`, `open` tripwires), close of only the owned target, and a mode-0600 request file that is unlinked afterwards.
-A mutation of the driver's confirm-button match was rejected by this case alone, which is the evidence that it exercises the driver rather than a stub.
+A further scenario transcribes the AWS sign-in username step reached once the portal session expired, including its label-named username input and its missing password field, and asserts that the driver reports credential entry and never submits the form.
+A mutation that drops the associated-label text from the driver's input naming turns that case red and returns it to the ambiguous-device-request outcome, which is the evidence that the case covers the live regression rather than the surrounding refusal.
+A mutation of the driver's confirm-button match was rejected by the portal case alone, which is the evidence that these cases exercise the driver rather than a stub.
 The remaining unverified surface is the binding between the real `browser_harness.helpers.cdp` and a live Chrome, which no deterministic test can cover.
 
 All generated ship, scout, and skill-led task instructions are covered by `tests/fm-brief.test.sh`.

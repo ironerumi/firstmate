@@ -876,6 +876,37 @@ EOF
   assert_absent "$dir/state/clicks.jsonl" "the embedded driver interacted with a credential form"
   assert_embedded_driver_safety "$dir"
 
+  # Transcribed from the live page reached on 2026-08-04 once this tenant's
+  # portal session had expired in the operator's own Chrome: the device URL
+  # redirects to the AWS sign-in username step, whose first stage shows no
+  # password field and names its input only through an associated <label>.
+  # Without that label the page matched nothing and the run timed out into the
+  # ambiguous-request outcome instead of naming the sign-in it needs.
+  dir=$(setup_embedded_driver_case cdp-signin-username-step)
+  cat > "$dir/scenario.json" <<'EOF'
+{
+  "pages": [
+    {
+      "url": "https://ap-northeast-1.signin.aws/platform/d-example/login",
+      "text": "サインイン先 example ユーザー名 次へ",
+      "controls": [
+        {"tag": "label", "text": "ユーザー名"},
+        {"tag": "input", "type": "text", "text": "", "label": "ユーザー名"},
+        {"tag": "button", "type": "submit", "text": "次へ"}
+      ]
+    }
+  ]
+}
+EOF
+  rc=$(run_embedded_driver "$dir")
+  expect_code 10 "$rc" "an AWS sign-in username step should require human action"
+  assert_grep "requires credential entry" "$dir/err" \
+    "the driver did not report the sign-in step as credential entry"
+  assert_no_grep "device request state is ambiguous" "$dir/err" \
+    "the driver still reported a sign-in step as an ambiguous device request"
+  assert_no_grep "次へ" "$dir/state/clicks.jsonl" "the embedded driver submitted a sign-in form"
+  assert_embedded_driver_safety "$dir"
+
   dir=$(setup_embedded_driver_case cdp-not-chrome)
   cat > "$dir/scenario.json" <<'EOF'
 {
