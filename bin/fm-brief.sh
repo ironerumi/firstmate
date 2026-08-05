@@ -6,9 +6,9 @@
 # description, acceptance criteria, and context, and may adjust other sections
 # when the task genuinely deviates (e.g. working an existing external PR instead
 # of shipping a new one).
-# Usage: fm-brief.sh <task-id> <repo-name> [--scout|--free-form] [--herdr-lab]
-#                     [--source firstmate|human] [--batch <id>] [--no-narration]
-#                     [--atomic <reason>]
+# Usage: fm-brief.sh <task-id> <repo-name> --mode <no-mistakes|direct-PR|local-only> [--free-form] [--herdr-lab]
+#                     [--source firstmate|human] [--batch <id>] [--no-narration] [--atomic <reason>]
+#        fm-brief.sh <task-id> <repo-name> --scout [--herdr-lab] [--source firstmate|human] [--batch <id>]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #                     [--source firstmate|human] [--batch <id>]
 #   --scout writes the scout contract instead: the deliverable is a report at
@@ -66,15 +66,24 @@
 #   The flag must be explicit because {TASK} is filled after scaffolding and the
 #   caller-supplied repo string cannot reliably identify this repo. Briefs made
 #   without it carry a loud declaration so an omitted contract cannot be silent.
-# For ship tasks, the definition of done is shaped by the project's delivery mode
-# (data/projects.md via fm-project-mode.sh; see the project-management skill
-# and AGENTS.md task lifecycle):
-#   no-mistakes  implement -> /no-mistakes pipeline -> PR -> captain merge (default)
-#   direct-PR    implement -> push + open PR via gh-axi (no pipeline) -> captain merge
+# For ship tasks, --mode is REQUIRED and shapes the definition of done. Firstmate
+# resolves it per task at intake (AGENTS.md section 7); data/projects.md holds the
+# captain's standing posture as context, and this script never reads it:
+#   no-mistakes  implement -> /no-mistakes pipeline -> PR -> configured merge authority
+#   direct-PR    implement -> push + open PR via gh-axi (no pipeline) -> configured merge authority
 #   local-only   implement on branch, stop and report "ready in branch" (no push/PR);
-#                captain approves, firstmate merges to local main
+#                the configured merge authority approves, firstmate merges to local main
+# no-mistakes-prod-only is a registry policy, not a task mode; resolve it to one of
+# the three concrete modes at intake before calling this script.
+# The generated ship brief records the chosen mode as a fixed machine-readable
+# "Delivery contract: mode=<mode>" line. bin/fm-spawn.sh reads that line and refuses
+# to launch a ship task whose explicit --mode disagrees, so an adjusted brief and the
+# recorded task metadata cannot drift apart.
 # Ship briefs begin with a worktree-isolation assertion before the branch step.
-# Scout tasks ignore mode - their deliverable is a report, not a merge.
+# --mode is refused on scout and secondmate scaffolds: a scout's deliverable is a
+# report rather than a merge, and a charter is not a delivery contract.
+# There is no --yolo flag here. The worker never owns approval decisions, so yolo is
+# a spawn-time and firstmate-side input only (AGENTS.md section 7).
 # Every scaffold's status protocol distinguishes the configured
 # declared-external-wait verb (FM_CLASSIFY_PAUSED_VERB, default "paused") from
 # "blocked:": pause for a known external wait expected to clear on its own,
@@ -106,10 +115,31 @@ esac
 # shellcheck source=bin/fm-classify-lib.sh
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 PAUSED_VERB=${FM_CLASSIFY_PAUSED_VERB:-$FM_CLASSIFY_PAUSED_VERB_DEFAULT}
+
+resolve_directory_input() {
+  local name=$1 path=$2 resolved
+  case "$path" in
+    /*) printf '%s\n' "$path"; return 0 ;;
+  esac
+  resolved=$(CDPATH='' cd -- "$path" 2>/dev/null && pwd -P) || {
+    echo "error: $name directory cannot be resolved: $path" >&2
+    return 1
+  }
+  printf '%s\n' "$resolved"
+}
+
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
-DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
-STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
+FM_HOME=$(resolve_directory_input FM_HOME "${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}") || exit 1
+if [ -n "${FM_DATA_OVERRIDE:-}" ]; then
+  DATA=$(resolve_directory_input FM_DATA_OVERRIDE "$FM_DATA_OVERRIDE") || exit 1
+else
+  DATA="$FM_HOME/data"
+fi
+if [ -n "${FM_STATE_OVERRIDE:-}" ]; then
+  STATE=$(resolve_directory_input FM_STATE_OVERRIDE "$FM_STATE_OVERRIDE") || exit 1
+else
+  STATE="$FM_HOME/state"
+fi
 KIND=ship
 FREE_FORM=0
 HERDR_LAB=0
@@ -119,48 +149,88 @@ ATOMIC_REASON=""
 ATOMIC=0
 SOURCE=human
 BATCH=unknown
+MODE=
+MODE_SET=0
 POS=()
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --scout) KIND=scout; shift ;;
-    --free-form) FREE_FORM=1; shift ;;
-    --secondmate) KIND=secondmate; shift ;;
-    --herdr-lab) HERDR_LAB=1; shift ;;
-    --no-projects) NO_PROJECTS=1; shift ;;
-    --no-narration) NO_NARRATION=1; shift ;;
-    --atomic)
-      [ $# -ge 2 ] || { echo "error: --atomic requires the concrete reason an intermediate state would be inconsistent" >&2; exit 1; }
-      ATOMIC_REASON=$2
-      ATOMIC=1
-      case "$ATOMIC_REASON" in
-        ''|--*) echo "error: --atomic requires the concrete reason an intermediate state would be inconsistent" >&2; exit 1 ;;
-        *$'\n'*) echo "error: --atomic reason must be one line" >&2; exit 1 ;;
-      esac
-      shift 2
-      ;;
-    --source)
-      [ $# -ge 2 ] || { echo "error: --source requires a value (firstmate|human)" >&2; exit 1; }
-      SOURCE=$2
-      case "$SOURCE" in
-        firstmate|human) ;;
-        *) echo "error: --source must be 'firstmate' or 'human' (got: $SOURCE)" >&2; exit 1 ;;
-      esac
-      shift 2
-      ;;
-    --batch)
-      [ $# -ge 2 ] || { echo "error: --batch requires a value" >&2; exit 1; }
-      BATCH=$2
-      [ -n "$BATCH" ] || { echo "error: --batch value must not be empty" >&2; exit 1; }
-      case "$BATCH" in
-        --*) echo "error: --batch requires a value" >&2; exit 1 ;;
-        *$'\n'*) echo "error: --batch value must be one line" >&2; exit 1 ;;
-      esac
-      shift 2
-      ;;
-    --*) echo "error: unknown option: $1" >&2; exit 1 ;;
-    *) POS+=("$1"); shift ;;
+want_value=
+for a in "$@"; do
+  if [ -n "$want_value" ]; then
+    case "$a" in
+      --*) echo "error: --$want_value requires a value" >&2; exit 1 ;;
+    esac
+    case "$want_value" in
+      mode) MODE=$a; MODE_SET=1 ;;
+      atomic)
+        ATOMIC_REASON=$a
+        ATOMIC=1
+        case "$ATOMIC_REASON" in
+          ''|*$'\n'*) echo "error: --atomic requires the concrete reason an intermediate state would be inconsistent" >&2; exit 1 ;;
+        esac
+        ;;
+      source)
+        SOURCE=$a
+        case "$SOURCE" in
+          firstmate|human) ;;
+          *) echo "error: --source must be 'firstmate' or 'human' (got: $SOURCE)" >&2; exit 1 ;;
+        esac
+        ;;
+      batch)
+        BATCH=$a
+        case "$BATCH" in
+          ''|*$'\n'*) echo "error: --batch value must not be empty or multi-line" >&2; exit 1 ;;
+        esac
+        ;;
+      *) echo "error: internal parser state for --$want_value" >&2; exit 1 ;;
+    esac
+    want_value=
+    continue
+  fi
+  case "$a" in
+    --scout) KIND=scout ;;
+    --free-form) FREE_FORM=1 ;;
+    --secondmate) KIND=secondmate ;;
+    --herdr-lab) HERDR_LAB=1 ;;
+    --no-projects) NO_PROJECTS=1 ;;
+    --no-narration) NO_NARRATION=1 ;;
+    --atomic) want_value=atomic ;;
+    --source) want_value=source ;;
+    --batch) want_value='batch' ;;
+    --mode) want_value=mode ;;
+    --mode=*) MODE=${a#--mode=}; MODE_SET=1 ;;
+    # yolo never reaches the worker: it is firstmate's approval authority, not a
+    # brief input. Refuse it loudly so it is never silently dropped here and then
+    # believed to have been recorded.
+    --yolo|--yolo=*) echo "error: --yolo is not a brief input; pass it to bin/fm-spawn.sh, which records the task's approval posture" >&2; exit 1 ;;
+    --*) echo "error: unknown option: $a" >&2; exit 1 ;;
+    *) POS+=("$a") ;;
   esac
 done
+if [ -n "$want_value" ]; then
+  case "$want_value" in
+    atomic) echo "error: --atomic requires the concrete reason an intermediate state would be inconsistent" >&2 ;;
+    *) echo "error: --$want_value requires a value" >&2 ;;
+  esac
+  exit 1
+fi
+
+# Ship delivery mode is an explicit per-task decision (AGENTS.md section 7). A
+# missing or invalid value stops the scaffold rather than silently defaulting.
+if [ "$KIND" = ship ]; then
+  [ "$MODE_SET" -eq 1 ] || {
+    echo "error: ship briefs require --mode <no-mistakes|direct-PR|local-only>; resolve it at intake from the captain's instruction and the project's registered posture in data/projects.md" >&2
+    exit 1
+  }
+  case "$MODE" in
+    no-mistakes|direct-PR|local-only) ;;
+    no-mistakes-prod-only)
+      echo "error: no-mistakes-prod-only is a registry policy, not a task mode; classify this task's surface and resolve it to no-mistakes or direct-PR at intake" >&2
+      exit 1 ;;
+    *) echo "error: --mode must be one of no-mistakes, direct-PR, local-only (got '$MODE')" >&2; exit 1 ;;
+  esac
+elif [ "$MODE_SET" -eq 1 ]; then
+  echo "error: --mode applies only to ship briefs; a scout delivers a report and a secondmate charter is not a delivery contract" >&2
+  exit 1
+fi
 ID=${POS[0]}
 
 if [ "$FREE_FORM" -eq 1 ] && [ "$KIND" != ship ]; then
@@ -392,13 +462,11 @@ echo "scaffolded: $BRIEF (scout; replace {TASK})"
 exit 0
 fi
 
-# Review ownership follows the registered delivery mode. Resolve it before choosing
-# the ship template so no-mistakes projects cannot receive a review-owning skill brief.
-# yolo does not affect the brief (it governs firstmate's approval behaviour), so discard it.
-read -r MODE _ <<EOF
-$("$FM_ROOT/bin/fm-project-mode.sh" "$REPO")
-EOF
-
+# Review ownership follows this task's explicit --mode (validated above as an
+# intake decision, not looked up here): no-mistakes always receives the full
+# pipeline-led contract, where the pipeline owns review. direct-PR and local-only
+# default to a concise skill-led contract naming one owning skill, unless
+# --free-form opts into the full mode-shaped contract.
 if [ "$NO_NARRATION" -eq 1 ] && [ "$MODE" != no-mistakes ]; then
   echo "error: --no-narration applies only to pipeline-led no-mistakes ship briefs" >&2
   exit 1
@@ -466,6 +534,7 @@ For a human decision, append one \`needs-decision:\` question with your recommen
 After an answer or cleared blocker, append the matching \`resolved:\` event before continuing.
 
 # Definition of done
+Delivery contract: mode=$MODE
 Follow the named skill through its terminal outcome.
 Append \`done:\` with the concrete artifact - corrected document path, ready branch, or full green PR URL - and stop.
 If the skill cannot complete safely, append \`blocked:\` or \`failed:\` with the concrete reason and preserve all work.
@@ -475,7 +544,10 @@ exit 0
 fi
 
 # Pipeline-led no-mistakes briefs and explicit free-form briefs share the full
-# delivery-mode-shaped safety envelope below.
+# delivery-mode-shaped safety envelope below. Setup / Rule 1 / Definition of done
+# are shaped by this task's explicit --mode, validated above; the generated DOD
+# opens with the fixed "Delivery contract: mode=<mode>" line that bin/fm-spawn.sh
+# checks against its own explicit --mode before launching.
 case "$MODE" in
   direct-PR)
     SETUP2=""
@@ -486,7 +558,8 @@ case "$MODE" in
    Firstmate sends it only under captain authority to override branch protection - a per-PR authorization or an explicit standing preference - with review complete, CI green, and branch protection the only blocker.'
     IFS= read -r -d '' DOD <<EOF || true
 # Definition of done
-This project ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
+Delivery contract: mode=direct-PR
+This task ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
 The task is complete only when committed on your branch.
 When it is implemented and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
@@ -497,14 +570,15 @@ EOF
     RULE1="1. Never push to any remote and never open a PR. Work only on your \`fm/$ID\` branch; firstmate handles the merge into local \`main\`."
     IFS= read -r -d '' DOD <<EOF || true
 # Definition of done
-This project ships **local-only**: no remote, no PR, no pipeline.
+Delivery contract: mode=local-only
+This task ships **local-only**: no remote, no PR, no pipeline.
 The task is complete only when committed on your branch \`fm/$ID\`. Do NOT push, do NOT open a PR, do NOT merge.
 Keep your branch a clean fast-forward onto the current default branch - if \`main\` has advanced, rebase onto it so the eventual merge stays a fast-forward.
 When it is implemented and committed, append \`done: ready in branch fm/$ID\` to the status file and stop.
 The configured merge authority approves the ready branch, then firstmate merges it into local \`main\` through the guarded fast-forward path.
 EOF
     ;;
-  *)  # no-mistakes (default)
+  *)  # no-mistakes
     SETUP2="
 2. Run \`no-mistakes doctor\`; if it reports the repo is not initialized here, run \`no-mistakes init\`."
     # shellcheck disable=SC2016  # single quotes are deliberate: the backtick-wrapped commands are literal brief text; only the '"$ID"' break-out interpolates.
@@ -518,12 +592,14 @@ EOF
     fi
     IFS= read -r -d '' DOD <<EOF || true
 # Definition of done
+Delivery contract: mode=no-mistakes
 The task is complete only when committed on your branch.
 When you believe it is complete, append \`done: {summary}\` to the status file and stop.
 Firstmate will then instruct you to run /no-mistakes to validate and ship a PR.
 
 You drive no-mistakes by responding to its gates, not by implementing fixes.
 Follow the guidance no-mistakes itself provides for the mechanics: it loads when you invoke /no-mistakes, and \`no-mistakes axi run --help\` plus the \`help\` lines in each \`axi\` response are authoritative and version-matched to the installed binary.
+When starting no-mistakes, make \`--intent\` preserve all relevant content from this brief's \`# Task\` section plus every later accepted Firstmate requirement, clarification, constraint, exclusion, and supersession, carrying only each requirement's current accepted form; retain direct requirements instead of substituting a diff summary, and exclude generic operational, status, delivery, and other scaffold boilerplate unless it is task-specific.
 Do not hand-edit, commit, or fix findings yourself while a run is active - the pipeline applies every fix.
 
 One run owns validation of this branch at a time, and starting a second one, pushing over it, or abandoning it cancels it and re-runs every step it had already finished.

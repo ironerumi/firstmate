@@ -9,11 +9,10 @@ It is not the away-mode injection wedge alarm, which answers a different questio
 
 ## What raises an alert
 
-`bin/fm-watch-arm.sh` repairs an unexpectedly dead watcher cycle in place before anything is reported.
-It re-arms up to `FM_WATCH_REPAIR_RETRIES` times (default 3, `FM_WATCH_REPAIR_DELAY` seconds apart) and then reports the repaired cycle's own outcome, so an ordinary transient watcher death never surfaces as a blind-turn banner.
-Repair is bounded deliberately: unbounded silent restarts would hide a genuinely broken watcher behind the appearance of live supervision.
-Once the budget is spent the arm stops retrying, prints the same typed failure line it always did, and raises one alert.
-The alert is one-shot per outage; a cycle that recovers re-arms it.
+`bin/fm-watch-arm.sh` resolves an unexpectedly dead watcher cycle against the watcher's terminal-delivery ledger before anything is reported; [`watcher-continuity.md`](watcher-continuity.md#arm-layer-cycle-contract) owns that resolution.
+Only a cycle with no matching delivery record is genuinely unexplained, and that failure is reported on the first attempt, with no retry: an ordinary transient watcher death that the watcher itself durably recorded is never misreported as a blind-turn banner in the first place.
+A genuinely unexplained cycle prints the same typed failure line it always did and raises one alert.
+The alert is one-shot per outage; a cycle that recovers clears it.
 
 `bin/fm-watch.sh` sweeps for parked work on a slow cadence (`FM_PARK_SCAN_INTERVAL`, default 300 seconds) and alerts once when a task has been waiting on a person for longer than `FM_PARK_ALERT_SECS` (default 1800).
 One sweep raises at most one alert: every task that newly crossed the threshold in that sweep is named, with its gate, in a single banner and a single Slack message, because a parked batch is one situation for the captain rather than N.
@@ -64,6 +63,6 @@ Every notifier routes through `FM_ALERT_EXEC`, which replaces the real channel w
 The value `discard` fires nothing.
 `tests/wake-helpers.sh` points the seam at a recorder for every suite that sources it, so no test can post a real notification or a real Slack message.
 
-`tests/fm-supervision-alert.test.sh` covers channel resolution, per-channel failure isolation, the credential boundary against a fake curl, bounded repair success and exhaustion, alert deduplication and re-arm, and every park exclusion.
-`tests/fm-watcher-lock.test.sh` continues to own the arm layer's cycle classification with repair disabled.
+`tests/fm-supervision-alert.test.sh` covers channel resolution, per-channel failure isolation, the credential boundary against a fake curl, the one-shot unexplained-cycle alert and its dedup and clear, and every park exclusion.
+`tests/fm-watcher-lock.test.sh` continues to own the arm layer's cycle classification.
 [`verification/supervision.md`](verification/supervision.md#supervision-alerts) records the manual macOS and Slack channel proof.
