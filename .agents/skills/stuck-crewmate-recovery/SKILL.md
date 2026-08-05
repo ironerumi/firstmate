@@ -44,6 +44,8 @@ Escalate in order:
    For example, for a single-Escape adapter: `FM_HOME=<this-firstmate-home> bin/fm-send.sh <window> --key Escape`.
 4. If the crewmate is genuinely wedged after redirection, exit the agent with the adapter's exit command and relaunch with the same brief plus a `progress so far` note appended to it.
    Genuine wedging means looping, unresponsive, repeating the same obstacle, or truly dead.
-   A low context reading is not wedging; modern harnesses auto-compact and keep going.
+   A low context reading is not wedging.
+   Non-Claude harnesses auto-compact on their own and need no action here.
+   Claude auto-compaction is disabled in this environment: for a Claude worker, a low reading is still not wedging, but load `claude-crew-compaction` for its below-50% proactive-compaction trigger rather than treating it as harmless.
    The worktree and commits persist, so relaunch is cheap.
 5. If a second relaunch fails too, write `failed` to the backlog and tell the captain the plain failure, preserved work, and consequence using `AGENTS.md` section 9; do not mention metadata, harness, window, or worktree unless the path itself is needed for action.
