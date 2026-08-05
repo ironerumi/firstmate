@@ -2,7 +2,7 @@
 
 This document is the authoritative human-readable contract for the validation-owner guard.
 `bin/fm-nm-guard-lib.sh` is the single decision owner.
-`bin/fm-nm-status-lib.sh` is the single owner of reading a no-mistakes run from a worktree, shared with `bin/fm-crew-state.sh`.
+`bin/fm-nm-status-lib.sh` is the single owner of reading a no-mistakes run from a worktree for this guard; firstmate's own current-state reader reads the pipeline independently through `bin/fm-nm-run-lib.sh`, so the two are deliberately uncoupled.
 `bin/fm-nm-guard-shim.sh` is the transport, reached through the `bin/shims/` names it is symlinked as.
 
 It is a worker-side sibling of the primary-session seatbelts, which share the same shape but not the same mechanism: the watcher-arm seatbelt (`docs/arm-pretool-check.md`), the cd-guard (`docs/cd-guard.md`), the delegation guard (`docs/subagent-guard.md`), and the turn-end supervision guard (`docs/turnend-guard.md`).
@@ -119,5 +119,4 @@ Run:
 bash -n bin/fm-nm-guard-shim.sh
 shellcheck bin/fm-nm-guard-shim.sh bin/fm-nm-guard-lib.sh bin/fm-nm-status-lib.sh
 tests/fm-nm-guard.test.sh
-tests/fm-crew-state.test.sh
 ```

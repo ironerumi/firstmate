@@ -292,7 +292,7 @@ The safe command-channel contract is covered without a notification by `tests/fm
 
 ## Supervision alerts
 
-The unrepairable-watcher and parked-work alerts of [`../supervision-alerts.md`](../supervision-alerts.md) were verified on 2026-07-30 on macOS 15.7.7.
+The unexplained-watcher-cycle and parked-work alerts of [`../supervision-alerts.md`](../supervision-alerts.md) were verified on 2026-07-30 on macOS 15.7.7.
 
 The macOS channel uses the same argv-safe form, with the title supplied as an argv item so each alert can name its own outcome:
 
@@ -316,17 +316,17 @@ The behavioral guarantees run as an ordinary suite:
 tests/fm-supervision-alert.test.sh
 ```
 
-Observed output on 2026-07-30:
+Observed output on 2026-08-05, after the arm layer adopted the terminal-delivery ledger and the alert became a one-shot on the first unexplained cycle:
 
 ```
 ok - alert channels resolve from config and fail independently
 ok - off disables every channel without reporting a failure
 ok - the slack token is read, used on stdin, and never exposed
 ok - an unavailable slack credential degrades to a logged skip
-ok - an unexpected watcher death self-repairs without a blind-turn failure
-ok - retry exhaustion stops retrying and alerts once through both channels
+ok - a watcher that delivers a wake never alerts
+ok - an unexplained cycle fails on the first attempt and alerts once through both channels
 ok - a continuing watcher outage alerts once, not once per re-arm
-ok - a recovered watcher re-arms the outage alert
+ok - a recovered watcher clears the outage alert
 ok - work waiting less than the threshold is not a park
 ok - a merge decision parked past the threshold alerts exactly once
 ok - clearing the gate re-arms park alerting
