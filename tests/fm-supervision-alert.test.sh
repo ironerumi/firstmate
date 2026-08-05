@@ -3,10 +3,11 @@
 # can reach: an unrepairable watcher, and work parked on a person.
 #
 # Covers bin/fm-alert-lib.sh (channel resolution, per-channel isolation, the
-# credential boundary, one-shot delivery), bin/fm-watch-arm.sh's bounded repair
-# loop, and bin/fm-watch.sh's park scan including the exclusions that keep it
-# from firing on ordinary working time, declared external waits, idle
-# secondmates, and queue items with nothing waiting on a person.
+# credential boundary, one-shot delivery), bin/fm-watch-arm.sh's one-shot
+# unexplained-cycle alert, and bin/fm-watch.sh's park scan including the
+# exclusions that keep it from firing on ordinary working time, declared
+# external waits, idle secondmates, and queue items with nothing waiting on a
+# person.
 #
 # Every alert here goes through the FM_ALERT_EXEC recorder installed by
 # tests/wake-helpers.sh, so no case can post a real notification or a real Slack
@@ -132,74 +133,85 @@ CURL
   pass "an unavailable slack credential degrades to a logged skip"
 }
 
-# --- 3. bounded watcher repair ------------------------------------------------
+# --- 3. one-shot unexplained-cycle alert --------------------------------------
 #
 # The arm layer resolves its watcher from its own directory, so a controllable
-# watcher means a temp copy of the three files the arm actually loads.
+# watcher means a temp copy of the three files the arm actually loads. A cycle
+# that ends without a reason line is resolved against the watcher's delivery
+# ledger (bin/fm-watch-arm.sh's close_unobserved_cycle); a fake watcher that
+# never calls wake() never publishes a delivery record, so its clean exit stays
+# genuinely unexplained and fails on the first attempt - there is no retry.
 
-arm_lab() {  # <name> <fail-count> -> lab dir
-  local name=$1 fail_count=$2 lab
+arm_lab() {  # <name> <mode: fail|succeed> -> lab dir
+  local name=$1 fake_mode=$2 lab
   lab="$TMP_ROOT/$name"
   mkdir -p "$lab/bin" "$lab/state" "$lab/config"
   printf 'osascript\nslack\n' > "$lab/config/supervision-alert"
   cp -f "$ROOT/bin/fm-watch-arm.sh" "$ROOT/bin/fm-wake-lib.sh" "$ROOT/bin/fm-alert-lib.sh" "$lab/bin/"
   printf '0\n' > "$lab/launches"
-  cat > "$lab/bin/fm-watch.sh" <<WATCH
+  if [ "$fake_mode" = fail ]; then
+    cat > "$lab/bin/fm-watch.sh" <<WATCH
 #!/usr/bin/env bash
-# Fake watcher: dies unexplained for the first $fail_count launches, then
-# reports one actionable wake.
+# Fake watcher: dies unexplained every launch (never calls wake, so it never
+# publishes a delivery record).
 n=\$(cat "$lab/launches")
 n=\$((n + 1))
 printf '%s\n' "\$n" > "$lab/launches"
-[ "\$n" -le "$fail_count" ] && exit 0
+exit 0
+WATCH
+  else
+    cat > "$lab/bin/fm-watch.sh" <<WATCH
+#!/usr/bin/env bash
+n=\$(cat "$lab/launches")
+n=\$((n + 1))
+printf '%s\n' "\$n" > "$lab/launches"
 echo "signal: $lab/state/demo.status"
 exit 0
 WATCH
+  fi
   chmod +x "$lab/bin/fm-watch.sh"
   printf '%s\n' "$lab"
 }
 
-run_arm() {  # <lab> <retries> <stdout-file> <stderr-file> [alert-log]
-  local lab=$1 retries=$2 out=$3 err=$4 log=${5:-/dev/null}
+run_arm() {  # <lab> <stdout-file> <stderr-file> [alert-log]
+  local lab=$1 out=$2 err=$3 log=${4:-/dev/null}
   FM_HOME="$lab" FM_STATE_OVERRIDE="$lab/state" FM_CONFIG_OVERRIDE="$lab/config" \
-  FM_ALERT_LOG="$log" FM_WATCH_REPAIR_RETRIES="$retries" FM_WATCH_REPAIR_DELAY=0 \
+  FM_ALERT_LOG="$log" \
   FM_ARM_CONFIRM_TIMEOUT=1 "$lab/bin/fm-watch-arm.sh" > "$out" 2> "$err"
 }
 
-test_repair_succeeds() {
+test_healthy_cycle_never_alerts() {
   local lab out err log code
-  lab=$(arm_lab repair-success 2)
+  lab=$(arm_lab healthy-cycle succeed)
   out="$lab/out"; err="$lab/err"; log="$lab/alerts.log"
-  run_arm "$lab" 3 "$out" "$err" "$log"; code=$?
-  expect_code 0 "$code" "a repaired cycle must succeed"
-  assert_contains "$(cat "$out")" "signal:" "the repaired cycle's wake must be propagated"
-  assert_not_contains "$(cat "$out")" "FAILED" "a successful repair must not report a failure"
-  [ "$(cat "$lab/launches")" = 3 ] || fail "repair must re-arm, got $(cat "$lab/launches") launches"
-  assert_contains "$(cat "$err")" "repairing dead cycle (attempt 1/3)" "repair progress belongs on stderr"
-  [ "$(alert_lines "$log")" = 0 ] || fail "a successful repair must not alert"
-  pass "an unexpected watcher death self-repairs without a blind-turn failure"
+  run_arm "$lab" "$out" "$err" "$log"; code=$?
+  expect_code 0 "$code" "a healthy cycle must succeed"
+  assert_contains "$(cat "$out")" "signal:" "the cycle's wake must be propagated"
+  assert_not_contains "$(cat "$out")" "FAILED" "a successful cycle must not report a failure"
+  [ "$(alert_lines "$log")" = 0 ] || fail "a successful cycle must not alert"
+  pass "a watcher that delivers a wake never alerts"
 }
 
-test_repair_exhaustion_alerts() {
+test_unexplained_cycle_alerts_once() {
   local lab out err log code
-  lab=$(arm_lab repair-exhaustion 99)
+  lab=$(arm_lab unexplained-cycle fail)
   out="$lab/out"; err="$lab/err"; log="$lab/alerts.log"
-  run_arm "$lab" 2 "$out" "$err" "$log"; code=$?
-  expect_code 1 "$code" "an unrepairable watcher must still fail loudly"
+  run_arm "$lab" "$out" "$err" "$log"; code=$?
+  expect_code 1 "$code" "an unexplained watcher death must fail loudly on the first attempt"
   assert_contains "$(cat "$out")" "watcher: FAILED - cycle ended without an actionable reason" \
-    "the typed failure line must survive repair"
-  [ "$(cat "$lab/launches")" = 3 ] || fail "repair must be bounded, got $(cat "$lab/launches") launches"
-  [ "$(alert_lines "$log" osascript)" = 1 ] || fail "exhaustion must raise exactly one macOS alert"
-  [ "$(alert_lines "$log" slack)" = 1 ] || fail "exhaustion must raise exactly one slack alert"
+    "the typed failure line must be reported"
+  [ "$(cat "$lab/launches")" = 1 ] || fail "there is no retry, got $(cat "$lab/launches") launches"
+  [ "$(alert_lines "$log" osascript)" = 1 ] || fail "the failure must raise exactly one macOS alert"
+  [ "$(alert_lines "$log" slack)" = 1 ] || fail "the failure must raise exactly one slack alert"
   assert_contains "$(cat "$log")" "supervision is down" "the alert must name the outcome"
-  pass "retry exhaustion stops retrying and alerts once through both channels"
+  pass "an unexplained cycle fails on the first attempt and alerts once through both channels"
 
   # The same outage must not re-alert on every re-arm.
-  run_arm "$lab" 2 "$out" "$err" "$log"
+  run_arm "$lab" "$out" "$err" "$log"
   [ "$(alert_lines "$log" slack)" = 1 ] || fail "a continuing outage must not alert again"
   pass "a continuing watcher outage alerts once, not once per re-arm"
 
-  # A recovered cycle re-arms the alert, so the next outage is heard.
+  # A recovered cycle clears the alert marker, so the next outage is heard.
   printf '0\n' > "$lab/launches"
   cat > "$lab/bin/fm-watch.sh" <<WATCH
 #!/usr/bin/env bash
@@ -207,9 +219,9 @@ echo "signal: $lab/state/demo.status"
 exit 0
 WATCH
   chmod +x "$lab/bin/fm-watch.sh"
-  run_arm "$lab" 2 "$out" "$err" "$log" || fail "the recovered cycle must succeed"
-  [ -e "$lab/state/.alert-watch-repair" ] && fail "a recovered cycle must re-arm the alert"
-  pass "a recovered watcher re-arms the outage alert"
+  run_arm "$lab" "$out" "$err" "$log" || fail "the recovered cycle must succeed"
+  [ -e "$lab/state/.alert-watch-repair" ] && fail "a recovered cycle must clear the alert marker"
+  pass "a recovered watcher clears the outage alert"
 }
 
 # --- 4. park alerting ---------------------------------------------------------
@@ -363,8 +375,8 @@ test_park_exclusions() {
 
 test_channels_and_isolation
 test_slack_credential_boundary
-test_repair_succeeds
-test_repair_exhaustion_alerts
+test_healthy_cycle_never_alerts
+test_unexplained_cycle_alerts_once
 test_park_alerts_once
 test_park_open_decision
 test_park_batch_collapses
