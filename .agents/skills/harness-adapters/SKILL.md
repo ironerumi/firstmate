@@ -179,7 +179,7 @@ The shared symptom is a healthy-looking pane with no work in progress, so each a
 | Interrupt | single Escape |
 | Skill invocation | `/<skill>` (e.g. `/no-mistakes`) |
 
-Claude auto-compaction is disabled in this environment; load `claude-crew-compaction` when a live Claude worker's displayed remaining context reads below 50%, rather than treating a low reading as harmless.
+Claude auto-compaction is disabled in this environment; load `claude-crew-compaction` when a live Claude crewmate's displayed remaining context reads below 50%, rather than treating a low reading as harmless.
 
 First launch in a fresh worktree, or first ever on a machine, may show a trust or bypass-permissions confirmation.
 After every spawn, peek the pane within about 20 seconds.
