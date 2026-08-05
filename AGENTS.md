@@ -424,12 +424,13 @@ Load `stuck-crewmate-recovery` after a stale wake, looping or confused pane, ans
 
 ### Claude context stub
 
-Invoke `claude-crew-compaction` when a Claude crewmate's or secondmate's displayed remaining context reads below 50%.
+Invoke `claude-crew-compaction` when a Claude crewmate's displayed remaining context reads below 50%.
 The skill owns the full handoff/compact/resume procedure; these safety facts remain inline:
 
 - Claude auto-compaction is disabled in this environment, so a low reading is never harmless and is never dismissed as ordinary auto-compact.
 - Never start the sequence during an active no-mistakes action, an active gate response, a commit, a push, or another ownership-sensitive transition; wait for the current bounded stage to finish.
-- A `/compact` response alone is not completion: Claude does not auto-resume, so the mandatory `/handoff resume <plan-doc-path>` nudge and confirming the same task is actively running again are both required.
+- A `/compact` response alone is not completion: Claude does not auto-resume, so the mandatory `/handoff resume <absolute-plan-document-path>` nudge and confirming the same task actually continued are both required.
+- Away mode cannot inspect a worker's remaining context; when model-owned supervision resumes, check every live Claude worker before dispatching new work.
 
 ## 9. Escalation and captain etiquette
 
@@ -533,7 +534,7 @@ These skills are not captain-invocable; load them only at their precise triggers
 - `project-management` - load before adding, creating, removing, or initializing a project.
   Cloning or registering a project is add intake and uses the same trigger.
 - `stuck-crewmate-recovery` - load when the session-start digest reports an ordinary direct report's endpoint dead or its metadata has no window, or after a stale wake, looping pane, repeated confusion, an answered-by-brief question, an unresponsive crewmate, or a failed steer.
-- `claude-crew-compaction` - load when a live Claude crewmate's or secondmate's displayed remaining context reads below 50%, and for its mandatory post-compaction resume nudge and verification.
+- `claude-crew-compaction` - load when a live Claude crewmate's displayed remaining context reads below 50%, and for its mandatory post-compaction resume nudge and verification.
 - `secondmate-provisioning` - load before creating, seeding, validating, launching, handing backlog to, recovering, pushing inherited local material into, or retiring a secondmate home, and before editing `data/secondmates.md`.
 - `decision-hold-lifecycle` - load before treating an investigation or visual review as complete, before ending a visual review that exposed a decision, and when recording or routing the captain's answer.
 - `process-event-sources` - load before arming a long-polling source, and on any `procevent <adapter> <source-id> <sequence>` check wake.
