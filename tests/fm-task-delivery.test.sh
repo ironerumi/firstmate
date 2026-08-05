@@ -44,6 +44,7 @@ write_brief() {  # <home> <id> [<recorded-mode>]
   local home=$1 id=$2 mode=${3:-}
   mkdir -p "$home/data/$id"
   {
+    printf 'source: human\nbatch_id: test-fixture\n'
     printf 'You are a crewmate.\n\n# Definition of done\n'
     [ -z "$mode" ] || printf 'Delivery contract: mode=%s\n' "$mode"
   } > "$home/data/$id/brief.md"

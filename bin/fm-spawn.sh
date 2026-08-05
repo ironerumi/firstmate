@@ -1222,24 +1222,6 @@ if [ "$KIND" = secondmate ]; then
       propagate_secondmate_inheritance "$FM_HOME" "$PROJ_ABS" "$CONFIG" "$DATA" \
       || echo "warning: secondmate $ID inheritance failed for $PROJ_ABS" >&2
   fi
-  if [ -f "$PROJ_ABS/data/charter.md" ]; then
-    BRIEF="$PROJ_ABS/data/charter.md"
-  else
-    BRIEF="$DATA/$ID/brief.md"
-  fi
-else
-  PROJ_ABS="$(cd "$(resolve_project_dir_arg "$PROJ")" && pwd)"
-  WT=""
-  BRIEF="$DATA/$ID/brief.md"
-fi
-[ -f "$BRIEF" ] || { echo "error: no brief at $BRIEF" >&2; exit 1; }
-if [ "$ALLOW_UNSTAMPED" -eq 0 ] \
-   && { ! grep -q '^source:' "$BRIEF" || ! grep -q '^batch_id:' "$BRIEF"; }; then
-  echo "error: unstamped brief at $BRIEF; restamp before dispatch by appending these two lines:" >&2
-  echo "source: firstmate" >&2
-  echo "batch_id: <shared-batch-id>" >&2
-  echo "Use --allow-unstamped only for an intentional legacy-brief bypass." >&2
-  exit 1
 fi
 
 delivery_rigor_rank() {  # <mode> -> 3 (most rigor) .. 1 (least); 0 = not a task mode

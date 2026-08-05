@@ -2,10 +2,11 @@
 # fm-nm-status-lib.sh - the single owner of reading a no-mistakes run from a
 # worktree.
 #
-# Two callers need the same three primitives and must not drift apart:
-#   - bin/fm-crew-state.sh, which reconciles a crew's CURRENT state for firstmate
-#   - bin/fm-nm-guard-lib.sh, which decides whether a worker command would take
-#     validation ownership away from a live run (docs/nm-validation-owner-guard.md)
+# The only caller is bin/fm-nm-guard-lib.sh, which decides whether a worker
+# command would take validation ownership away from a live run
+# (docs/nm-validation-owner-guard.md). bin/fm-crew-state.sh used to share these
+# primitives, but now reads the pipeline through bin/fm-nm-run-lib.sh instead, so
+# the two are independent readers by design - do not assume a coupling here.
 #
 # The primitives are: a bounded invocation of the real no-mistakes binary in a
 # given worktree, a scalar read of a TOON key from its output, and the
