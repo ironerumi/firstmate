@@ -2003,6 +2003,15 @@ const strip = (text) => text.replace(new RegExp(`${ESC}\\[[0-9;]*m`, "g"), "");
 const check = (condition, message) => {
   if (!condition) throw new Error(message);
 };
+// The working-row slot is deliberately shared with the standalone Pi Calm
+// extension, which installs its own boat under the same key. Pi replaces widgets
+// per key, so a session loading both Calms renders exactly one boat. Renaming
+// this slot in only one implementation silently restores the duplicate-boat
+// defect this suite exists to prevent.
+check(
+  CALM_WORKING_SHIP_WIDGET_KEY === "calm-working-ship",
+  `Firstmate Calm claims a private working-row widget key (${CALM_WORKING_SHIP_WIDGET_KEY}); it must share the standalone Calm slot "calm-working-ship" so dual-install sessions render one boat`,
+);
 const sailOf = (frame) => {
   const row = strip(frame[0]);
   if (row.includes("<|")) return "<|";
