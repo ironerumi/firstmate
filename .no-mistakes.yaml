@@ -9,6 +9,25 @@
 # HEAD-continuity guard; see docs/architecture.md "No-mistakes gate authority boundary."
 disable_project_settings: true
 
+review:
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        Oracle Pro consult (advisory only; you remain the structured-findings owner).
+        Before finalizing review findings, run one GPT-5.5 Pro consult on the changed files when the delta is non-trivial code or high-risk config (skip pure typo/docs-only if Pro adds no value).
+
+        Use the daemon-visible helper (not a zsh alias):
+          nm-oracle-pro-consult -p "<review prompt>" -f <changed-files...>
+
+        Prompt must ask for: correctness bugs, security issues, regressions vs stated intent, missing tests, and whether each issue is blocking vs nit. Attach only the changed files plus the minimum necessary neighbors (prefer under ~20 files; if larger, attach the highest-risk subset and summarize the rest yourself).
+
+        Rules:
+        - You own the no-mistakes findings JSON. Oracle output is evidence, not authority.
+        - Translate only high-signal oracle points you can verify in the tree into findings.
+        - If oracle fails, times out, needs interactive login, or is unavailable: continue with your own review and note "oracle-pro consult unavailable" in the review summary; do not block the pipeline solely on oracle failure.
+        - Do not spend the consult on formatter/nits the lint step owns.
+        - Never put secrets into the oracle prompt or file set.
+
 # Trusted documentation placement policy for the Document step.
 # The audience inventory and coding guideline own the detail; keep this as a
 # pointer so gate instructions cannot become a second prose policy.
