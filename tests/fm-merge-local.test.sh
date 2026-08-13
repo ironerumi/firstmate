@@ -4,15 +4,10 @@
 # Matrix:
 #   (a) baseline: an approved local-only branch fast-forwards the project's
 #       default branch (origin-default resolution)
-#   (b) home-checkout landing: when the project IS this home's primary
-#       branch and the default branch stays untouched
-#       branch of that name exists in the project (no weakening)
-#       when the home checkout sits on another branch
-#   (e) non-local-only tasks are refused
-#   (f) the test runner keeps this file in the pr-forge family, so --changed
+#   (b) non-local-only tasks are refused
+#   (c) the test runner keeps this file in the pr-forge family, so --changed
 #       selection on bin/fm-merge-local.sh still runs it
-#   (g) a change to bin/fm-tangle* (home of the landing-branch helper) also
-#       selects this file through the runner's changed-file map
+#   (d) a change to bin/fm-tangle* also selects this file through the runner map
 set -u
 
 # shellcheck source=tests/lib.sh
