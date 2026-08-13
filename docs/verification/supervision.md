@@ -48,13 +48,122 @@ The earlier `sendUserMessage` counterfactual raced the positional prompt; the cu
 The installed pi-signed 0.82.0 wrapper repeated the Pi primary extension and session-start path on 2026-07-27.
 [`runtime-backends.md`](runtime-backends.md#tmux) owns the shared-ancestry evidence and authoritative selection-marker boundary.
 
+### Run-tier source vocabulary and context-reset injection
+
+The run tier depends on three facts only the vendor can supply: the session-open source it reports, whether hook stdout reaches model context on a context-RESET open rather than only a cold one, and whether a worker the hook detaches survives the hook returning.
+The first two were measured on 2026-08-05 against a throwaway Firstmate-shaped lab carrying each harness's own tracked registration with a recorder standing in for `bin/fm-sessionstart-run.sh`.
+Each open printed a source-stamped token, and the model was asked to quote that token back, so producing hook stdout could never be mistaken for delivering it.
+The third is recorded below.
+
+| Harness | Version verified | Cold open | Context reset | Context-preserving reopen |
+| --- | --- | --- | --- | --- |
+| Claude | 2.1.222 (Claude Code) | `source=startup`, token quoted back in both `-p` and the TUI | `/clear` reports `source=clear` and `/compact` reports `source=compact`; both re-injected a fresh token that the model quoted back | `claude --continue` reports `source=resume` |
+| Codex | codex-cli 0.146.0 | `source=startup` under `codex exec`, token quoted back | Not reachable from a tracked project registration; see the limit below | `codex exec resume --last` reports `source=resume` |
+| Pi | 0.82.0 | `source=startup`, token quoted back in both `-p` and the TUI | `/new` raises `session_start` reason `new`, which the extension maps to `clear`; `/compact` raises `session_compact`, and both freshly injected source-stamped tokens were quoted back | `pi -c` reports reason `startup`, not `resume` |
+
+Two harness-specific consequences are load-bearing rather than incidental.
+
+Codex's interactive TUI fired no project `SessionStart` hook at all in the same lab where `codex exec` fired it reliably, which matches the earlier 2026-07-28 finding for 0.145.0.
+Codex's run tier is therefore verified only for `codex exec` startup and context-preserving resume.
+The interactive TUI is a known uncovered gap: Firstmate has no tracked session-open, compaction, or re-emit channel there, ships no global hook, and does not claim instruction-refresh delivery for that surface.
+
+Pi compaction was verified on 2026-08-05 with Pi 0.82.0 in the same throwaway lab after setting `.pi/settings.json` `compaction.keepRecentTokens` to 200 and completing one substantial assistant-prose turn before issuing `/compact`.
+Pi reported `Compacted from 7,697 tokens`, the recorder observed `session_compact`, and the model quoted the freshly injected `source=compact` token back.
+Both preconditions are load-bearing: the stock 20,000-token keep window exceeds a small lab session, and `AgentSession.compact()` aborts an in-flight turn before measuring compactable history, which otherwise discards that turn and reports `Nothing to compact (session too small)`.
+Tool output alone does not grow compactable context; the completed assistant prose does.
+
+Observed compaction output and recorder source:
+
+```text
+Compacted from 7,697 tokens
+compact
+```
+
+Pi disagrees with Claude and Codex on `resume`: a new Pi process continuing a session reports `startup`, and Pi's `resume` reason is reserved for an in-process session switch.
+The current adapter classification and baseline mechanics are owned by [`../sessionstart-nudge.md`](../sessionstart-nudge.md#harness-transports) and the `bin/fm-session-start.sh` header.
+Their continuation classification is covered by portable tests, not claimed as live validation in this record.
+
+### Post-start instruction refresh
+
+The isolated real-Pi instruction-refresh regression ran on 2026-08-11 with Pi 0.84.0.
+It used a scratch `FM_HOME`, a private tmux socket, and a disposable Firstmate checkout.
+The historical `origin/main` implementation first reproduced the stale original marker after a real compaction.
+The current implementation then recorded `source=startup`, changed and committed the lab's `AGENTS.md`, compacted the same real Pi session, and answered with the replacement marker.
+The fixed run also proved that the true-start baseline remained different from the updated file after compaction.
+
+```sh
+FM_SESSIONSTART_INSTRUCTION_REFRESH_LIVE_E2E=1 \
+FM_SESSIONSTART_INSTRUCTION_REFRESH_REF=origin/main \
+FM_SESSIONSTART_INSTRUCTION_REFRESH_EXPECT=stale \
+tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh
+# ok - Pi 0.84.0 reproduces stale AGENTS.md after a real compact
+
+FM_SESSIONSTART_INSTRUCTION_REFRESH_LIVE_E2E=1 \
+tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh
+# ok - Pi 0.84.0 re-injects updated AGENTS.md after a real compact in an isolated session
+```
+
+This is live coverage only for Pi compaction.
+The portable session-start tests cover continuation classification, baseline immutability, and source-routing behavior.
+Pi compaction is the only supported stale-cache refresh pair.
+Codex exec exposes only startup and context-preserving resume through tracked registration; Codex interactive reset behavior remains uncovered rather than inferred from direct wrapper invocation.
+
+### Detached session-open workers survive the hook
+
+Session start composes its digest from local reads and runs every external-network call in a worker detached by the hook (`bin/fm-startup-network.sh`), so a harness that reaped the hook's process tree would silently stop running the sweeps rather than merely delaying them.
+Verified on 2026-08-06 with Claude Code 2.1.222 in a throwaway lab whose `bin/fm-bootstrap.sh` sleeps 6s before writing a marker, so the marker can exist only if the worker outlived the hook and the whole `claude -p` process.
+
+```text
+$ claude -p --permission-mode bypassPermissions '<quote the session-start token>'
+FMHOOKTOKEN-startup-1-abc123
+--- claude exited at 13:38:40; polling for the detached worker's marker ---
+MARKER at +4s: detached worker survived the hook
+state=done
+started=1786048716
+finished=1786048723
+```
+
+The worker started before the harness exited and published 6s after it was gone.
+
+The latency this buys was re-measured on 2026-08-06 against default-branch tip `8398d31`, in a throwaway home holding one remote secondmate whose host hangs 25s per SSH connection (an `FM_SSH_BIN`-shaped stub; no real host was contacted).
+Both runs used the same fixture and the same `bin/fm-session-start.sh` invocation, differing only in which checkout supplied the script:
+
+```text
+before (8398d31)   real 1m21.15s   3 blocking SSH attempts inside the digest
+after              real 0m3.36s    digest prints IN PROGRESS; the same 3 SSH attempts
+                                   run in the detached worker and finish at +77s
+```
+
+The remaining seconds are entirely local subprocess work; the `NETWORK CHECKS` section named GitHub authentication, dead-secondmate relaunch, secondmate convergence, pending handoff delivery, and project clone refresh as not yet confirmed.
+
+Deferring the sweeps changed only when they run, not what they conclude.
+The deferred worker's published report was byte-identical to the three sweep lines the blocking baseline printed, on the same fixture:
+
+```text
+SECONDMATE_LIVENESS: secondmate ios: skipped: remote host unavailable or endpoint state unknown; route preserved on remote-mac
+SECONDMATE_SYNC: secondmate ios: skipped: remote tracked-file sync failed on remote-mac:
+SECONDMATE_SYNC: secondmate ios: skipped: remote inheritance failed on remote-mac:
+```
+
+The unreachable route was preserved rather than relaunched in both runs, and the result surfaced durably as a queued `check: startup-network` wake once the worker finished.
+
+Codex and Pi were not installed as run-tier labs in this measurement, so their evidence for this fact is NOT refreshed; `tests/fm-sessionstart-hook-live-e2e.test.sh` asserts it for every installed run-tier harness and is the command that refreshes this record.
+A harness that did reap the worker degrades loudly rather than silently: the leftover record reads as an abandoned run needing a rerun, and the next session start re-derives every finding, because these sweeps are idempotent detectors.
+
 Current deterministic and live entry points:
 
 ```sh
 tests/fm-sessionstart-nudge.test.sh
+tests/fm-session-start.test.sh
+tests/fm-startup-network.test.sh
+FM_SESSIONSTART_HOOK_LIVE_E2E=1 tests/fm-sessionstart-hook-live-e2e.test.sh
+FM_SESSIONSTART_INSTRUCTION_REFRESH_LIVE_E2E=1 tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh
 FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
 FM_OPENCODE_LIVE_E2E=1 tests/fm-opencode-primary-live-e2e.test.sh
 ```
+
+`tests/fm-sessionstart-hook-live-e2e.test.sh` is the command that refreshes the table above; run it after every run-tier harness upgrade.
+It reports an absent harness explicitly, asserts Pi compaction rather than noting it, and refuses to pass when no run-tier harness was installed at all.
 
 The Ahoy first-message boundary was reverified on 2026-07-22 with Pi 0.81.1 and OpenCode 1.17.18.
 Marked current operational input and the two exact legacy compatibility shapes selected Bearings, while genuine near-miss captain messages remained real boundaries.
@@ -82,7 +191,7 @@ codex exec --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-
 ```
 
 The daemon refused with `managed standalone Codex install not found`, and an interactive TUI worker neither starts nor attaches to the app-server control socket, so no client can observe its turns.
-Firstmate-written project hooks under `<worktree>/.codex/hooks.json` fired for neither an interactive pane whose directory trust was granted nor `codex exec`, in both cases with `--dangerously-bypass-hook-trust`, while global `~/.codex/hooks.json` `SessionStart` hooks fired in the same runs.
+In this 2026-07-28 Codex 0.145.0 semantic-busy probe, Firstmate-written lifecycle project hooks under `<worktree>/.codex/hooks.json` fired for neither an interactive pane whose directory trust was granted nor `codex exec`, in both cases with `--dangerously-bypass-hook-trust`, while an untracked global probe fired in the same runs; Firstmate does not ship, install, recommend, or depend on that global path.
 Codex also exposes no `StopFailure` hook, so an API-error turn end would need separate coverage even after hook discovery works.
 The app-server protocol schema does define the required lifecycle (`turn/started`, plus a `turn/completed` status of `completed`, `interrupted`, `failed`, or `inProgress`), so the gate is a reachability problem rather than a protocol gap.
 
@@ -124,13 +233,17 @@ ok - Grok adaptive Stop real-process matrix passed with exact target cleanup and
 ```
 
 The same run proved the Claude-compatible Stop entries stay inert under `GROK_AGENT`, the legacy resume carries `GROK_TURNEND_GUARD_ACTIVE=1`, and every replacement root is removed after exact target cleanup while its control window survives.
+That inertness result is scoped to the builds it exercised: it did not establish that `GROK_AGENT` reaches a Grok HOOK process, and on grok 1.0.0 it does not, so the marker set was widened to `GROK_HOOK_EVENT` as well (docs/turnend-guard.md "Harness integrations").
+`tests/fm-turnend-guard.test.sh` now pins every tracked `.claude/settings.json` hook entry against a real grok 1.0.0 hook environment so the inertness contract is covered deterministically rather than only by the opt-in live matrix.
 
 The secondmate-home scope and manual-repair wake path were measured with Claude Code 2.1.207 on 2026-07-12, when a native background completion re-invoked the idle model with no human input.
 The current Stop-owned main/secondmate inclusion and child-worktree exclusion are covered deterministically by `tests/fm-claude-stop-autoarm.test.sh`.
 Session-lock ownership in `bin/fm-session-lock-lib.sh` is decided against a session's whole contiguous harness ancestry rather than one chosen pid, so the Stop auto-arm reaches its lock owner wherever that owner sits: the outermost pid of Claude Code's multi-level `bg-spare` hook worker chain, or an inner pid when a harness-named daemon parents the session.
 Harness identity is read from the executable path and `argv[0]` as well as the command basename, because Claude Code's native installer names the per-session executable by its version (`.../share/claude/versions/2.1.220`): `ps -o comm=` reports that path on macOS and the bare version string on Linux, and neither basename names a harness.
 `tests/fm-session-lock-ancestry.test.sh` pins both platforms' reporting semantics behind a deterministic process table and runs the real Stop auto-arm in version-named, daemon-parented, and combined real process trees.
-`tests/fm-watch-arm.test.sh` runs a real watcher and attached arm to verify that a delivered reason survives queue draining, while an unrelated queue append cannot make a watcher cycle that delivered nothing look successful.
+`tests/fm-watch-arm.test.sh` runs real watcher and arm cycles against durable on-disk state to verify that a delivered reason survives until post-handling acknowledgement and stops replaying after acknowledgement, while an unrelated queue append cannot make a watcher cycle that delivered nothing look successful.
+The same suite ingests a keyed remote-secondmate parent reply through the real adapter, establishes the incremental OPEN DECISIONS cursor, interrupts supervision, and proves re-arm replays every unacknowledged queue row plus the still-open decision through the ordinary drain path.
+It also covers decision-only recovery, interrupted handling, handling-window generation reuse, non-fatal moved-generation acknowledgement with sequence-bounded consumption, and a persistent successor remaining live after recovery is acknowledged.
 
 The Claude product live path ran with Claude Code 2.1.219 on 2026-07-24:
 
@@ -252,6 +365,8 @@ Deterministic entry points:
 tests/fm-pi-watch-extension.test.sh
 tests/fm-pi-primary-types.test.sh
 tests/fm-watcher-lock.test.sh
+tests/fm-watch-arm.test.sh
+tests/fm-wake-queue.test.sh
 tests/fm-subagent-pretool-check.test.sh
 tests/fm-claude-stop-autoarm.test.sh
 tests/fm-turnend-guard.test.sh
@@ -290,51 +405,3 @@ Observed output:
 
 The safe command-channel contract is covered without a notification by `tests/fm-daemon.test.sh`: the summary reaches both `$1` and stdin, every channel is process-group bounded, and a failed channel falls through.
 
-## Supervision alerts
-
-The unexplained-watcher-cycle and parked-work alerts of [`../supervision-alerts.md`](../supervision-alerts.md) were verified on 2026-07-30 on macOS 15.7.7.
-
-The macOS channel uses the same argv-safe form, with the title supplied as an argv item so each alert can name its own outcome:
-
-```sh
-/usr/bin/osascript \
-  -e 'on run argv' \
-  -e 'display notification (item 1 of argv) with title (item 2 of argv) sound name "Basso"' \
-  -e 'end run' \
-  'FIRSTMATE TEST - IGNORE (supervision-alert channel verification)' \
-  'FIRSTMATE TEST - IGNORE'
-```
-
-Observed output: no stdout, exit 0, and one banner with the supplied body and title.
-
-No live Slack message was posted to prove the Slack channel, because a real post to a shared channel is not an acceptable test artifact.
-The transport is verified instead against a fake `curl` in `tests/fm-supervision-alert.test.sh`, which proves the three properties that matter: the bot token never appears in any process's arguments, it does reach curl through the stdin `--config` header, and the configured channel id is what gets posted to.
-
-The behavioral guarantees run as an ordinary suite:
-
-```sh
-tests/fm-supervision-alert.test.sh
-```
-
-Observed output on 2026-08-05, after the arm layer adopted the terminal-delivery ledger and the alert became a one-shot on the first unexplained cycle:
-
-```
-ok - alert channels resolve from config and fail independently
-ok - off disables every channel without reporting a failure
-ok - the slack token is read, used on stdin, and never exposed
-ok - an unavailable slack credential degrades to a logged skip
-ok - a watcher that delivers a wake never alerts
-ok - an unexplained cycle fails on the first attempt and alerts once through both channels
-ok - a continuing watcher outage alerts once, not once per re-arm
-ok - a recovered watcher clears the outage alert
-ok - work waiting less than the threshold is not a park
-ok - a merge decision parked past the threshold alerts exactly once
-ok - clearing the gate re-arms park alerting
-ok - a worker waiting on a decision past the threshold alerts once
-ok - a resolved decision stops counting as a park
-ok - a scan collapses every parked task into one alert per channel
-ok - per-task dedup survives collapsing, so a later park alerts on its own
-ok - working time, declared waits, idle secondmates, standing authority, and blockers never alert
-ok - an action-free queue item never alerts
-ok - fm-supervision-alert.test.sh
-```

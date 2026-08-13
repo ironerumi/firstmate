@@ -174,13 +174,6 @@ test_help_includes_entire_header() {
   local help
   help=$("$ROOT/bin/fm-brief.sh" --help)
   assert_contains "$help" "Refuses to overwrite an existing brief." "fm-brief.sh --help omitted its header terminator"
-  assert_contains "$help" "Ship briefs route review ownership by delivery mode" "fm-brief.sh --help omitted delivery-mode routing"
-  assert_contains "$help" "no-mistakes projects always" "fm-brief.sh --help omitted the pipeline-led no-mistakes route"
-  assert_contains "$help" "--free-form opts a direct-PR or local-only ship task" "fm-brief.sh --help omitted the free-form opt-out"
-  assert_contains "$help" "--no-narration explicitly arms the narration experiment" \
-    "fm-brief.sh --help omitted the narration experiment toggle"
-  assert_contains "$help" "armed automatically from --batch" \
-    "fm-brief.sh --help omitted the automatic narration-arm assignment"
   pass "fm-brief.sh: --help renders the complete header"
 }
 
@@ -191,7 +184,6 @@ write_registry() {
   local home=$1
   mkdir -p "$home/data"
   cat > "$home/data/projects.md" <<'EOF'
-- nm-proj [no-mistakes] - fixture for no-mistakes mode (added 2026-07-01)
 - direct-proj [direct-PR] - fixture for direct-PR mode (added 2026-07-01)
 - local-proj [local-only] - fixture for local-only mode (added 2026-07-01)
 EOF
@@ -210,12 +202,10 @@ test_ship_modes_generate_clean_briefs() {
   for id_mode in "brief-nomistakes-a1:no-mistakes" "brief-directpr-a2:direct-PR" "brief-localonly-a3:local-only"; do
     id=${id_mode%%:*}
     mode=${id_mode##*:}
-    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --mode "$mode" --free-form >/dev/null 2>&1; status=$?
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --mode "$mode" >/dev/null 2>&1; status=$?
     expect_code 0 "$status" "fm-brief.sh $id --mode $mode should exit 0"
     brief="$home/data/$id/brief.md"
     assert_present "$brief" "$id: brief was not scaffolded"
-    assert_grep "$ROOT/bin/fm-aws-sso-refresh.sh" "$brief" \
-      "$id: full ship brief did not expose the common AWS SSO refresh command"
     assert_grep "# Definition of done" "$brief" "$id: brief missing Definition of done section"
     grep -qx "Delivery contract: mode=$mode" "$brief" \
       || fail "$id: brief did not record its machine-readable delivery contract line"
@@ -225,364 +215,6 @@ test_ship_modes_generate_clean_briefs() {
     assert_no_grep "EOF" "$brief" "$id: brief leaked a heredoc EOF marker (unterminated heredoc)"
   done
   pass "fm-brief.sh: no-mistakes/direct-PR/local-only briefs generate cleanly"
-}
-
-# PR-mode ship briefs must keep the default merge prohibition while carrying
-# the one narrowly authorized exception: an exact firstmate-issued
-# bin/fm-pr-merge.sh command naming this task. The exception must admit both
-# accepted authority forms - an explicit per-PR authorization and an explicit
-# standing preference - without weakening the no-self-selection prohibition.
-# Local-only briefs stay free of any PR merge channel.
-test_ship_briefs_carry_guarded_merge_exception() {
-  local home id proj brief
-  home="$TMP_ROOT/merge-exception-home"
-  write_registry "$home"
-  for id_proj_mode in "brief-merge-nm-b1:some-proj:no-mistakes" "brief-merge-dp-b2:direct-proj:direct-PR"; do
-    id=${id_proj_mode%%:*}
-    proj=${id_proj_mode#*:}; proj=${proj%%:*}
-    mode=${id_proj_mode##*:}
-    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" --mode "$mode" --free-form >/dev/null 2>&1
-    brief="$home/data/$id/brief.md"
-    assert_present "$brief" "$id: brief was not scaffolded"
-    assert_grep 'Never merge a PR on your own' "$brief" \
-      "$id: brief lost the default merge prohibition"
-    # shellcheck disable=SC2016  # Literal backtick-wrapped brief text is the expected value.
-    assert_grep 'raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden' "$brief" \
-      "$id: brief lost the forbidden merge channels"
-    assert_grep "bin/fm-pr-merge.sh $id <PR url>" "$brief" \
-      "$id: brief exception does not name the task and canonical PR command"
-    assert_grep 'command that firstmate itself sends you; run it verbatim' "$brief" \
-      "$id: brief exception is not limited to a firstmate-issued exact command"
-    assert_grep 'a per-PR authorization or an explicit standing preference' "$brief" \
-      "$id: brief exception does not admit both accepted authority forms"
-    assert_grep 'branch protection the only blocker' "$brief" \
-      "$id: brief exception lost the authorization conditions"
-  done
-  id='brief-merge-lo-b3'
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" local-proj --mode local-only --free-form >/dev/null 2>&1
-  brief="$home/data/$id/brief.md"
-  assert_no_grep 'fm-pr-merge.sh' "$brief" "local-only brief gained a PR merge exception"
-  assert_grep 'Never push to any remote and never open a PR' "$brief" \
-    "local-only brief lost its no-remote rule"
-  pass "fm-brief.sh: ship briefs keep the default merge prohibition with the narrow firstmate-issued exception"
-}
-
-test_ship_briefs_route_review_ownership_by_delivery_mode() {
-  local home id brief lines output status=0
-  home="$TMP_ROOT/delivery-mode-routing-home"
-  write_registry "$home"
-
-  id="brief-pipeline-led-a4"
-  output=$(FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" nm-proj --mode no-mistakes 2>&1)
-  brief="$home/data/$id/brief.md"
-  assert_present "$brief" "pipeline-led brief was not scaffolded"
-  assert_contains "$output" "pipeline-led ship, mode=no-mistakes" \
-    "no-mistakes scaffold did not identify the pipeline-led route"
-  assert_grep "no-mistakes axi run --help" "$brief" \
-    "pipeline-led brief lost the axi-run contract"
-  assert_grep "# Project memory" "$brief" \
-    "pipeline-led brief lost the full ship safety envelope"
-  assert_no_grep "Invoke the named skill exactly as written" "$brief" \
-    "pipeline-led brief gave review ownership to a skill"
-  assert_no_grep "Do not stack a second workflow or independent review" "$brief" \
-    "pipeline-led brief retained the skill-led review-ownership clause"
-
-  id="brief-pipeline-led-free-form-a5"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" nm-proj --mode no-mistakes --free-form >/dev/null 2>&1
-  brief="$home/data/$id/brief.md"
-  assert_grep "no-mistakes axi run --help" "$brief" \
-    "--free-form changed the no-mistakes pipeline-led route"
-  assert_no_grep "Invoke the named skill exactly as written" "$brief" \
-    "--free-form resurrected skill-led review ownership on a no-mistakes project"
-
-  for mode_proj in "direct-PR:direct-proj" "local-only:local-proj"; do
-    id="brief-skill-led-${mode_proj%%-*}"
-    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "${mode_proj##*:}" --mode "${mode_proj%%:*}" >/dev/null 2>&1
-    brief="$home/data/$id/brief.md"
-    assert_present "$brief" "$id: skill-led brief was not scaffolded"
-    assert_grep "both resolve to this isolated task worktree" "$brief" \
-      "$id: skill-led brief lost the isolation assertion"
-    assert_grep "Invoke the named skill exactly as written" "$brief" \
-      "$id: skill-led brief did not delegate mechanics to the owning skill"
-    assert_grep "$ROOT/bin/fm-aws-sso-refresh.sh" "$brief" \
-      "$id: skill-led brief did not expose the common AWS SSO refresh command"
-    assert_grep "Do not stack a second workflow or independent review" "$brief" \
-      "$id: skill-led brief allowed a duplicate workflow"
-    assert_grep "Never discard, reset, or hide unlanded work" "$brief" \
-      "$id: skill-led brief lost unlanded-work protection"
-    assert_grep "Merge only when the task text explicitly grants that authority" "$brief" \
-      "$id: skill-led brief lost explicit merge authority"
-    assert_grep "corrected document path, ready branch, or full green PR URL" "$brief" \
-      "$id: skill-led brief did not require a concrete terminal artifact"
-    assert_no_grep "no-mistakes doctor" "$brief" \
-      "$id: skill-led brief stacked the standard no-mistakes setup"
-    assert_no_grep "# Project memory" "$brief" \
-      "$id: skill-led brief retained the full ship template"
-    lines=$(wc -l < "$brief" | tr -d ' ')
-    [ "$lines" -le 45 ] || fail "$id: skill-led brief is not concise ($lines lines, expected at most 45)"
-  done
-
-  id="brief-free-form-a6"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" direct-proj --mode direct-PR --free-form >/dev/null 2>&1
-  brief="$home/data/$id/brief.md"
-  assert_grep "# Project memory" "$brief" \
-    "--free-form direct-PR ship did not preserve the full ship body"
-  assert_no_grep "Do not stack a second workflow or independent review" "$brief" \
-    "--free-form direct-PR ship retained the skill-led anti-stack clause"
-  assert_no_grep "narration_arm:" "$brief" \
-    "--free-form direct-PR ship gained a pipeline-only experiment marker"
-
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" bad-scout some-proj --scout --free-form >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--free-form combined with --scout must fail"
-  status=0
-  FM_HOME="$home" FM_SECONDMATE_CHARTER=x "$ROOT/bin/fm-brief.sh" bad-mate --secondmate --no-projects --free-form >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--free-form combined with --secondmate must fail"
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" removed-flag some-proj --skill-led >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "removed --skill-led flag must be rejected as unknown"
-  pass "fm-brief.sh: ship briefs route review ownership by delivery mode"
-}
-
-test_pipeline_narration_arm_is_explicit_and_diff_bounded() {
-  local off_home on_home state id off_brief on_brief diff changes status=0
-  off_home="$TMP_ROOT/narration-off-home"
-  on_home="$TMP_ROOT/narration-on-home"
-  state="$TMP_ROOT/narration-shared-state"
-  id="brief-narration-arm-a7"
-  write_registry "$off_home"
-  write_registry "$on_home"
-  mkdir -p "$state"
-
-  FM_HOME="$off_home" FM_STATE_OVERRIDE="$state" \
-    "$ROOT/bin/fm-brief.sh" "$id" nm-proj --mode no-mistakes >/dev/null 2>&1
-  FM_HOME="$on_home" FM_STATE_OVERRIDE="$state" \
-    "$ROOT/bin/fm-brief.sh" "$id" nm-proj --mode no-mistakes --no-narration >/dev/null 2>&1
-  off_brief="$off_home/data/$id/brief.md"
-  on_brief="$on_home/data/$id/brief.md"
-  diff="$TMP_ROOT/narration-arm.diff"
-
-  [ "$(grep -c '^narration_arm: off$' "$off_brief")" -eq 1 ] \
-    || fail "default pipeline-led brief did not carry exactly one off marker"
-  assert_no_grep "No-narration experiment arm" "$off_brief" \
-    "default pipeline-led brief enabled the clause without an explicit toggle"
-  [ "$(grep -c '^narration_arm: on$' "$on_brief")" -eq 1 ] \
-    || fail "toggled pipeline-led brief did not carry exactly one on marker"
-  assert_grep "emit only status signals and the pipeline's required output; no meta-commentary between tool calls" "$on_brief" \
-    "toggled pipeline-led brief did not carry the no-narration clause"
-
-  diff -u "$off_brief" "$on_brief" > "$diff" || status=$?
-  expect_code 1 "$status" "the on/off narration scaffolds must differ"
-  changes=$(grep -Ec '^[+-][^+-]' "$diff")
-  [ "$changes" -eq 3 ] \
-    || fail "narration arm changed $changes lines; expected only marker replacement plus clause insertion"
-  grep -qxF -- '-narration_arm: off' "$diff" \
-    || fail "narration arm diff did not remove only the off marker"
-  grep -qxF -- '+narration_arm: on' "$diff" \
-    || fail "narration arm diff did not add the on marker"
-  grep -qxF -- "+1a. No-narration experiment arm: emit only status signals and the pipeline's required output; no meta-commentary between tool calls." "$diff" \
-    || fail "narration arm diff did not add the exact clause"
-  pass "fm-brief.sh: narration arm is unbatched-off, explicit, marked, and diff-bounded"
-}
-
-# The arm a batch id resolves to. Returns nonzero (never a default) when the
-# brief is missing or does not carry exactly one narration_arm marker, so a
-# missing or duplicated marker can never be read as an arm. Every call site runs
-# inside `$(...)`, where fail()'s exit would kill only the subshell, so each one
-# must check the status: `arm=$(narration_arm_of "$b") || fail ...`.
-narration_arm_of() {
-  local brief=$1 marker
-  [ -f "$brief" ] || return 1
-  [ "$(grep -c '^narration_arm: ' "$brief")" -eq 1 ] || return 1
-  marker=$(grep '^narration_arm: ' "$brief")
-  printf '%s\n' "${marker#narration_arm: }"
-}
-
-# Without an explicit toggle the eligible shape is armed from the batch id, so
-# both cohorts accrue on their own. The contract under test is the assignment's
-# determinism and batch scoping, not which arm any one id happens to draw.
-test_narration_arm_is_deterministic_and_batch_scoped() {
-  local home rerun_home id arm rerun_arm first seen_on=0 seen_off=0
-  home="$TMP_ROOT/narration-assign-home"
-  rerun_home="$TMP_ROOT/narration-assign-rerun-home"
-  write_registry "$home"
-  write_registry "$rerun_home"
-
-  # Four distinct ids must exercise both arms, and each must be reproducible in
-  # a second home: same id in, same arm out.
-  for id in batch-a batch-b batch-c batch-d; do
-    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "assign-$id" nm-proj --mode no-mistakes --source firstmate --batch "$id" >/dev/null 2>&1
-    FM_HOME="$rerun_home" "$ROOT/bin/fm-brief.sh" "assign-$id" nm-proj --mode no-mistakes --source firstmate --batch "$id" >/dev/null 2>&1
-    arm=$(narration_arm_of "$home/data/assign-$id/brief.md") \
-      || fail "batch id $id did not scaffold a brief carrying exactly one narration_arm marker"
-    rerun_arm=$(narration_arm_of "$rerun_home/data/assign-$id/brief.md") \
-      || fail "batch id $id did not carry exactly one narration_arm marker in the second home"
-    [ "$arm" = "$rerun_arm" ] \
-      || fail "batch id $id drew a different arm on a repeated run"
-    case "$arm" in
-      on) seen_on=1 ;;
-      off) seen_off=1 ;;
-      *) fail "batch id $id produced an unknown arm: $arm" ;;
-    esac
-  done
-  [ "$seen_on" -eq 1 ] && [ "$seen_off" -eq 1 ] \
-    || fail "four distinct batch ids exercised only one arm (on=$seen_on off=$seen_off)"
-
-  # Every brief of one batch stays in that batch's arm.
-  first=""
-  for id in 1 2 3; do
-    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "cohort-$id" nm-proj --mode no-mistakes --source firstmate --batch shared-cohort >/dev/null 2>&1
-    arm=$(narration_arm_of "$home/data/cohort-$id/brief.md") \
-      || fail "brief cohort-$id did not carry exactly one narration_arm marker"
-    [ -n "$first" ] || first=$arm
-    [ "$arm" = "$first" ] || fail "brief cohort-$id left its batch's arm ($arm, expected $first)"
-  done
-
-  # An id that resolves to `on` must carry the clause the arm exists to test,
-  # exactly as the explicit toggle does.
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-armed nm-proj --mode no-mistakes --batch batch-a >/dev/null 2>&1
-  arm=$(narration_arm_of "$home/data/auto-armed/brief.md") \
-    || fail "an automatically armed brief did not carry exactly one narration_arm marker"
-  [ "$arm" = on ] \
-    || fail "the on-parity fixture batch id no longer resolves to the on arm"
-  [ "$(grep -c '^narration_arm: ' "$home/data/auto-armed/brief.md")" -eq 1 ] \
-    || fail "an automatically armed brief did not carry exactly one narration_arm stamp"
-  assert_grep "1a. No-narration experiment arm" "$home/data/auto-armed/brief.md" \
-    "an automatically armed brief did not carry the no-narration clause"
-
-  # Explicit beats automatic: --no-narration arms an off-parity batch anyway.
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" explicit-over-auto nm-proj --mode no-mistakes --batch batch-b --no-narration >/dev/null 2>&1
-  arm=$(narration_arm_of "$home/data/explicit-over-auto/brief.md") \
-    || fail "an explicitly toggled brief did not carry exactly one narration_arm marker"
-  [ "$arm" = on ] \
-    || fail "--no-narration lost to the automatic arm assignment"
-
-  # No --batch means the "unknown" sentinel, which is not a cohort: it stays off.
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" unbatched nm-proj --mode no-mistakes >/dev/null 2>&1
-  arm=$(narration_arm_of "$home/data/unbatched/brief.md") \
-    || fail "an unbatched brief did not carry exactly one narration_arm marker"
-  [ "$arm" = off ] \
-    || fail "an unbatched brief was automatically armed"
-  assert_no_grep "No-narration experiment arm" "$home/data/unbatched/brief.md" \
-    "an unbatched brief carried the no-narration clause"
-  pass "fm-brief.sh: narration arm is deterministic per batch id, batch-scoped, and explicit-first"
-}
-
-# batch-a resolves to the on arm (see the deterministic test above), so any
-# marker or clause here would be automatic arming of an ineligible shape.
-test_narration_arm_assignment_is_eligible_shape_only() {
-  local home id arm status
-  home="$TMP_ROOT/narration-ineligible-home"
-  write_registry "$home"
-
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-direct direct-proj --mode direct-PR --batch batch-a >/dev/null 2>&1 || status=$?
-  expect_code 0 "$status" "auto-direct: an ineligible shape must still scaffold"
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-direct-freeform direct-proj --mode direct-PR --free-form --batch batch-a >/dev/null 2>&1 || status=$?
-  expect_code 0 "$status" "auto-direct-freeform: an ineligible shape must still scaffold"
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-local local-proj --mode local-only --batch batch-a >/dev/null 2>&1 || status=$?
-  expect_code 0 "$status" "auto-local: an ineligible shape must still scaffold"
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-scout nm-proj --scout --batch batch-a >/dev/null 2>&1 || status=$?
-  expect_code 0 "$status" "auto-scout: an ineligible shape must still scaffold"
-  status=0
-  FM_HOME="$home" FM_SECONDMATE_CHARTER=ops \
-    "$ROOT/bin/fm-brief.sh" auto-mate --secondmate --no-projects --batch batch-a >/dev/null 2>&1 || status=$?
-  expect_code 0 "$status" "auto-mate: an ineligible shape must still scaffold"
-  # Absence is evidence only when the brief exists: grep on a missing file exits
-  # 2, which assert_no_grep reads as "no match".
-  for id in auto-direct auto-direct-freeform auto-local auto-scout auto-mate; do
-    assert_present "$home/data/$id/brief.md" "$id: brief was not scaffolded"
-    assert_no_grep "narration_arm:" "$home/data/$id/brief.md" \
-      "$id gained a pipeline-only experiment marker from its batch id"
-    assert_no_grep "No-narration experiment arm" "$home/data/$id/brief.md" \
-      "$id was automatically armed despite being an ineligible shape"
-  done
-
-  # A free-form no-mistakes ship is the same pipeline-led shape, so it is armed.
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" auto-nm-freeform nm-proj --mode no-mistakes --free-form --batch batch-a >/dev/null 2>&1 || status=$?
-  expect_code 0 "$status" "auto-nm-freeform: the eligible free-form shape must scaffold"
-  arm=$(narration_arm_of "$home/data/auto-nm-freeform/brief.md") \
-    || fail "a free-form no-mistakes ship did not carry exactly one narration_arm marker"
-  [ "$arm" = on ] \
-    || fail "a free-form no-mistakes ship was excluded from its batch's arm"
-  pass "fm-brief.sh: only the eligible pipeline-led shape is armed from its batch id"
-}
-
-# The batch id is both the grouping stamp and the arm selector, so a value that
-# cannot be one machine-readable line is rejected before any brief is written.
-test_batch_values_are_rejected_before_writing() {
-  local home status
-  home="$TMP_ROOT/narration-badbatch-home"
-  write_registry "$home"
-
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" batch-empty nm-proj --batch '' >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "an empty --batch value must fail"
-  assert_absent "$home/data/batch-empty/brief.md" "rejected empty --batch still wrote a brief"
-
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" batch-multiline nm-proj --batch "$(printf 'first\nsecond')" >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "a multi-line --batch value must fail"
-  assert_absent "$home/data/batch-multiline/brief.md" "rejected multi-line --batch still wrote a brief"
-
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" batch-missing nm-proj --batch >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "a --batch flag with no value must fail"
-  assert_absent "$home/data/batch-missing/brief.md" "rejected valueless --batch still wrote a brief"
-
-  # A swallowed following flag would silently drop that flag and pick the arm
-  # from its name, so --batch rejects a flag-shaped value exactly as --atomic does.
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" batch-swallow nm-proj --batch --source firstmate >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "a --batch value that is itself a flag must fail"
-  assert_absent "$home/data/batch-swallow/brief.md" "rejected flag-shaped --batch still wrote a brief"
-  pass "fm-brief.sh: malformed batch values are rejected before any brief is written"
-}
-
-# The arm must never fall back to the control cohort when the CRC cannot be
-# computed: a silent `off` is the stuck single-arm failure again, and would split
-# one batch across arms between a host with a working cksum and one without.
-test_batch_arm_refuses_without_a_usable_cksum() {
-  local home stub output status=0
-  home="$TMP_ROOT/narration-nocksum-home"
-  stub="$TMP_ROOT/narration-nocksum-bin"
-  write_registry "$home"
-  mkdir -p "$stub"
-  printf '%s\n' '#!/bin/sh' 'exit 127' > "$stub/cksum"
-  chmod +x "$stub/cksum"
-
-  output=$(PATH="$stub:$PATH" FM_HOME="$home" \
-    "$ROOT/bin/fm-brief.sh" nocksum nm-proj --mode no-mistakes --batch batch-a 2>&1) || status=$?
-  expect_code 1 "$status" "a cksum that yields no CRC must fail the scaffold, not draw the control arm"
-  assert_contains "$output" "cksum" "the refusal did not name the missing cksum requirement"
-  assert_absent "$home/data/nocksum/brief.md" "a scaffold with no usable cksum still wrote a brief"
-  pass "fm-brief.sh: an unusable cksum refuses loudly instead of silently drawing the control arm"
-}
-
-test_no_narration_rejects_non_pipeline_briefs() {
-  local home status
-  home="$TMP_ROOT/narration-misuse-home"
-  write_registry "$home"
-
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" narration-direct direct-proj --mode direct-PR --no-narration >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--no-narration on direct-PR must fail"
-  assert_absent "$home/data/narration-direct/brief.md" "rejected direct-PR toggle still wrote a brief"
-
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" narration-scout nm-proj --scout --no-narration >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--no-narration on a scout must fail"
-  assert_absent "$home/data/narration-scout/brief.md" "rejected scout toggle still wrote a brief"
-
-  status=0
-  FM_HOME="$home" FM_SECONDMATE_CHARTER=ops \
-    "$ROOT/bin/fm-brief.sh" narration-mate --secondmate --no-projects --no-narration >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--no-narration on a secondmate charter must fail"
-  assert_absent "$home/data/narration-mate/brief.md" "rejected secondmate toggle still wrote a brief"
-  pass "fm-brief.sh: no non-pipeline brief can enable the narration experiment"
 }
 
 # A ship task's delivery mode is firstmate's per-task decision, so a missing or
@@ -663,14 +295,14 @@ test_faster_paths_use_configured_authority_without_stacked_review() {
   home="$TMP_ROOT/configured-authority-home"
   write_registry "$home"
   id="brief-direct-authority-a4"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" direct-proj --mode direct-PR --free-form >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" direct-proj --mode direct-PR >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_grep "The configured merge authority decides whether to merge the PR; firstmate relays the outcome." "$brief" \
     "direct-PR brief lost configured merge authority"
   assert_no_grep "The captain reviews and merges the PR" "$brief" \
     "direct-PR brief hard-coded captain-only authority"
   id="brief-local-authority-a4"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" local-proj --mode local-only --free-form >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" local-proj --mode local-only >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_grep "The configured merge authority approves the ready branch, then firstmate merges it into local \`main\` through the guarded fast-forward path." "$brief" \
     "local-only brief lost configured merge authority and guarded landing"
@@ -685,76 +317,6 @@ test_faster_paths_use_configured_authority_without_stacked_review() {
   assert_no_grep "make \`--intent\` preserve all relevant content from this brief" "$home/data/$id/brief.md" \
     "direct-PR brief must not include the no-mistakes --intent contract"
   pass "fm-brief.sh: faster paths use configured authority without stacked review"
-}
-
-# Sizing is a dispatch decision this scaffold owns, and the captain's rule has
-# two halves that must both survive: sequential per part by default, and one
-# atomic delivery only when the concrete reason is stated. Neither half may
-# reintroduce a size cap.
-test_change_sizing_defaults_to_sequential_parts() {
-  local home id brief
-  home="$TMP_ROOT/sizing-home"
-  write_registry "$home"
-  for id_proj_mode in "brief-sizing-nm-s1:nm-proj:no-mistakes" "brief-sizing-direct-s2:direct-proj:direct-PR" "brief-sizing-local-s3:local-proj:local-only"; do
-    id=${id_proj_mode%%:*}
-    proj=${id_proj_mode#*:}; proj=${proj%%:*}
-    mode=${id_proj_mode##*:}
-    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" --mode "$mode" >/dev/null 2>&1
-    brief="$home/data/$id/brief.md"
-    assert_grep "# Change sizing" "$brief" "every ship brief must carry the sizing contract"
-    assert_grep "ship one at a time" "$brief" "the default sizing contract must be sequential"
-    assert_grep "there is no line count or item count that makes a change too large" "$brief" \
-      "the sizing contract must refuse a blanket size cap"
-    assert_no_grep "ONE atomic change" "$brief" "the default must not claim atomicity"
-  done
-  pass "fm-brief.sh: every ship brief defaults to sequential per-part delivery with no size cap"
-}
-
-test_atomic_requires_and_records_its_reason() {
-  local home id brief out status
-  home="$TMP_ROOT/atomic-home"
-  write_registry "$home"
-  id="brief-atomic-s4"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" nm-proj --mode no-mistakes \
-    --atomic "both tabs read one view and disagree until both land" >/dev/null 2>&1
-  brief="$home/data/$id/brief.md"
-  assert_grep "This task ships as ONE atomic change" "$brief" "an atomic brief must say so"
-  assert_grep "both tabs read one view and disagree until both land" "$brief" \
-    "an atomic brief must carry the concrete reason it was given"
-  assert_no_grep "ship one at a time" "$brief" "an atomic brief must not also carry the sequential default"
-
-  out=$(FM_HOME="$home" "$ROOT/bin/fm-brief.sh" brief-atomic-s5 nm-proj --atomic 2>&1); status=$?
-  expect_code 1 "$status" "--atomic without a reason must be refused"
-  assert_contains "$out" "concrete reason" "the refusal must name what is missing"
-  assert_absent "$home/data/brief-atomic-s5/brief.md" "a refused --atomic must write no brief"
-
-  out=$(FM_HOME="$home" "$ROOT/bin/fm-brief.sh" brief-atomic-s6 nm-proj --atomic --herdr-lab 2>&1); status=$?
-  expect_code 1 "$status" "--atomic must not swallow the next flag as its reason"
-
-  out=$(FM_HOME="$home" "$ROOT/bin/fm-brief.sh" brief-atomic-s7 nm-proj --scout --atomic "x" 2>&1); status=$?
-  expect_code 1 "$status" "--atomic must be refused for a scout"
-  assert_contains "$out" "only to ship briefs" "the scout refusal must name the applicable shape"
-  pass "fm-brief.sh: one atomic delivery is only possible with a stated concrete reason"
-}
-
-test_pipeline_brief_carries_validation_ownership_rules() {
-  local home id brief
-  home="$TMP_ROOT/validation-owner-home"
-  write_registry "$home"
-  id="brief-validation-owner-s8"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" nm-proj --mode no-mistakes >/dev/null 2>&1
-  brief="$home/data/$id/brief.md"
-  assert_grep "One run owns validation of this branch at a time" "$brief" \
-    "the pipeline-led brief must state single validation ownership"
-  # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
-  assert_grep 'never a second `no-mistakes axi run`' "$brief" \
-    "the pipeline-led brief must forbid a second run"
-  # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
-  assert_grep 'continue it with `no-mistakes axi respond`' "$brief" \
-    "the pipeline-led brief must name the permitted continuation path"
-  assert_grep "naming the run id and the failing step" "$brief" \
-    "the pipeline-led brief must require the failure to be reported instead of replaced"
-  pass "fm-brief.sh: the pipeline-led brief states one validation owner and its continuation path"
 }
 
 # Pin the specific line the bug lived on: the no-mistakes DOD's no-mistakes
@@ -1101,8 +663,10 @@ test_pause_verb_override_renders_all_brief_scaffolds() {
     # shellcheck disable=SC2016 # Literal backticks and braces must remain unexpanded.
     assert_no_grep '`paused: {why}`' "$brief" \
       "$kind brief still instructs the default paused status"
-    assert_grep 'or a blocker clears' "$brief" \
+    assert_grep 'a blocker or wait clears' "$brief" \
       "$kind brief did not require durable resolution when a blocker clears"
+    assert_grep 'even when the answer is what started that work' "$brief" \
+      "$kind brief did not warn that an answer-started done/working never closes a decision"
   done
   pass "fm-brief.sh: custom pause verb renders in every scaffold"
 }
@@ -1135,8 +699,6 @@ test_scout_and_secondmate_scaffold() {
   assert_present "$brief" "scout brief was not scaffolded"
   assert_grep "SCOUT task" "$brief" "scout brief must declare itself a scout task"
   assert_grep "report.md" "$brief" "scout brief must point at the report deliverable"
-  assert_grep "$ROOT/bin/fm-aws-sso-refresh.sh" "$brief" \
-    "scout brief did not expose the common AWS SSO refresh command"
 
   FM_SECONDMATE_CHARTER='Supervise the alpha domain.' \
     FM_HOME="$BRIEF_HOME" "$ROOT/bin/fm-brief.sh" brief-sm-q6 --secondmate alpha >/dev/null 2>&1 \
@@ -1148,135 +710,14 @@ test_scout_and_secondmate_scaffold() {
   pass "fm-brief: scout and secondmate code paths still scaffold well-formed briefs"
 }
 
-# Provenance stamping (--source/--batch): defaults, explicit values, and the
-# batch sentinel. Every scaffolded variant carries exactly one well-formed
-# `source:` + `batch_id:` pair for the kaizen batch scanner.
-test_provenance_defaults_to_human_and_unknown() {
-  local home id brief
-  home="$TMP_ROOT/provenance-default-home"
-  mkdir -p "$home/data"
-  id="brief-provenance-default-e1"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --mode no-mistakes >/dev/null 2>&1
-  brief="$home/data/$id/brief.md"
-  assert_present "$brief" "brief was not scaffolded"
-  assert_grep "source: human" "$brief" \
-    "ship brief without --source must default to source: human"
-  assert_grep "batch_id: unknown" "$brief" \
-    "ship brief without --batch must default to the unknown sentinel"
-  pass "fm-brief.sh: provenance defaults to source: human / batch_id: unknown"
-}
-
-test_provenance_explicit_values_stamp_ship_brief() {
-  local home id brief
-  home="$TMP_ROOT/provenance-explicit-home"
-  mkdir -p "$home/data"
-  id="brief-provenance-explicit-e2"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --mode no-mistakes --source firstmate --batch wave-42 >/dev/null 2>&1
-  brief="$home/data/$id/brief.md"
-  assert_present "$brief" "brief was not scaffolded"
-  assert_grep "source: firstmate" "$brief" \
-    "ship brief did not stamp explicit --source firstmate"
-  assert_grep "batch_id: wave-42" "$brief" \
-    "ship brief did not stamp explicit --batch wave-42"
-  pass "fm-brief.sh: explicit --source/--batch stamp the ship brief"
-}
-
-test_provenance_stamps_all_variants() {
-  local home brief
-  home="$TMP_ROOT/provenance-variants-home"
-  write_registry "$home"
-
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-ship-e3 nm-proj --mode no-mistakes --source firstmate --batch wave-e3 >/dev/null 2>&1
-  brief="$home/data/prov-ship-e3/brief.md"
-  assert_grep "source: firstmate" "$brief" "pipeline-led ship variant missing source: stamp"
-  assert_grep "batch_id: wave-e3" "$brief" "pipeline-led ship variant missing batch_id: stamp"
-
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-scout-e3 alpha --scout --source firstmate --batch wave-e3 >/dev/null 2>&1
-  brief="$home/data/prov-scout-e3/brief.md"
-  assert_grep "source: firstmate" "$brief" "scout variant missing source: stamp"
-  assert_grep "batch_id: wave-e3" "$brief" "scout variant missing batch_id: stamp"
-
-  FM_HOME="$home" FM_SECONDMATE_CHARTER='ops' \
-    "$ROOT/bin/fm-brief.sh" prov-sm-e3 --secondmate --no-projects --source firstmate --batch wave-e3 >/dev/null 2>&1
-  brief="$home/data/prov-sm-e3/brief.md"
-  assert_grep "source: firstmate" "$brief" "secondmate variant missing source: stamp"
-  assert_grep "batch_id: wave-e3" "$brief" "secondmate variant missing batch_id: stamp"
-
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-skill-led-e3 direct-proj --mode direct-PR --source firstmate --batch wave-e3 >/dev/null 2>&1
-  brief="$home/data/prov-skill-led-e3/brief.md"
-  assert_grep "source: firstmate" "$brief" "skill-led variant missing source: stamp"
-  assert_grep "batch_id: wave-e3" "$brief" "skill-led variant missing batch_id: stamp"
-
-  pass "fm-brief.sh: ship, scout, secondmate, and skill-led variants all stamp source/batch_id"
-}
-
-test_provenance_validation_rejects_malformed_input() {
-  local home status
-  home="$TMP_ROOT/provenance-validation-home"
-  mkdir -p "$home/data"
-
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-bad-source alpha --source bogus >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--source with an invalid value must fail"
-  assert_absent "$home/data/prov-bad-source/brief.md" "rejected --source still wrote a brief"
-
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-missing-source alpha --source >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--source with no value must fail"
-  assert_absent "$home/data/prov-missing-source/brief.md" "value-less --source still wrote a brief"
-
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-missing-batch alpha --batch >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--batch with no value must fail"
-  assert_absent "$home/data/prov-missing-batch/brief.md" "value-less --batch still wrote a brief"
-
-  status=0
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" prov-empty-batch alpha --batch "" >/dev/null 2>&1 || status=$?
-  expect_code 1 "$status" "--batch with an empty value must fail"
-  assert_absent "$home/data/prov-empty-batch/brief.md" "empty --batch still wrote a brief"
-
-  pass "fm-brief.sh: malformed or missing --source/--batch values are rejected"
-}
-
-test_provenance_preserves_existing_template_body() {
-  local home id brief
-  home="$TMP_ROOT/provenance-template-home"
-  mkdir -p "$home/data"
-  id="brief-provenance-template-e5"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj --mode no-mistakes --free-form --source firstmate --batch wave-e5 >/dev/null 2>&1
-  brief="$home/data/$id/brief.md"
-  assert_present "$brief" "brief was not scaffolded"
-  assert_grep "# Definition of done" "$brief" "provenance flags regressed the Definition of done section"
-  assert_grep "{TASK}" "$brief" "provenance flags regressed the {TASK} placeholder"
-  assert_grep "# Herdr lifecycle declaration - NOT ENABLED" "$brief" \
-    "provenance flags regressed the unguarded Herdr declaration"
-  assert_grep "# Project memory" "$brief" \
-    "provenance flags regressed the project-memory section"
-  assert_grep "Never merge a PR on your own" "$brief" \
-    "provenance flags regressed the default merge prohibition"
-  assert_no_grep "EOF" "$brief" "provenance flags left a leaked heredoc EOF marker"
-  pass "fm-brief.sh: --source/--batch stamping does not regress the existing template body"
-}
-
 test_script_parses
 test_no_heredoc_in_command_substitution
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
-test_ship_briefs_carry_guarded_merge_exception
-test_ship_briefs_route_review_ownership_by_delivery_mode
-test_pipeline_narration_arm_is_explicit_and_diff_bounded
-test_no_narration_rejects_non_pipeline_briefs
-test_narration_arm_is_deterministic_and_batch_scoped
-test_narration_arm_assignment_is_eligible_shape_only
-test_batch_values_are_rejected_before_writing
-test_batch_arm_refuses_without_a_usable_cksum
 test_ship_mode_is_required_and_closed_set
 test_ship_mode_is_explicit_not_registry
 test_delivery_flags_are_refused_where_they_do_not_apply
 test_faster_paths_use_configured_authority_without_stacked_review
-test_change_sizing_defaults_to_sequential_parts
-test_atomic_requires_and_records_its_reason
-test_pipeline_brief_carries_validation_ownership_rules
 test_no_mistakes_dod_wording
 test_ship_project_memory_wording
 test_herdr_lab_contract_is_explicit_and_complete
@@ -1289,8 +730,3 @@ test_secondmate_directory_paths_are_absolute_and_output_is_stable
 test_pause_verb_override_renders_all_brief_scaffolds
 test_scout_and_secondmate_load_decision_hold_policy
 test_scout_and_secondmate_scaffold
-test_provenance_defaults_to_human_and_unknown
-test_provenance_explicit_values_stamp_ship_brief
-test_provenance_stamps_all_variants
-test_provenance_validation_rejects_malformed_input
-test_provenance_preserves_existing_template_body

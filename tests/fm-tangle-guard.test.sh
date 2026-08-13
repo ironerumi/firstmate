@@ -24,11 +24,12 @@ set -u
 TMP_ROOT=$(fm_test_tmproot fm-tangle-guard)
 fm_git_identity fmtest fmtest@example.invalid
 
-# A fresh git repo on `main` with one commit. Echoes its path.
+# A fresh git repo on `main` with one commit and a local origin. Echoes its path.
 make_repo() {
   local dir=$1
   git init -q -b main "$dir"
   git -C "$dir" commit -q --allow-empty -m init
+  fm_git_add_origin "$dir" "$dir.origin.git"
   printf '%s\n' "$dir"
 }
 
@@ -54,19 +55,10 @@ on the default branch is healthy|default||
 on a feature branch is the tangle|feature|fm/readme-restructure-d3|fm/readme-restructure-d3
 detached HEAD on default is healthy (worktrees, secondmate homes)|detached||
 ROWS
-  mkdir -p "$repo/config"
-  git -C "$repo" checkout -q -B dorofune main
-  printf '%s\n' dorofune > "$repo/config/primary-branch"
-  out=$(FM_HOME="$repo" fm_primary_tangle_branch "$repo" || true)
-  [ -z "$out" ] || fail "configured primary branch wrongly reported a tangle: '$out'"
-  git -C "$repo" checkout -q -B other-local main
-  out=$(FM_HOME="$repo" fm_primary_tangle_branch "$repo" || true)
-  [ "$out" = other-local ] || fail "branch outside configured primary was not a tangle: '$out'"
-
   # A non-git directory is not a tangle and must not error.
   out=$(fm_primary_tangle_branch "$TMP_ROOT" || true)
   [ -z "$out" ] || fail "non-git dir wrongly reported a tangle: '$out'"
-  pass "fm_primary_tangle_branch: configured/default/detached states are healthy; other branches alarm"
+  pass "fm_primary_tangle_branch: feature branch alarms; default/detached/non-git stay silent"
 }
 
 # --- GUARD 2a: fm-guard banner ----------------------------------------------
@@ -96,15 +88,7 @@ test_guard_banner() {
   assert_contains "$out" "WORKTREE TANGLE" "read-only guard did not keep the tangle alarm"
   assert_contains "$out" "read-only session must leave restore work" "read-only guard did not explain restore ownership"
   assert_not_contains "$out" "checkout main" "read-only guard printed a state-changing restore command"
-
-  mkdir -p "$repo/config"
-  printf '%s\n' fm/tangle-aa1 > "$repo/config/primary-branch"
-  out=$(run_guard "$repo")
-  assert_not_contains "$out" "WORKTREE TANGLE" "guard alarmed on the configured primary branch"
-  printf '%s\n' nonexistent-local > "$repo/config/primary-branch"
-  out=$(run_guard "$repo")
-  assert_contains "$out" "WORKTREE TANGLE" "invalid primary-branch config weakened the default guard"
-  pass "fm-guard: configured primary is healthy; other branches retain the tangle alarm"
+  pass "fm-guard: bordered tangle banner fires only for a feature branch and suppresses repair commands in read-only mode"
 }
 
 # --- GUARD 2b: fm-bootstrap problem line ------------------------------------
@@ -133,12 +117,7 @@ test_bootstrap_line() {
   assert_contains "$out" "fm/tangle-bb2" "detect-only bootstrap did not report the tangled branch"
   assert_contains "$out" "read-only session must leave restore work" "detect-only bootstrap did not explain restore ownership"
   assert_not_contains "$out" "checkout main" "detect-only bootstrap printed a state-changing restore command"
-
-  mkdir -p "$repo/config"
-  printf '%s\n' fm/tangle-bb2 > "$repo/config/primary-branch"
-  out=$(run_bootstrap "$repo" | grep '^TANGLE:' || true)
-  [ -z "$out" ] || fail "bootstrap emitted a TANGLE line on configured primary: $out"
-  pass "fm-bootstrap: configured primary suppresses only its own tangle diagnostic"
+  pass "fm-bootstrap: TANGLE problem line fires only for a feature branch and suppresses repair commands in detect-only mode"
 }
 
 # --- GUARD 1a: brief isolation assertion ------------------------------------
@@ -198,7 +177,7 @@ SH
 run_spawn() {
   local home=$1 id=$2 proj=$3 pane=$4 fakebin=$5
   mkdir -p "$home/data/$id"
-  printf 'source: human\nbatch_id: test-fixture\nbrief\n' > "$home/data/$id/brief.md"
+  printf 'brief\n' > "$home/data/$id/brief.md"
   FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
@@ -277,7 +256,7 @@ SH
 run_spawn_record() {
   local home=$1 id=$2 proj=$3 pane=$4 fakebin=$5 rec=$6
   mkdir -p "$home/data/$id"
-  printf 'source: human\nbatch_id: test-fixture\nbrief\n' > "$home/data/$id/brief.md"
+  printf 'brief\n' > "$home/data/$id/brief.md"
   FM_ROOT_OVERRIDE='' FM_HOME="$home" \
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \

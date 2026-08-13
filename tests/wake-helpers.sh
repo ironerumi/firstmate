@@ -42,22 +42,6 @@ REC
 chmod +x "$_fm_wedge_rec_dir/rec"
 export FM_WEDGE_ALARM_EXEC="$_fm_wedge_rec_dir/rec"
 
-# Supervision-alert notifier recorder (safety seam), same reasoning as the wedge
-# recorder above: bin/fm-alert-lib.sh fires a real macOS notification and a real
-# Slack post by default, and both the watcher and the arm layer can reach it.
-# Sourcing this harness makes that impossible to forget. The recorder logs
-# "<channel>\t<title>\t<summary>" to $FM_ALERT_LOG (unset means /dev/null), and
-# FM_ALERT_FAIL=<channel> makes it exit non-zero for that channel so a suite can
-# exercise per-channel failure isolation.
-cat > "$_fm_wedge_rec_dir/alert-rec" <<'REC'
-#!/usr/bin/env bash
-printf '%s\t%s\t%s\n' "${1:-}" "${2:-}" "${3:-}" >> "${FM_ALERT_LOG:-/dev/null}"
-case " ${FM_ALERT_FAIL:-} " in *" ${1:-} "*) exit 1 ;; esac
-exit 0
-REC
-chmod +x "$_fm_wedge_rec_dir/alert-rec"
-export FM_ALERT_EXEC="$_fm_wedge_rec_dir/alert-rec"
-
 # append_wake <state> <kind> <key> <payload>: append a wake record to the durable
 # queue in a subshell scoped to <state>, using the production wake library.
 append_wake() {
@@ -124,6 +108,29 @@ exit 0
 SH
   chmod +x "$fakebin/fm-crew-state.sh"
   printf '%s\n' "$fakebin/fm-crew-state.sh"
+}
+
+# Prime <file>'s .seen-* marker to its CURRENT signature through the production
+# signature owner (bin/fm-wake-lib.sh), so a test can declare "everything in
+# this file was already surfaced or deliberately absorbed" before exercising
+# the next wake, self-announced append, or annotation decision.
+prime_status_seen() {  # <state> <file>
+  FM_STATE_OVERRIDE="$1" bash -c '
+    . "$1"
+    sig=$(fm_wake_signal_sig "$3") || exit 1
+    [ -n "$sig" ] || exit 1
+    printf "%s" "$sig" > "$(fm_wake_signal_seen_path "$2" "$3")"
+  ' _ "$ROOT/bin/fm-wake-lib.sh" "$1" "$2"
+}
+
+# Acknowledge a drain from its captured stderr (the WAKE_ACK_REQUIRED line).
+ack_drain_err() {  # <state> <stderr-file>
+  local state=$1 err=$2 sequence generation
+  sequence=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation [A-Za-z0-9._-][A-Za-z0-9._-]*$/\1/p' "$err")
+  generation=$(sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through [0-9][0-9]* --recovery-generation \([A-Za-z0-9._-][A-Za-z0-9._-]*\)$/\1/p' "$err")
+  [ -n "$sequence" ] && [ -n "$generation" ] || return 1
+  FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-wake-drain.sh" \
+    --ack-through "$sequence" --recovery-generation "$generation"
 }
 
 make_supercase() {

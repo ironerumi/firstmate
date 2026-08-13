@@ -19,9 +19,10 @@
 #      down into each secondmate home's config/, so the secondmate's OWN crewmates,
 #      dispatch profiles, backlog backend, runtime-backend default, Herdr
 #      presentation choice, startup-memory budget, and trace context inherit the
-#      primary's settings. config/herdr-presentation-spaces is default-ON, so an
-#      absent primary file and an absent destination file both mean on and the
-#      generic absence mirror already converges that item correctly.
+#      primary's settings. For config/herdr-presentation-spaces, an absent
+#      primary file and an absent destination file both mean the same
+#      unconfigured default, so the generic absence mirror converges that item
+#      without deciding its release-dependent floor.
 #      It is primary-authoritative
 #      (re-pushed at secondmate spawn, on the bootstrap secondmate sweep, and by
 #      config push).
@@ -62,7 +63,7 @@ unset CLAUDECODE
 # ambient CLAUDECODE=1, the pi-signed ancestry case resolves "claude". Drop the
 # ambient markers so what this suite asserts does not depend on which harness it
 # was launched from; every case states the marker it means to test.
-unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT
+unset CLAUDECODE PI_CODING_AGENT FM_PI_HARNESS GROK_AGENT CURSOR_AGENT CURSOR_INVOKED_AS
 
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 fm_git_identity fmtest fmtest@example.com
@@ -103,6 +104,27 @@ crew=default resolves to own, secondmate follows^default^-^claude^claude
 secondmate=default with crew absent -> own^-^default^claude^claude
 ROWS
   pass "A1 fm-harness.sh secondmate resolves the fallback chain; crew mode unchanged"
+}
+
+test_cursor_marker_detection() {
+  local dir fakebin got
+  dir="$TMP_ROOT/cursor-marker"
+  fakebin=$(fm_fakebin "$dir")
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+case "$*" in
+  *'ppid='*) printf '%s\n' 1 ;;
+  *) printf '%s\n' bash ;;
+esac
+SH
+  chmod +x "$fakebin/ps"
+  got=$(env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT \
+    PATH="$fakebin:$BASE_PATH" CURSOR_INVOKED_AS=cursor-agent "$ROOT/bin/fm-harness.sh")
+  [ "$got" = cursor ] || fail "Cursor's exact launcher marker resolved '$got', expected cursor"
+  got=$(env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT \
+    PATH="$fakebin:$BASE_PATH" CURSOR_INVOKED_AS=cursor "$ROOT/bin/fm-harness.sh")
+  [ "$got" != cursor ] || fail "an inexact Cursor marker value was accepted as Cursor Agent CLI"
+  pass "fm-harness detects only Cursor Agent CLI's exact invocation marker"
 }
 
 # ===========================================================================
@@ -567,6 +589,32 @@ test_spawn_unverified_secondmate_harness_refused() {
   pass "B6 spawn: an unverified resolved secondmate harness is refused (guard intact)"
 }
 
+test_spawn_cursor_secondmate_refused() {
+  local w sm fakebin err rc
+  w="$TMP_ROOT/spawn-cursor-secondmate"
+  sm="$w/sm"
+  mkdir -p "$w/home/config" "$w/home/state"
+  printf 'cursor\n' > "$w/home/config/secondmate-harness"
+  make_seeded_home "$sm" sm
+  fakebin=$(make_noop_tmux "$w/tmux")
+  err="$w/spawn.err"
+  rc=0
+  PATH="$fakebin:$BASE_PATH" TMUX='' CLAUDECODE=1 \
+    FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$w/home" \
+    FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
+    FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
+    FM_SPAWN_NO_GUARD=1 \
+    "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate >/dev/null 2>"$err" || rc=$?
+
+  [ "$rc" -ne 0 ] || fail "cursor secondmate spawn should have failed"
+  assert_contains "$(cat "$err")" "verified crewmate/scout adapter only" \
+    "cursor secondmate refusal did not explain the verified boundary"
+  assert_contains "$(cat "$err")" "no primary supervision protocol" \
+    "cursor secondmate refusal did not name the missing safety contract"
+  [ -e "$w/home/state/sm.meta" ] && fail "cursor secondmate refusal still wrote task metadata"
+  pass "Cursor is accepted for workers but refused for secondmates"
+}
+
 # ===========================================================================
 # C integration: config/secondmate-harness's optional model/effort tokens thread
 # into the secondmate launch command and meta, durably and without a new file.
@@ -609,6 +657,7 @@ esac
 exit 0
 SH
   chmod +x "$fakebin/tmux"
+  fm_fake_exit0 "$fakebin" pi
   printf '%s\n' "$fakebin"
 }
 
@@ -850,9 +899,13 @@ test_spawned_secondmate_uses_its_harness_supervision_model() {
     fm_write_meta "$sm/state/task.meta" "window=firstmate:fm-task" "kind=ship"
     touch "$sm/state/.last-watcher-beat"
     fakebin="$w/tmux-sm/fakebin"
+    # Point the guard at the fixture home, not at whatever checkout this suite
+    # happens to be running from. The guard also reports a tangled primary
+    # checkout, so without this the branch a contributor is working on decides
+    # whether this assertion passes.
     cat > "$fakebin/$harness" <<SH
 #!/usr/bin/env bash
-"$ROOT/bin/fm-guard.sh"
+FM_ROOT_OVERRIDE="$sm" "$ROOT/bin/fm-guard.sh"
 SH
     chmod +x "$fakebin/$harness"
     launch=$(cat "$launchlog")
@@ -981,7 +1034,8 @@ make_fake_toolchain() {
   local dir=$1 fakebin
   fakebin="$dir/fakebin"
   mkdir -p "$fakebin"
-  fm_fake_exit0 "$fakebin" node chrome-devtools-axi lavish-axi
+  fm_fake_exit0 "$fakebin" node chrome-devtools-axi
+  fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.46
   cat > "$fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = --version ]; then
@@ -1002,7 +1056,7 @@ case "$*" in
   *display-message*'#{pane_current_command}'*) printf '%s\n' codex; exit 0 ;;
   *display-message*'#{pane_id}'*) printf '%s\n' '%1'; exit 0 ;;
   *display-message*'#{cursor_y}'*) printf '%s\n' 0; exit 0 ;;
-  *capture-pane*) printf '\n'; exit 0 ;;
+  *capture-pane*) printf '❯\n'; exit 0 ;;
   *'send-keys'*' -l '*)
     [ "${FM_FAKE_TMUX_FAIL_LITERAL:-0}" = 1 ] && exit 1
     exit 0
@@ -1040,7 +1094,7 @@ SH
   cat > "$fakebin/tasks-axi" <<'SH'
 #!/usr/bin/env bash
 case "${1:-} ${2:-}" in
-  "--version ") printf '%s\n' '0.2.2' ;;
+  "--version ") printf '%s\n' '0.2.4' ;;
   "update --help") printf '%s\n' 'usage: tasks-axi update <id> [flags]' '  --archive-body' ;;
   "mv --help") printf '%s\n' 'usage: tasks-axi mv <id> [<id>...] --to <path-or-dir>' ;;
 esac
@@ -1050,7 +1104,7 @@ SH
   cat > "$fakebin/quota-axi" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = --version ]; then
-  printf '%s\n' '0.1.16'
+  printf '%s\n' '0.1.25'
   exit 0
 fi
 exit 0
@@ -1342,14 +1396,20 @@ test_backend_inheritance_present_and_absent() {
   pass "B12b backend inheritance: present values and primary absence converge exactly"
 }
 
-# config/herdr-presentation-spaces is default-ON, so this item's convergence is
-# asserted through the verdict the spawn gate actually reads in the destination
-# home, not through file presence alone: mirroring the primary's absence must
-# converge a secondmate to the same default rather than turning its projection off.
+# config/herdr-presentation-spaces has an unconfigured default, so this item's
+# convergence is asserted through the preference the spawn gate actually reads
+# in the destination home, not through file presence alone: mirroring the primary's
+# absence must converge a secondmate to the same unconfigured default rather
+# than turning its projection off. The Herdr version floor that decides what
+# that default resolves to is a property of the running release, not of
+# inheritance, so it is pinned in tests/fm-backend-herdr.test.sh instead.
 sm_presentation_verdict() {  # <config-dir> -> on|off
   bash -c '
     . "$0/bin/backends/herdr.sh"
-    if fm_backend_herdr_presentation_enabled "$1"; then printf "on\n"; else printf "off\n"; fi
+    case "$(fm_backend_herdr_presentation_preference "$1")" in
+      off) printf "off\n" ;;
+      *) printf "on\n" ;;
+    esac
   ' "$ROOT" "$1" 2>/dev/null
 }
 
@@ -2365,7 +2425,7 @@ case "\$*" in
   *display-message*'#{pane_current_command}'*) printf '%s' zsh ;;
   *display-message*'#{pane_id}'*) printf '%s' '%1' ;;
   *display-message*'#{cursor_y}'*) printf '%s' 0 ;;
-  *capture-pane*) :
+  *capture-pane*) printf '❯\n'
     ;;
   *send-keys*) printf '%s' send-keys >> '$log' ;;
 esac
@@ -2458,6 +2518,7 @@ SH
 }
 
 test_harness_resolution
+test_cursor_marker_detection
 test_secondmate_model_effort_tokens
 test_pi_signed_detection_and_session_lock_identity
 test_dash_leading_process_names_are_basename_operands
@@ -2467,6 +2528,7 @@ test_spawn_backward_compat_crew_fallback
 test_spawn_bare_backward_compat
 test_spawn_explicit_harness_wins
 test_spawn_unverified_secondmate_harness_refused
+test_spawn_cursor_secondmate_refused
 test_spawn_backend_precedence_over_inherited_config
 test_spawn_explicit_backend_precedence_over_env_and_inherited_config
 test_spawn_bare_harness_no_model_effort_flag

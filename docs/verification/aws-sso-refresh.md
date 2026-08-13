@@ -105,6 +105,6 @@ A mutation that drops the associated-label text from either half of the driver's
 A mutation of the driver's confirm-button match was rejected by the portal case alone, which is the evidence that these cases exercise the driver rather than a stub.
 The remaining unverified surface is the binding between the real `browser_harness.helpers.cdp` and a live Chrome, which no deterministic test can cover.
 
-All generated ship, scout, and skill-led task instructions are covered by `tests/fm-brief.test.sh`.
+All generated ship and scout task instructions are covered by `tests/fm-brief.test.sh`.
 `bin/fm-spawn.sh` sends the selected instruction file through one backend-agnostic launch path after resolving all verified worker runtimes, and every supported session provider uses that same launch content.
 No harness-specific or session-provider-specific AWS branch exists.

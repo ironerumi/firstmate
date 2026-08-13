@@ -4,18 +4,10 @@
 # Matrix:
 #   (a) baseline: an approved local-only branch fast-forwards the project's
 #       default branch (origin-default resolution)
-#   (b) home-checkout landing: when the project IS this home's primary
-#       Firstmate checkout, a valid config/primary-branch names the landing
-#       branch and the default branch stays untouched
-#   (c) ordinary projects ignore the home's config/primary-branch even when a
-#       branch of that name exists in the project (no weakening)
-#   (d) an invalid config/primary-branch preserves the default-branch refusal
-#       when the home checkout sits on another branch
-#   (e) non-local-only tasks are refused
-#   (f) the test runner keeps this file in the pr-forge family, so --changed
+#   (b) non-local-only tasks are refused
+#   (c) the test runner keeps this file in the pr-forge family, so --changed
 #       selection on bin/fm-merge-local.sh still runs it
-#   (g) a change to bin/fm-tangle* (home of the landing-branch helper) also
-#       selects this file through the runner's changed-file map
+#   (d) a change to bin/fm-tangle* also selects this file through the runner map
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -35,7 +27,6 @@ make_case() {
 }
 
 # Init <dir> as a git repo normalized onto `main` with one baseline commit.
-# config/ is gitignored like the real firstmate home, so a primary-branch
 # config never reads as a dirty tree.
 init_repo_on_main() {
   local dir=$1
@@ -94,79 +85,6 @@ test_baseline_ff_into_main() {
   pass "fm-merge-local fast-forwards the project default branch (baseline)"
 }
 
-test_home_checkout_lands_on_configured_primary() {
-  local case_dir home main_before
-  case_dir=$(make_case home-primary)
-  home="$case_dir/home"
-  init_repo_on_main "$home"
-  git -C "$home" checkout -q -b dorofune main
-  add_task_branch "$home" dorofune
-  mkdir -p "$home/config"
-  printf '%s\n' dorofune > "$home/config/primary-branch"
-  main_before=$(git -C "$home" rev-parse main)
-  write_meta "$case_dir" "$home"
-
-  FM_HOME="$home" run_merge_local "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" \
-    || fail "home-primary: fm-merge-local failed: $(cat "$case_dir/stderr")"
-
-  [ "$(git -C "$home" rev-parse dorofune)" = "$(git -C "$home" rev-parse fm/task-x1)" ] \
-    || fail "home-primary: configured primary branch was not fast-forwarded"
-  [ "$(git -C "$home" rev-parse main)" = "$main_before" ] \
-    || fail "home-primary: main moved even though the configured primary owns the landing"
-  assert_grep 'into local dorofune' "$case_dir/stdout" \
-    "home-primary: merge outcome did not name the configured primary branch"
-  pass "fm-merge-local lands on config/primary-branch when the project is the home checkout"
-}
-
-test_ordinary_project_ignores_home_primary_config() {
-  local case_dir home proj dorofune_before
-  case_dir=$(make_case ordinary-project)
-  home="$case_dir/home"
-  proj="$case_dir/project"
-  mkdir -p "$home/config"
-  printf '%s\n' dorofune > "$home/config/primary-branch"
-  init_repo_on_main "$proj"
-  git -C "$proj" branch dorofune main
-  dorofune_before=$(git -C "$proj" rev-parse dorofune)
-  add_task_branch "$proj" main
-  write_meta "$case_dir" "$proj"
-
-  FM_HOME="$home" run_merge_local "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" \
-    || fail "ordinary-project: fm-merge-local failed: $(cat "$case_dir/stderr")"
-
-  [ "$(git -C "$proj" rev-parse main)" = "$(git -C "$proj" rev-parse fm/task-x1)" ] \
-    || fail "ordinary-project: main was not fast-forwarded"
-  [ "$(git -C "$proj" rev-parse dorofune)" = "$dorofune_before" ] \
-    || fail "ordinary-project: the home's primary-branch config leaked into an ordinary project"
-  assert_grep 'into local main' "$case_dir/stdout" \
-    "ordinary-project: merge outcome did not name main"
-  pass "fm-merge-local ignores config/primary-branch for projects that are not the home checkout"
-}
-
-test_invalid_primary_config_keeps_default_refusal() {
-  local case_dir home rc
-  case_dir=$(make_case invalid-config)
-  home="$case_dir/home"
-  init_repo_on_main "$home"
-  git -C "$home" checkout -q -b dorofune main
-  add_task_branch "$home" dorofune
-  mkdir -p "$home/config"
-  printf '%s\n' no-such-branch > "$home/config/primary-branch"
-  write_meta "$case_dir" "$home"
-
-  set +e
-  FM_HOME="$home" run_merge_local "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
-  rc=$?
-  set -e
-
-  expect_code 1 "$rc" "invalid-config: fm-merge-local should refuse"
-  assert_grep "expected default branch 'main'" "$case_dir/stderr" \
-    "invalid-config: refusal did not fall back to the default branch"
-  [ "$(git -C "$home" rev-parse dorofune)" != "$(git -C "$home" rev-parse fm/task-x1)" ] \
-    || fail "invalid-config: an invalid primary-branch config still landed the merge"
-  pass "fm-merge-local falls back to the default-branch guard on invalid primary-branch config"
-}
-
 test_non_local_only_mode_refused() {
   local case_dir proj rc
   case_dir=$(make_case wrong-mode)
@@ -199,7 +117,6 @@ test_runner_classifies_this_test_into_pr_forge() {
   pass "the test runner classifies fm-merge-local.test.sh into the pr-forge family"
 }
 
-# The landing branch itself is resolved by fm_home_primary_landing_branch in
 # bin/fm-tangle-lib.sh, and the only tests exercising it are pr-forge ones (this
 # file and fm-teardown). The runner's changed-path map otherwise routes
 # bin/fm-tangle* to session-bootstrap alone, so editing the helper would select
@@ -226,9 +143,6 @@ test_tangle_source_change_selects_this_test() {
 }
 
 test_baseline_ff_into_main
-test_home_checkout_lands_on_configured_primary
-test_ordinary_project_ignores_home_primary_config
-test_invalid_primary_config_keeps_default_refusal
 test_non_local_only_mode_refused
 test_runner_classifies_this_test_into_pr_forge
 test_tangle_source_change_selects_this_test
