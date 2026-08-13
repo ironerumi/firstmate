@@ -6,33 +6,11 @@
 # description, acceptance criteria, and context, and may adjust other sections
 # when the task genuinely deviates (e.g. working an existing external PR instead
 # of shipping a new one).
-# Usage: fm-brief.sh <task-id> <repo-name> --mode <no-mistakes|direct-PR|local-only> [--free-form] [--herdr-lab]
-#                     [--source firstmate|human] [--batch <id>] [--no-narration] [--atomic <reason>]
-#        fm-brief.sh <task-id> <repo-name> --scout [--herdr-lab] [--source firstmate|human] [--batch <id>]
+# Usage: fm-brief.sh <task-id> <repo-name> --mode <no-mistakes|direct-PR|local-only> [--herdr-lab]
+#        fm-brief.sh <task-id> <repo-name> --scout [--herdr-lab]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
-#                     [--source firstmate|human] [--batch <id>]
 #   --scout writes the scout contract instead: the deliverable is a report at
 #   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is scratch.
-#   Ship briefs route review ownership by delivery mode. no-mistakes projects always
-#   receive the full pipeline-led contract, where the pipeline owns review. direct-PR
-#   and local-only projects default to a concise skill-led contract for an exact skill
-#   invocation that owns implementation, review, tests, and delivery mechanics.
-#   --free-form opts a direct-PR or local-only ship task into the full mode-shaped
-#   contract when no exact owning skill applies. On no-mistakes projects it is an
-#   idempotent compatibility flag and cannot restore skill-led review ownership.
-#   --no-narration explicitly arms the narration experiment for a pipeline-led
-#   no-mistakes ship brief. That brief stamps exactly one machine-readable
-#   `narration_arm: on|off` line. The flag is rejected for every other brief shape,
-#   and no other shape stamps the marker.
-#   Without the flag, that same shape is armed automatically from --batch: the arm
-#   is the parity of the batch id's POSIX CRC-32 (`printf '%s' <id> | cksum`, odd =
-#   on), so one batch id always resolves to the same arm and every brief of one
-#   batch shares it, which is what lets both cohorts accrue. Precedence is explicit
-#   over automatic: --no-narration always yields `on`. A brief with no --batch keeps
-#   the "unknown" sentinel and stays `off`, because that sentinel groups unrelated
-#   one-off briefs rather than a cohort. A cksum that yields no CRC-32 refuses the
-#   scaffold instead of falling back to `off`, so a broken host cannot silently put
-#   part of one batch in the other arm.
 #   --secondmate writes a persistent secondmate charter. The project list
 #   is cloned into the secondmate home, while the natural-language scope
 #   tells the main firstmate when to route work there; routine churn stays in its own home;
@@ -44,23 +22,6 @@
 #   omitting both still fails loudly so an accidental omission is never silent.
 #   Set FM_SECONDMATE_CHARTER='<charter>' to fill the charter text.
 #   Set FM_SECONDMATE_SCOPE='<scope>' to write a routing scope distinct from the charter text.
-#   --source firstmate|human stamps the generated brief's provenance line for the
-#   kaizen batch scanner (default human: misclassification undercounts firstmate,
-#   never pollutes it). --batch <id> stamps the shared batch grouping id for the
-#   same scanner (default sentinel "unknown" when omitted). Every generated
-#   variant (pipeline-led ship, skill-led ship, free-form ship, scout, and secondmate) carries
-#   exactly one `source:` + `batch_id:` pair. Malformed or missing option values,
-#   including an empty or multi-line --batch id, are rejected before any file is
-#   written, so both stamps stay one machine-readable line each.
-#   Every ship brief carries a Change sizing section, and this scaffold is the
-#   single owner of that contract. The default is sequential: independent parts
-#   of a task are implemented and delivered one at a time, because a restarted
-#   pipeline run costs the whole batch rather than the part that failed. There is
-#   deliberately NO line-count or todo-count cap - size alone never decides.
-#   --atomic <reason> writes the one-change variant instead, and exists to make
-#   the concrete reason mandatory: an atomic brief cannot be scaffolded without
-#   stating why an intermediate state would be inconsistent, and the reason is
-#   written into the brief the worker reads. It applies only to ship briefs.
 #   --herdr-lab is mandatory when the task will issue Herdr lifecycle commands.
 #   It adds the hard isolation contract backed by bin/fm-herdr-lab.sh.
 #   The flag must be explicit because {TASK} is filled after scaffolding and the
@@ -141,14 +102,8 @@ else
   STATE="$FM_HOME/state"
 fi
 KIND=ship
-FREE_FORM=0
 HERDR_LAB=0
 NO_PROJECTS=0
-NO_NARRATION=0
-ATOMIC_REASON=""
-ATOMIC=0
-SOURCE=human
-BATCH=unknown
 MODE=
 MODE_SET=0
 POS=()
@@ -160,26 +115,6 @@ for a in "$@"; do
     esac
     case "$want_value" in
       mode) MODE=$a; MODE_SET=1 ;;
-      atomic)
-        ATOMIC_REASON=$a
-        ATOMIC=1
-        case "$ATOMIC_REASON" in
-          ''|*$'\n'*) echo "error: --atomic requires the concrete reason an intermediate state would be inconsistent" >&2; exit 1 ;;
-        esac
-        ;;
-      source)
-        SOURCE=$a
-        case "$SOURCE" in
-          firstmate|human) ;;
-          *) echo "error: --source must be 'firstmate' or 'human' (got: $SOURCE)" >&2; exit 1 ;;
-        esac
-        ;;
-      batch)
-        BATCH=$a
-        case "$BATCH" in
-          ''|*$'\n'*) echo "error: --batch value must not be empty or multi-line" >&2; exit 1 ;;
-        esac
-        ;;
       *) echo "error: internal parser state for --$want_value" >&2; exit 1 ;;
     esac
     want_value=
@@ -187,31 +122,19 @@ for a in "$@"; do
   fi
   case "$a" in
     --scout) KIND=scout ;;
-    --free-form) FREE_FORM=1 ;;
     --secondmate) KIND=secondmate ;;
     --herdr-lab) HERDR_LAB=1 ;;
     --no-projects) NO_PROJECTS=1 ;;
-    --no-narration) NO_NARRATION=1 ;;
-    --atomic) want_value=atomic ;;
-    --source) want_value=source ;;
-    --batch) want_value='batch' ;;
     --mode) want_value=mode ;;
     --mode=*) MODE=${a#--mode=}; MODE_SET=1 ;;
     # yolo never reaches the worker: it is firstmate's approval authority, not a
     # brief input. Refuse it loudly so it is never silently dropped here and then
     # believed to have been recorded.
     --yolo|--yolo=*) echo "error: --yolo is not a brief input; pass it to bin/fm-spawn.sh, which records the task's approval posture" >&2; exit 1 ;;
-    --*) echo "error: unknown option: $a" >&2; exit 1 ;;
     *) POS+=("$a") ;;
   esac
 done
-if [ -n "$want_value" ]; then
-  case "$want_value" in
-    atomic) echo "error: --atomic requires the concrete reason an intermediate state would be inconsistent" >&2 ;;
-    *) echo "error: --$want_value requires a value" >&2 ;;
-  esac
-  exit 1
-fi
+[ -z "$want_value" ] || { echo "error: --$want_value requires a value" >&2; exit 1; }
 
 # Ship delivery mode is an explicit per-task decision (AGENTS.md section 7). A
 # missing or invalid value stops the scaffold rather than silently defaulting.
@@ -233,11 +156,6 @@ elif [ "$MODE_SET" -eq 1 ]; then
 fi
 ID=${POS[0]}
 
-if [ "$FREE_FORM" -eq 1 ] && [ "$KIND" != ship ]; then
-  echo "error: --free-form applies only to ship briefs" >&2
-  exit 1
-fi
-
 if [ "$KIND" = secondmate ] && [ "$HERDR_LAB" -eq 1 ]; then
   echo "error: --herdr-lab applies only to crewmate ship or scout briefs" >&2
   exit 1
@@ -246,35 +164,6 @@ fi
 if [ "$NO_PROJECTS" -eq 1 ] && [ "$KIND" != secondmate ]; then
   echo "error: --no-projects applies only to --secondmate charters" >&2
   exit 1
-fi
-
-if [ "$NO_NARRATION" -eq 1 ] && [ "$KIND" != ship ]; then
-  echo "error: --no-narration applies only to pipeline-led no-mistakes ship briefs" >&2
-  exit 1
-fi
-
-if [ "$ATOMIC" -eq 1 ] && [ "$KIND" != ship ]; then
-  echo "error: --atomic applies only to ship briefs" >&2
-  exit 1
-fi
-
-# The one sizing contract every ship brief carries. Sequential is the default
-# because independent parts that ship together share one failure: a restarted
-# pipeline run re-reviews and re-tests the whole batch. Neither variant names a
-# line or todo count - the test is whether the parts are independent, not how
-# large they are - and the atomic variant cannot exist without the concrete
-# reason --atomic required above.
-if [ "$ATOMIC" -eq 1 ]; then
-  SIZING_SECTION="# Change sizing
-This task ships as ONE atomic change, because an intermediate state would be inconsistent: $ATOMIC_REASON
-Deliver it whole, and keep everything not covered by that reason as small as it can coherently be.
-If that reason turns out not to hold once you are inside the code, say so in a \`needs-decision:\` line rather than splitting the delivery on your own."
-else
-  SIZING_SECTION="# Change sizing
-Parts of this task that can be implemented and verified independently ship one at a time: take the smallest coherent part, carry it through the definition of done below, and only then start the next.
-Do not batch independent parts into one delivery to save round trips - they then share one failure, and a restarted validation run re-reviews and re-tests all of them.
-Size alone never decides this: there is no line count or item count that makes a change too large, only whether its parts are independent.
-If the parts turn out not to be independent - an intermediate state would be inconsistent - say so in a \`needs-decision:\` line with the concrete reason before delivering them together."
 fi
 
 BRIEF="$DATA/$ID/brief.md"
@@ -312,9 +201,6 @@ else
 fi
 cat > "$BRIEF" <<EOF
 You are a persistent second mate managed by the main firstmate. Work on your own; do not wait for a human.
-
-source: $SOURCE
-batch_id: $BATCH
 
 # Charter
 $SECONDMATE_CHARTER
@@ -359,7 +245,8 @@ Never append \`working:\` merely to acknowledge receipt or announce that a marke
 When a routed-work phase has a supervisor-actionable material change worth reporting under the rule above, give that reported phase a stable key.
 If its first reportable event is \`working [key=<work-slug>]: {material phase}\`, use the same key on its later \`$PAUSED_VERB\`, \`done\`, \`failed\`, \`needs-decision\`, or \`blocked\` event so the earlier working phase is superseded.
 When a keyed phase ends without another reportable state, append \`resolved [key=<work-slug>]: {why it is no longer active}\`.
-When a decision you escalated is answered or a blocker clears and your domain resumes, append \`resolved: {how it was decided or unblocked}\` (keyed with \`[key=<slug>]\` if you opened it with one) so it is durably closed instead of resurfacing behind later unrelated events.
+\`resolved\` separately closes an escalated decision or blocker, and only a \`resolved\` line carrying that decision's exact key closes it: a later \`done\` or \`working\` event never does, even when the answer is what started that work.
+The main firstmate's answer normally writes that closing line at answer time; when a blocker or wait clears WITHOUT an answer from the main firstmate, append \`resolved: {how it cleared}\` yourself (keyed with \`[key=<slug>]\` if you opened it with one) as your domain resumes.
 Routine internal supervision, heartbeats, retries, and crewmate churn stay inside your own home and must not touch that status file.
 
 # Definition of done
@@ -415,9 +302,6 @@ if [ "$KIND" = scout ]; then
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
 
-source: $SOURCE
-batch_id: $BATCH
-
 # Task
 {TASK}
 
@@ -432,7 +316,7 @@ The report is the only thing that survives, so anything worth keeping must be in
 # Rules
 1. Never push to any remote and never open a PR.
 2. Stay inside this worktree; the only files you may write outside it are the report and the status file below.
-3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations. For an expired AWS SSO session during already-authorized AWS work, use \`$FM_ROOT/bin/fm-aws-sso-refresh.sh\` instead of a project browser recipe.
+3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
    States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
@@ -446,7 +330,8 @@ The report is the only thing that survives, so anything worth keeping must be in
 5. If you hit the same obstacle twice, append \`blocked: {why}\` and stop; firstmate will help.
 6. If a decision belongs to a human (product choices, destructive actions),
    append \`needs-decision: {summary of options}\` and stop. Firstmate will reply with the decision.
-   When firstmate replies or a blocker clears and you resume, append \`resolved: {how it was decided or unblocked}\` (add the same \`[key=<slug>]\` if you opened it with one) so the decision or blocker is durably closed and does not keep resurfacing.
+   A decision or blocker you opened stays open until a \`resolved\` line carrying its exact key lands; a later \`done:\` or \`working:\` line never closes it, even when the answer is what started that work.
+   Firstmate's reply normally writes that closing line at answer time; when a blocker or wait clears WITHOUT a firstmate reply, append \`resolved: {how it cleared}\` yourself (same \`[key=<slug>]\` if you opened it with one) as you resume.
 7. Never stop, restart, or update the shared \`no-mistakes\` daemon - it is one instance serving
    every lane/home, so restarting it kills other lanes' in-flight pipeline runs. On ANY no-mistakes
    daemon error, append \`blocked: {the daemon error}\` and stop; only firstmate manages the daemon.
@@ -462,100 +347,14 @@ echo "scaffolded: $BRIEF (scout; replace {TASK})"
 exit 0
 fi
 
-# Review ownership follows this task's explicit --mode (validated above as an
-# intake decision, not looked up here): no-mistakes always receives the full
-# pipeline-led contract, where the pipeline owns review. direct-PR and local-only
-# default to a concise skill-led contract naming one owning skill, unless
-# --free-form opts into the full mode-shaped contract.
-if [ "$NO_NARRATION" -eq 1 ] && [ "$MODE" != no-mistakes ]; then
-  echo "error: --no-narration applies only to pipeline-led no-mistakes ship briefs" >&2
-  exit 1
-fi
-
-# Narration-arm assignment for the one eligible shape: the pipeline-led
-# no-mistakes ship brief (the same shape --no-narration is accepted for, and the
-# only one that stamps narration_arm at all). Explicit --no-narration wins, so
-# every existing caller keeps its exact arm. Otherwise a real --batch id selects
-# the arm from the parity of its POSIX CRC-32, which `cksum` computes identically
-# on every supported platform: one id therefore always resolves to the same arm,
-# and every brief of one batch shares it, which is what lets both cohorts accrue
-# without a hand-passed flag. The "unknown" sentinel (no --batch) stays in the
-# control arm because it groups unrelated one-off briefs rather than a cohort.
-NARRATION_ARM=off
-if [ "$MODE" = no-mistakes ]; then
-  if [ "$NO_NARRATION" -eq 1 ]; then
-    NARRATION_ARM=on
-  elif [ "$BATCH" != unknown ]; then
-    # awk, not a prefix strip: cksum output is one line of whitespace-separated
-    # fields, and implementations differ on padding around the checksum.
-    BATCH_CRC=$(printf '%s' "$BATCH" | cksum | awk '{print $1}')
-    # No usable CRC must never read as the control arm: that would be the stuck
-    # single-arm failure again, and would split one batch across arms by host.
-    case "$BATCH_CRC" in
-      ''|*[!0-9]*)
-        echo "error: cksum produced no CRC-32 for --batch '$BATCH' (got: '$BATCH_CRC'); the narration arm requires a working POSIX cksum" >&2
-        exit 1
-        ;;
-    esac
-    [ $((BATCH_CRC % 2)) -eq 0 ] || NARRATION_ARM=on
-  fi
-fi
-
-if [ "$MODE" != no-mistakes ] && [ "$FREE_FORM" -eq 0 ]; then
-cat > "$BRIEF" <<EOF
-You are a crewmate: an autonomous worker agent managed by firstmate.
-
-source: $SOURCE
-batch_id: $BATCH
-
-# Task
-{TASK}
-
-$HERDR_SECTION
-
-$SIZING_SECTION
-
-# Safety envelope
-Verify that \`pwd -P\` and \`git rev-parse --show-toplevel\` both resolve to this isolated task worktree, never the primary project copy.
-Stop before writing if that assertion fails.
-Work only inside this worktree, except for the status file below.
-Never push to the default branch.
-Merge only when the task text explicitly grants that authority; otherwise return the ready branch or PR to firstmate.
-Invoke the named skill exactly as written and let it own implementation, review, tests, documentation, and delivery mechanics.
-Do not stack a second workflow or independent review around the owning skill.
-Never discard, reset, or hide unlanded work.
-Never stop, restart, or update the shared no-mistakes daemon.
-For an expired AWS SSO session during already-authorized AWS work, use \`$FM_ROOT/bin/fm-aws-sso-refresh.sh\` instead of a project browser recipe.
-
-# Supervisor channel
-Append sparse, actionable events to $STATUS_FILE using one of: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
-Use \`$PAUSED_VERB: {why}\` only for a bounded external wait expected to clear on its own; use \`blocked:\` when firstmate must act.
-For a human decision, append one \`needs-decision:\` question with your recommendation and wait.
-After an answer or cleared blocker, append the matching \`resolved:\` event before continuing.
-
-# Definition of done
-Delivery contract: mode=$MODE
-Follow the named skill through its terminal outcome.
-Append \`done:\` with the concrete artifact - corrected document path, ready branch, or full green PR URL - and stop.
-If the skill cannot complete safely, append \`blocked:\` or \`failed:\` with the concrete reason and preserve all work.
-EOF
-echo "scaffolded: $BRIEF (skill-led ship; replace {TASK})"
-exit 0
-fi
-
-# Pipeline-led no-mistakes briefs and explicit free-form briefs share the full
-# delivery-mode-shaped safety envelope below. Setup / Rule 1 / Definition of done
-# are shaped by this task's explicit --mode, validated above; the generated DOD
-# opens with the fixed "Delivery contract: mode=<mode>" line that bin/fm-spawn.sh
-# checks against its own explicit --mode before launching.
+# Ship task: shape Setup / Rule 1 / Definition of done by this task's explicit
+# delivery mode, validated above. The generated DOD opens with the fixed
+# "Delivery contract: mode=<mode>" line that bin/fm-spawn.sh checks against its own
+# explicit --mode before launching.
 case "$MODE" in
   direct-PR)
     SETUP2=""
-    # shellcheck disable=SC2016  # single quotes are deliberate: the backtick-wrapped commands are literal brief text; only the '"$ID"' break-outs interpolate.
-    RULE1='1. Never push to the default branch (push only your `fm/'"$ID"'` branch). Never merge a PR on your own:
-   raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden.
-   Sole exception: one exact `bin/fm-pr-merge.sh '"$ID"' <PR url> ...` command that firstmate itself sends you; run it verbatim, changing nothing.
-   Firstmate sends it only under captain authority to override branch protection - a per-PR authorization or an explicit standing preference - with review complete, CI green, and branch protection the only blocker.'
+    RULE1='1. Never push to the default branch (push only your `fm/'"$ID"'` branch). Never merge a PR.'
     IFS= read -r -d '' DOD <<EOF || true
 # Definition of done
 Delivery contract: mode=direct-PR
@@ -581,15 +380,7 @@ EOF
   *)  # no-mistakes
     SETUP2="
 2. Run \`no-mistakes doctor\`; if it reports the repo is not initialized here, run \`no-mistakes init\`."
-    # shellcheck disable=SC2016  # single quotes are deliberate: the backtick-wrapped commands are literal brief text; only the '"$ID"' break-out interpolates.
-    RULE1='1. Never push to the default branch. Never merge a PR on your own:
-   raw `gh`, `gh-axi pr merge`, API merge calls, direct pushes, and self-selected PRs are all forbidden.
-   Sole exception: one exact `bin/fm-pr-merge.sh '"$ID"' <PR url> ...` command that firstmate itself sends you; run it verbatim, changing nothing.
-   Firstmate sends it only under captain authority to override branch protection - a per-PR authorization or an explicit standing preference - with review complete, CI green, and branch protection the only blocker.'
-    if [ "$NARRATION_ARM" = on ]; then
-      RULE1="$RULE1
-1a. No-narration experiment arm: emit only status signals and the pipeline's required output; no meta-commentary between tool calls."
-    fi
+    RULE1='1. Never push to the default branch. Never merge a PR.'
     IFS= read -r -d '' DOD <<EOF || true
 # Definition of done
 Delivery contract: mode=no-mistakes
@@ -601,11 +392,6 @@ You drive no-mistakes by responding to its gates, not by implementing fixes.
 Follow the guidance no-mistakes itself provides for the mechanics: it loads when you invoke /no-mistakes, and \`no-mistakes axi run --help\` plus the \`help\` lines in each \`axi\` response are authoritative and version-matched to the installed binary.
 When starting no-mistakes, make \`--intent\` preserve all relevant content from this brief's \`# Task\` section plus every later accepted Firstmate requirement, clarification, constraint, exclusion, and supersession, carrying only each requirement's current accepted form; retain direct requirements instead of substituting a diff summary, and exclude generic operational, status, delivery, and other scaffold boilerplate unless it is task-specific.
 Do not hand-edit, commit, or fix findings yourself while a run is active - the pipeline applies every fix.
-
-One run owns validation of this branch at a time, and starting a second one, pushing over it, or abandoning it cancels it and re-runs every step it had already finished.
-While a run is live: inspect it with \`no-mistakes axi status\`, \`no-mistakes axi logs --step {step}\`, or \`no-mistakes attach\`, and continue it with \`no-mistakes axi respond\` - never a second \`no-mistakes axi run\` or \`rerun\`, never \`git push\` (the pipeline pushes at its own push step), and never an abort of a gate you could answer.
-If a step fails and the run cannot be driven forward, append \`blocked:\` naming the run id and the failing step, and stop - whether to spend a replacement run is firstmate's call, not yours.
-Those exact commands are refused while a run is live; a refusal is the signal to report, never to retry another way.
 
 Two firstmate-specific rules layer on top of that guidance:
 - ask-user findings are never yours to answer: escalate to firstmate (rule 6) and stop.
@@ -623,23 +409,13 @@ esac
 # briefs stay byte-identical to the historical Bash 5 output.
 DOD=${DOD%$'\n'}
 
-NARRATION_MARKER=
-if [ "$MODE" = no-mistakes ]; then
-  NARRATION_MARKER=$'\n'"narration_arm: $NARRATION_ARM"
-fi
-
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
-
-source: $SOURCE
-batch_id: $BATCH$NARRATION_MARKER
 
 # Task
 {TASK}
 
 $HERDR_SECTION
-
-$SIZING_SECTION
 
 # Setup
 You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.
@@ -653,7 +429,7 @@ If the top-level path is the primary checkout or not the worktree you were launc
 # Rules
 $RULE1
 2. Stay inside this worktree; modify nothing outside it.
-3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations. For an expired AWS SSO session during already-authorized AWS work, use \`$FM_ROOT/bin/fm-aws-sso-refresh.sh\` instead of a project browser recipe.
+3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
    States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
@@ -670,7 +446,8 @@ $RULE1
 5. If you hit the same obstacle twice, append \`blocked: {why}\` and stop; firstmate will help.
 6. If a decision belongs above the implementation worker (product choices, destructive actions, ask-user findings),
    append \`needs-decision: {summary of options}\` and stop. Firstmate will apply the configured authority and reply with the decision.
-   When firstmate replies or a blocker clears and you resume, append \`resolved: {how it was decided or unblocked}\` (add the same \`[key=<slug>]\` if you opened it with one) so the decision or blocker is durably closed and does not keep resurfacing.
+   A decision or blocker you opened stays open until a \`resolved\` line carrying its exact key lands; a later \`done:\` or \`working:\` line never closes it, even when the answer is what started that work.
+   Firstmate's reply normally writes that closing line at answer time; when a blocker or wait clears WITHOUT a firstmate reply, append \`resolved: {how it cleared}\` yourself (same \`[key=<slug>]\` if you opened it with one) as you resume.
 7. Never stop, restart, or update the shared \`no-mistakes\` daemon - it is one instance serving
    every lane/home, so restarting it kills other lanes' in-flight pipeline runs. On ANY no-mistakes
    daemon error, append \`blocked: {the daemon error}\` and stop; only firstmate manages the daemon.
@@ -684,8 +461,4 @@ Keep it proportionate: skip \`AGENTS.md\` edits for trivial tasks that produced 
 
 $DOD
 EOF
-if [ "$MODE" = no-mistakes ]; then
-  echo "scaffolded: $BRIEF (pipeline-led ship, mode=$MODE; replace {TASK})"
-else
-  echo "scaffolded: $BRIEF (free-form ship, mode=$MODE; replace {TASK})"
-fi
+echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK})"

@@ -41,10 +41,8 @@
 # watcher's identity-bound delivery record: a matching record reports that wake
 # and exits 0, and only a cycle that delivered nothing is the typed nonzero
 # failure. Neither is ever a clean empty completion. On FAILED it exits non-zero
-# so the failure is loud, AND raises one user-visible alert through
-# bin/fm-alert-lib.sh, deduplicated per outage until a cycle succeeds again. A
-# live cycle already present means re-arm attaches - do not start a second
-# watcher.
+# so the failure is loud. A live cycle already present means re-arm attaches - do
+# not start a second watcher.
 #
 # Every observed watcher cycle appends one tab-separated lifecycle record to
 # state/.watch-cycle-exits.log. The arm layer owns that bounded ledger; it records
@@ -65,8 +63,6 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
-# shellcheck source=bin/fm-alert-lib.sh
-. "$SCRIPT_DIR/fm-alert-lib.sh"
 
 WATCH="$SCRIPT_DIR/fm-watch.sh"
 WATCH_LOCK="$STATE/.watch.lock"
@@ -234,7 +230,7 @@ clear_stale_recorded_watcher_lock() {
   [ "$lock_home" = "$FM_HOME" ] || return 0
   [ "$lock_path" = "$WATCH" ] || return 0
   [ -n "$lock_identity" ] || return 0
-  fm_lock_remove_path "$WATCH_LOCK" || true
+  fm_recovery_transition "$STATE/.watcher-down" clear-stale-lock "$WATCH_LOCK" downtime
 }
 
 # A watcher is "healthy" iff the lock names a live process that is genuinely THIS
@@ -376,27 +372,40 @@ print_watch_output() {
   [ -s "$out" ] && cat "$out"
 }
 
-# The watcher-repair alert is a distinct, PUSH-based channel from fm-guard.sh's
-# pull-based "WATCHER DOWN" banner (which only surfaces on the next guarded
-# command): it fires even while firstmate itself is idle between turns. One-shot
-# per outage; a successful cycle clears it so the next genuine failure re-alerts.
-REPAIR_ALERT_MARKER="$STATE/.alert-watch-repair"
-arm_alert_dispatch() {  # <exit-code>
-  if [ "$1" -eq 0 ]; then
-    fm_alert_clear_once "$REPAIR_ALERT_MARKER"
-    return 0
-  fi
-  fm_alert_notify_once "$REPAIR_ALERT_MARKER" \
-    "firstmate: supervision is down" \
-    "The watcher cycle ended without an actionable reason in $FM_HOME. Supervision is off until it is restarted by hand." >/dev/null 2>&1 || true
+handling_successor_generation() {
+  [ -n "${FM_WATCH_PREDECESSOR_ARM_PID:-}" ] || return 0
+  fm_recovery_marker_snapshot "$STATE/.watcher-down" || return 1
+  case "$FM_RECOVERY_MARKER_TOKEN" in
+    pending:downtime:*|pending:handling:*) printf '%s' "${FM_RECOVERY_MARKER_TOKEN##*:}" ;;
+    acked:*|'') ;;
+    *) return 1 ;;
+  esac
 }
 
 mode=arm
+handling_generation=
+handling_watcher_pid=
 case "${1:-}" in
   ''|arm|--arm) mode=arm ;;
   --restart) mode=restart ;;
-  *) echo "usage: $(basename "$0") [--restart]" >&2; exit 2 ;;
+  --handling-delivered)
+    mode=handling-delivered
+    handling_generation=${2:-}
+    [ "${3:-}" = --watcher-pid ] || { echo "watcher: invalid handling delivery confirmation" >&2; exit 2; }
+    handling_watcher_pid=${4:-}
+    case "$handling_generation" in ''|*[!A-Za-z0-9._-]*) echo "watcher: invalid recovery generation" >&2; exit 2 ;; esac
+    case "$handling_watcher_pid" in ''|*[!0-9]*) echo "watcher: invalid successor watcher pid" >&2; exit 2 ;; esac
+    [ "$#" -eq 4 ] || { echo "watcher: unexpected handling delivery arguments" >&2; exit 2; }
+    ;;
+  *) echo "usage: $(basename "$0") [--restart | --handling-delivered GENERATION --watcher-pid PID]" >&2; exit 2 ;;
 esac
+
+if [ "$mode" = handling-delivered ]; then
+  fm_pid_alive "$handling_watcher_pid" \
+    && fm_watcher_lock_matches_pid "$STATE" "$WATCH" "$handling_watcher_pid" "$FM_HOME" \
+    && fm_recovery_marker_begin_handling "$STATE/.watcher-down" "$handling_generation"
+  exit $?
+fi
 
 if [ "$mode" = restart ]; then
   # Home-scoped stop: only the watcher pid recorded in THIS home's lock.
@@ -413,7 +422,10 @@ if [ "$mode" = restart ]; then
         i=$((i + 1))
       done
     else
-      clear_stale_recorded_watcher_lock
+      if ! clear_stale_recorded_watcher_lock; then
+        echo "watcher: FAILED - stale watcher recovery state could not be persisted" >&2
+        exit 1
+      fi
     fi
   fi
 fi
@@ -427,9 +439,7 @@ if [ "$mode" = arm ] && healthy_watcher; then
   cycle_begin "$HEALTHY_PID" attached "$HEALTHY_IDENTITY"
   report_attached
   attach_and_wait "$HEALTHY_PID"
-  rc=$?
-  arm_alert_dispatch "$rc"
-  exit "$rc"
+  exit $?
 fi
 
 # Start a watcher as a tracked child and confirm it before settling in. The child
@@ -466,10 +476,13 @@ trap 'handle_arm_signal INT 130' INT
 
 child_out=$(mktemp "$STATE/.watch-arm-output.XXXXXX") || {
   echo "watcher: FAILED - no live watcher with a fresh beacon"
-  arm_alert_dispatch 1
   exit 1
 }
-"$WATCH" >"$child_out" &
+if [ -n "${FM_WATCH_PREDECESSOR_ARM_PID:-}" ]; then
+  FM_WATCH_HANDLING_SUCCESSOR=1 "$WATCH" >"$child_out" &
+else
+  "$WATCH" >"$child_out" &
+fi
 child=$!
 cycle_begin "$child" started "$(fm_pid_identity "$child" 2>/dev/null || true)"
 child_done=0
@@ -537,31 +550,36 @@ while :; do
   if healthy_watcher; then
     if [ "$HEALTHY_PID" = "$child" ]; then
       cycle_refresh_lock_before
+      if ! handling_generation=$(handling_successor_generation); then
+        cleanup_child
+        wait "$child" 2>/dev/null || true
+        cycle_log_append 1 none handling-handoff-failed none
+        echo "watcher: FAILED - established successor could not inspect handling state"
+        exit 1
+      fi
       cycle_mark_predecessor_successor "started:$child"
-      echo "watcher: started pid=$child (beacon fresh)"
+      if [ -n "$handling_generation" ]; then
+        echo "watcher: started pid=$child (beacon fresh) recovery-generation=$handling_generation"
+      else
+        echo "watcher: started pid=$child (beacon fresh)"
+      fi
       wait "$child"
       rc=$?
       owned_child_finished "$rc"
-      rc=$?
-      arm_alert_dispatch "$rc"
-      exit "$rc"
+      exit $?
     fi
     # Another watcher won the singleton; our child stood down.
     wait "$child"
     rc=$?
     owned_child_finished "$rc"
-    rc=$?
-    arm_alert_dispatch "$rc"
-    exit "$rc"
+    exit $?
   fi
   if [ "$child_done" -eq 0 ] && ! fm_pid_alive "$child"; then
     wait "$child"
     rc=$?
     child_done=1
     owned_child_finished "$rc"
-    rc=$?
-    arm_alert_dispatch "$rc"
-    exit "$rc"
+    exit $?
   fi
   [ "$(date +%s)" -ge "$deadline" ] && break
   sleep 0.2
@@ -574,5 +592,4 @@ wait "$child" 2>/dev/null
 rc=$?
 cycle_log_append "$rc" "$(cycle_signal_name "$rc")" confirmation-timeout none
 echo "watcher: FAILED - no live watcher with a fresh beacon"
-arm_alert_dispatch 1
 exit 1

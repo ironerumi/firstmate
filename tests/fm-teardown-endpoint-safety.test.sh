@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Regression tests for cleanup endpoint identity validation, including the
-# kind=adhoc carve-out that is the only path allowed to skip it.
+# Regression tests for cleanup endpoint identity validation.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -94,110 +93,101 @@ test_invalid_endpoint_records_refuse_before_mutation() {
   pass "fm-teardown: missing, empty, malformed, ambiguous, and task-mismatched endpoints refuse before every mutation or runtime call"
 }
 
-# Write a kind=adhoc record in the shape bin/fm-task-register.sh publishes, with
-# the three fields an ad-hoc task must not own left injectable so a forged
-# variant can be built. Extra key=val lines are appended verbatim.
-write_adhoc_meta() {  # <case> <id> <window> <worktree> <tasktmp> [key=val ...]
-  local dir=$1 id=$2 window=$3 worktree=$4 tasktmp=$5
-  shift 5
+test_control_lock_contention_refuses_before_mutation() {
+  local dir id=locked-task lock holder i=0 rc
+  dir=$(make_case control-lock)
   fm_write_meta "$dir/home/state/$id.meta" \
-    "window=$window" "worktree=$worktree" "project=$dir/project" \
-    "kind=adhoc" "mode=no-mistakes" "yolo=off" "tasktmp=$tasktmp" \
-    "model=default" "effort=default" "home=$dir/home" "$@"
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  lock="$dir/home/state/.control-$id.lock"
+  (
+    # shellcheck source=/dev/null
+    . "$ROOT/bin/fm-wake-lib.sh"
+    fm_lock_try_acquire "$lock" || exit 1
+    sleep 30
+  ) &
+  holder=$!
+  while [ ! -e "$lock" ] && [ "$i" -lt 100 ]; do
+    sleep 0.1
+    i=$((i + 1))
+  done
+  [ -e "$lock" ] || {
+    kill "$holder" 2>/dev/null || true
+    wait "$holder" 2>/dev/null || true
+    fail "could not stage a held lifecycle lock"
+  }
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=other-task" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+
+  set +e
+  run_case "$dir" "$id" > "$dir/stdout" 2> "$dir/stderr"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "teardown unexpectedly succeeded under lifecycle lock contention"
+  assert_present "$dir/home/state/$id.meta" "contended teardown removed task metadata"
+  assert_present "$dir/worktree/sentinel" "contended teardown changed the worktree"
+  assert_present "$lock" "contended teardown removed another action's lock"
+  [ ! -s "$dir/runtime.log" ] \
+    || fail "contended teardown reached the runtime: $(cat "$dir/runtime.log")"
+  assert_contains "$(cat "$dir/stderr")" "another lifecycle action is already running" \
+    "contended teardown should serialize before reading mutable task metadata"
+  kill "$holder" 2>/dev/null || true
+  wait "$holder" 2>/dev/null || true
+  pass "fm-teardown: a concurrent lifecycle action refuses before mutation"
 }
 
-# bin/fm-teardown.sh's validate_adhoc_task_record is the only authorization that
-# skips fm_backend_validate_task_endpoint, so it must be no laxer: it may admit
-# only what bin/fm-task-register.sh writes and must refuse every drifted or
-# forged kind=adhoc record with task state preserved. These run through
-# run_case, so --force buys no way past the identity boundary either.
-test_forged_adhoc_records_refuse_before_mutation() {
-  local dir id=adhoc-task
-
-  dir=$(make_case adhoc-foreign-harness)
-  write_adhoc_meta "$dir" "$id" "" "" "" "harness=claude"
-  assert_refused_without_mutation "$dir" "$id" "ad-hoc record with a crew harness"
-  assert_grep 'non-ad-hoc harness identity' "$dir/stderr" \
-    "ad-hoc record with a crew harness: refusal did not name the harness identity"
-
-  dir=$(make_case adhoc-missing-harness)
-  write_adhoc_meta "$dir" "$id" "" "" ""
-  assert_refused_without_mutation "$dir" "$id" "ad-hoc record without a harness"
-
-  dir=$(make_case adhoc-ambiguous-harness)
-  write_adhoc_meta "$dir" "$id" "" "" "" "harness=adhoc" "harness=adhoc"
-  assert_refused_without_mutation "$dir" "$id" "ad-hoc record with an ambiguous harness"
-
-  dir=$(make_case adhoc-missing-project)
+test_metadata_lock_serializes_destructive_cleanup() {
+  local dir id=metadata-locked-task lock ready release holder teardown_pid i=0 rc
+  dir=$(make_case metadata-lock)
   fm_write_meta "$dir/home/state/$id.meta" \
-    "window=" "worktree=" "harness=adhoc" "kind=adhoc" "mode=no-mistakes" \
-    "yolo=off" "tasktmp=" "home=$dir/home"
-  assert_refused_without_mutation "$dir" "$id" "ad-hoc record without a project"
-  assert_grep 'project identity' "$dir/stderr" \
-    "ad-hoc record without a project: refusal did not name the project identity"
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  lock="$dir/home/state/.meta-$id.lock"
+  ready="$dir/meta-lock-ready"
+  release="$dir/meta-lock-release"
+  (
+    # shellcheck source=/dev/null
+    . "$ROOT/bin/fm-wake-lib.sh"
+    fm_lock_try_acquire "$lock" || exit 1
+    trap 'fm_lock_release "$lock"' EXIT
+    : > "$ready"
+    while [ ! -e "$release" ]; do
+      sleep 0.01
+    done
+  ) &
+  holder=$!
+  while [ ! -e "$ready" ] && [ "$i" -lt 100 ]; do
+    sleep 0.1
+    i=$((i + 1))
+  done
+  [ -e "$ready" ] || {
+    kill "$holder" 2>/dev/null || true
+    wait "$holder" 2>/dev/null || true
+    fail "could not stage a held metadata lock"
+  }
 
-  # Each forged field below would otherwise reach a destructive branch with no
-  # endpoint validation behind it: an endpoint kill, a branch delete plus
-  # treehouse return, and rm -rf of the recorded per-task temp root.
-  dir=$(make_case adhoc-forged-window)
-  write_adhoc_meta "$dir" "$id" "firstmate:fm-$id" "" "" "harness=adhoc"
-  assert_refused_without_mutation "$dir" "$id" "ad-hoc record carrying a window"
-  assert_grep 'non-empty window' "$dir/stderr" \
-    "ad-hoc record carrying a window: refusal did not name the field it must not own"
+  run_case "$dir" "$id" > "$dir/stdout" 2> "$dir/stderr" &
+  teardown_pid=$!
+  sleep 0.2
+  if ! kill -0 "$teardown_pid" 2>/dev/null; then
+    : > "$release"
+    wait "$holder" 2>/dev/null || true
+    wait "$teardown_pid" 2>/dev/null || true
+    fail "teardown did not wait for the shared metadata writer lock"
+  fi
+  assert_present "$dir/home/state/$id.meta" "metadata-lock contention removed task metadata"
+  assert_present "$dir/worktree/sentinel" "metadata-lock contention changed the worktree"
+  [ ! -s "$dir/runtime.log" ] \
+    || fail "metadata-lock contention reached the runtime: $(cat "$dir/runtime.log")"
 
-  dir=$(make_case adhoc-forged-worktree)
-  write_adhoc_meta "$dir" "$id" "" "$dir/worktree" "" "harness=adhoc"
-  assert_refused_without_mutation "$dir" "$id" "ad-hoc record carrying a worktree"
-  assert_grep 'non-empty worktree' "$dir/stderr" \
-    "ad-hoc record carrying a worktree: refusal did not name the field it must not own"
-
-  dir=$(make_case adhoc-forged-tasktmp)
-  mkdir -p "$dir/tasktmp"
-  : > "$dir/tasktmp/sentinel"
-  write_adhoc_meta "$dir" "$id" "" "" "$dir/tasktmp" "harness=adhoc"
-  assert_refused_without_mutation "$dir" "$id" "ad-hoc record carrying a tasktmp"
-  assert_present "$dir/tasktmp/sentinel" \
-    "ad-hoc record carrying a tasktmp: refusal removed the forged temp root"
-
-  # An ambiguous kind= is not ad-hoc, so the record stays on the endpoint gate
-  # and refuses there for its missing endpoint rather than taking the carve-out.
-  dir=$(make_case adhoc-ambiguous-kind)
-  fm_write_meta "$dir/home/state/$id.meta" \
-    "window=" "worktree=" "project=$dir/project" "harness=adhoc" \
-    "kind=ship" "kind=adhoc" "mode=no-mistakes" "yolo=off" "tasktmp=" \
-    "home=$dir/home"
-  assert_refused_without_mutation "$dir" "$id" "ad-hoc record with an ambiguous kind"
-  assert_grep 'window endpoint' "$dir/stderr" \
-    "ad-hoc record with an ambiguous kind: record did not fall back to the endpoint gate"
-
-  pass "cleanup identity: forged, drifted, and ambiguous kind=adhoc records refuse before every mutation or runtime call"
-}
-
-test_registered_adhoc_record_clears_only_volatile_state() {
-  local dir id=adhoc-registered
-  dir=$(make_case adhoc-registered)
-  touch "$dir/home/state/.last-watcher-beat"
-  write_adhoc_meta "$dir" "$id" "" "" "" "harness=adhoc"
-  : > "$dir/home/state/$id.status"
-  : > "$dir/home/state/$id.turn-ended"
-  : > "$dir/home/state/.keepwarm-$id"
-
-  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
-  FM_RUNTIME_LOG="$dir/runtime.log" PATH="$dir/fakebin:$PATH" \
-    "$TEARDOWN" "$id" > "$dir/stdout" 2> "$dir/stderr" \
-    || fail "registered ad-hoc record: cleanup failed: $(cat "$dir/stderr")"
-
-  assert_absent "$dir/home/state/$id.meta" "registered ad-hoc record: cleanup kept task metadata"
-  assert_absent "$dir/home/state/$id.status" "registered ad-hoc record: cleanup kept the status record"
-  assert_absent "$dir/home/state/$id.turn-ended" "registered ad-hoc record: cleanup kept the turn-end record"
-  assert_absent "$dir/home/state/.keepwarm-$id" "registered ad-hoc record: cleanup kept the keep-warm marker"
-  assert_present "$dir/worktree/sentinel" "registered ad-hoc record: cleanup touched a worktree it does not own"
-  [ ! -s "$dir/runtime.log" ] || fail "registered ad-hoc record: cleanup ran a runtime command: $(cat "$dir/runtime.log")"
-  assert_grep "teardown $id complete" "$dir/stdout" \
-    "registered ad-hoc record: cleanup did not report completion"
-  assert_no_grep 'Backlog:' "$dir/stdout" \
-    "registered ad-hoc record: cleanup emitted a worker backlog reminder"
-  pass "cleanup identity: a registered kind=adhoc record clears its volatile state with no endpoint, worktree, or backlog work"
+  : > "$release"
+  wait "$holder" || fail "metadata lock holder failed"
+  wait "$teardown_pid"; rc=$?
+  expect_code 0 "$rc" "teardown should complete after the metadata writer releases"
+  assert_absent "$dir/home/state/$id.meta" \
+    "serialized teardown left a task record that a completed writer could resurrect"
+  pass "fm-teardown: destructive cleanup serializes with metadata writers"
 }
 
 test_supported_backend_endpoint_records_validate() {
@@ -376,8 +366,8 @@ SH
 }
 
 test_invalid_endpoint_records_refuse_before_mutation
-test_forged_adhoc_records_refuse_before_mutation
-test_registered_adhoc_record_clears_only_volatile_state
+test_control_lock_contention_refuses_before_mutation
+test_metadata_lock_serializes_destructive_cleanup
 test_supported_backend_endpoint_records_validate
 test_tmux_empty_target_refuses_without_invocation
 test_recorded_process_identity_cleanup_is_exact

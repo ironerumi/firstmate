@@ -53,10 +53,9 @@
 #                          running a check or removing poll artifacts
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
-# A confirmed-idle pane also gets one keep-warm tick, which prints no reason and
-# never queues a wake: it only decides whether a Claude crew waiting out its own
-# no-mistakes run has been quiet long enough to need a benign activation.
-# bin/fm-nm-keepwarm-lib.sh owns that contract.
+#   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
+#                          inactive terminal outcome that still lacks its durable
+#                          upstream receipt
 # For normal supervision, resume the session-start primary-harness protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
@@ -71,7 +70,10 @@ mkdir -p "$STATE"
 # The native event fast-path and only its true dependencies have one narrow
 # production owner. The Herdr event-wait smoke test consumes this same owner
 # without sourcing the entire watcher graph.
-# shellcheck source=bin/fm-push-transition-lib.sh
+# The shared transition owner is a canonical lint root itself. Stop duplicate
+# source-graph expansion here: following its backend graph from this large
+# runtime can exceed the bounded CI lint worker while adding no uncovered file.
+# shellcheck source=/dev/null
 . "$SCRIPT_DIR/fm-push-transition-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
 . "$SCRIPT_DIR/fm-pr-lib.sh"
@@ -84,22 +86,16 @@ mkdir -p "$STATE"
 # cheap when no records exist and never scrapes secondmate conversation.
 # shellcheck source=bin/fm-pending-reply-lib.sh
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
-# Park alerting reuses the merge-wait readiness predicate (the same `done: PR`
-# event that already defines "waiting on the captain") and the shared
-# supervision alert channels. Both are function-only sources.
-# shellcheck source=bin/fm-merge-wait-lib.sh
-. "$SCRIPT_DIR/fm-merge-wait-lib.sh"
-# shellcheck source=bin/fm-alert-lib.sh
-. "$SCRIPT_DIR/fm-alert-lib.sh"
-# Keep-warm activation for a Claude crew whose no-mistakes run has gone quiet.
-# Function-only source; the tick below is the single call site.
-# shellcheck source=bin/fm-nm-keepwarm-lib.sh
-. "$SCRIPT_DIR/fm-nm-keepwarm-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
+# Keep-warm for Claude crews waiting out their own long no-mistakes run.
+# bin/fm-nm-keepwarm-lib.sh owns that contract.
+# shellcheck source=bin/fm-nm-keepwarm-lib.sh
+. "$SCRIPT_DIR/fm-nm-keepwarm-lib.sh"
 
 WATCH_LOCK="$STATE/.watch.lock"
 WATCH_PATH="$SCRIPT_DIR/fm-watch.sh"
+WATCHER_DOWNTIME_MARKER="$STATE/.watcher-down"
 WATCHER_STALE_GRACE=${FM_WATCHER_STALE_GRACE:-${FM_GUARD_GRACE:-300}}
 # The singleton-lock acquisition, EXIT trap, and the blocking supervision loop
 # all live below the source guard at the very bottom of this file (see "Main
@@ -117,11 +113,13 @@ WATCHER_STALE_GRACE=${FM_WATCHER_STALE_GRACE:-${FM_GUARD_GRACE:-300}}
 # watcher mid-cycle. Detect the platform once and pick the right form.
 if [ "$(uname)" = Darwin ]; then
   stat_mtime() { stat -f %m "$1" 2>/dev/null; }        # epoch seconds of mtime
-  stat_sig()   { stat -f '%z:%Fm' "$1" 2>/dev/null; }   # size:mtime signature
 else
   stat_mtime() { stat -c %Y "$1" 2>/dev/null; }
-  stat_sig()   { stat -c '%s:%Y' "$1" 2>/dev/null; }
 fi
+# The size:mtime signal signature and .seen-* marker format are owned by
+# bin/fm-wake-lib.sh (fm_wake_signal_sig, fm_wake_signal_seen_path), shared
+# with the drain's annotation staleness check and this home's own bookkeeping
+# writers' guarded self-announced append.
 
 POLL=${FM_POLL:-15}                   # seconds between cycles
 HEARTBEAT=${FM_HEARTBEAT:-600}        # base seconds between heartbeat scans
@@ -453,89 +451,6 @@ age_of() {  # seconds since file mtime; "due immediately" if missing
   echo $(( $(date +%s) - m ))
 }
 
-# --- park alerting -----------------------------------------------------------
-#
-# The wake queue reaches a captain who is present. It cannot reach one who is
-# not, which is how a batch whose work is FINISHED and whose only remaining step
-# is a human decision sits parked overnight: the fleet is idle, nothing is
-# stale, no wake is owed, and the calendar cost is invisible. This scan answers
-# one narrow question on a slow cadence - which task has been waiting on a
-# person for longer than FM_PARK_ALERT_SECS - and raises exactly one alert per
-# park episode through the shared supervision alert channels.
-#
-# It deliberately does NOT wake firstmate: an idle fleet has no supervision work
-# to do, and turning a park into a wake would spend a turn to say "still parked".
-#
-# Only two gates count as a person's turn to act, both read from records
-# firstmate already writes:
-#   - a reported-ready PR on a task firstmate may not merge itself (yolo off),
-#     which is the captain's merge decision; and
-#   - an open needs-decision that is still the crew's current state.
-# Everything else is excluded on purpose. Ordinary working and validation time
-# never matches, because the last status line is not one of those two. A
-# declared external wait (paused:) is a scheduled delay that clears on its own. A
-# secondmate is idle by contract, so its quiet endpoint is health, not a park. A
-# blocked: line needs firstmate, not the captain, and already surfaces as a wake.
-# A queue item with no task of its own has nothing waiting on anyone.
-PARK_ALERT_SECS=${FM_PARK_ALERT_SECS:-1800}
-PARK_SCAN_INTERVAL=${FM_PARK_SCAN_INTERVAL:-300}
-
-# Print the human-readable gate this task is parked on, or fail when it is not
-# parked on a person at all.
-park_gate() {  # <task-id>
-  local id=$1 statusf meta last
-  statusf="$STATE/$id.status"
-  meta="$STATE/$id.meta"
-  [ -f "$statusf" ] || return 1
-  case "$(fm_merge_wait_meta_value "$meta" kind)" in
-    secondmate) return 1 ;;
-  esac
-  last=$(last_status_line "$statusf")
-  status_is_paused "$last" && return 1
-  if fm_merge_wait_reported_ready "$statusf"; then
-    # With yolo on firstmate merges under standing authority, so no human is
-    # holding this work and there is nothing to alert about.
-    [ "$(fm_merge_wait_meta_value "$meta" yolo)" = on ] && return 1
-    printf 'a finished PR is waiting for a merge decision'
-    return 0
-  fi
-  case "$(status_line_verb "$last")" in
-    needs-decision) ;;
-    *) return 1 ;;
-  esac
-  # The durable open-set, not the last line alone, decides whether the decision
-  # is still open.
-  [ -n "$(status_open_decisions "$statusf")" ] || return 1
-  printf 'a worker is waiting on a decision'
-}
-
-# One scan raises at most one alert. A parked batch is one situation for the
-# captain - the motivating incident was a whole batch waiting on one merge
-# session - so N newly parked tasks produce one banner and one Slack message
-# naming each task and its gate, not N of each. Deduplication stays per task:
-# each hit claims its own marker, so a task already reported never repeats while
-# a task that parks later still earns its own line in a later scan.
-park_alert_scan() {
-  local meta id gate age marker parked=0 summary=
-  for meta in "$STATE"/*.meta; do
-    [ -e "$meta" ] || continue
-    id=$(basename "$meta" .meta)
-    marker="$STATE/.park-alerted-$id"
-    if ! gate=$(park_gate "$id"); then
-      # The gate cleared, so the next park on this task alerts again.
-      fm_alert_clear_once "$marker"
-      continue
-    fi
-    age=$(age_of "$STATE/$id.status")
-    [ "$age" -ge "$PARK_ALERT_SECS" ] || continue
-    fm_alert_claim_once "$marker" || continue
-    summary="$summary$id has been waiting $((age / 60)) minutes: $gate."$'\n'
-    parked=$((parked + 1))
-  done
-  [ "$parked" -gt 0 ] || return 0
-  fm_alert_notify "firstmate: work is parked on you" "${summary%$'\n'}" >/dev/null 2>&1 || true
-}
-
 # Layer 2 + 3 signal scan: status files and turn-end markers. Each file is
 # compared against a persisted size:mtime signature (.seen-*) rather than
 # mtime-vs-a-startup-touch, so signals that land while no watcher is running
@@ -548,8 +463,9 @@ scan_signals() {
   local f sig sf
   for f in "$STATE"/*.status "$STATE"/*.turn-ended; do
     [ -e "$f" ] || continue
-    sig=$(stat_sig "$f") || continue
-    sf="$STATE/.seen-$(basename "$f" | tr '.' '_')"
+    sig=$(fm_wake_signal_sig "$f") || continue
+    [ -n "$sig" ] || continue
+    sf=$(fm_wake_signal_seen_path "$STATE" "$f")
     if [ "$sig" != "$(cat "$sf" 2>/dev/null)" ]; then
       printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"
     fi
@@ -602,6 +518,7 @@ procevent_surface_queued() {
     return 0
   fi
   reason="check: process-event result captured:$PROCEVENT_SURFACED"
+  # shellcheck disable=SC2034 # Consumed by wake() in the separately linted transition owner.
   FM_WAKE_POST_OUTPUT_ACTION=procevent_surface_after_output
   wake "$reason"
 }
@@ -830,11 +747,37 @@ if ! fm_lock_try_acquire "$WATCH_LOCK"; then
   fi
   exit 0
 fi
+WATCHER_RECOVERY_PENDING=0
+if [ -n "${FM_LOCK_RECOVERED_PID:-}" ]; then
+  WATCHER_RECOVERY_PENDING=1
+fi
+if ! fm_recovery_marker_arm_check "$WATCHER_DOWNTIME_MARKER"; then
+  echo "watcher: recovery state could not be consumed safely; retaining stale lock evidence" >&2
+  exit 1
+fi
+if [ "${FM_WATCH_HANDLING_SUCCESSOR:-0}" = 1 ]; then
+  WATCHER_RECOVERY_PENDING=0
+elif [ "$FM_RECOVERY_MARKER_ACTION" = recover ]; then
+  WATCHER_RECOVERY_PENDING=1
+fi
 watcher_cleanup() {
-  fm_active_check_stop || return 1
+  local cleanup_status=0 owns_lock=0 transition=release-lock
+  if [ "$(cat "$WATCH_LOCK/pid" 2>/dev/null || true)" = "${WATCHER_PID:-}" ]; then
+    owns_lock=1
+    if [ "${WATCHER_RECOVERY_PENDING:-0}" -eq 1 ] \
+      && [ "${FM_WATCH_DELIVERED_REASON:-}" = "check: rearm-resurface" ]; then
+      transition=release-lock-existing
+    fi
+  fi
+  fm_active_check_stop || cleanup_status=1
   fm_check_output_cleanup
   fm_custom_check_snapshot_cleanup
-  fm_lock_release "$WATCH_LOCK"
+  if [ "$owns_lock" -eq 1 ] \
+    && ! fm_recovery_transition "$WATCHER_DOWNTIME_MARKER" "$transition" "$WATCH_LOCK" downtime; then
+    echo "watcher: recovery state could not be persisted; retaining stale lock evidence" >&2
+    cleanup_status=1
+  fi
+  return "$cleanup_status"
 }
 trap watcher_cleanup EXIT
 trap 'exit 1' HUP INT TERM
@@ -844,6 +787,7 @@ trap 'exit 1' HUP INT TERM
 WATCHER_PID=${BASHPID:-$$}
 printf '%s\n' "$FM_HOME" > "$WATCH_LOCK/fm-home" || true
 printf '%s\n' "$WATCH_PATH" > "$WATCH_LOCK/watcher-path" || true
+# shellcheck disable=SC2034 # Consumed by wake() in the separately linted transition owner.
 FM_WATCH_DELIVERY_PID=$WATCHER_PID
 FM_WATCH_DELIVERY_IDENTITY=$(fm_pid_identity "$WATCHER_PID" 2>/dev/null || true)
 printf '%s\n' "$FM_WATCH_DELIVERY_IDENTITY" > "$WATCH_LOCK/pid-identity" 2>/dev/null || true
@@ -858,6 +802,32 @@ if ! fm_pr_poll_retirement_recover_all "$STATE" "$SCRIPT_DIR/fm-pr-poll.sh"; the
   fm_wake_append check pr-poll-retirement "$reason" || exit 1
   touch "$STATE/.last-check"
   wake "$reason"
+fi
+
+resurface_after_downtime() {
+  if [ "$WATCHER_RECOVERY_PENDING" -ne 1 ]; then
+    if ! fm_recovery_marker_arm_check "$WATCHER_DOWNTIME_MARKER"; then
+      echo "watcher: recovery state could not be consumed safely" >&2
+      exit 1
+    fi
+    [ "$FM_RECOVERY_MARKER_ACTION" = recover ] || return 0
+  fi
+  wake "check: rearm-resurface"
+}
+
+if [ "${FM_WATCH_HANDLING_SUCCESSOR:-0}" = 1 ]; then
+  touch "$STATE/.last-watcher-beat"
+  handling_wait=0
+  while [ "$handling_wait" -lt 600 ]; do
+    fm_recovery_marker_snapshot "$WATCHER_DOWNTIME_MARKER" || true
+    case "$FM_RECOVERY_MARKER_TOKEN" in
+      pending:downtime:*) ;;
+      *) break ;;
+    esac
+    sleep 0.05
+    handling_wait=$((handling_wait + 1))
+  done
+  [ "$handling_wait" -lt 600 ] || WATCHER_RECOVERY_PENDING=1
 fi
 
 while :; do
@@ -881,14 +851,6 @@ while :; do
   # No conversation scraping; unresolved records are never silently expired.
   fm_pending_reply_tick "$STATE" || true
 
-  # Park alerting: a slow, wake-free sweep for work that has been waiting on a
-  # person past the threshold. Cadence lives in a file mtime so it survives
-  # watcher restarts, exactly like the check and heartbeat schedules.
-  if [ "$(age_of "$STATE/.last-park-scan")" -ge "$PARK_SCAN_INTERVAL" ]; then
-    touch "$STATE/.last-park-scan"
-    park_alert_scan
-  fi
-
   # Process-to-event liveness repair. This never discovers a result by polling:
   # each registered source has its own child blocking on that source, and this
   # only republishes results already captured durably and restarts a source
@@ -899,6 +861,23 @@ while :; do
   # Then deliver any queued-but-unsurfaced result, including one a runner
   # published while this watcher was between cycles.
   procevent_surface_queued
+
+  # A process-event result carries richer adapter-owned wake context than the
+  # generic recovery reason, so give that owner first refusal.
+  resurface_after_downtime
+
+  # The existing poll loop also owns the bounded inactive-outcome cadence.
+  # This is mechanical and silent unless a durable terminal-outcome obligation
+  # was created, so quiet cycles never wake firstmate or consume model tokens.
+  inactive_out=
+  if inactive_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    "$SCRIPT_DIR/fm-inactive-reconcile.sh" scan 2>/dev/null); then
+    if [ -n "$inactive_out" ]; then
+      wake "check: inactive-outcome"
+    fi
+  else
+    triage_log "inactive-outcome reconciliation unavailable"
+  fi
 
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
   # Time-based via .last-check mtime so the cadence survives watcher restarts.
