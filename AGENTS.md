@@ -510,6 +510,7 @@ The generated Herdr contract must use a named non-`default` isolated lab and its
 
 Load `secondmate-provisioning` before creating or using a charter brief and preserve its idle-by-default and marked-return-channel contracts.
 Status appends are sparse supervisor-actionable events, not routine progress; `bin/fm-classify-lib.sh` owns keyed open and resolved semantics.
+Batch independent small issues onto one ship branch — the validation gate is a fixed ~30-minute cost per invocation, so N briefs on one branch cost one gate run instead of N; split only when the changes are genuinely indivisible, and say which.
 The scaffold is a safety contract, not a suggestion.
 
 ## 12. Self-update
