@@ -944,9 +944,6 @@ families_for_changed_path() {
     bin/fm-merge-wait-lib.sh)
       printf '%s\n' pure-contract-unit
       ;;
-    bin/fm-task-register.sh)
-      printf '%s\n' pr-forge
-      ;;
     bin/fm-aws-sso-refresh.sh)
       printf '%s\n' pure-contract-unit
       ;;
