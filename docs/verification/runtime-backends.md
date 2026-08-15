@@ -889,16 +889,16 @@ FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-l
 
 Claude Code's per-session attribution object was verified on 2026-08-16 with Claude Code 2.1.233 (macOS arm64).
 
-The exact settings object `bin/fm-spawn.sh` writes for claude crews (in the worktree's `.claude/settings.local.json`, alongside the lifecycle hooks):
+The settings object `bin/fm-spawn.sh` writes for claude crews has the following shape, with hook command values abbreviated:
 
 ```json
-{"attribution":{"commit":"","sessionUrl":false},"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"..."}]}],"Stop":[{"hooks":[{"type":"command","command":"..."}]}]}}
+{"attribution":{"commit":"","sessionUrl":false},"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"..."}]}],"Stop":[{"hooks":[{"type":"command","command":"..."}]}],"StopFailure":[{"hooks":[{"type":"command","command":"..."}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"..."}]}]}}
 ```
 
 `attribution.commit` is an empty string, which hides the `Co-Authored-By` commit trailer, and `attribution.sessionUrl` is `false`, which omits the `Claude-Session:` claude.ai link.
 The deprecated `includeCoAuthoredBy` key is not used.
 
-Reproduction, in a throwaway git repo with the settings file above and `claude --version` reporting `2.1.233`:
+Reproduction, in a throwaway git repo with the production settings file and `claude --version` reporting `2.1.233`:
 
 ```sh
 claude -p --dangerously-skip-permissions --model claude-sonnet-4-5 \

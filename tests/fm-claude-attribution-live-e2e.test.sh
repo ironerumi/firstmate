@@ -75,10 +75,10 @@ BASELINE_BODY=$(claude_commit "attribution live guard baseline")
 printf '%s\n' "$BASELINE_BODY" | grep -q '^Co-Authored-By: ' \
   || fail "claude $CLAUDE_VERSION baseline commit carried no Co-Authored-By trailer; divergence assumption broken"
 
-# Candidate: the exact settings object fm-spawn emits for claude crews
-# (attribution + lifecycle hooks). Both lines must disappear.
+# Candidate: the attribution object and complete lifecycle hook set fm-spawn
+# emits for claude crews. Both lines must disappear.
 cat > "$SETTINGS" <<'JSON'
-{"attribution":{"commit":"","sessionUrl":false},"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"true"}]}],"Stop":[{"hooks":[{"type":"command","command":"true"}]}]}}
+{"attribution":{"commit":"","sessionUrl":false},"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"true"}]}],"Stop":[{"hooks":[{"type":"command","command":"true"}]}],"StopFailure":[{"hooks":[{"type":"command","command":"true"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"true"}]}]}}
 JSON
 
 CANDIDATE_BODY=$(claude_commit "attribution live guard candidate")

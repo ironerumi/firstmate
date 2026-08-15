@@ -94,10 +94,11 @@ test_claude_spawn_writes_attribution_suppression() {
   settings="$WT_DIR/.claude/settings.local.json"
   [ -f "$settings" ] || fail "claude spawn did not generate $settings"
   command -v jq >/dev/null 2>&1 || fail "jq is required to parse the generated settings"
-  [ "$(jq -r '.attribution.commit' "$settings")" = "" ] \
-    || fail "attribution.commit is not empty; the Co-Authored-By trailer would land"
-  [ "$(jq -r '.attribution.sessionUrl' "$settings")" = "false" ] \
-    || fail "attribution.sessionUrl is not false; the Claude-Session link would land"
+  jq -e '(.attribution.commit | type == "string")
+    and .attribution.commit == ""
+    and (.attribution.sessionUrl | type == "boolean")
+    and .attribution.sessionUrl == false' "$settings" >/dev/null \
+    || fail "generated attribution settings have the wrong values or JSON types"
   for hook in UserPromptSubmit Stop StopFailure SessionEnd; do
     jq -e ".hooks.\"$hook\" | length > 0" "$settings" >/dev/null \
       || fail "generated settings lost the $hook lifecycle hook"
