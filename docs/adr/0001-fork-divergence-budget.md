@@ -4,9 +4,10 @@ This repo is a fork of `kunchenguid/firstmate` that merges upstream continuously
 
 **Decision**: divergence is budgeted per upstream-owned file, weighted by its upstream churn; fork-added files and directories are free. Fork behavior therefore ships preferentially as fork-added surfaces (new `bin/` scripts, fork-added `.agents/skills/`, wrapper scripts that call upstream tooling unchanged) rather than as edits to hot upstream files. Prose additions to `AGENTS.md` are the most expensive change in the repo and are rationed accordingly.
 
-Two corollaries:
+Three corollaries:
 
 - **Crew-facing contracts must be emission-based, not recall-based.** A contract that must reach a crewmate's brief is appended deterministically by a fork-added wrapper around the upstream scaffolder — never left as prose an agent must remember to paste, and never patched into the upstream scaffolder's own heredocs (see churn numbers above).
+- **Fork-added docs are free but not registration-free.** The doc-audience CI gate requires every tracked prose surface to be classified exactly once in `docs/documentation-audiences.json` — an already-fork-diverged file. Every fork-added `.md` therefore lands together with its inventory entry, or the portable-serial CI shard goes red (learned on this ADR's own commit).
 - **Upstream-seed universal improvements, but never wait on them.** Changes with nothing fork-specific may additionally be filed as upstream PRs so the fork copy can be deleted if merged. Upstream is currently unresponsive to this fork's asks (PRs/issues open since 2026-07 without response), so seeding is a bet, not a delivery path.
 
 **Considered and rejected**: patching hot upstream files directly (recurring conflicts on every merge); carrying crew-facing contracts in `data/captain.md`/`learnings.md` (zero divergence but recall-based and home-local — right surface for captain preferences and per-home deviations, wrong for gate contracts and shared SOPs, which the repo's own architecture assigns to tracked files).
