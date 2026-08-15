@@ -884,3 +884,47 @@ Refresh this harness-dependent proof before accepting a cursor upgrade:
 ```sh
 FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-live-e2e.test.sh
 ```
+
+## Claude commit attribution suppression
+
+Claude Code's per-session attribution object was verified on 2026-08-16 with Claude Code 2.1.233 (macOS arm64).
+
+The exact settings object `bin/fm-spawn.sh` writes for claude crews (in the worktree's `.claude/settings.local.json`, alongside the lifecycle hooks):
+
+```json
+{"attribution":{"commit":"","sessionUrl":false},"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"..."}]}],"Stop":[{"hooks":[{"type":"command","command":"..."}]}]}}
+```
+
+`attribution.commit` is an empty string, which hides the `Co-Authored-By` commit trailer, and `attribution.sessionUrl` is `false`, which omits the `Claude-Session:` claude.ai link.
+The deprecated `includeCoAuthoredBy` key is not used.
+
+Reproduction, in a throwaway git repo with the settings file above and `claude --version` reporting `2.1.233`:
+
+```sh
+claude -p --dangerously-skip-permissions --model claude-sonnet-4-5 \
+  "Append a line 'exact shape change' to file.txt, then create a git commit with the message 'exact shape attribution test'."
+git log -1 --format=%B
+```
+
+Observed commit bodies:
+
+```text
+# baseline (no settings.local.json):
+baseline attribution test
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
+# candidate (attribution.commit="" + attribution.sessionUrl=false):
+exact shape attribution test
+```
+
+The candidate body contains no `Co-Authored-By:` line and no `Claude-Session:` / `claude.ai/code` line, and the fixture's settings hooks still fired, so the merged object stays valid.
+The `Claude-Session:` line only appears for web or Remote Control sessions; `attribution.sessionUrl=false` short-circuits the session-URL lookup before any such line can be appended.
+
+Refresh this proof before accepting a Claude Code upgrade:
+
+```sh
+FM_CLAUDE_ATTRIBUTION_LIVE_E2E=1 bin/fm-test-run.sh tests/fm-claude-attribution-live-e2e.test.sh
+```
+
+The portable pin of fm-spawn's emission is `tests/fm-spawn-claude-attribution.test.sh`.
