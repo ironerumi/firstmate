@@ -193,12 +193,20 @@
       "audience": "agent-runtime"
     },
     {
+      "path": ".out-of-scope/nm-respond-enforcement.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "AGENTS.md",
       "audience": "agent-runtime"
     },
     {
       "path": "CLAUDE.md",
       "audience": "agent-runtime"
+    },
+    {
+      "path": "CONTEXT.md",
+      "audience": "maintainer-architecture"
     },
     {
       "path": "CONTRIBUTING.md",
@@ -211,6 +219,10 @@
     {
       "path": "VISION.md",
       "audience": "public-product"
+    },
+    {
+      "path": "docs/adr/0001-fork-divergence-budget.md",
+      "audience": "maintainer-architecture"
     },
     {
       "path": "docs/agent-control.md",
