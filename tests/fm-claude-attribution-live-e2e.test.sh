@@ -17,6 +17,8 @@ if [ "${FM_CLAUDE_ATTRIBUTION_LIVE_E2E:-0}" != 1 ]; then
 fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=bin/fm-timeout-lib.sh
+source "$ROOT/bin/fm-timeout-lib.sh"
 
 fail() {
   printf 'not ok - %s\n' "$1" >&2
@@ -58,7 +60,7 @@ claude_commit() {
   local message=$1
   printf 'live guard change\n' >> "$REPO/file.txt"
   ( cd "$REPO" \
-      && timeout 300 "$CLAUDE_BIN" -p --dangerously-skip-permissions --model "$CLAUDE_MODEL" \
+      && fm_run_timed 300 "$CLAUDE_BIN" -p --dangerously-skip-permissions --model "$CLAUDE_MODEL" \
         "Append a line 'live guard change' to file.txt, then create a git commit with the message '$message'." \
         > "$LAB/run.log" 2>&1 ) \
     || fail "claude $CLAUDE_VERSION run failed (see $LAB/run.log)"
