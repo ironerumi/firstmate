@@ -121,10 +121,6 @@
       "audience": "agent-runtime"
     },
     {
-      "path": ".agents/skills/aws-sso-refresh/SKILL.md",
-      "audience": "agent-runtime"
-    },
-    {
       "path": ".agents/skills/bearings/SKILL.md",
       "audience": "agent-runtime"
     },
@@ -351,10 +347,6 @@
     {
       "path": "docs/turnend-guard.md",
       "audience": "operator-current"
-    },
-    {
-      "path": "docs/verification/aws-sso-refresh.md",
-      "audience": "maintainer-verification"
     },
     {
       "path": "docs/verification/dispatch-auth.md",
