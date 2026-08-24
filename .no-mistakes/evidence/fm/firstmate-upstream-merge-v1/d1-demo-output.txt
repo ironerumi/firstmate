@@ -1,0 +1,59 @@
+================================================================
+CASE 1: ordinary text steer -> durable inbox enqueue, never typed
+================================================================
+exit=0
+--- state/t1.inbox/ listing after send ---
+001.msg
+handled
+--- durable record 001.msg ---
+schema=fm-task-inbox.v1
+at=2026-08-24T05:43:26Z
+--
+please rebase onto main--- everything that crossed the terminal (send.log) ---
+Firstmate instruction waiting: list /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/no-mistakes-evidence/01M0S2Y7DSFSYNRA8SSKPVDCN0/d1-demo.04aKCR/home/state/t1.inbox/*.msg and, in numeric order, read and act on each, then mv each handled file to /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/no-mistakes-evidence/01M0S2Y7DSFSYNRA8SSKPVDCN0/d1-demo.04aKCR/home/state/t1.inbox/handled/.
+--- payload typed? (must be NO) ---
+no payload in typed output (doorbell-only)
+
+================================================================
+CASE 2: second send -> NEW sequenced record, still never retypes
+================================================================
+exit=0
+001.msg
+002.msg
+handled
+--- record 002.msg ---
+schema=fm-task-inbox.v1
+at=2026-08-24T05:43:27Z
+--
+also update the changelog--- case2 typed (send.log) ---
+Firstmate instruction waiting: list /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/no-mistakes-evidence/01M0S2Y7DSFSYNRA8SSKPVDCN0/d1-demo.04aKCR/home/state/t1.inbox/*.msg and, in numeric order, read and act on each, then mv each handled file to /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/no-mistakes-evidence/01M0S2Y7DSFSYNRA8SSKPVDCN0/d1-demo.04aKCR/home/state/t1.inbox/handled/.
+no payload in typed output (doorbell-only)
+
+================================================================
+CASE 3: byte-exact multi-line round trip
+================================================================
+exit=0
+schema=fm-task-inbox.v1
+at=2026-08-24T05:43:27Z
+--
+first line
+second line
+third: punct!--- body extracted via fm_task_inbox_body ---
+first line
+second line
+third: punct!
+================================================================
+CASE 4: carve-out - a leading / steer keeps the typed harness plane
+================================================================
+exit=0
+--- a /-steer must NOT be in t1.inbox ---
+001.msg
+002.msg
+003.msg
+handled
+--- typed output for / steer ---
+/status
+
+================================================================
+EVIDENCE DIR: /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/no-mistakes-evidence/01M0S2Y7DSFSYNRA8SSKPVDCN0/d1-demo.04aKCR
+================================================================
