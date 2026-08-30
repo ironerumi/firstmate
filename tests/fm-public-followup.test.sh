@@ -23,6 +23,9 @@ TEARDOWN="$ROOT/bin/fm-teardown.sh"
 PROMOTE="$ROOT/bin/fm-promote.sh"
 SESSION_START="$ROOT/bin/fm-session-start.sh"
 TMP_ROOT=$(fm_test_tmproot fm-public-followup)
+# Pin the suite before the fixture's follow-up expiry; boundary tests override this clock explicitly.
+TEST_NOW_EPOCH=1787539200
+export FMX_NOW_OVERRIDE=$TEST_NOW_EPOCH
 
 command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; exit 0; }
 command -v tasks-axi >/dev/null 2>&1 || { echo "skip: tasks-axi not found"; exit 0; }
@@ -1563,11 +1566,11 @@ test_rechain_claims_delivered_source_once() {
   FAKE_CURL_LOG="$log" run_pf "$home" consume >/dev/null || fail "consume failed"
   FAKE_CURL_LOG="$log" run_pf "$home" deliver public-final-claim-a >/dev/null || fail "deliver failed"
 
-  FMX_NOW_OVERRIDE=1787539200 run_pf "$home" rechain public-final-claim-b \
+  FMX_NOW_OVERRIDE="$TEST_NOW_EPOCH" run_pf "$home" rechain public-final-claim-b \
     --from public-final-claim-a --work-home main --work-id ship-claim-b \
     --expected pr-merged > "$home/rechain-b.out" 2>&1 &
   pid_b=$!
-  FMX_NOW_OVERRIDE=1787539200 run_pf "$home" rechain public-final-claim-c \
+  FMX_NOW_OVERRIDE="$TEST_NOW_EPOCH" run_pf "$home" rechain public-final-claim-c \
     --from public-final-claim-a --work-home main --work-id ship-claim-c \
     --expected pr-merged > "$home/rechain-c.out" 2>&1 &
   pid_c=$!
