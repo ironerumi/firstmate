@@ -1,0 +1,12 @@
+Legacy input: CLAUDE.md type=Symbolic Link target=AGENTS.md
+updated: replaced CLAUDE.md symlink with @AGENTS.md pointer in /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/no-mistakes-evidence/01M19KBZN2QMGV3S34D0VAD7RP/pointer-e2e.qqBf5j
+Migrated output: CLAUDE.md type=Regular File symlink=no
+CLAUDE.md bytes:
+<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->
+@AGENTS.md
+AGENTS.md payload preserved=yes sha256_before=5d00571b5b1a99da0e0e5880f92cd6d144131c16a33c82bcfa84e6568cab991e sha256_after=5d00571b5b1a99da0e0e5880f92cd6d144131c16a33c82bcfa84e6568cab991e
+unchanged: AGENTS.md with CLAUDE.md @AGENTS.md pointer in /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/no-mistakes-evidence/01M19KBZN2QMGV3S34D0VAD7RP/pointer-e2e.qqBf5j
+Repository contract: git_mode=100644 filesystem_type=Regular File symlink=no
+Repository CLAUDE.md bytes:
+<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->
+@AGENTS.md
