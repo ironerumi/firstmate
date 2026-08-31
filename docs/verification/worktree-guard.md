@@ -9,7 +9,7 @@ Host: macOS 15.7.7 (arm64), GNU bash 5.3.9, git 2.52.0.
 ## Portable regression
 
 `tests/fm-worktree-guard.test.sh` is the reusable suite and runs anywhere the rest of the portable tests run.
-It drives the decision matrix through `fm_worktree_guard_decide` (every refusal code and every documented allowance, including a `cwd` already outside the root, `..` reaching the pool, an outside target after `--`, `mv -t`, `git -C`, an unknown `git` option before `worktree remove`, and the operand-versus-option shapes of `rm` and `mv`), then re-drives every refusal through the real `bin/shims` symlinks against real files: the sibling's file is asserted to survive each refusal, a real linked git worktree is asserted to still exist and still be registered after `git worktree remove --force` is refused, and the escape, the authorized-parent path, the four inert cases, the two-shim-directories-on-one-PATH case, and the wrapper-loop backstop are all asserted end to end.
+It drives the decision matrix through `fm_worktree_guard_decide` (every refusal code and every documented allowance, including a `cwd` already outside the root, `..` reaching the pool, an outside target after `--`, `mv -t`, `git -C`, an unknown `git` option before `worktree remove`, and the operand-versus-option shapes of `rm` and `mv`), then re-drives every refusal through the real `bin/shims` symlinks against real files: the sibling's file is asserted to survive each refusal, a real linked git worktree is asserted to still exist and still be registered after `git worktree remove --force` is refused, and the escape, the authorized-parent path, the five inert cases, the two-shim-directories-on-one-PATH case, and the wrapper-loop backstop are all asserted end to end.
 
 ```
 $ bash tests/fm-worktree-guard.test.sh
@@ -17,14 +17,26 @@ ok - the decision matrix matches the documented contract
 ok - the temp namespace is an explicit, configurable allowance rather than a hole
 ok - rm of a sibling worktree is refused end to end and the sibling survives
 ok - mv out of the home's state directory is refused end to end
+ok - a dotted sibling task id cannot collide with this task's allowances
+ok - intermediate symlinks cannot escape the worker's root
+ok - in-root symlinks preserve the fronted tool's final-component semantics
+ok - remove tools judge trailing-slash symlink targets physically
+ok - move destinations follow directory symlinks without widening source semantics
+ok - ordinary long options preserve move destination classification
+ok - move sources preserve trailing-slash dereference semantics
+ok - mv attached option arguments are classified by their option semantics
 ok - the worker's own worktree, records, and scratch stay fully usable
 ok - git worktree remove of a live sibling worktree is refused end to end
+ok - an external canonical common directory refuses a linked worker's nested removal
+ok - an in-root canonical common directory permits a standalone nested removal
 ok - worktree pruning is refused while its dry run stays available
+ok - git worktree refusal uses the portable bounded-execution owner
+ok - git worktree commands judge the selected repository
 ok - FM_WORKTREE_GUARD_ALLOW=1 allows a removal firstmate has authorized
 ok - an authorized firstmate-owned parent process is not refused
 ok - the cleanup path that owns worktree removal is not itself guarded
 ok - the guard is inert wherever the worker's own root cannot be established
-ok - every fronted tool reaches one shim owner
+ok - every public filesystem and pool shim enforces observable behavior
 ok - a second firstmate home's shims on PATH cannot loop the transport
 ok - a wrapper that resolves back to the shim fails fast instead of hanging
 ok - fm-worktree-guard.test.sh
@@ -32,7 +44,7 @@ ok - fm-worktree-guard.test.sh
 
 `tests/fm-backend-orca.test.sh` proves the spawn wiring line carries `FM_WORKTREE_GUARD_META` and the shim PATH through a non-default backend's own send path.
 
-Because the shimmed tool set grows from two names to seven, the whole affected suite was also re-run with this branch's `bin/shims` at the front of `PATH` - the pane every worker gets once this lands - and every fixture that captures a real tool now resolves it with `fm_real_tool`.
+Because the shimmed tool set grows from two names to seven, the whole affected suite was also re-run with this branch's `bin/shims` at the front of `PATH` - the pane every worker gets once this lands - and every fixture that captures a real tool now resolves it with `fm_real_tool`, or strips the shim directory from `PATH` in the one suite that cannot load `lib.sh`.
 
 ## Live worker evidence
 

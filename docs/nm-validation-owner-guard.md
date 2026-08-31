@@ -89,7 +89,7 @@ The shims sit at the tool boundary rather than at any harness's hook surface, wh
 export FM_NM_GUARD_STATUS='<state>/<id>.status' FM_WORKTREE_GUARD_META='<state>/<id>.meta' PATH='<fm-root>/bin/shims':$PATH
 ```
 
-- **Worker runtimes.** Every supported harness - `claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi` - is launched as a command in that pane shell, so each inherits the environment, and each passes it to the shells its own tool calls run in. There is no per-harness hook to write, no trust dialog to clear, and no harness-specific payload shape to parse. A harness added later is covered on the day it is launched this way.
+- **Worker runtimes.** Every supported harness - `claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, `cursor`, `muse` - is launched as a command in that pane shell, so each inherits the environment, and each passes it to the shells its own tool calls run in. There is no per-harness hook to write, no trust dialog to clear, and no harness-specific payload shape to parse. A harness added later is covered on the day it is launched this way.
 - **Session providers.** `spawn_send_text_line` is the backend-agnostic text path, so the same line reaches a task on `tmux`, `herdr`, `zellij`, `orca`, and `cmux` without a per-backend branch.
 - **Secondmate homes.** A secondmate is launched through the same path and receives the same shims; the guard is inert there because a secondmate does not drive a validation run of its own.
 - **The primary session.** Firstmate's own shell never receives the shim PATH, so nothing firstmate runs is affected.
