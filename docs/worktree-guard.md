@@ -31,7 +31,11 @@ The discriminator is the resolved target path, never the command's size or appar
 
 Always permitted:
 
-- Every command against a path inside this task's own worktree, including `rm -rf` of its own build output and a `git worktree remove` of a worktree the worker itself nested inside its root.
+- Ordinary filesystem commands against a path inside this task's own worktree, including `rm -rf` of its own build output.
+- A `git worktree remove` is judged by the canonical common directory Git reports, not only by where the named worktree sits, so nesting a worktree inside the worker's own root does not by itself permit its removal.
+  A real worker runs from a linked worktree whose common directory lives in the project clone outside its own root, so the guard refuses that nested removal.
+  That refusal is intended because the removal rewrites shared repository administration that every sibling task depends on, and firstmate's authorized teardown path carries `FM_WORKTREE_GUARD_ALLOW=1` for that operation.
+  A nested removal is permitted only when the canonical common directory is genuinely inside the worker's own root, such as for a standalone repository created there.
 - This task's exact `state/<id>.status` file and paths under its `state/<id>.inbox/` directory - the brief itself tells a worker to `mv` its inbox messages into `handled/`.
   A sibling's records, including a dotted task ID that begins with this task's ID, and the fleet-wide records beside them stay protected.
 - This task's own temp root (`tasktmp=` in the record, `/tmp/fm-<id>`) and the OS temp namespace. Unlanded work never lives in temp - firstmate puts each task's scratch there itself - and refusing an ordinary `rm` of a scratch file would make the guard something workers route around, which costs more than the class it catches.

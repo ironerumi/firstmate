@@ -114,7 +114,6 @@ check_decision allow "mv of this task's own inbox message" mv "$OWN" "$STATE/t1.
 check_decision allow "rm of this task's own status file" rm "$OWN" -f "$STATE/t1.status"
 check_decision allow "rm inside this task's own temp root" rm "$OWN" -rf "$TASKTMP/scratch"
 check_decision allow "mv -S consumes a suffix, not a path" mv "$OWN" -S ../backup src/a src/b
-check_decision allow "git worktree remove of a worktree nested in the root" git "$OWN" worktree remove nested/wt
 check_decision allow "git worktree prune --dry-run changes nothing" git "$OWN" worktree prune --dry-run
 check_decision allow "git worktree add" git "$OWN" worktree add ../elsewhere
 check_decision allow "an ordinary git command" git "$OWN" status --porcelain
@@ -326,6 +325,33 @@ SIBLING_REAL=$(cd "$REPO_SIBLING" && pwd -P)
 git -C "$REPO" worktree list --porcelain | grep -qF "$SIBLING_REAL" \
   || fail "the sibling worktree must still be registered after the refusal"
 pass "git worktree remove of a live sibling worktree is refused end to end"
+
+LINKED_WORKER_NESTED="$REPO_SIBLING/nested-linked-worktree"
+"$REAL_GIT" -C "$REPO" worktree add -q -b fm/worktree-guard-nested-linked "$LINKED_WORKER_NESTED"
+: > "$LINKED_WORKER_NESTED/unlanded.txt"
+fm_write_meta "$STATE/linked-worker.meta" "worktree=$REPO_SIBLING" "kind=ship"
+out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/linked-worker.meta" -- "$REPO_SIBLING" \
+  git worktree remove --force "$LINKED_WORKER_NESTED" 2>&1)
+expect_code 3 $? "a linked worker must refuse a nested removal through its external common directory"
+assert_present "$LINKED_WORKER_NESTED/unlanded.txt" \
+  "the linked worker's nested worktree must survive the refused removal"
+LINKED_WORKER_NESTED_REAL=$(cd "$LINKED_WORKER_NESTED" && pwd -P)
+"$REAL_GIT" -C "$REPO" worktree list --porcelain | grep -qF "$LINKED_WORKER_NESTED_REAL" \
+  || fail "the linked worker's nested worktree must remain registered after refusal"
+pass "an external canonical common directory refuses a linked worker's nested removal"
+
+STANDALONE_REPO="$REPO_SIBLING/standalone-repo"
+STANDALONE_NESTED="$REPO_SIBLING/standalone-nested-worktree"
+fm_git_worktree "$STANDALONE_REPO" "$STANDALONE_NESTED" fm/worktree-guard-standalone-nested
+: > "$STANDALONE_NESTED/removable.txt"
+STANDALONE_NESTED_REAL=$(cd "$STANDALONE_NESTED" && pwd -P)
+guarded "FM_WORKTREE_GUARD_META=$STATE/linked-worker.meta" -- "$REPO_SIBLING" \
+  git -C "$STANDALONE_REPO" worktree remove --force "$STANDALONE_NESTED"
+expect_code 0 $? "an in-root standalone common directory must permit its nested removal"
+assert_absent "$STANDALONE_NESTED" "the permitted standalone nested worktree must be removed"
+"$REAL_GIT" -C "$STANDALONE_REPO" worktree list --porcelain | grep -qF "$STANDALONE_NESTED_REAL" \
+  && fail "the permitted standalone nested worktree must be unregistered"
+pass "an in-root canonical common directory permits a standalone nested removal"
 
 out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" -- "$REPO" git worktree prune 2>&1)
 expect_code 3 $? "a refused prune must exit 3"
