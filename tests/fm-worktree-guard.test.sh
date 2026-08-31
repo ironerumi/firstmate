@@ -31,6 +31,9 @@ STATE="$TMP/state"
 TASKTMP="$TMP/tmp/fm-t1"
 META="$STATE/t1.meta"
 mkdir -p "$OWN/src" "$SIBLING/src" "$STATE/t1.inbox/handled" "$TASKTMP"
+REAL_GIT=$(fm_real_tool git)
+fm_git_identity
+"$REAL_GIT" init -q "$OWN"
 
 fm_write_meta "$META" \
   "window=firstmate:fm-t1" \
@@ -55,6 +58,7 @@ decision_code() { # <tool> <cwd> [argv...]
   local tool=$1 cwd=$2 out
   shift 2
   out=$(FM_WORKTREE_GUARD_TEMP_ROOTS="$NO_TEMP" \
+    FM_WORKTREE_GUARD_REAL_GIT="$REAL_GIT" \
     FM_WORKTREE_GUARD_STATE_STATUS="$STATE/t1.status" \
     FM_WORKTREE_GUARD_STATE_INBOX="$STATE/t1.inbox" \
     FM_WORKTREE_GUARD_TASKTMP="$TASKTMP" \
@@ -92,7 +96,8 @@ check_decision worktree-escape-move "mv with a clustered -t destination" mv "$OW
 check_decision allow "mv -T preserves final-component semantics" mv "$OWN" -T src/x "$OWN/outside-link"
 check_decision worktree-remove "git worktree remove of a sibling" git "$OWN" worktree remove ../task-sibling
 check_decision worktree-remove "git worktree remove of this task's own root" git "$OWN" worktree remove "$OWN"
-check_decision worktree-remove "git -C rebasing a relative worktree removal" git "$OWN" -C "$POOL" worktree remove task-sibling
+check_decision worktree-remove "git -C rebasing a relative worktree removal" git "$OWN" \
+  "--git-dir=$OWN/.git" -C "$POOL" worktree remove task-sibling
 check_decision worktree-remove "git worktree remove behind an unknown option" git "$OWN" --no-optional-locks worktree remove --force "$SIBLING"
 check_decision worktree-prune "git worktree prune rewrites shared records" git "$OWN" worktree prune
 check_decision worktree-pool "treehouse return frees the lease" treehouse "$OWN" return --force "$SIBLING"
@@ -217,6 +222,38 @@ expect_code 0 $? "a final symlink destination inside the root must run"
 assert_present "$OWN/inside-target/inside-destination.txt" "an in-root destination symlink must receive the file"
 pass "move destinations follow directory symlinks without widening source semantics"
 
+ln -s "$SIBLING" "$OWN/outside-source-link"
+: > "$SIBLING/trailing-source-marker"
+out=$(guarded -- "$OWN" mv outside-source-link/ "$OWN/renamed-sibling" 2>&1)
+expect_code 3 $? "a trailing-slash source symlink to a sibling must be refused"
+assert_present "$OWN/outside-source-link" "the refused trailing source link must remain"
+assert_present "$SIBLING/trailing-source-marker" "the sibling directory must remain intact"
+assert_absent "$OWN/renamed-sibling" "a refused trailing source must not be renamed"
+
+TRAILING_MV_BIN="$TMP/trailing-mv-bin"
+mkdir -p "$TRAILING_MV_BIN"
+# shellcheck disable=SC2016
+printf '%s\n' '#!/usr/bin/env bash' \
+  'mode=${MV_TRAILING_MODE:-}' \
+  'if [ "$mode" = strip ]; then shift; exec /bin/mv "${1%/}" "$2"; fi' \
+  'if [ "$mode" = follow ]; then source=${1%/}; exec /bin/mv "$(readlink "$source")" "$2"; fi' \
+  'exit 64' > "$TRAILING_MV_BIN/mv"
+chmod +x "$TRAILING_MV_BIN/mv"
+guarded "PATH=$SHIMS:$TRAILING_MV_BIN:$PATH" "MV_TRAILING_MODE=strip" -- "$OWN" \
+  mv --strip-trailing-slashes outside-source-link/ "$OWN/stripped-source-link"
+expect_code 0 $? "--strip-trailing-slashes must keep unresolved source semantics"
+assert_present "$OWN/stripped-source-link" "the stripped final symlink must be moved"
+assert_present "$SIBLING/trailing-source-marker" "moving the link must not move its sibling target"
+mkdir -p "$OWN/inside-source-target"
+: > "$OWN/inside-source-target/trailing-source-marker"
+ln -s "$OWN/inside-source-target" "$OWN/inside-source-link"
+guarded "PATH=$SHIMS:$TRAILING_MV_BIN:$PATH" "MV_TRAILING_MODE=follow" -- "$OWN" \
+  mv inside-source-link/ "$OWN/inside-source-renamed"
+expect_code 0 $? "a trailing-slash source resolving inside the root must run"
+assert_present "$OWN/inside-source-renamed/trailing-source-marker" \
+  "the in-root trailing source directory must actually move"
+pass "move sources preserve trailing-slash dereference semantics"
+
 : > "$OWN/src/attached-target.txt"
 out=$(guarded -- "$OWN" mv "-t$SIBLING" src/attached-target.txt 2>&1)
 expect_code 3 $? "an attached -t outside destination must be refused"
@@ -283,43 +320,63 @@ pass "worktree pruning is refused while its dry run stays available"
 
 OTHER_REPO="$TMP/other-repo"
 OTHER_WORKTREE="$TMP/other-worktree"
-SCRATCH_REPO="$TMP/scratch-repo"
+SCRATCH_ROOT="$TMP/scratch-space"
+SCRATCH_REPO="$SCRATCH_ROOT/repo"
+SCRATCH_PRUNABLE="$SCRATCH_ROOT/prunable"
+SCRATCH_EXTERNAL_LINK="$SCRATCH_ROOT/external-linked"
 fm_git_worktree "$OTHER_REPO" "$OTHER_WORKTREE" fm/worktree-guard-other
-git init -q "$SCRATCH_REPO"
+fm_git_worktree "$SCRATCH_REPO" "$SCRATCH_PRUNABLE" fm/worktree-guard-scratch
+"$REAL_GIT" -C "$OTHER_REPO" worktree add -q -b fm/worktree-guard-external "$SCRATCH_EXTERNAL_LINK"
 out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
-  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" -- "$REPO" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_ROOT" -- "$REPO" \
   git "--git-dir=$OTHER_REPO/.git" -C "$SCRATCH_REPO" worktree prune 2>&1)
 expect_code 3 $? "an external --git-dir prune must be refused"
 assert_contains "$out" "REFUSED BY FIRSTMATE [worktree-prune]" "the selected repository refusal must name prune"
 git -C "$OTHER_REPO" worktree list --porcelain | grep -qF "$(cd "$OTHER_WORKTREE" && pwd -P)" \
   || fail "the external repository's linked worktree must remain registered"
 out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
-  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" "GIT_DIR=$OTHER_REPO/.git" -- "$REPO" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_ROOT" "GIT_DIR=$OTHER_REPO/.git" -- "$REPO" \
   git -C "$SCRATCH_REPO" worktree prune 2>&1)
 expect_code 3 $? "an external GIT_DIR prune must be refused"
 git -C "$OTHER_REPO" worktree list --porcelain | grep -qF "$(cd "$OTHER_WORKTREE" && pwd -P)" \
   || fail "the external repository must stay registered after a GIT_DIR refusal"
 out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
-  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" -- "$REPO" \
-  git -C "$TMP" --work-tree other-repo -C "$SCRATCH_REPO" worktree prune 2>&1)
-expect_code 3 $? "a relative selected work tree outside scratch must be refused"
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_ROOT" -- "$REPO" \
+  git -C "$OTHER_REPO" "--work-tree=$SCRATCH_ROOT" worktree prune 2>&1)
+expect_code 3 $? "--work-tree must not replace the selected repository"
+git -C "$OTHER_REPO" worktree list --porcelain | grep -qF "$(cd "$OTHER_WORKTREE" && pwd -P)" \
+  || fail "the repository selected alongside --work-tree must stay registered"
+SHALLOW_FILE="$SCRATCH_ROOT/shallow-file"
+: > "$SHALLOW_FILE"
 out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
-  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" "GIT_WORK_TREE=$OTHER_REPO" -- "$REPO" \
-  git -C "$SCRATCH_REPO" worktree prune 2>&1)
-expect_code 3 $? "an external GIT_WORK_TREE prune must be refused"
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_ROOT" -- "$REPO" \
+  git --shallow-file "$SHALLOW_FILE" worktree prune 2>&1)
+expect_code 3 $? "a value-taking global option must not hide worktree prune"
 out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
-  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" -- "$REPO" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_ROOT" -- "$SCRATCH_EXTERNAL_LINK" \
+  git worktree prune 2>&1)
+expect_code 3 $? "a scratch linked worktree with an external common directory must be refused"
+git -C "$OTHER_REPO" worktree list --porcelain | grep -qF "$(cd "$SCRATCH_EXTERNAL_LINK" && pwd -P)" \
+  || fail "the scratch linked worktree must stay registered after refusal"
+out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_ROOT" -- "$REPO" \
   git "--git-dir=$OTHER_REPO/.git" -C "$SCRATCH_REPO" worktree remove absent 2>&1)
 expect_code 3 $? "an external selected repository removal must be refused"
 ln -s "$OTHER_REPO/.git" "$REPO/foreign-git"
 out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
-  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" -- "$REPO" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_ROOT" -- "$REPO" \
   git "--git-dir=$REPO/foreign-git" -C "$SCRATCH_REPO" worktree remove absent 2>&1)
 expect_code 3 $? "a selected repository symlink outside the root must be refused"
+SCRATCH_PRUNABLE_REAL=$(cd "$SCRATCH_PRUNABLE" && pwd -P)
+/bin/rm -rf "$SCRATCH_PRUNABLE"
+git -C "$SCRATCH_REPO" worktree list --porcelain | grep -qF "$SCRATCH_PRUNABLE_REAL" \
+  || fail "the scratch repository must begin with a stale worktree registration"
 guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
-  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" -- "$REPO" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_ROOT" -- "$REPO" \
   git -C "$SCRATCH_REPO" worktree prune
 expect_code 0 $? "a repository selected inside scratch must allow prune"
+git -C "$SCRATCH_REPO" worktree list --porcelain | grep -qF "$SCRATCH_PRUNABLE_REAL" \
+  && fail "the allowed scratch prune must actually remove the stale registration"
 pass "git worktree commands judge the selected repository"
 
 # --- 3. the escape, and firstmate's own authorized removal path -------------

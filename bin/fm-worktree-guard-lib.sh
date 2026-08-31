@@ -58,7 +58,11 @@ FM_WORKTREE_GUARD_TASKTMP_LEXICAL=
 FM_WORKTREE_GUARD_PATH=
 FM_WORKTREE_GUARD_MOVE_DESTINATION=
 FM_WORKTREE_GUARD_MOVE_NO_TARGET_DIRECTORY=0
+FM_WORKTREE_GUARD_MOVE_STRIP_TRAILING_SLASHES=0
 FM_WORKTREE_GUARD_GIT_REPOSITORY=
+FM_WORKTREE_GUARD_GIT_ACTION=
+FM_WORKTREE_GUARD_GIT_PREFIX=()
+FM_WORKTREE_GUARD_GIT_ARGUMENTS=()
 
 # Deny reason text, keyed by code. One owner; the transports only render it.
 fm_worktree_guard_reason() { # <code> <target>
@@ -250,6 +254,7 @@ fm_worktree_guard_move_operands() { # [argv...]
   FM_WORKTREE_GUARD_TARGETS=()
   FM_WORKTREE_GUARD_MOVE_DESTINATION=
   FM_WORKTREE_GUARD_MOVE_NO_TARGET_DIRECTORY=0
+  FM_WORKTREE_GUARD_MOVE_STRIP_TRAILING_SLASHES=0
   while [ "$#" -gt 0 ]; do
     a=$1
     if [ "$endopts" -eq 0 ]; then
@@ -272,6 +277,11 @@ fm_worktree_guard_move_operands() { # [argv...]
           ;;
         --no-target-directory)
           FM_WORKTREE_GUARD_MOVE_NO_TARGET_DIRECTORY=1
+          shift
+          continue
+          ;;
+        --strip-trailing-slashes)
+          FM_WORKTREE_GUARD_MOVE_STRIP_TRAILING_SLASHES=1
           shift
           continue
           ;;
@@ -323,93 +333,76 @@ fm_worktree_guard_move_operands() { # [argv...]
   fi
 }
 
-# git's own options before the subcommand. -C rebases subsequent relative paths,
-# while --git-dir and --work-tree select the repository affected by a worktree
-# command. An option shape this list does not know is skipped rather than read as
-# the subcommand. Publishes the effective directory in FM_WORKTREE_GUARD_PATH,
-# the selected repository in FM_WORKTREE_GUARD_GIT_REPOSITORY, and the remaining
-# words in FM_WORKTREE_GUARD_TARGETS.
-fm_worktree_guard_git_scan() { # <cwd> [argv...]
-  local cwd=$1 git_dir='' work_tree='' git_dir_flag=0 work_tree_flag=0 value
-  shift
-  fm_worktree_guard_normalize "$cwd" /
-  cwd=$FM_WORKTREE_GUARD_PATH
-  FM_WORKTREE_GUARD_TARGETS=()
-  FM_WORKTREE_GUARD_GIT_REPOSITORY=
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      -C)
-        [ "$#" -ge 2 ] || break
-        fm_worktree_guard_normalize "$2" "$cwd"
-        cwd=$FM_WORKTREE_GUARD_PATH
-        shift 2
-        ;;
-      --git-dir|--work-tree)
-        [ "$#" -ge 2 ] || break
-        value=$2
-        fm_worktree_guard_normalize "$value" "$cwd"
-        if [ "$1" = --git-dir ]; then
-          git_dir=$FM_WORKTREE_GUARD_PATH
-          git_dir_flag=1
-        else
-          work_tree=$FM_WORKTREE_GUARD_PATH
-          work_tree_flag=1
-        fi
-        shift 2
-        ;;
-      --git-dir=*|--work-tree=*)
-        value=${1#*=}
-        fm_worktree_guard_normalize "$value" "$cwd"
-        case "$1" in
-          --git-dir=*) git_dir=$FM_WORKTREE_GUARD_PATH; git_dir_flag=1 ;;
-          *) work_tree=$FM_WORKTREE_GUARD_PATH; work_tree_flag=1 ;;
-        esac
-        shift
-        ;;
-      -c|--namespace|--exec-path|--super-prefix|--config-env)
-        [ "$#" -ge 2 ] || break
-        shift 2
-        ;;
-      --) shift; break ;;
-      -?*) shift ;;
-      *) break ;;
-    esac
-  done
-  if [ "$git_dir_flag" -eq 0 ] && [ -n "${GIT_DIR:-}" ]; then
-    fm_worktree_guard_normalize "$GIT_DIR" "$cwd"
-    git_dir=$FM_WORKTREE_GUARD_PATH
-  fi
-  if [ "$work_tree_flag" -eq 0 ] && [ -n "${GIT_WORK_TREE:-}" ]; then
-    fm_worktree_guard_normalize "$GIT_WORK_TREE" "$cwd"
-    work_tree=$FM_WORKTREE_GUARD_PATH
-  fi
-  FM_WORKTREE_GUARD_PATH=$cwd
-  if [ -n "$git_dir" ]; then
-    FM_WORKTREE_GUARD_GIT_REPOSITORY=$git_dir
-  elif [ -n "$work_tree" ]; then
-    FM_WORKTREE_GUARD_GIT_REPOSITORY=$work_tree
-  else
-    FM_WORKTREE_GUARD_GIT_REPOSITORY=$cwd
-  fi
-  while [ "$#" -gt 0 ]; do
-    FM_WORKTREE_GUARD_TARGETS[${#FM_WORKTREE_GUARD_TARGETS[@]}]=$1
-    shift
+# Preserve git's original global prefix and find only an adjacent worktree
+# action. Git itself remains the owner of every global option's meaning.
+fm_worktree_guard_git_scan() { # [argv...]
+  local words=("$@") index
+  FM_WORKTREE_GUARD_GIT_PREFIX=()
+  FM_WORKTREE_GUARD_GIT_ARGUMENTS=()
+  FM_WORKTREE_GUARD_GIT_ACTION=
+  index=0
+  while [ "$index" -lt "$(( ${#words[@]} - 1 ))" ]; do
+    if [ "${words[$index]}" = worktree ]; then
+      case "${words[$((index + 1))]}" in
+        remove|prune)
+          FM_WORKTREE_GUARD_GIT_PREFIX=("${words[@]:0:index}")
+          FM_WORKTREE_GUARD_GIT_ACTION=${words[$((index + 1))]}
+          FM_WORKTREE_GUARD_GIT_ARGUMENTS=("${words[@]:$((index + 2))}")
+          return 0
+          ;;
+      esac
+    fi
+    index=$((index + 1))
   done
 }
 
-fm_worktree_guard_decide_git() { # <cwd> [argv...]
-  local cwd=$1 repository repository_target
-  shift
-  fm_worktree_guard_git_scan "$cwd" "$@"
+fm_worktree_guard_git_effective_cwd() { # <cwd>
+  local cwd=$1 index=0 word
+  fm_worktree_guard_normalize "$cwd" /
   cwd=$FM_WORKTREE_GUARD_PATH
-  repository=$FM_WORKTREE_GUARD_GIT_REPOSITORY
-  repository_target=$repository
-  [ ! -d "$repository" ] || repository_target="$repository/.fm-worktree-guard-child"
-  set -- ${FM_WORKTREE_GUARD_TARGETS[@]+"${FM_WORKTREE_GUARD_TARGETS[@]}"}
-  [ "${1:-}" = worktree ] || { printf 'allow\n'; return 0; }
+  while [ "$index" -lt "${#FM_WORKTREE_GUARD_GIT_PREFIX[@]}" ]; do
+    word=${FM_WORKTREE_GUARD_GIT_PREFIX[$index]}
+    if [ "$word" = -C ]; then
+      index=$((index + 1))
+      [ "$index" -lt "${#FM_WORKTREE_GUARD_GIT_PREFIX[@]}" ] || return 1
+      fm_worktree_guard_normalize "${FM_WORKTREE_GUARD_GIT_PREFIX[$index]}" "$cwd"
+      cwd=$FM_WORKTREE_GUARD_PATH
+    fi
+    index=$((index + 1))
+  done
+  FM_WORKTREE_GUARD_PATH=$cwd
+}
+
+fm_worktree_guard_git_common_dir() { # <cwd>
+  local cwd=$1 timeout_bin='' output candidate
+  [ -n "${FM_WORKTREE_GUARD_REAL_GIT:-}" ] && [ -x "$FM_WORKTREE_GUARD_REAL_GIT" ] || return 1
+  for candidate in /usr/bin/timeout /bin/timeout /usr/local/bin/timeout /opt/homebrew/bin/timeout; do
+    if [ -x "$candidate" ]; then
+      timeout_bin=$candidate
+      break
+    fi
+  done
+  [ -n "$timeout_bin" ] || return 1
+  output=$(CDPATH='' cd -P -- "$cwd" 2>/dev/null && \
+    "$timeout_bin" 2 "$FM_WORKTREE_GUARD_REAL_GIT" \
+      ${FM_WORKTREE_GUARD_GIT_PREFIX[@]+"${FM_WORKTREE_GUARD_GIT_PREFIX[@]}"} \
+      rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+  [ -n "$output" ] || return 1
+  case "$output" in
+    *$'\n'*) return 1 ;;
+  esac
+  fm_worktree_guard_normalize "$output" "${PWD:-/}"
+  fm_worktree_guard_resolve_directory "$FM_WORKTREE_GUARD_PATH" || return 1
+  FM_WORKTREE_GUARD_GIT_REPOSITORY=$FM_WORKTREE_GUARD_PATH
+}
+
+fm_worktree_guard_decide_git() { # <cwd> [argv...]
+  local cwd=$1 invocation_cwd=$1 repository repository_target
   shift
-  local action=${1:-} target='' dryrun=0 word
-  [ "$#" -eq 0 ] || shift
+  fm_worktree_guard_git_scan "$@"
+  local action=$FM_WORKTREE_GUARD_GIT_ACTION target='' dryrun=0 word
+  [ -n "$action" ] || { printf 'allow\n'; return 0; }
+  set -- ${FM_WORKTREE_GUARD_GIT_ARGUMENTS[@]+"${FM_WORKTREE_GUARD_GIT_ARGUMENTS[@]}"}
   for word in "$@"; do
     case "$word" in
       -n|--dry-run) dryrun=1 ;;
@@ -417,6 +410,12 @@ fm_worktree_guard_decide_git() { # <cwd> [argv...]
       *) [ -n "$target" ] || target=$word ;;
     esac
   done
+  [ "$action" != prune ] || [ "$dryrun" -eq 0 ] || { printf 'allow\n'; return 0; }
+  fm_worktree_guard_git_effective_cwd "$cwd" || { printf 'allow\n'; return 0; }
+  cwd=$FM_WORKTREE_GUARD_PATH
+  fm_worktree_guard_git_common_dir "$invocation_cwd" || { printf 'allow\n'; return 0; }
+  repository=$FM_WORKTREE_GUARD_GIT_REPOSITORY
+  repository_target="$repository/.fm-worktree-guard-child"
   case "$action" in
     remove)
       [ -n "$target" ] || { printf 'allow\n'; return 0; }
@@ -438,10 +437,9 @@ fm_worktree_guard_decide_git() { # <cwd> [argv...]
       fm_worktree_guard_deny worktree-remove "$target"
       ;;
     prune)
-      [ "$dryrun" -eq 0 ] || { printf 'allow\n'; return 0; }
       # prune names no path: it rewrites the shared administration of whatever
       # repository the command runs against, including the record of every
-      # sibling worktree, so the effective directory is what is judged. Only a
+      # sibling worktree, so git's canonical common directory is judged. Only a
       # repository inside the unprotected scratch namespace - a fixture, never a
       # fleet checkout - is allowed, which is why the worker's own root does not
       # buy a pass here.
@@ -544,6 +542,12 @@ fm_worktree_guard_decide() { # <tool> <root> <cwd> [argv...]
       [ "$FM_WORKTREE_GUARD_MOVE_NO_TARGET_DIRECTORY" -eq 0 ] && \
       [ "$resolved" = "$destination" ] && [ -d "$resolved" ]; then
       check_target="$resolved/.fm-worktree-guard-child"
+    elif [ "$code" = worktree-escape-move ] && \
+      [ "$FM_WORKTREE_GUARD_MOVE_STRIP_TRAILING_SLASHES" -eq 0 ] && \
+      [ "$resolved" != "$destination" ]; then
+      case "$target" in
+        */) check_target="$resolved/.fm-worktree-guard-child" ;;
+      esac
     fi
     if ! fm_worktree_guard_target_allowed "$check_target"; then
       fm_worktree_guard_deny "$code" "$resolved"

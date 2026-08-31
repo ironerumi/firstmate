@@ -130,6 +130,7 @@ fm_nm_path_bin_fallback() { # <name>
 # owners, one shim: this call renders its own refusal and exits 3, or returns
 # so the validation-owner classification below proceeds unchanged.
 if [ -n "$BIN_DIR" ] && [ -f "$BIN_DIR/fm-worktree-guard-lib.sh" ]; then
+  FM_WORKTREE_GUARD_REAL_GIT=$(fm_nm_path_bin_fallback git 2>/dev/null) || FM_WORKTREE_GUARD_REAL_GIT=
   # shellcheck source=bin/fm-worktree-guard-lib.sh
   . "$BIN_DIR/fm-worktree-guard-lib.sh"
   fm_worktree_guard_enforce "$FM_NM_GUARD_TOOL" "$@"
