@@ -36,6 +36,12 @@
 #   FM_WORKTREE_GUARD_TEMP_ROOTS  colon-separated override of the OS temp
 #                            namespace treated as unprotected scratch.
 
+_FM_WORKTREE_GUARD_LIB_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || _FM_WORKTREE_GUARD_LIB_DIR=
+if [ -n "$_FM_WORKTREE_GUARD_LIB_DIR" ] && [ -f "$_FM_WORKTREE_GUARD_LIB_DIR/fm-timeout-lib.sh" ]; then
+  # shellcheck source=bin/fm-timeout-lib.sh
+  . "$_FM_WORKTREE_GUARD_LIB_DIR/fm-timeout-lib.sh"
+fi
+
 # Colon-separated temp namespace. Unlanded work never lives here - firstmate
 # puts each task's own scratch under /tmp/fm-<id> - and refusing an ordinary
 # `rm` of a scratch file would make the guard something workers route around,
@@ -374,17 +380,11 @@ fm_worktree_guard_git_effective_cwd() { # <cwd>
 }
 
 fm_worktree_guard_git_common_dir() { # <cwd>
-  local cwd=$1 timeout_bin='' output candidate
+  local cwd=$1 output
   [ -n "${FM_WORKTREE_GUARD_REAL_GIT:-}" ] && [ -x "$FM_WORKTREE_GUARD_REAL_GIT" ] || return 1
-  for candidate in /usr/bin/timeout /bin/timeout /usr/local/bin/timeout /opt/homebrew/bin/timeout; do
-    if [ -x "$candidate" ]; then
-      timeout_bin=$candidate
-      break
-    fi
-  done
-  [ -n "$timeout_bin" ] || return 1
+  declare -F fm_run_timed >/dev/null 2>&1 || return 1
   output=$(CDPATH='' cd -P -- "$cwd" 2>/dev/null && \
-    "$timeout_bin" 2 "$FM_WORKTREE_GUARD_REAL_GIT" \
+    fm_run_timed 2 "$FM_WORKTREE_GUARD_REAL_GIT" \
       ${FM_WORKTREE_GUARD_GIT_PREFIX[@]+"${FM_WORKTREE_GUARD_GIT_PREFIX[@]}"} \
       rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
   [ -n "$output" ] || return 1
@@ -545,6 +545,10 @@ fm_worktree_guard_decide() { # <tool> <root> <cwd> [argv...]
     elif [ "$code" = worktree-escape-move ] && \
       [ "$FM_WORKTREE_GUARD_MOVE_STRIP_TRAILING_SLASHES" -eq 0 ] && \
       [ "$resolved" != "$destination" ]; then
+      case "$target" in
+        */) check_target="$resolved/.fm-worktree-guard-child" ;;
+      esac
+    elif [ "$tool" = rm ] || [ "$tool" = rmdir ]; then
       case "$target" in
         */) check_target="$resolved/.fm-worktree-guard-child" ;;
       esac

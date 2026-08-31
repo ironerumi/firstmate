@@ -39,6 +39,7 @@ Always permitted:
 - `treehouse get`, `treehouse enter`, `treehouse status`, every other `git` subcommand, and every command that is not one of the fronted tools.
 
 Deliberate non-goals, called out so nobody reads more into the guard than it does: it does not classify `git -C <sibling> reset --hard`, `git clean`, an editor writing over a sibling's file, or any other way to damage a checkout without removing a path.
+A Git alias that expands to `worktree remove` or `worktree prune` is also not classified because alias expansion happens inside Git after the guard has seen the command, and the threat model does not include a worker deliberately defining an alias for the command being guarded.
 Its threat model is a worker's mistake under pressure, the same as firstmate's other seatbelts, so a path handed to a program the guard does not front is an accepted gap rather than a hole to be plugged with a sandbox.
 
 ## Where the root comes from
@@ -82,7 +83,9 @@ Path resolution first drops `.` and empty components and lets `..` pop one compo
 For a target that lexically appears inside an allowed boundary, the guard then resolves its deepest existing parent physically and re-appends any missing components lexically, so an intermediate directory symlink into a sibling worktree is refused.
 An existing `mv` destination directory is resolved physically because `mv` writes into that directory, including when the destination is a symlink without a trailing slash.
 A trailing slash on an `mv` source resolves that source physically because the move dereferences it, while `--strip-trailing-slashes` restores ordinary unresolved final-component treatment.
-A final symlink that `rm`, `rmdir`, or `unlink` would remove itself stays unresolved, and `mv -T` or `mv --no-target-directory` keeps the same final-component semantics for the destination.
+Without a trailing slash, a final symlink that `rm`, `rmdir`, or `unlink` would remove itself stays unresolved.
+With a trailing slash, `rm` and `rmdir` dereference the final symlink, so the guard judges it physically and refuses it when it leaves the root.
+`mv -T` or `mv --no-target-directory` keeps the unresolved final-component semantics for the destination.
 If an existing parent cannot be resolved, the uncertainty allows the command under the fail-open contract.
 
 ## The escape

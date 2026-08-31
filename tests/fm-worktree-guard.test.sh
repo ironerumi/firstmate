@@ -206,6 +206,22 @@ assert_absent "$OWN/final-link" "the in-root final symlink must be removed"
 assert_present "$SIBLING/src/unlanded.txt" "the final symlink's outside target must survive"
 pass "in-root symlinks preserve the fronted tool's final-component semantics"
 
+out=$(guarded -- "$OWN" rm -rf outside-link/ 2>&1)
+expect_code 3 $? "rm of an outside final symlink with a trailing slash must be refused"
+assert_present "$SIBLING/src/unlanded.txt" "the sibling must survive a trailing-slash rm refusal"
+mkdir -p "$SIBLING/empty-outside"
+ln -s "$SIBLING/empty-outside" "$OWN/empty-outside-link"
+out=$(guarded -- "$OWN" rmdir empty-outside-link/ 2>&1)
+expect_code 3 $? "rmdir of an outside final symlink with a trailing slash must be refused"
+assert_present "$SIBLING/empty-outside" "the sibling directory must survive a trailing-slash rmdir refusal"
+mkdir -p "$OWN/inside-removal-target"
+: > "$OWN/inside-removal-target/removable.txt"
+ln -s "$OWN/inside-removal-target" "$OWN/inside-removal-link"
+guarded -- "$OWN" rm -rf inside-removal-link/
+expect_code 0 $? "a trailing-slash removal resolving inside the root must run"
+assert_absent "$OWN/inside-removal-target/removable.txt" "the in-root trailing-slash removal must reach its target"
+pass "remove tools judge trailing-slash symlink targets physically"
+
 : > "$OWN/src/final-destination.txt"
 out=$(guarded -- "$OWN" mv src/final-destination.txt outside-link 2>&1)
 expect_code 3 $? "a final symlink destination to a sibling must be refused"
@@ -317,6 +333,19 @@ assert_contains "$out" "REFUSED BY FIRSTMATE [worktree-prune]" "the refusal must
 guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" -- "$REPO" git worktree prune --dry-run >/dev/null 2>&1
 expect_code 0 $? "a prune dry run changes nothing and must run"
 pass "worktree pruning is refused while its dry run stays available"
+
+NO_TIMEOUT_BIN="$TMP/no-timeout-bin"
+mkdir -p "$NO_TIMEOUT_BIN"
+for tool in bash basename dirname readlink mktemp sleep cat rm; do
+  ln -s "$(fm_real_tool "$tool")" "$NO_TIMEOUT_BIN/$tool"
+done
+ln -s "$REAL_GIT" "$NO_TIMEOUT_BIN/git"
+out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
+  "PATH=$SHIMS:$NO_TIMEOUT_BIN" -- "$REPO" git worktree prune 2>&1)
+expect_code 3 $? "git worktree prune must stay refused without timeout or gtimeout on PATH"
+git -C "$REPO" worktree list --porcelain | grep -qF "$SIBLING_REAL" \
+  || fail "the sibling worktree must stay registered through the portable timeout fallback"
+pass "git worktree refusal uses the portable bounded-execution owner"
 
 OTHER_REPO="$TMP/other-repo"
 OTHER_WORKTREE="$TMP/other-worktree"
