@@ -579,7 +579,7 @@ test_installer_falls_back_to_shasum() {
   hasher_log="$tmp/hasher.log"
 
   for tool in bash dirname mktemp rm awk mkdir install cat chmod; do
-    ln -s "$(command -v "$tool")" "$fakebin/$tool"
+    ln -s "$(fm_real_tool "$tool")" "$fakebin/$tool"
   done
   fm_install_stub_uname "$fakebin"
   fm_install_stub_curl "$fakebin"
@@ -655,7 +655,7 @@ test_missing_shellcheck_fails_closed() {
   tmp=$(fm_test_tmproot fm-lint-noshellcheck)
   fakebin=$(fm_fakebin "$tmp")
   for tool in bash dirname; do
-    ln -s "$(command -v "$tool")" "$fakebin/$tool"
+    ln -s "$(fm_real_tool "$tool")" "$fakebin/$tool"
   done
   rc=0
   out=$(PATH="$fakebin" CI=true GITHUB_ACTIONS=true "$LINT" 2>&1) || rc=$?

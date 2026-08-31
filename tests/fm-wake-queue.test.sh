@@ -608,7 +608,7 @@ test_wake_publish_requires_atomic_recovery_evidence() {
   dir=$(make_case wake-publish-recovery-evidence)
   state="$dir/state"
   fakebin="$dir/fakebin"
-  real_mv=$(command -v mv) || fail "could not locate mv for recovery publication fixture"
+  real_mv=$(fm_real_tool mv) || fail "could not locate mv for recovery publication fixture"
   printf 'pending:handling:existing\n' > "$state/.watcher-down"
   cat > "$fakebin/mv" <<'SH'
 #!/usr/bin/env bash
@@ -757,7 +757,7 @@ test_recovery_ack_failure_is_reported() {
   dir=$(make_case recovery-ack-failure)
   state="$dir/state"
   fakebin="$dir/fakebin"
-  real_mv=$(command -v mv) || fail "could not locate mv for recovery acknowledgement fixture"
+  real_mv=$(fm_real_tool mv) || fail "could not locate mv for recovery acknowledgement fixture"
   printf 'pending:handling:fixture\n' > "$state/.watcher-down"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$dir/initial.out" 2> "$dir/initial.err" \
     || fail "initial recovery drain failed"

@@ -557,7 +557,7 @@ for arg in "\$@"; do
     exit 0
   fi
 done
-exec $(command -v git) "\$@"
+exec $(fm_real_tool git) "\$@"
 SH
   chmod 0755 "$dir/git"
 
@@ -594,7 +594,7 @@ for arg in "\$@"; do
     exit 0
   fi
 done
-exec $(command -v git) "\$@"
+exec $(fm_real_tool git) "\$@"
 SH
   chmod 0755 "$dir/git"
 

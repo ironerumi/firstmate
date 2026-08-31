@@ -2826,10 +2826,20 @@ if [ -n "$SPAWN_TRACEPARENT" ]; then
 fi
 sleep 0.3
 # Put firstmate's tool shims ahead of the real tools in the pane's PATH, and bind
-# them to this task's status file. The shims refuse only the commands that would
-# take validation ownership away from a live no-mistakes run - a second run, a
-# superseding push, an abandoned gate - and exec the real tool for everything
-# else (bin/fm-nm-guard-shim.sh; docs/nm-validation-owner-guard.md).
+# them to this task's status file and durable record. The shims refuse only two
+# narrow classes and exec the real tool for everything else: the commands that
+# would take validation ownership away from a live no-mistakes run - a second
+# run, a superseding push, an abandoned gate (bin/fm-nm-guard-shim.sh;
+# docs/nm-validation-owner-guard.md) - and the destructive commands that would
+# reach OUTSIDE this task's own worktree, which is how a sibling task lost its
+# unlanded work (bin/fm-worktree-guard-shim.sh; docs/worktree-guard.md).
+#
+# FM_WORKTREE_GUARD_META names the durable record rather than the worktree path
+# itself, so the guard reads the same `worktree=` a relaunch rewrites instead of
+# an exported copy that a relaunch would leave stale. A secondmate is
+# deliberately not guarded - it runs a fleet of its own, whose teardown and
+# lease returns are exactly the commands this guard refuses - and the library
+# enforces that from kind= in the record rather than trusting this call site.
 #
 # Sent here, before the launch command, for the same reason GOTMPDIR is: the
 # harness starts inside this shell and every tool call it makes inherits the
@@ -2837,7 +2847,7 @@ sleep 0.3
 # hook, and it reaches every runtime backend because spawn_send_text_line is the
 # backend-agnostic text path.
 spawn_send_text_line "$T" \
-  "export FM_NM_GUARD_STATUS=$(shell_quote "$STATE_REAL/$ID.status") PATH=$(shell_quote "$FM_ROOT/bin/shims"):\$PATH"
+  "export FM_NM_GUARD_STATUS=$(shell_quote "$STATE_REAL/$ID.status") FM_WORKTREE_GUARD_META=$(shell_quote "$STATE_REAL/$ID.meta") PATH=$(shell_quote "$FM_ROOT/bin/shims"):\$PATH"
 sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"
 sleep 0.3

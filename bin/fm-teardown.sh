@@ -150,6 +150,15 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 SECONDMATE_REG="$DATA/secondmates.md"
+# This script IS firstmate's authorized worktree-removal path, and it reaches the
+# checkout, the pool lease, and the state sidecars of the task it is retiring -
+# all of them outside any worker's own worktree. Its landed-work test above is
+# what makes that safe, so it declares itself to the worktree-isolation guard
+# (docs/worktree-guard.md) rather than being refused by it. This changes nothing
+# in the ordinary case, where teardown runs from a firstmate session the guard is
+# already inert in; it is what keeps the authorized path working if teardown is
+# ever run from a guarded pane.
+export FM_WORKTREE_GUARD_ALLOW=1
 SUB_HOME_MARKER=".fm-secondmate-home"
 SUB_HOME_PARENT_MARKER=".fm-secondmate-parent"
 # shellcheck source=bin/fm-tasks-axi-lib.sh

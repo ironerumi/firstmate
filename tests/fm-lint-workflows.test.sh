@@ -249,7 +249,7 @@ test_missing_actionlint_fails_closed() {
   mkdir -p "$tmp/.github/workflows"
   write_valid_workflow "$tmp/.github/workflows/ci.yml"
   for tool in bash dirname find sort awk; do
-    ln -s "$(command -v "$tool")" "$fakebin/$tool"
+    ln -s "$(fm_real_tool "$tool")" "$fakebin/$tool"
   done
   rc=0
   out=$(PATH="$fakebin" "$LINT_WF" --root "$tmp" 2>&1) || rc=$?
@@ -389,7 +389,7 @@ test_installer_falls_back_to_shasum() {
   hasher_log="$tmp/hasher.log"
 
   for tool in bash dirname mktemp rm awk mkdir install cat chmod; do
-    ln -s "$(command -v "$tool")" "$fakebin/$tool"
+    ln -s "$(fm_real_tool "$tool")" "$fakebin/$tool"
   done
   fm_install_stub_uname "$fakebin"
   fm_install_stub_curl "$fakebin"

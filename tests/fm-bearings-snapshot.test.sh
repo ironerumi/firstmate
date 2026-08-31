@@ -1054,7 +1054,7 @@ test_perl_fallback_bounds_github_call() {
   toolbin="$home/toolbin"
   mkdir -p "$toolbin"
   for cmd in bash dirname basename jq date sed git grep tail cut tr head sort wc perl sleep cat find; do
-    ln -s "$(command -v "$cmd")" "$toolbin/$cmd"
+    ln -s "$(fm_real_tool "$cmd")" "$toolbin/$cmd"
   done
   started=$(date +%s)
   json=$(PATH="$fakebin:$toolbin" FM_HOME="$home" FM_BEARINGS_NOW=2026-07-11T18:00:00Z \

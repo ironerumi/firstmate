@@ -27,7 +27,7 @@ trap 'if [ -n "$DOCTOR_WORKER_PID" ]; then kill "$DOCTOR_WORKER_PID" 2>/dev/null
 # symlink, alongside the system directories the doctor's own helpers need.
 TOOLS="$TMP_ROOT/tools"
 mkdir -p "$TOOLS"
-ln -sf "$(command -v git)" "$TOOLS/git"
+ln -sf "$(fm_real_tool git)" "$TOOLS/git"
 ln -sf "$(command -v jq)" "$TOOLS/jq"
 BASE_PATH="$TOOLS:/usr/bin:/bin:/usr/sbin:/sbin"
 

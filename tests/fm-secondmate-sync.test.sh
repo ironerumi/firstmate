@@ -247,7 +247,7 @@ test_no_fetch_in_local_path() {
 
   fakebin="$w/fakebin"
   log="$w/fetch.log"
-  real_git=$(command -v git)
+  real_git=$(fm_real_tool git)
   mkdir -p "$fakebin"
   cat > "$fakebin/git" <<SH
 #!/usr/bin/env bash

@@ -105,6 +105,10 @@
     {
       "source": "docs/trace-context.md",
       "target": "docs/verification/trace-context.md"
+    },
+    {
+      "source": "docs/worktree-guard.md",
+      "target": "docs/verification/worktree-guard.md"
     }
   ],
   "surfaces": [
@@ -405,6 +409,10 @@
       "audience": "maintainer-verification"
     },
     {
+      "path": "docs/verification/worktree-guard.md",
+      "audience": "maintainer-verification"
+    },
+    {
       "path": "docs/voice-relay.md",
       "audience": "operator-current"
     },
@@ -415,6 +423,10 @@
     {
       "path": "docs/wedge-alarm.md",
       "audience": "operator-current"
+    },
+    {
+      "path": "docs/worktree-guard.md",
+      "audience": "maintainer-architecture"
     },
     {
       "path": "docs/zellij-backend.md",
