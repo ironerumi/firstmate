@@ -13,9 +13,9 @@ A worker that deletes a path outside its own worktree therefore reaches directly
 That is not a hypothetical: a worker removed a sibling task's worktree and wiped work that had never been landed anywhere, which is unrecoverable in a way a bad commit is not.
 
 Prose did not prevent it and cannot: every brief already told that worker to stay inside its own worktree.
-The detection, in contrast, is completely deterministic.
-At the moment the command runs, both halves of the question are known - the worker's own worktree root, from the durable `worktree=` line of `state/<id>.meta`, and the path the command is about to destroy, resolved against the process's real working directory.
-So this guard is a 0/1 refusal, not a judgment about intent, and it classifies nothing else.
+Within the command shapes documented below, detection is deterministic.
+At the moment one of those commands runs, both halves of the question are known - the worker's own worktree root, from the durable `worktree=` line of `state/<id>.meta`, and the classified target path resolved against the process's real working directory.
+So a classified target receives a 0/1 refusal rather than a judgment about intent, while the known non-goals remain outside that classification.
 
 ## What is refused, and what is always permitted
 
@@ -38,9 +38,36 @@ Always permitted:
 - `git worktree prune --dry-run`, which changes nothing.
 - `treehouse get`, `treehouse enter`, `treehouse status`, every other `git` subcommand, and every command that is not one of the fronted tools.
 
-Deliberate non-goals, called out so nobody reads more into the guard than it does: it does not classify `git -C <sibling> reset --hard`, `git clean`, an editor writing over a sibling's file, or any other way to damage a checkout without removing a path.
-A Git alias that expands to `worktree remove` or `worktree prune` is also not classified because alias expansion happens inside Git after the guard has seen the command, and the threat model does not include a worker deliberately defining an alias for the command being guarded.
-Its threat model is a worker's mistake under pressure, the same as firstmate's other seatbelts, so a path handed to a program the guard does not front is an accepted gap rather than a hole to be plugged with a sandbox.
+## Proven denial boundary
+
+The proven boundary for the command shapes it classifies includes the following cases.
+
+- It denies `rm`, `rmdir`, `unlink`, and either side of an `mv` when the classified target resolves outside the worker's own worktree root.
+- It denies a `..` path that reaches the pool directory holding sibling worktrees.
+- It denies an intermediate directory symlink that leaves the root because parent components are resolved physically.
+- It physically judges an `mv` destination that is an existing directory or a symlink to one, and an `mv` source written with a trailing slash.
+- It physically judges `rm` and `rmdir` operands written with a trailing slash because those tools dereference the final component.
+- It denies `git worktree remove` and `git worktree prune` against a protected repository by judging the canonical common directory that Git itself reports, so `-C`, `--git-dir`, `--work-tree`, `--shallow-file`, and a linked worktree whose `.git` file points elsewhere resolve correctly.
+- It denies `treehouse return`, `treehouse destroy`, and `treehouse prune`.
+
+## Known non-goals
+
+The guard does not classify `git -C <sibling> reset --hard`, `git clean`, an editor writing over a sibling's file, or any other way to damage a checkout without removing a path.
+
+A `..` traversal that re-enters a symlinked path is a known residual that can be reached accidentally rather than only by deliberate construction.
+With `own/link` pointing to `sibling/subdir`, normalization judges `rm -rf own/link/../unlanded` as `own/unlanded` because it collapses `..` before resolving parent components physically, while the operating system resolves the path to `sibling/unlanded`; `mv` shares this escape.
+A worker can plausibly type `..` after a symlinked path, but this remains an accepted non-goal because closing it requires resolving components in order rather than collapsing first, and successive review rounds kept surfacing further variants of the same class.
+
+GNU long-option abbreviations for the `mv` target directory are not classified.
+For example, `mv --target=../sibling` is an unambiguous abbreviation of `--target-directory`, but the guard recognizes only the full spelling and therefore never checks the abbreviated destination.
+
+A dash-prefixed `git worktree remove` operand after the end-of-options delimiter is not classified.
+For example, `git worktree remove -- -sibling` leaves the guard with no target and fails open, while Git treats `-sibling` as the worktree operand.
+
+A Git alias that expands to `worktree remove` or `worktree prune` is not classified because alias expansion happens inside Git after the guard has seen and allowed the command line.
+This includes `git -c alias.destroy='worktree remove' destroy <sibling>` and an equivalent alias committed in the shared repository.
+
+Its threat model is a worker's mistake under pressure, the same as firstmate's other seatbelts, rather than an adversary composing unusual command spellings, so these documented gaps and paths handed to programs the guard does not front are not expanded into a sandbox.
 
 ## Where the root comes from
 
@@ -61,7 +88,7 @@ export FM_NM_GUARD_STATUS='<state>/<id>.status' FM_WORKTREE_GUARD_META='<state>/
 
 - **Worker runtimes.** Every supported harness - `claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, `cursor`, `muse` - is launched as a command in that pane shell, so each inherits the environment and passes it to the shells its own tool calls run in.
 - **Session providers.** `spawn_send_text_line` is the backend-agnostic text path, so the same line reaches a task on `tmux`, `herdr`, `zellij`, `orca`, and `cmux` with no per-backend branch.
-- **After expansion.** Arriving at the tool rather than at a hook is what makes the verdict exact: the guard sees the paths the tool will actually operate on, with the process's real working directory, so a glob, a variable, a `..`, or a `cd` earlier in the same command line needs no lexical guesswork.
+- **After expansion.** Arriving at the tool rather than at a hook lets the guard see expanded globs and variables with the process's real working directory, while `..` handling follows the proven and known boundaries above.
 
 ### Why not a PreToolUse hook
 
