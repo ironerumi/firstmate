@@ -56,6 +56,9 @@ FM_WORKTREE_GUARD_STATE_INBOX_LEXICAL=
 FM_WORKTREE_GUARD_TASKTMP=
 FM_WORKTREE_GUARD_TASKTMP_LEXICAL=
 FM_WORKTREE_GUARD_PATH=
+FM_WORKTREE_GUARD_MOVE_DESTINATION=
+FM_WORKTREE_GUARD_MOVE_NO_TARGET_DIRECTORY=0
+FM_WORKTREE_GUARD_GIT_REPOSITORY=
 
 # Deny reason text, keyed by code. One owner; the transports only render it.
 fm_worktree_guard_reason() { # <code> <target>
@@ -243,8 +246,10 @@ fm_worktree_guard_remove_operands() { # [argv...]
 # -t/--target-directory names a destination; -S/--suffix consumes a value that
 # is not a path.
 fm_worktree_guard_move_operands() { # [argv...]
-  local endopts=0 a cluster option
+  local endopts=0 a cluster option explicit_destination=0
   FM_WORKTREE_GUARD_TARGETS=()
+  FM_WORKTREE_GUARD_MOVE_DESTINATION=
+  FM_WORKTREE_GUARD_MOVE_NO_TARGET_DIRECTORY=0
   while [ "$#" -gt 0 ]; do
     a=$1
     if [ "$endopts" -eq 0 ]; then
@@ -253,11 +258,20 @@ fm_worktree_guard_move_operands() { # [argv...]
         --target-directory)
           [ "$#" -ge 2 ] || return 0
           FM_WORKTREE_GUARD_TARGETS[${#FM_WORKTREE_GUARD_TARGETS[@]}]=$2
+          FM_WORKTREE_GUARD_MOVE_DESTINATION=$2
+          explicit_destination=1
           shift 2
           continue
           ;;
         --target-directory=*)
           FM_WORKTREE_GUARD_TARGETS[${#FM_WORKTREE_GUARD_TARGETS[@]}]=${a#*=}
+          FM_WORKTREE_GUARD_MOVE_DESTINATION=${a#*=}
+          explicit_destination=1
+          shift
+          continue
+          ;;
+        --no-target-directory)
+          FM_WORKTREE_GUARD_MOVE_NO_TARGET_DIRECTORY=1
           shift
           continue
           ;;
@@ -276,12 +290,17 @@ fm_worktree_guard_move_operands() { # [argv...]
               t)
                 if [ -n "$cluster" ]; then
                   FM_WORKTREE_GUARD_TARGETS[${#FM_WORKTREE_GUARD_TARGETS[@]}]=$cluster
+                  FM_WORKTREE_GUARD_MOVE_DESTINATION=$cluster
+                  explicit_destination=1
                   cluster=
                 elif [ "$#" -ge 2 ]; then
                   FM_WORKTREE_GUARD_TARGETS[${#FM_WORKTREE_GUARD_TARGETS[@]}]=$2
+                  FM_WORKTREE_GUARD_MOVE_DESTINATION=$2
+                  explicit_destination=1
                   shift
                 fi
                 ;;
+              T) FM_WORKTREE_GUARD_MOVE_NO_TARGET_DIRECTORY=1 ;;
               S)
                 if [ -n "$cluster" ]; then
                   cluster=
@@ -299,18 +318,24 @@ fm_worktree_guard_move_operands() { # [argv...]
     FM_WORKTREE_GUARD_TARGETS[${#FM_WORKTREE_GUARD_TARGETS[@]}]=$a
     shift
   done
+  if [ "$explicit_destination" -eq 0 ] && [ "${#FM_WORKTREE_GUARD_TARGETS[@]}" -ge 2 ]; then
+    FM_WORKTREE_GUARD_MOVE_DESTINATION=${FM_WORKTREE_GUARD_TARGETS[${#FM_WORKTREE_GUARD_TARGETS[@]}-1]}
+  fi
 }
 
-# git's own options before the subcommand. Only -C changes the verdict: it
-# rebases every relative path in the rest of the command, and repeated -C
-# compose. An option shape this list does not know is skipped rather than read
-# as the subcommand, so an unknown git option can never make a `worktree remove`
-# parse as something else. Publishes the effective directory in
-# FM_WORKTREE_GUARD_PATH and the remaining words in FM_WORKTREE_GUARD_TARGETS.
+# git's own options before the subcommand. -C rebases subsequent relative paths,
+# while --git-dir and --work-tree select the repository affected by a worktree
+# command. An option shape this list does not know is skipped rather than read as
+# the subcommand. Publishes the effective directory in FM_WORKTREE_GUARD_PATH,
+# the selected repository in FM_WORKTREE_GUARD_GIT_REPOSITORY, and the remaining
+# words in FM_WORKTREE_GUARD_TARGETS.
 fm_worktree_guard_git_scan() { # <cwd> [argv...]
-  local cwd=$1
+  local cwd=$1 git_dir='' work_tree='' git_dir_flag=0 work_tree_flag=0 value
   shift
+  fm_worktree_guard_normalize "$cwd" /
+  cwd=$FM_WORKTREE_GUARD_PATH
   FM_WORKTREE_GUARD_TARGETS=()
+  FM_WORKTREE_GUARD_GIT_REPOSITORY=
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -C)
@@ -319,7 +344,29 @@ fm_worktree_guard_git_scan() { # <cwd> [argv...]
         cwd=$FM_WORKTREE_GUARD_PATH
         shift 2
         ;;
-      -c|--namespace|--git-dir|--work-tree|--exec-path|--super-prefix|--config-env)
+      --git-dir|--work-tree)
+        [ "$#" -ge 2 ] || break
+        value=$2
+        fm_worktree_guard_normalize "$value" "$cwd"
+        if [ "$1" = --git-dir ]; then
+          git_dir=$FM_WORKTREE_GUARD_PATH
+          git_dir_flag=1
+        else
+          work_tree=$FM_WORKTREE_GUARD_PATH
+          work_tree_flag=1
+        fi
+        shift 2
+        ;;
+      --git-dir=*|--work-tree=*)
+        value=${1#*=}
+        fm_worktree_guard_normalize "$value" "$cwd"
+        case "$1" in
+          --git-dir=*) git_dir=$FM_WORKTREE_GUARD_PATH; git_dir_flag=1 ;;
+          *) work_tree=$FM_WORKTREE_GUARD_PATH; work_tree_flag=1 ;;
+        esac
+        shift
+        ;;
+      -c|--namespace|--exec-path|--super-prefix|--config-env)
         [ "$#" -ge 2 ] || break
         shift 2
         ;;
@@ -328,7 +375,22 @@ fm_worktree_guard_git_scan() { # <cwd> [argv...]
       *) break ;;
     esac
   done
+  if [ "$git_dir_flag" -eq 0 ] && [ -n "${GIT_DIR:-}" ]; then
+    fm_worktree_guard_normalize "$GIT_DIR" "$cwd"
+    git_dir=$FM_WORKTREE_GUARD_PATH
+  fi
+  if [ "$work_tree_flag" -eq 0 ] && [ -n "${GIT_WORK_TREE:-}" ]; then
+    fm_worktree_guard_normalize "$GIT_WORK_TREE" "$cwd"
+    work_tree=$FM_WORKTREE_GUARD_PATH
+  fi
   FM_WORKTREE_GUARD_PATH=$cwd
+  if [ -n "$git_dir" ]; then
+    FM_WORKTREE_GUARD_GIT_REPOSITORY=$git_dir
+  elif [ -n "$work_tree" ]; then
+    FM_WORKTREE_GUARD_GIT_REPOSITORY=$work_tree
+  else
+    FM_WORKTREE_GUARD_GIT_REPOSITORY=$cwd
+  fi
   while [ "$#" -gt 0 ]; do
     FM_WORKTREE_GUARD_TARGETS[${#FM_WORKTREE_GUARD_TARGETS[@]}]=$1
     shift
@@ -336,10 +398,13 @@ fm_worktree_guard_git_scan() { # <cwd> [argv...]
 }
 
 fm_worktree_guard_decide_git() { # <cwd> [argv...]
-  local cwd=$1
+  local cwd=$1 repository repository_target
   shift
   fm_worktree_guard_git_scan "$cwd" "$@"
   cwd=$FM_WORKTREE_GUARD_PATH
+  repository=$FM_WORKTREE_GUARD_GIT_REPOSITORY
+  repository_target=$repository
+  [ ! -d "$repository" ] || repository_target="$repository/.fm-worktree-guard-child"
   set -- ${FM_WORKTREE_GUARD_TARGETS[@]+"${FM_WORKTREE_GUARD_TARGETS[@]}"}
   [ "${1:-}" = worktree ] || { printf 'allow\n'; return 0; }
   shift
@@ -355,6 +420,10 @@ fm_worktree_guard_decide_git() { # <cwd> [argv...]
   case "$action" in
     remove)
       [ -n "$target" ] || { printf 'allow\n'; return 0; }
+      if ! fm_worktree_guard_target_allowed "$repository_target"; then
+        fm_worktree_guard_deny worktree-remove "$repository"
+        return 0
+      fi
       fm_worktree_guard_normalize "$target" "$cwd"
       target=$FM_WORKTREE_GUARD_PATH
       # A worktree the worker created strictly INSIDE its own root is its own
@@ -379,7 +448,7 @@ fm_worktree_guard_decide_git() { # <cwd> [argv...]
       local saved=$FM_WORKTREE_GUARD_ROOT saved_lexical=$FM_WORKTREE_GUARD_ROOT_LEXICAL
       FM_WORKTREE_GUARD_ROOT=
       FM_WORKTREE_GUARD_ROOT_LEXICAL=
-      if fm_worktree_guard_target_allowed "$cwd"; then
+      if fm_worktree_guard_target_allowed "$repository_target"; then
         FM_WORKTREE_GUARD_ROOT=$saved
         FM_WORKTREE_GUARD_ROOT_LEXICAL=$saved_lexical
         printf 'allow\n'
@@ -387,7 +456,7 @@ fm_worktree_guard_decide_git() { # <cwd> [argv...]
       fi
       FM_WORKTREE_GUARD_ROOT=$saved
       FM_WORKTREE_GUARD_ROOT_LEXICAL=$saved_lexical
-      fm_worktree_guard_deny worktree-prune "$cwd"
+      fm_worktree_guard_deny worktree-prune "$repository"
       ;;
     *) printf 'allow\n' ;;
   esac
@@ -459,16 +528,22 @@ fm_worktree_guard_decide() { # <tool> <root> <cwd> [argv...]
   else
     fm_worktree_guard_remove_operands "$@"
   fi
-  local resolved check_target
+  local resolved check_target destination
+  if [ "$code" = worktree-escape-move ] && [ -n "$FM_WORKTREE_GUARD_MOVE_DESTINATION" ]; then
+    fm_worktree_guard_normalize "$FM_WORKTREE_GUARD_MOVE_DESTINATION" "$cwd"
+    destination=$FM_WORKTREE_GUARD_PATH
+  else
+    destination=
+  fi
   for target in ${FM_WORKTREE_GUARD_TARGETS[@]+"${FM_WORKTREE_GUARD_TARGETS[@]}"}; do
     [ -n "$target" ] || continue
     fm_worktree_guard_normalize "$target" "$cwd"
     resolved=$FM_WORKTREE_GUARD_PATH
     check_target=$resolved
-    if [ "$code" = worktree-escape-move ]; then
-      case "$target" in
-        */) check_target="$resolved/.fm-worktree-guard-child" ;;
-      esac
+    if [ "$code" = worktree-escape-move ] && \
+      [ "$FM_WORKTREE_GUARD_MOVE_NO_TARGET_DIRECTORY" -eq 0 ] && \
+      [ "$resolved" = "$destination" ] && [ -d "$resolved" ]; then
+      check_target="$resolved/.fm-worktree-guard-child"
     fi
     if ! fm_worktree_guard_target_allowed "$check_target"; then
       fm_worktree_guard_deny "$code" "$resolved"
@@ -512,7 +587,7 @@ fm_worktree_guard_load() {
     esac
   done < "$meta"
   [ -n "$root" ] || return 1
-  FM_WORKTREE_GUARD_ROOT=$( (CDPATH='' cd -- "$root" 2>/dev/null && pwd -P) || printf '%s' "$root")
+  FM_WORKTREE_GUARD_ROOT=$(CDPATH='' cd -- "$root" 2>/dev/null && pwd -P) || return 1
   id=${meta##*/}
   id=${id%.meta}
   state_dir=${meta%/*}

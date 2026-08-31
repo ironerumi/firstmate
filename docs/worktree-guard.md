@@ -25,8 +25,8 @@ The discriminator is the resolved target path, never the command's size or appar
 | --- | --- | --- |
 | `rm`, `rmdir`, `unlink` of a path outside this task's own worktree | `worktree-escape-delete` | The incident's exact shape: `rm -rf ../<sibling>` destroys another task's unlanded work. |
 | `mv` with either side outside this task's own worktree | `worktree-escape-move` | A move removes the source from where it is and overwrites the destination; both sides are targets. |
-| `git worktree remove` of anything that is not strictly inside this task's own worktree, including its own root | `worktree-remove` | Deletes a checkout whose work no one has landed, and the shared repository record with it. Ending this task's own worktree is firstmate's cleanup path. |
-| `git worktree prune` | `worktree-prune` | Names no path: it rewrites the shared repository administration every sibling task depends on, so a sibling whose checkout is momentarily unreadable loses its registration. |
+| `git worktree remove` when the selected repository or removal target is outside the allowed set, including removal of its own root | `worktree-remove` | Deletes a checkout whose work no one has landed and its selected repository's shared record, while ending this task's own worktree remains firstmate's cleanup path. |
+| `git worktree prune` when the selected repository is outside scratch | `worktree-prune` | Rewrites the selected repository's shared administration, which every linked sibling task depends on. |
 | `treehouse return`, `treehouse destroy`, `treehouse prune` | `worktree-pool` | Terminates the checkout holding this task's unlanded work and frees its pool lease. Firstmate's teardown owns the pool. |
 
 Always permitted:
@@ -72,12 +72,13 @@ The shim line covers all of them, and it is where the paths are already resolved
 
 ## Fail open on uncertainty, closed on the verdict
 
-Uncertainty about the environment always resolves toward running the command: no `FM_WORKTREE_GUARD_META`, an unreadable or root-less record, a `kind=secondmate` record, an unreadable working directory, or an unloadable library all allow.
+Uncertainty about the environment always resolves toward running the command: no `FM_WORKTREE_GUARD_META`, an unreadable, root-less, or physically unresolvable record, a `kind=secondmate` record, an unreadable working directory, or an unloadable library all allow.
 A refusal comes only from a resolved target that is provably outside the allowed set.
 
 Path resolution first drops `.` and empty components and lets `..` pop one component against an already-physical working directory.
 For a target that lexically appears inside an allowed boundary, the guard then resolves its deepest existing parent physically and re-appends any missing components lexically, so an intermediate directory symlink into a sibling worktree is refused.
-The final component is deliberately not resolved because `rm`, `mv`, and `git worktree remove` operate on a final symlink itself rather than its destination.
+An existing `mv` destination directory is resolved physically because `mv` writes into that directory, including when the destination is a symlink without a trailing slash.
+A final symlink that `rm`, `rmdir`, or `unlink` would remove itself stays unresolved, and `mv -T` or `mv --no-target-directory` keeps the same final-component semantics.
 If an existing parent cannot be resolved, the uncertainty allows the command under the fail-open contract.
 
 ## The escape

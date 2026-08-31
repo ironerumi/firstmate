@@ -89,6 +89,7 @@ check_decision worktree-escape-move "mv whose destination is outside" mv "$OWN" 
 check_decision worktree-escape-move "mv -t naming an outside destination" mv "$OWN" -t "$SIBLING" src/x
 check_decision worktree-escape-move "mv with an attached -t destination" mv "$OWN" "-t$SIBLING" src/x
 check_decision worktree-escape-move "mv with a clustered -t destination" mv "$OWN" -ft "$SIBLING" src/x
+check_decision allow "mv -T preserves final-component semantics" mv "$OWN" -T src/x "$OWN/outside-link"
 check_decision worktree-remove "git worktree remove of a sibling" git "$OWN" worktree remove ../task-sibling
 check_decision worktree-remove "git worktree remove of this task's own root" git "$OWN" worktree remove "$OWN"
 check_decision worktree-remove "git -C rebasing a relative worktree removal" git "$OWN" -C "$POOL" worktree remove task-sibling
@@ -200,6 +201,22 @@ assert_absent "$OWN/final-link" "the in-root final symlink must be removed"
 assert_present "$SIBLING/src/unlanded.txt" "the final symlink's outside target must survive"
 pass "in-root symlinks preserve the fronted tool's final-component semantics"
 
+: > "$OWN/src/final-destination.txt"
+out=$(guarded -- "$OWN" mv src/final-destination.txt outside-link 2>&1)
+expect_code 3 $? "a final symlink destination to a sibling must be refused"
+assert_present "$OWN/src/final-destination.txt" "a refused final destination move must keep its source"
+assert_absent "$SIBLING/final-destination.txt" "a refused final destination move must not reach the sibling"
+: > "$OWN/src/target-directory.txt"
+out=$(guarded -- "$OWN" mv "-t$OWN/outside-link" src/target-directory.txt 2>&1)
+expect_code 3 $? "an attached target-directory symlink to a sibling must be refused"
+assert_present "$OWN/src/target-directory.txt" "a refused target-directory move must keep its source"
+assert_absent "$SIBLING/target-directory.txt" "a refused target-directory move must not reach the sibling"
+: > "$OWN/src/inside-destination.txt"
+guarded -- "$OWN" mv src/inside-destination.txt inside-link
+expect_code 0 $? "a final symlink destination inside the root must run"
+assert_present "$OWN/inside-target/inside-destination.txt" "an in-root destination symlink must receive the file"
+pass "move destinations follow directory symlinks without widening source semantics"
+
 : > "$OWN/src/attached-target.txt"
 out=$(guarded -- "$OWN" mv "-t$SIBLING" src/attached-target.txt 2>&1)
 expect_code 3 $? "an attached -t outside destination must be refused"
@@ -219,6 +236,11 @@ guarded "PATH=$SHIMS:$MV_BIN:$PATH" "MV_LOG=$MV_LOG" -- "$OWN" \
   mv -b -S.keep src/suffix-source.txt src/suffix-destination.txt
 expect_code 0 $? "an attached -S suffix on an in-root move must reach the real tool"
 assert_contains "$(< "$MV_LOG")" "-S.keep" "the backup suffix must be passed through as an option value"
+: > "$MV_LOG"
+guarded "PATH=$SHIMS:$MV_BIN:$PATH" "MV_LOG=$MV_LOG" -- "$OWN" \
+  mv -T src/no-target-source.txt outside-link
+expect_code 0 $? "mv -T must preserve the final destination component"
+assert_contains "$(< "$MV_LOG")" "-T" "mv -T must reach the real tool"
 pass "mv attached option arguments are classified by their option semantics"
 
 guarded -- "$OWN" rm -f src/mine.txt
@@ -259,6 +281,47 @@ guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" -- "$REPO" git worktree prune --
 expect_code 0 $? "a prune dry run changes nothing and must run"
 pass "worktree pruning is refused while its dry run stays available"
 
+OTHER_REPO="$TMP/other-repo"
+OTHER_WORKTREE="$TMP/other-worktree"
+SCRATCH_REPO="$TMP/scratch-repo"
+fm_git_worktree "$OTHER_REPO" "$OTHER_WORKTREE" fm/worktree-guard-other
+git init -q "$SCRATCH_REPO"
+out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" -- "$REPO" \
+  git "--git-dir=$OTHER_REPO/.git" -C "$SCRATCH_REPO" worktree prune 2>&1)
+expect_code 3 $? "an external --git-dir prune must be refused"
+assert_contains "$out" "REFUSED BY FIRSTMATE [worktree-prune]" "the selected repository refusal must name prune"
+git -C "$OTHER_REPO" worktree list --porcelain | grep -qF "$(cd "$OTHER_WORKTREE" && pwd -P)" \
+  || fail "the external repository's linked worktree must remain registered"
+out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" "GIT_DIR=$OTHER_REPO/.git" -- "$REPO" \
+  git -C "$SCRATCH_REPO" worktree prune 2>&1)
+expect_code 3 $? "an external GIT_DIR prune must be refused"
+git -C "$OTHER_REPO" worktree list --porcelain | grep -qF "$(cd "$OTHER_WORKTREE" && pwd -P)" \
+  || fail "the external repository must stay registered after a GIT_DIR refusal"
+out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" -- "$REPO" \
+  git -C "$TMP" --work-tree other-repo -C "$SCRATCH_REPO" worktree prune 2>&1)
+expect_code 3 $? "a relative selected work tree outside scratch must be refused"
+out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" "GIT_WORK_TREE=$OTHER_REPO" -- "$REPO" \
+  git -C "$SCRATCH_REPO" worktree prune 2>&1)
+expect_code 3 $? "an external GIT_WORK_TREE prune must be refused"
+out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" -- "$REPO" \
+  git "--git-dir=$OTHER_REPO/.git" -C "$SCRATCH_REPO" worktree remove absent 2>&1)
+expect_code 3 $? "an external selected repository removal must be refused"
+ln -s "$OTHER_REPO/.git" "$REPO/foreign-git"
+out=$(guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" -- "$REPO" \
+  git "--git-dir=$REPO/foreign-git" -C "$SCRATCH_REPO" worktree remove absent 2>&1)
+expect_code 3 $? "a selected repository symlink outside the root must be refused"
+guarded "FM_WORKTREE_GUARD_META=$STATE/t2.meta" \
+  "FM_WORKTREE_GUARD_TEMP_ROOTS=$SCRATCH_REPO" -- "$REPO" \
+  git -C "$SCRATCH_REPO" worktree prune
+expect_code 0 $? "a repository selected inside scratch must allow prune"
+pass "git worktree commands judge the selected repository"
+
 # --- 3. the escape, and firstmate's own authorized removal path -------------
 
 out=$(guarded "FM_WORKTREE_GUARD_ALLOW=1" -- "$OWN" rm -f ../task-sibling/src/unlanded.txt 2>&1)
@@ -298,6 +361,9 @@ inert_case "a record that does not exist" "FM_WORKTREE_GUARD_META=$STATE/absent.
 
 fm_write_meta "$STATE/rootless.meta" "kind=ship" "harness=claude"
 inert_case "a record with no worktree line" "FM_WORKTREE_GUARD_META=$STATE/rootless.meta"
+
+fm_write_meta "$STATE/unresolved.meta" "worktree=$TMP/missing-worktree" "kind=ship"
+inert_case "a record whose worktree cannot be resolved" "FM_WORKTREE_GUARD_META=$STATE/unresolved.meta"
 
 fm_write_secondmate_meta "$STATE/sm1.meta" "$OWN"
 inert_case "a secondmate home, which runs a fleet of its own" "FM_WORKTREE_GUARD_META=$STATE/sm1.meta"
