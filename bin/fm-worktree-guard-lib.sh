@@ -297,6 +297,7 @@ fm_worktree_guard_move_operands() { # [argv...]
           continue
           ;;
         --suffix=*) shift; continue ;;
+        --?*) shift; continue ;;
         -?*)
           cluster=${a#-}
           while [ -n "$cluster" ]; do

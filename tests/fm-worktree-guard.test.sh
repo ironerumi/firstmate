@@ -237,6 +237,61 @@ expect_code 0 $? "a final symlink destination inside the root must run"
 assert_present "$OWN/inside-target/inside-destination.txt" "an in-root destination symlink must receive the file"
 pass "move destinations follow directory symlinks without widening source semantics"
 
+LONG_MV_BIN="$TMP/long-mv-bin"
+mkdir -p "$LONG_MV_BIN"
+# shellcheck disable=SC2016
+printf '%s\n' '#!/usr/bin/env bash' \
+  'while [ "$#" -gt 0 ]; do' \
+  '  case "$1" in' \
+  '    --interactive|--verbose|--strip-trailing-slashes) shift ;;' \
+  '    *) break ;;' \
+  '  esac' \
+  'done' \
+  'exec /bin/mv "$@"' > "$LONG_MV_BIN/mv"
+chmod +x "$LONG_MV_BIN/mv"
+
+: > "$OWN/src/interactive-outside.txt"
+out=$(guarded "PATH=$SHIMS:$LONG_MV_BIN:$PATH" -- "$OWN" \
+  mv --interactive src/interactive-outside.txt outside-link 2>&1)
+expect_code 3 $? "--interactive must not hide an outside directory-symlink destination"
+assert_present "$OWN/src/interactive-outside.txt" "a refused --interactive move must keep its source"
+assert_absent "$SIBLING/interactive-outside.txt" "a refused --interactive move must not reach the sibling"
+: > "$OWN/src/interactive-inside.txt"
+guarded "PATH=$SHIMS:$LONG_MV_BIN:$PATH" -- "$OWN" \
+  mv --interactive src/interactive-inside.txt inside-link
+expect_code 0 $? "--interactive with an in-root destination must run"
+assert_present "$OWN/inside-target/interactive-inside.txt" \
+  "--interactive must preserve the real in-root destination"
+
+: > "$OWN/src/verbose-outside.txt"
+out=$(guarded "PATH=$SHIMS:$LONG_MV_BIN:$PATH" -- "$OWN" \
+  mv --verbose src/verbose-outside.txt outside-link 2>&1)
+expect_code 3 $? "--verbose must not hide an outside directory-symlink destination"
+assert_present "$OWN/src/verbose-outside.txt" "a refused --verbose move must keep its source"
+assert_absent "$SIBLING/verbose-outside.txt" "a refused --verbose move must not reach the sibling"
+: > "$OWN/src/verbose-inside.txt"
+guarded "PATH=$SHIMS:$LONG_MV_BIN:$PATH" -- "$OWN" \
+  mv --verbose src/verbose-inside.txt inside-link
+expect_code 0 $? "--verbose with an in-root destination must run"
+assert_present "$OWN/inside-target/verbose-inside.txt" \
+  "--verbose must preserve the real in-root destination"
+
+: > "$OWN/src/strip-option-outside.txt"
+out=$(guarded "PATH=$SHIMS:$LONG_MV_BIN:$PATH" -- "$OWN" \
+  mv --strip-trailing-slashes src/strip-option-outside.txt outside-link 2>&1)
+expect_code 3 $? "--strip-trailing-slashes must not hide an outside destination"
+assert_present "$OWN/src/strip-option-outside.txt" \
+  "a refused --strip-trailing-slashes move must keep its source"
+assert_absent "$SIBLING/strip-option-outside.txt" \
+  "a refused --strip-trailing-slashes move must not reach the sibling"
+: > "$OWN/src/strip-option-inside.txt"
+guarded "PATH=$SHIMS:$LONG_MV_BIN:$PATH" -- "$OWN" \
+  mv --strip-trailing-slashes src/strip-option-inside.txt inside-link
+expect_code 0 $? "--strip-trailing-slashes with an in-root destination must run"
+assert_present "$OWN/inside-target/strip-option-inside.txt" \
+  "--strip-trailing-slashes must preserve the real in-root destination"
+pass "ordinary long options preserve move destination classification"
+
 ln -s "$SIBLING" "$OWN/outside-source-link"
 : > "$SIBLING/trailing-source-marker"
 out=$(guarded -- "$OWN" mv outside-source-link/ "$OWN/renamed-sibling" 2>&1)
