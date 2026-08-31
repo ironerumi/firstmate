@@ -187,6 +187,38 @@ SH
   chmod +x "$fakebin/$tool"
 }
 
+# fm_real_tool <name>: the first <name> on PATH that is NOT one of firstmate's
+# guard shims. A fixture that wraps a tool and execs "the real one" must resolve
+# it this way: a crewmate's pane carries bin/shims ahead of the real tools, so a
+# bare `command -v` there hands back the shim, and the shim's own PATH walk then
+# hands back the fixture's wrapper - two programs exec'ing each other inside one
+# process, forever. Falls back to the bare lookup when nothing else is found.
+fm_real_tool() {
+  local name=$1 entry candidate link target hops
+  local IFS=:
+  for entry in ${PATH:-}; do
+    [ -n "$entry" ] || entry=.
+    candidate="$entry/$name"
+    [ -x "$candidate" ] && [ ! -d "$candidate" ] || continue
+    link=$candidate
+    hops=0
+    while [ -L "$link" ] && [ "$hops" -lt 10 ]; do
+      target=$(readlink "$link" 2>/dev/null) || break
+      case "$target" in
+        /*) link=$target ;;
+        *) link="${link%/*}/$target" ;;
+      esac
+      hops=$((hops + 1))
+    done
+    case "$link" in
+      *fm-nm-guard-shim.sh|*fm-worktree-guard-shim.sh) continue ;;
+    esac
+    printf '%s\n' "$candidate"
+    return 0
+  done
+  command -v "$name"
+}
+
 # --- deterministic git identity and fixtures --------------------------------
 
 # fm_git_identity [name] [email]: export a fixed author/committer identity so

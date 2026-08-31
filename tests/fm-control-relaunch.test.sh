@@ -308,7 +308,7 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
   ready="$dir/meta-writer-ready"
   exported="$dir/trace-exported"
   release="$dir/meta-writer-release"
-  FM_REAL_MV=$(command -v mv) \
+  FM_REAL_MV=$(fm_real_tool mv) \
     FM_FAKE_TRACE_PREPARE="$prepare" \
     FM_FAKE_META_WRITER_READY="$ready" \
     FM_FAKE_TRACE_EXPORTED="$exported" \
@@ -324,7 +324,7 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
     fail "relaunch did not reach trace delivery"
   }
   env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
-    FM_REAL_MV="$(command -v mv)" \
+    FM_REAL_MV="$(fm_real_tool mv)" \
     FM_FAKE_META_WRITER_TARGET="$dir/home/state/rl28.meta" \
     FM_FAKE_META_WRITER_READY="$ready" \
     FM_FAKE_META_WRITER_RELEASE="$release" \
@@ -564,7 +564,7 @@ test_wiring_removal_failure_refuses_before_replacement_arm() {
   hook="$dir/wt/.claude/settings.local.json"
   mkdir -p "${hook%/*}"
   printf '{}\n' > "$hook"
-  real_rm=$(command -v rm)
+  real_rm=$(fm_real_tool rm)
   make_rm_failure_stub "$dir"
   out=$(FM_REAL_RM="$real_rm" FM_FAKE_RM_FAIL_PATH="$hook" \
     run_control "$dir" rl29 relaunch --note "retry after wiring cleanup"); rc=$?
@@ -884,7 +884,7 @@ test_checkpoint_refusal_leaves_the_record_byte_identical() {
 
 test_checkpoint_refuses_uninspectable_head_and_status() {
   local dir out rc real_git
-  real_git=$(command -v git)
+  real_git=$(fm_real_tool git)
 
   dir=$(new_case badhead rl22)
   add_ship_task "$dir" rl22 claude
@@ -1004,7 +1004,7 @@ test_complete_journal_failure_rolls_back_from_durable_phase() {
   dir=$(new_case completejournal rl27)
   add_ship_task "$dir" rl27 claude
   printf 'codex' > "$dir/fake/becomes"
-  real_mv=$(command -v mv)
+  real_mv=$(fm_real_tool mv)
   make_mv_failure_stub "$dir"
   out=$(FM_REAL_MV="$real_mv" FM_FAKE_COMPLETE_JOURNAL_MV_FAIL=1 \
     run_control "$dir" rl27 relaunch --harness codex --note "keep durable phase honest"); rc=$?
@@ -1027,7 +1027,7 @@ test_prepublication_abort_retires_replacement_wiring_and_busy_state() {
   dir=$(new_case prepublishcleanup rl28)
   add_ship_task "$dir" rl28 claude
   meta="$dir/home/state/rl28.meta"
-  real_mv=$(command -v mv)
+  real_mv=$(fm_real_tool mv)
   make_mv_failure_stub "$dir"
   out=$(FM_REAL_MV="$real_mv" FM_FAKE_META_PUBLISH_MV_FAIL="$meta" \
     run_control "$dir" rl28 relaunch --note "clean partial replacement state"); rc=$?

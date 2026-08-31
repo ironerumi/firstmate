@@ -515,7 +515,7 @@ pass "terminal retirement preserves and releases a concurrently replaced registr
 HRETFAIL="$TMP_ROOT/hretfail"; new_home "$HRETFAIL"
 PE_TRACKED+=("$HRETFAIL|retire-fail-src")
 FAIL_RM_BIN=$(fm_fakebin "$TMP_ROOT/retire-fail-bin")
-REAL_RM=$(command -v rm)
+REAL_RM=$(fm_real_tool rm)
 export REAL_RM
 cat > "$FAIL_RM_BIN/rm" <<'SH'
 #!/usr/bin/env bash

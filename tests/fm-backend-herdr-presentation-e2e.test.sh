@@ -18,7 +18,11 @@ command -v treehouse >/dev/null 2>&1 || { echo "skip: treehouse not found"; exit
 [ -x "$HERDR_LAB_HELPER" ] || { echo "skip: Herdr lab helper not executable at $HERDR_LAB_HELPER"; exit 0; }
 
 REAL_HERDR=$(command -v herdr)
-REAL_TREEHOUSE=$(command -v treehouse)
+# treehouse is one of the tools firstmate's guard shims front, and a worker's
+# pane puts that shim directory ahead of the real tool, so resolve past it: the
+# fake below execs REAL_TREEHOUSE, and a captured shim would send that straight
+# back into the fake. This suite loads no lib.sh, so it cannot use fm_real_tool.
+REAL_TREEHOUSE=$(PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/bin/shims$' | paste -sd: -) command -v treehouse)
 HERDR_ORIGINAL_PATH=$PATH
 TMP_ROOT=$(mktemp -d "$(cd "${TMPDIR:-/tmp}" && pwd -P)/fm-herdr-presentation.XXXXXX")
 FAKEBIN="$TMP_ROOT/fakebin"

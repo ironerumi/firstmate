@@ -6,6 +6,7 @@ This document is the authoritative human-readable contract for the validation-ow
 `bin/fm-nm-guard-shim.sh` is the transport, reached through the `bin/shims/` names it is symlinked as.
 
 It is a worker-side sibling of the primary-session seatbelts, which share the same shape but not the same mechanism: the watcher-arm seatbelt (`docs/arm-pretool-check.md`), the cd-guard (`docs/cd-guard.md`), the delegation guard (`docs/subagent-guard.md`), and the turn-end supervision guard (`docs/turnend-guard.md`).
+The worktree-isolation guard (`docs/worktree-guard.md`) is the other worker-side guard, and rides this same shim transport for `git`.
 
 ## Purpose and boundary
 
@@ -85,7 +86,7 @@ The shims sit at the tool boundary rather than at any harness's hook surface, wh
 `bin/fm-spawn.sh` sends one line into the crewmate's pane before the harness launches, through `spawn_send_text_line`:
 
 ```sh
-export FM_NM_GUARD_STATUS='<state>/<id>.status' PATH='<fm-root>/bin/shims':$PATH
+export FM_NM_GUARD_STATUS='<state>/<id>.status' FM_WORKTREE_GUARD_META='<state>/<id>.meta' PATH='<fm-root>/bin/shims':$PATH
 ```
 
 - **Worker runtimes.** Every supported harness - `claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi` - is launched as a command in that pane shell, so each inherits the environment, and each passes it to the shells its own tool calls run in. There is no per-harness hook to write, no trust dialog to clear, and no harness-specific payload shape to parse. A harness added later is covered on the day it is launched this way.

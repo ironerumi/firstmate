@@ -357,7 +357,7 @@ pass "remote handoff wakes its supported endpoint or remains loudly recoverable"
 
 RM_FAKEBIN="$TMP_ROOT/rm-fakebin"
 mkdir -p "$RM_FAKEBIN"
-REAL_RM=$(command -v rm)
+REAL_RM=$(fm_real_tool rm)
 cat > "$RM_FAKEBIN/rm" <<'SH'
 #!/usr/bin/env bash
 last=${!#}

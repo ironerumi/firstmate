@@ -698,7 +698,7 @@ test_local_secondmate_seed_publishes_parent_before_identity() {
   entered="$TMP_ROOT/seed-publication-entered"
   release="$TMP_ROOT/seed-publication-release"
   manifest_out="$TMP_ROOT/seed-publication.out"
-  real_mv=$(command -v mv)
+  real_mv=$(fm_real_tool mv)
   cat > "$fakebin/mv" <<'SH'
 #!/usr/bin/env bash
 destination=${!#}

@@ -247,7 +247,7 @@ assert_allowed "an unreadable pipeline answer"
 pass "an unreadable pipeline answer fails open"
 
 set_run running 01LIVE
-OUT=$( (cd "$REPO" && PATH="$SHIMS:$(dirname "$(command -v git)")" git push origin fm/task-x) 2>&1 )
+OUT=$( (cd "$REPO" && PATH="$SHIMS:$(dirname "$(fm_real_tool git)")" git push origin fm/task-x) 2>&1 )
 CODE=$?
 assert_allowed "a push with no no-mistakes binary reachable"
 pass "an absent no-mistakes binary fails open"
