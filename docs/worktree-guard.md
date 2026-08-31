@@ -58,20 +58,18 @@ The proven boundary for the command shapes it classifies includes the following 
 
 The guard does not classify `git -C <sibling> reset --hard`, `git clean`, an editor writing over a sibling's file, or any other way to damage a checkout without removing a path.
 
-A `..` traversal that re-enters a symlinked path is a known residual that can be reached accidentally rather than only by deliberate construction.
+The guard scans command strings and paths but does not share Git's or coreutils' own argument parser, so a deliberately contrived spelling that makes their interpretations disagree can evade classification.
+Representative disagreements include a file literally named `-C` passed as a `--shallow-file` value, a GNU long-option abbreviation such as `mv --target=../sibling`, a dash-prefixed operand such as `git worktree remove -- -sibling`, a `..` traversal that re-enters a symlinked path, and a Git config alias that expands to `worktree remove`.
+Except for the symlink re-entry case described below, these spellings require deliberate construction rather than a mistake under pressure and therefore sit outside the guard's threat model.
+Several parser disagreements fail open, so the guard does not refuse a legitimate command when it cannot establish a shared interpretation.
+
+The `..` traversal that re-enters a symlinked path is the one member of this class that can be reached accidentally rather than only by deliberate construction.
 With `own/link` pointing to `sibling/subdir`, normalization judges `rm -rf own/link/../unlanded` as `own/unlanded` because it collapses `..` before resolving parent components physically, while the operating system resolves the path to `sibling/unlanded`; `mv` shares this escape.
 A worker can plausibly type `..` after a symlinked path, but this remains an accepted non-goal because closing it requires resolving components in order rather than collapsing first, and successive review rounds kept surfacing further variants of the same class.
 
-GNU long-option abbreviations for the `mv` target directory are not classified.
-For example, `mv --target=../sibling` is an unambiguous abbreviation of `--target-directory`, but the guard recognizes only the full spelling and therefore never checks the abbreviated destination.
+A Git alias expands inside Git after the guard has already seen and allowed the command line, including `git -c alias.destroy='worktree remove' destroy <sibling>` and an equivalent alias committed in the shared repository.
 
-A dash-prefixed `git worktree remove` operand after the end-of-options delimiter is not classified.
-For example, `git worktree remove -- -sibling` leaves the guard with no target and fails open, while Git treats `-sibling` as the worktree operand.
-
-A Git alias that expands to `worktree remove` or `worktree prune` is not classified because alias expansion happens inside Git after the guard has seen and allowed the command line.
-This includes `git -c alias.destroy='worktree remove' destroy <sibling>` and an equivalent alias committed in the shared repository.
-
-Its threat model is a worker's mistake under pressure, the same as firstmate's other seatbelts, rather than an adversary composing unusual command spellings, so these documented gaps and paths handed to programs the guard does not front are not expanded into a sandbox.
+The threat model is a worker's mistake under pressure, the same as firstmate's other seatbelts, rather than an adversary composing unusual command spellings, so these documented gaps and paths handed to programs the guard does not front are not expanded into a sandbox.
 
 ## Where the root comes from
 
