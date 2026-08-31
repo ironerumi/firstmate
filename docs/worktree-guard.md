@@ -32,7 +32,8 @@ The discriminator is the resolved target path, never the command's size or appar
 Always permitted:
 
 - Every command against a path inside this task's own worktree, including `rm -rf` of its own build output and a `git worktree remove` of a worktree the worker itself nested inside its root.
-- This task's own durable records under `state/<id>.` - the brief itself tells a worker to `mv` its inbox messages into `handled/`. A sibling's records, and the fleet-wide records beside them, stay protected.
+- This task's exact `state/<id>.status` file and paths under its `state/<id>.inbox/` directory - the brief itself tells a worker to `mv` its inbox messages into `handled/`.
+  A sibling's records, including a dotted task ID that begins with this task's ID, and the fleet-wide records beside them stay protected.
 - This task's own temp root (`tasktmp=` in the record, `/tmp/fm-<id>`) and the OS temp namespace. Unlanded work never lives in temp - firstmate puts each task's scratch there itself - and refusing an ordinary `rm` of a scratch file would make the guard something workers route around, which costs more than the class it catches.
 - `git worktree prune --dry-run`, which changes nothing.
 - `treehouse get`, `treehouse enter`, `treehouse status`, every other `git` subcommand, and every command that is not one of the fronted tools.
@@ -74,9 +75,10 @@ The shim line covers all of them, and it is where the paths are already resolved
 Uncertainty about the environment always resolves toward running the command: no `FM_WORKTREE_GUARD_META`, an unreadable or root-less record, a `kind=secondmate` record, an unreadable working directory, or an unloadable library all allow.
 A refusal comes only from a resolved target that is provably outside the allowed set.
 
-Path resolution is lexical - `.` and empty components are dropped, `..` pops one component - against a working directory that is already physical, and the worktree root is resolved physically once.
-A target reached through a symlink that leaves the root is therefore judged as written, which can make the guard refuse a command that would in fact have stayed inside.
-That direction is deliberate: the failure mode is a refusal the escape below clears, never a silent allow.
+Path resolution first drops `.` and empty components and lets `..` pop one component against an already-physical working directory.
+For a target that lexically appears inside an allowed boundary, the guard then resolves its deepest existing parent physically and re-appends any missing components lexically, so an intermediate directory symlink into a sibling worktree is refused.
+The final component is deliberately not resolved because `rm`, `mv`, and `git worktree remove` operate on a final symlink itself rather than its destination.
+If an existing parent cannot be resolved, the uncertainty allows the command under the fail-open contract.
 
 ## The escape
 

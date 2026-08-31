@@ -55,7 +55,8 @@ decision_code() { # <tool> <cwd> [argv...]
   local tool=$1 cwd=$2 out
   shift 2
   out=$(FM_WORKTREE_GUARD_TEMP_ROOTS="$NO_TEMP" \
-    FM_WORKTREE_GUARD_STATE_PREFIX="$STATE/t1." \
+    FM_WORKTREE_GUARD_STATE_STATUS="$STATE/t1.status" \
+    FM_WORKTREE_GUARD_STATE_INBOX="$STATE/t1.inbox" \
     FM_WORKTREE_GUARD_TASKTMP="$TASKTMP" \
     fm_worktree_guard_decide "$tool" "$OWN" "$cwd" "$@")
   case "$out" in
@@ -79,12 +80,15 @@ check_decision worktree-escape-delete "rm of the pool that holds every sibling" 
 check_decision worktree-escape-delete "rm from a cwd already outside the root" rm "$SIBLING" -rf src
 check_decision worktree-escape-delete "rm of another task's durable record" rm "$STATE" -f "$STATE/t2.meta"
 check_decision worktree-escape-delete "rm of a fleet-wide record" rm "$OWN" -f "$STATE/.wake-queue"
+check_decision worktree-escape-delete "rm of a dotted sibling task record" rm "$OWN" -f "$STATE/t1.other.meta"
 check_decision worktree-escape-delete "rmdir outside the root" rmdir "$OWN" ../task-sibling/src
 check_decision worktree-escape-delete "unlink outside the root" unlink "$OWN" "$SIBLING/src/x"
 check_decision worktree-escape-delete "an outside target hidden after -- " rm "$OWN" -rf -- ../task-sibling
 check_decision worktree-escape-move "mv whose source is outside" mv "$OWN" ../task-sibling/src/x .
 check_decision worktree-escape-move "mv whose destination is outside" mv "$OWN" src/x ../task-sibling/
 check_decision worktree-escape-move "mv -t naming an outside destination" mv "$OWN" -t "$SIBLING" src/x
+check_decision worktree-escape-move "mv with an attached -t destination" mv "$OWN" "-t$SIBLING" src/x
+check_decision worktree-escape-move "mv with a clustered -t destination" mv "$OWN" -ft "$SIBLING" src/x
 check_decision worktree-remove "git worktree remove of a sibling" git "$OWN" worktree remove ../task-sibling
 check_decision worktree-remove "git worktree remove of this task's own root" git "$OWN" worktree remove "$OWN"
 check_decision worktree-remove "git -C rebasing a relative worktree removal" git "$OWN" -C "$POOL" worktree remove task-sibling
@@ -114,10 +118,12 @@ check_decision allow "an unfronted tool" cp "$OWN" ../task-sibling/x .
 pass "the decision matrix matches the documented contract"
 
 # The OS temp namespace is unprotected by contract, and only by contract.
-got=$(FM_WORKTREE_GUARD_STATE_PREFIX="$STATE/t1." FM_WORKTREE_GUARD_TASKTMP="$TASKTMP" \
+got=$(FM_WORKTREE_GUARD_STATE_STATUS="$STATE/t1.status" \
+  FM_WORKTREE_GUARD_STATE_INBOX="$STATE/t1.inbox" FM_WORKTREE_GUARD_TASKTMP="$TASKTMP" \
   fm_worktree_guard_decide rm "$OWN" "$OWN" -rf /tmp/scratch-file)
 [ "$got" = allow ] || fail "the default temp namespace must stay unprotected scratch, got: $got"
-got=$(FM_WORKTREE_GUARD_TEMP_ROOTS="$NO_TEMP" FM_WORKTREE_GUARD_STATE_PREFIX="$STATE/t1." \
+got=$(FM_WORKTREE_GUARD_TEMP_ROOTS="$NO_TEMP" FM_WORKTREE_GUARD_STATE_STATUS="$STATE/t1.status" \
+  FM_WORKTREE_GUARD_STATE_INBOX="$STATE/t1.inbox" \
   FM_WORKTREE_GUARD_TASKTMP="$TASKTMP" \
   fm_worktree_guard_decide rm "$OWN" "$OWN" -rf /tmp/scratch-file)
 case "$got" in
@@ -149,6 +155,8 @@ guarded() { # [VAR=VAL ...] -- <cwd> <cmd> [args...]
 : > "$STATE/t1.inbox/001.msg"
 : > "$STATE/.wake-queue"
 : > "$TASKTMP/scratch"
+: > "$STATE/t1.status"
+: > "$STATE/t1.other.meta"
 
 out=$(guarded -- "$OWN" rm -rf ../task-sibling 2>&1)
 expect_code 3 $? "a refused removal must exit 3"
@@ -163,9 +171,62 @@ assert_contains "$out" "REFUSED BY FIRSTMATE [worktree-escape-move]" "the refusa
 assert_present "$STATE/.wake-queue" "a fleet-wide record must survive the refused move"
 pass "mv out of the home's state directory is refused end to end"
 
+out=$(guarded -- "$OWN" rm -f "$STATE/t1.other.meta" 2>&1)
+expect_code 3 $? "a dotted sibling task record removal must exit 3"
+assert_present "$STATE/t1.other.meta" "a dotted sibling task record must survive"
+pass "a dotted sibling task id cannot collide with this task's allowances"
+
+ln -s "$SIBLING" "$OWN/outside-link"
+out=$(guarded -- "$OWN" rm -f outside-link/src/unlanded.txt 2>&1)
+expect_code 3 $? "an intermediate symlink to a sibling must be refused"
+assert_present "$SIBLING/src/unlanded.txt" "rm through an escaping symlink must leave sibling work intact"
+: > "$OWN/src/symlink-move.txt"
+out=$(guarded -- "$OWN" mv src/symlink-move.txt outside-link/ 2>&1)
+expect_code 3 $? "an mv destination through an escaping symlink must be refused"
+assert_present "$OWN/src/symlink-move.txt" "a refused symlink move must leave its source intact"
+assert_absent "$SIBLING/symlink-move.txt" "a refused symlink move must not reach the sibling"
+pass "intermediate symlinks cannot escape the worker's root"
+
+mkdir -p "$OWN/inside-target"
+ln -s "$OWN/inside-target" "$OWN/inside-link"
+: > "$OWN/inside-target/removable.txt"
+guarded -- "$OWN" rm -f inside-link/removable.txt
+expect_code 0 $? "an intermediate symlink staying inside the root must run"
+assert_absent "$OWN/inside-target/removable.txt" "an in-root symlink removal must reach the real file"
+ln -s "$SIBLING/src/unlanded.txt" "$OWN/final-link"
+guarded -- "$OWN" rm -f final-link
+expect_code 0 $? "removing an in-root final symlink must run"
+assert_absent "$OWN/final-link" "the in-root final symlink must be removed"
+assert_present "$SIBLING/src/unlanded.txt" "the final symlink's outside target must survive"
+pass "in-root symlinks preserve the fronted tool's final-component semantics"
+
+: > "$OWN/src/attached-target.txt"
+out=$(guarded -- "$OWN" mv "-t$SIBLING" src/attached-target.txt 2>&1)
+expect_code 3 $? "an attached -t outside destination must be refused"
+assert_present "$OWN/src/attached-target.txt" "a refused attached -t move must keep its source"
+: > "$OWN/src/clustered-target.txt"
+out=$(guarded -- "$OWN" mv -ft "$SIBLING" src/clustered-target.txt 2>&1)
+expect_code 3 $? "a clustered -t outside destination must be refused"
+assert_present "$OWN/src/clustered-target.txt" "a refused clustered -t move must keep its source"
+MV_BIN="$TMP/mv-bin"
+MV_LOG="$TMP/mv.log"
+mkdir -p "$MV_BIN"
+: > "$MV_LOG"
+# shellcheck disable=SC2016
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$*" >> "${MV_LOG:?}"' > "$MV_BIN/mv"
+chmod +x "$MV_BIN/mv"
+guarded "PATH=$SHIMS:$MV_BIN:$PATH" "MV_LOG=$MV_LOG" -- "$OWN" \
+  mv -b -S.keep src/suffix-source.txt src/suffix-destination.txt
+expect_code 0 $? "an attached -S suffix on an in-root move must reach the real tool"
+assert_contains "$(< "$MV_LOG")" "-S.keep" "the backup suffix must be passed through as an option value"
+pass "mv attached option arguments are classified by their option semantics"
+
 guarded -- "$OWN" rm -f src/mine.txt
 expect_code 0 $? "a removal inside the worker's own worktree must run"
 assert_absent "$OWN/src/mine.txt" "the worker's own file must actually be removed"
+guarded -- "$OWN" rm -f "$STATE/t1.status"
+expect_code 0 $? "this task's exact status file must remain usable"
+assert_absent "$STATE/t1.status" "this task's exact status file must actually be removed"
 guarded -- "$OWN" mv "$STATE/t1.inbox/001.msg" "$STATE/t1.inbox/handled/"
 expect_code 0 $? "the brief's own inbox acknowledgement must run"
 assert_present "$STATE/t1.inbox/handled/001.msg" "the inbox acknowledgement must actually land"
@@ -242,17 +303,40 @@ fm_write_secondmate_meta "$STATE/sm1.meta" "$OWN"
 inert_case "a secondmate home, which runs a fleet of its own" "FM_WORKTREE_GUARD_META=$STATE/sm1.meta"
 pass "the guard is inert wherever the worker's own root cannot be established"
 
-# --- 5. one owner, reached under every fronted name -------------------------
+# --- 5. every public shim name enforces the guard --------------------------
 
-for tool in rm rmdir unlink mv treehouse; do
-  [ -L "$SHIMS/$tool" ] || fail "$SHIMS/$tool must be a symlink to the one shim owner"
-  [ -x "$SHIMS/$tool" ] || fail "$SHIMS/$tool must be executable"
-  [ "$(readlink "$SHIMS/$tool")" = "../fm-worktree-guard-shim.sh" ] \
-    || fail "$SHIMS/$tool must resolve to bin/fm-worktree-guard-shim.sh"
+mkdir -p "$SIBLING/outside-empty" "$OWN/inside-empty"
+out=$(guarded -- "$OWN" rmdir "$SIBLING/outside-empty" 2>&1)
+expect_code 3 $? "rmdir outside the root must be refused"
+assert_present "$SIBLING/outside-empty" "the outside directory must survive rmdir"
+guarded -- "$OWN" rmdir "$OWN/inside-empty"
+expect_code 0 $? "rmdir inside the root must run"
+assert_absent "$OWN/inside-empty" "the inside directory must be removed"
+: > "$SIBLING/outside-unlink"
+: > "$OWN/inside-unlink"
+out=$(guarded -- "$OWN" unlink "$SIBLING/outside-unlink" 2>&1)
+expect_code 3 $? "unlink outside the root must be refused"
+assert_present "$SIBLING/outside-unlink" "the outside file must survive unlink"
+guarded -- "$OWN" unlink "$OWN/inside-unlink"
+expect_code 0 $? "unlink inside the root must run"
+assert_absent "$OWN/inside-unlink" "the inside file must be removed"
+
+TREEHOUSE_BIN="$TMP/treehouse-bin"
+TREEHOUSE_LOG="$TMP/treehouse.log"
+mkdir -p "$TREEHOUSE_BIN"
+: > "$TREEHOUSE_LOG"
+# shellcheck disable=SC2016
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$*" >> "${TREEHOUSE_LOG:?}"' > "$TREEHOUSE_BIN/treehouse"
+chmod +x "$TREEHOUSE_BIN/treehouse"
+for action in return destroy prune; do
+  out=$(guarded "PATH=$SHIMS:$TREEHOUSE_BIN:$PATH" "TREEHOUSE_LOG=$TREEHOUSE_LOG" -- "$OWN" treehouse "$action" 2>&1)
+  expect_code 3 $? "treehouse $action must be refused"
 done
-[ "$(readlink "$SHIMS/git")" = "../fm-nm-guard-shim.sh" ] \
-  || fail "bin/shims/git must stay the validation-owner shim, which carries this guard too"
-pass "every fronted tool reaches one shim owner"
+[ ! -s "$TREEHOUSE_LOG" ] || fail "refused treehouse pool commands must not reach the real tool"
+guarded "PATH=$SHIMS:$TREEHOUSE_BIN:$PATH" "TREEHOUSE_LOG=$TREEHOUSE_LOG" -- "$OWN" treehouse get
+expect_code 0 $? "treehouse get must pass through"
+assert_contains "$(< "$TREEHOUSE_LOG")" "get" "treehouse get must reach the real tool"
+pass "every public filesystem and pool shim enforces observable behavior"
 
 # A second firstmate home's shims on the same PATH must not make two shims exec
 # each other instead of the real tool. A worker pane already carries one shim
