@@ -1,0 +1,28 @@
+SCENARIO 1: worker tries to delete a sibling worktree
+command: remove sibling recursively
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  REFUSED BY FIRSTMATE [worktree-escape-delete]
+●  deleting "/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/tmp.8ZNC0G3NQK/task-sibling" would destroy a path OUTSIDE this task's own worktree, which is exactly how a sibling task loses unlanded work. Work inside your own worktree; if firstmate has authorized this exact command, re-run it with FM_WORKTREE_GUARD_ALLOW=1 in front of it.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+exit=3
+sibling_unlanded_work=STILL_PRESENT
+
+SCENARIO 2: worker removes a file inside its own worktree
+command: unlink src/disposable.txt
+exit=0
+own_file=REMOVED
+
+SCENARIO 3: explicit firstmate authorization removes an outside file
+command: FM_WORKTREE_GUARD_ALLOW=1 unlink ../task-sibling/src/unlanded.txt
+exit=0
+sibling_file=REMOVED_WITH_EXPLICIT_OVERRIDE
+
+SCENARIO 4: worker tries git worktree removal against a sibling checkout
+command: git worktree remove --force <sibling>
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  REFUSED BY FIRSTMATE [worktree-remove]
+●  removing the worktree "/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/tmp.2nPcALed2W/sibling-linked-worktree" is firstmate's cleanup path, not a worker's: it deletes a checkout whose work no one has landed, and the shared repository record with it. Report the task done and let firstmate clean up; if firstmate has authorized this exact command, re-run it with FM_WORKTREE_GUARD_ALLOW=1 in front of it.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+exit=3
+sibling_unlanded_work=STILL_PRESENT
+sibling_worktree_registration=STILL_PRESENT
