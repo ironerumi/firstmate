@@ -98,9 +98,15 @@ test_refuses_invalid_id() {
 
 add_merge_mocks() {
   local case_dir=$1
+  # fm-pr-merge.sh reads the pull request back and refuses an outcome it cannot
+  # prove landed, so the merge mock must answer `pr view` as well as `pr merge`.
   cat > "$case_dir/fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$FM_TEST_GH_AXI_LOG"
+case "${1:-} ${2:-}" in
+  "pr merge") printf 'merged:\n  number: %s\n  status: ok\n' "${3:-}" ;;
+  "pr view") printf 'pull_request:\n  number: %s\n  state: merged\n' "${3:-}" ;;
+esac
 exit 0
 SH
   cat > "$case_dir/fakebin/gh" <<'SH'
