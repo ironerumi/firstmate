@@ -142,25 +142,21 @@ nm_is_guard_shim() {
 # shims - then fall back to the standard no-mistakes install locations.
 # Prints the resolved path and returns 0, or returns 1 when nothing resolves.
 nm_binary_resolve() {
-  local path entry candidate
-  path=$(command -v no-mistakes 2>/dev/null) || return 1
-  path=$(nm_resolve_links "$path")
-  if ! nm_is_guard_shim "$path"; then
-    [ -f "$path" ] && [ -x "$path" ] || return 1
-    printf '%s\n' "$path"
-    return 0
-  fi
-  while IFS=: read -r entry; do
-    [ -n "$entry" ] || continue
+  local entry candidate
+  local IFS=:
+  for entry in ${PATH:-}; do
+    [ -n "$entry" ] || entry=.
     candidate=$(nm_resolve_links "$entry/no-mistakes")
     [ -f "$candidate" ] && [ -x "$candidate" ] || continue
     nm_is_guard_shim "$candidate" && continue
     printf '%s\n' "$candidate"
     return 0
-  done <<< "$PATH"
+  done
   for candidate in "$HOME/.no-mistakes/bin/no-mistakes" \
     /usr/local/bin/no-mistakes /opt/homebrew/bin/no-mistakes; do
+    candidate=$(nm_resolve_links "$candidate")
     [ -f "$candidate" ] && [ -x "$candidate" ] || continue
+    nm_is_guard_shim "$candidate" && continue
     printf '%s\n' "$candidate"
     return 0
   done
@@ -245,12 +241,20 @@ action_check() {
   # arm, check does not insist the config exist - a host without one simply has
   # no config to be missing keys.)
   [ -f "$NM_CONFIG" ] || return 0
-  bin=$(nm_binary_resolve) || return 0
-  defaults=$(nm_template "$bin" | nm_keys) || return 0
+  bin=$(nm_binary_resolve) || {
+    rm -f -- "$RECORD" 2>/dev/null || true
+    return 0
+  }
+  defaults=$(nm_template "$bin" | nm_keys) || {
+    rm -f -- "$RECORD" 2>/dev/null || true
+    return 0
+  }
   # No template block readable means the defaults are unknown, so nothing can be
-  # reported; stay silent AND leave the record alone, so a later readable run
-  # reports what it finds rather than being suppressed by an empty record.
-  [ -n "$defaults" ] || return 0
+  # reported and no prior finding remains authoritative.
+  if [ -z "$defaults" ]; then
+    rm -f -- "$RECORD" 2>/dev/null || true
+    return 0
+  fi
   missing=$(nm_missing "$defaults" "$(nm_keys < "$NM_CONFIG")") || return 0
   found=
   if [ -n "$missing" ]; then

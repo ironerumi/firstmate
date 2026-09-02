@@ -209,6 +209,23 @@ test_absent_binary_is_silent() {
   pass "no resolvable no-mistakes binary means no report and no record"
 }
 
+test_real_binary_is_found_after_a_guard_shim() {
+  local home shim_dir empty_dir bin_dir out path
+  home=$(make_home path-walk)
+  shim_dir="$TMP_ROOT/path-walk/shims"
+  empty_dir="$TMP_ROOT/path-walk/empty"
+  bin_dir="$TMP_ROOT/path-walk/bin"
+  mkdir -p "$shim_dir" "$empty_dir"
+  ln -s "$ROOT/bin/fm-nm-guard-shim.sh" "$shim_dir/no-mistakes"
+  make_binary "$bin_dir"
+  out="$home/out.txt"
+  path="$shim_dir:$empty_dir:$bin_dir:/usr/bin:/bin"
+
+  run_check "$home" "$path" "$TMP_ROOT/config-missing.yaml" "$out" HOME="$TMP_ROOT/path-walk/home"
+  assert_contains "$(cat "$out")" "agent_timeout" "the real binary in a middle PATH entry was not found after the guard shim"
+  pass "the real binary is found in a middle PATH entry after a guard shim"
+}
+
 test_findings_are_reported_once_until_they_change() {
   local home bin_dir config out
   home=$(make_home no-nag)
@@ -242,6 +259,31 @@ test_findings_are_reported_once_until_they_change() {
   run_check "$home" "$path" "$config" "$out"
   assert_contains "$(cat "$out")" "agent_timeout" "a returning finding was not reported again"
   pass "the same finding is reported once, and a change or return is reported again"
+}
+
+test_unreadable_probe_clears_the_report_record() {
+  local home bin_dir hidden config out path
+  home=$(make_home unreadable-recovery)
+  bin_dir="$TMP_ROOT/unreadable-recovery/bin"
+  hidden="$TMP_ROOT/unreadable-recovery/no-mistakes.hidden"
+  config="$TMP_ROOT/config-missing.yaml"
+  make_binary "$bin_dir"
+  out="$home/out.txt"
+  path="$bin_dir:/usr/bin:/bin"
+
+  run_check "$home" "$path" "$config" "$out" HOME="$TMP_ROOT/unreadable-recovery/home"
+  assert_contains "$(cat "$out")" "agent_timeout" "the initial finding was not reported"
+  assert_present "$home/state/.nm-config-keydiff" "the initial finding did not write its report record"
+
+  mv "$bin_dir/no-mistakes" "$hidden"
+  run_check "$home" "$path" "$config" "$out" HOME="$TMP_ROOT/unreadable-recovery/home"
+  [ ! -s "$out" ] || fail "an unreadable probe produced a report: $(cat "$out")"
+  assert_absent "$home/state/.nm-config-keydiff" "an unreadable probe retained the prior report record"
+
+  mv "$hidden" "$bin_dir/no-mistakes"
+  run_check "$home" "$path" "$config" "$out" HOME="$TMP_ROOT/unreadable-recovery/home"
+  assert_contains "$(cat "$out")" "agent_timeout" "the restored readable probe did not report the unchanged finding again"
+  pass "an unreadable probe clears dedupe so restored findings report again"
 }
 
 test_the_report_record_carries_the_full_finding_set() {
@@ -475,7 +517,9 @@ test_embedded_strings_outside_the_template_block_are_not_keys
 test_config_with_every_default_key_is_silent
 test_absent_config_is_silent
 test_absent_binary_is_silent
+test_real_binary_is_found_after_a_guard_shim
 test_findings_are_reported_once_until_they_change
+test_unreadable_probe_clears_the_report_record
 test_the_report_record_carries_the_full_finding_set
 test_no_subcommand_writes_the_operator_config
 test_arm_registers_the_check_and_disarm_removes_it
