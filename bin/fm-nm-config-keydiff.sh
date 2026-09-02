@@ -235,12 +235,14 @@ record_write() {
 # --- actions ----------------------------------------------------------------
 
 action_check() {
-  local bin defaults missing found line
+  local bin config defaults config_keys missing found line
 
   # An absent config is not a finding: there is nothing to diff against. (Unlike
   # arm, check does not insist the config exist - a host without one simply has
   # no config to be missing keys.)
   [ -f "$NM_CONFIG" ] || return 0
+  config=$(cat -- "$NM_CONFIG" 2>/dev/null) || return 0
+  config_keys=$(printf '%s\n' "$config" | nm_keys) || return 0
   bin=$(nm_binary_resolve) || {
     rm -f -- "$RECORD" 2>/dev/null || true
     return 0
@@ -255,7 +257,7 @@ action_check() {
     rm -f -- "$RECORD" 2>/dev/null || true
     return 0
   fi
-  missing=$(nm_missing "$defaults" "$(nm_keys < "$NM_CONFIG")") || return 0
+  missing=$(nm_missing "$defaults" "$config_keys") || return 0
   found=
   if [ -n "$missing" ]; then
     found=$(printf '%s\n' "$missing" \
