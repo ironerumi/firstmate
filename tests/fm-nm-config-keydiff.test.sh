@@ -443,7 +443,7 @@ test_a_failed_registration_leaves_no_unregistered_shim() {
 }
 
 test_a_failed_rearm_leaves_no_shim_the_trust_binding_lost() {
-  local home bin_dir fake status
+  local home bin_dir fake hash_calls status
   home=$(make_home arm-rearm-fail)
   bin_dir="$TMP_ROOT/arm-rearm-fail/bin"
   make_binary "$bin_dir"
@@ -451,18 +451,32 @@ test_a_failed_rearm_leaves_no_shim_the_trust_binding_lost() {
     "$CHECK" arm >/dev/null || fail "the first arm failed"
   assert_present "$home/state/nm-config-keydiff.check-trust" "the first arm did not bind the shim"
 
-  # A hash tool that answers with nothing makes the register write a binding it
-  # then rejects, and it removes the old binding on the way out.
+  # Make registration replace the old binding with a syntactically valid hash,
+  # then fail while verifying it. This deterministically reaches the rollback
+  # state where registration removed the trust binding; a hash command that
+  # fails immediately can leave the old binding intact under pipefail.
   fake="$TMP_ROOT/arm-rearm-fail/fake-hash"
+  hash_calls="$TMP_ROOT/arm-rearm-fail/hash-calls"
   mkdir -p "$fake"
-  printf '#!/usr/bin/env bash\nexit 1\n' > "$fake/shasum"
-  printf '#!/usr/bin/env bash\nexit 1\n' > "$fake/sha256sum"
+  cat > "$fake/shasum" <<EOF
+#!/usr/bin/env bash
+count=0
+[ ! -f '$hash_calls' ] || count=\$(cat '$hash_calls')
+count=\$((count + 1))
+printf '%s\n' "\$count" > '$hash_calls'
+if [ "\$count" -eq 1 ]; then
+  printf '%064d  %s\n' 0 "\${3:-}"
+  exit 0
+fi
+exit 1
+EOF
+  cp "$fake/shasum" "$fake/sha256sum"
   chmod 0755 "$fake/shasum" "$fake/sha256sum"
   printf '#!/usr/bin/env bash\n# a shim armed earlier\nexit 0\n' > "$home/state/nm-config-keydiff.check.sh"
   chmod 0700 "$home/state/nm-config-keydiff.check.sh"
 
   status=0
-  env FM_HOME="$home" PATH="$(fixture_path "$fake")" FM_NM_CONFIG="$TMP_ROOT/config-missing.yaml" \
+  env FM_HOME="$home" PATH="$fake:$(fixture_path "$bin_dir")" FM_NM_CONFIG="$TMP_ROOT/config-missing.yaml" \
     "$CHECK" arm >/dev/null 2>&1 || status=$?
   expect_code 1 "$status" "arm whose registration cannot hash exit"
   assert_absent "$home/state/nm-config-keydiff.check.sh" "a failed re-arm left a shim behind after the trust binding was removed"
