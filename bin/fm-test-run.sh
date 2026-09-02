@@ -220,7 +220,7 @@ family_for_basename() {
     fm-session-lock-ancestry.test.sh|fm-cursor-primary.test.sh|\
     fm-supervision-events.test.sh|fm-turnend-guard.test.sh|fm-wake-daemon-lifecycle-e2e.test.sh|\
     fm-wake-drain-unread-status.test.sh|\
-    fm-tool-update-check.test.sh|\
+    fm-tool-update-check.test.sh|fm-nm-config-keydiff.test.sh|\
     fm-wake-queue.test.sh|fm-watch-arm.test.sh|fm-watch-checkpoint.test.sh|fm-watch-recovery-loop.test.sh|\
     fm-watch-triage.test.sh|fm-task-inbox.test.sh|\
     fm-watcher-lock.test.sh|fm-inactive-reconcile.test.sh)
@@ -607,6 +607,7 @@ tests/fm-test-fixtures.test.sh 1045
 tests/fm-test-isolation-proof.test.sh 451
 tests/fm-tmux-agent-liveness.test.sh 4065
 tests/fm-tool-update-check.test.sh 12846
+tests/fm-nm-config-keydiff.test.sh 10000
 tests/fm-trace-context-lib.test.sh 194
 tests/fm-trace-context-spawn.test.sh 35325
 tests/fm-turnend-guard.test.sh 34915
