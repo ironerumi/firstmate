@@ -1,0 +1,12 @@
+End-to-end check against the installed no-mistakes binary and real operator config
+
+resolved_binary=/Users/gu_yifu/.local/bin/no-mistakes
+first_check_lines=1
+first_check=no-mistakes config /Users/gu_yifu/.no-mistakes/config.yaml is missing default keys: agent_timeout, branch_sync_remote_timeout, eval, forgejo_axi_path, review_agent_timeout, test_agent_timeout
+second_check_lines=0
+config_sha256_before=212d368dc965b1eafd3a4d2b3e5afa61f43ef9956495eeaf5c36dd3869ffce02
+config_sha256_after=212d368dc965b1eafd3a4d2b3e5afa61f43ef9956495eeaf5c36dd3869ffce02
+
+Interpretation: the public `check` command found all six required missing keys in
+one line, suppressed the unchanged finding on the next watcher-style poll, and
+did not change the operator config bytes.
