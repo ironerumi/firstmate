@@ -196,6 +196,23 @@ test_absent_config_is_silent() {
   pass "no config file means no report and no record"
 }
 
+test_unreadable_config_is_silent() {
+  local home bin_dir config out
+  home=$(make_home unreadable-config)
+  bin_dir="$TMP_ROOT/unreadable-config/bin"
+  make_binary "$bin_dir"
+  config="$TMP_ROOT/unreadable-config/config.yaml"
+  cp "$TMP_ROOT/config-missing.yaml" "$config"
+  chmod 000 "$config"
+  out="$home/out.txt"
+
+  run_check "$home" "$(fixture_path "$bin_dir")" "$config" "$out"
+  chmod 0600 "$config"
+  [ ! -s "$out" ] || fail "an unreadable config produced output: $(cat "$out")"
+  assert_absent "$home/state/.nm-config-keydiff" "an unreadable config wrote a fabricated report record"
+  pass "a config read failure is silent and records no fabricated finding"
+}
+
 test_absent_binary_is_silent() {
   local home out
   home=$(make_home no-binary)
@@ -516,6 +533,7 @@ test_missing_default_keys_are_reported
 test_embedded_strings_outside_the_template_block_are_not_keys
 test_config_with_every_default_key_is_silent
 test_absent_config_is_silent
+test_unreadable_config_is_silent
 test_absent_binary_is_silent
 test_real_binary_is_found_after_a_guard_shim
 test_findings_are_reported_once_until_they_change

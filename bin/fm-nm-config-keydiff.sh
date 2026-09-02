@@ -48,9 +48,10 @@
 # touches the network. It does not run no-mistakes itself.
 #
 # The check degrades quietly rather than crashing or spewing, because it runs
-# under the watcher: an absent config means nothing to diff against (silent),
-# and a missing or unparseable binary means the defaults are unknown (silent),
-# so a host where no-mistakes is not installed at all never wakes firstmate.
+# under the watcher: an absent or unreadable config means nothing to diff
+# against (silent), and a missing or unparseable binary means the defaults are
+# unknown (silent), so a host where no-mistakes is not installed at all never
+# wakes firstmate.
 #
 # The report record state/.nm-config-keydiff is written on every successful
 # check run and carries the whole key set the last report was made from, so the
@@ -111,8 +112,8 @@ die_usage() {
 
 # --- binary resolution ------------------------------------------------------
 
-# Follow a path through its whole symlink chain, so `command -v` results and
-# PATH entries resolve to the file they actually name.
+# Follow a PATH candidate through its whole symlink chain so it resolves to the
+# file it actually names.
 nm_resolve_links() {
   local p=$1 link links=0
   while [ -L "$p" ] && [ "$links" -lt 10 ]; do
