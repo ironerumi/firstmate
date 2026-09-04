@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # Regression test for the claude) branch of bin/fm-spawn.sh: the generated
-# <worktree>/.claude/settings.local.json must carry the attribution object that
-# suppresses Claude's Co-Authored-By commit trailer (attribution.commit="") and
-# the Claude-Session claude.ai link (attribution.sessionUrl=false), while the
-# lifecycle hooks the file exists for stay intact.
+# <worktree>/.claude/settings.local.json must carry the lifecycle hooks it
+# exists for and NO attribution object, because Claude co-author suppression
+# moved to the user-global ~/.claude/settings.json (attribution.commit="" +
+# attribution.sessionUrl=false), which a project-level settings.local.json does
+# not override. The live proof of that global shape is
+# tests/fm-claude-attribution-live-e2e.test.sh.
 #
-# Exercises fm-spawn's real interface: a full spawn run against a fake tmux,
-# with the claude harness, followed by a JSON parse of the generated settings
-# artifact in the isolated worktree. Never asserts source bytes. The behavior
-# is scoped to the claude branch, so a second spawn on another harness must
-# produce no Claude attribution settings file at all.
+# This pin is the zero-divergence guard: a regression that reintroduces the
+# per-worker attribution object into the spawned settings file - the fork line
+# this test exists to keep out - fails loudly. Exercises fm-spawn's real
+# interface: a full spawn run against a fake tmux, with the claude harness,
+# followed by a JSON parse of the generated settings artifact in the isolated
+# worktree. Never asserts source bytes. The behavior is scoped to the claude
+# branch, so a second spawn on another harness must produce no Claude settings
+# file at all.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -76,9 +81,10 @@ run_spawn() {
     "$SPAWN" "$id" "$PROJ_DIR" "$harness" --mode no-mistakes --yolo off 2>&1
 }
 
-# The claude settings artifact carries the suppression object next to the
-# hooks, and stays valid JSON that a real claude session would load.
-test_claude_spawn_writes_attribution_suppression() {
+# The claude settings artifact must keep the lifecycle hooks and must NOT
+# reintroduce the per-worker attribution object: co-author suppression is
+# user-global now, and project settings must not carry it.
+test_claude_spawn_settings_carry_hooks_without_attribution() {
   local rec id out status settings
   id=claude-attrib-settings-z1
   rec=$(make_case claude-attrib "$id" claude)
@@ -94,21 +100,18 @@ test_claude_spawn_writes_attribution_suppression() {
   settings="$WT_DIR/.claude/settings.local.json"
   [ -f "$settings" ] || fail "claude spawn did not generate $settings"
   command -v jq >/dev/null 2>&1 || fail "jq is required to parse the generated settings"
-  jq -e '(.attribution.commit | type == "string")
-    and .attribution.commit == ""
-    and (.attribution.sessionUrl | type == "boolean")
-    and .attribution.sessionUrl == false' "$settings" >/dev/null \
-    || fail "generated attribution settings have the wrong values or JSON types"
+  jq -e 'has("attribution") | not' "$settings" >/dev/null \
+    || fail "the per-worker attribution object was reintroduced into the spawned settings"
   for hook in UserPromptSubmit Stop StopFailure SessionEnd; do
     jq -e ".hooks.\"$hook\" | length > 0" "$settings" >/dev/null \
       || fail "generated settings lost the $hook lifecycle hook"
   done
-  pass "claude spawn settings carry commit=\"\" + sessionUrl=false with hooks intact"
+  pass "claude spawn settings carry the hooks and no per-worker attribution object"
 }
 
-# Scope pin: another harness's spawn must not receive a Claude attribution
-# settings file, so the suppression cannot leak outside the claude branch.
-test_non_claude_spawn_has_no_claude_attribution_settings() {
+# Scope pin: another harness's spawn must not receive a Claude settings file,
+# so the carrier cannot leak outside the claude branch.
+test_non_claude_spawn_has_no_claude_settings_file() {
   local rec id out status
   id=codex-no-attrib-z2
   rec=$(make_case codex-no-attrib "$id" codex)
@@ -119,11 +122,11 @@ test_non_claude_spawn_has_no_claude_attribution_settings() {
   expect_code 0 "$status" "codex spawn should succeed against the fake tmux"
   assert_contains "$out" "spawned $id" "spawn did not report success"
   [ ! -e "$WT_DIR/.claude/settings.local.json" ] \
-    || fail "codex worktree must not carry a claude attribution settings file"
-  pass "non-claude spawn carries no claude attribution settings file"
+    || fail "codex worktree must not carry a claude settings file"
+  pass "non-claude spawn carries no claude settings file"
 }
 
-test_claude_spawn_writes_attribution_suppression
-test_non_claude_spawn_has_no_claude_attribution_settings
+test_claude_spawn_settings_carry_hooks_without_attribution
+test_non_claude_spawn_has_no_claude_settings_file
 
 echo "# all fm-spawn-claude-attribution tests passed"

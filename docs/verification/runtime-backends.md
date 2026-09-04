@@ -976,38 +976,52 @@ FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-l
 
 ## Claude commit attribution suppression
 
-Claude Code's per-session attribution object was verified on 2026-08-16 with Claude Code 2.1.233 (macOS arm64).
+[`docs/configuration.md`](../configuration.md#harness-support) owns the current operator setup and the boundary between user-global attribution settings and spawned-worktree lifecycle hooks.
+That configuration was verified on 2026-09-04 with Claude Code 2.1.260 (macOS arm64).
 
-The settings object `bin/fm-spawn.sh` writes for claude crews has the following shape, with hook command values abbreviated:
+`bin/fm-spawn.sh` writes no per-worker attribution any more: the project-level `settings.local.json` it generates for claude crews carries only the lifecycle hooks, byte-identical to upstream; the global object does not get overridden because that project file sets no attribution key.
+
+The verified user-global object has the following shape:
 
 ```json
-{"attribution":{"commit":"","sessionUrl":false},"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"..."}]}],"Stop":[{"hooks":[{"type":"command","command":"..."}]}],"StopFailure":[{"hooks":[{"type":"command","command":"..."}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"..."}]}]}}
+{"attribution":{"commit":"","sessionUrl":false}}
 ```
 
 `attribution.commit` is an empty string, which hides the `Co-Authored-By` commit trailer, and `attribution.sessionUrl` is `false`, which omits the `Claude-Session:` claude.ai link.
 The deprecated `includeCoAuthoredBy` key is not used.
 
-Reproduction, in a throwaway git repo with the production settings file and `claude --version` reporting `2.1.233`:
+All three live-guard arms pass an explicit attribution object through `claude --settings`, so none depends on the ambient user-global settings file.
+This is the same merged settings view a user-global settings file resolves into, because `CLAUDE_CONFIG_DIR` redirection breaks OAuth refresh in this install; the real HOME and managed auth stay in place.
+
+Reproduction, in a throwaway git repo with the production settings in effect and `claude --version` reporting `2.1.260`:
 
 ```sh
-claude -p --dangerously-skip-permissions --model claude-sonnet-4-5 \
-  "Append a line 'exact shape change' to file.txt, then create a git commit with the message 'exact shape attribution test'."
+# baseline (attribution explicitly enabled):
+claude --settings '{"attribution":{"commit":"Co-Authored-By: Claude <noreply@anthropic.com>","sessionUrl":false}}' \
+  -p --dangerously-skip-permissions --model claude-sonnet-4-5 \
+  "Append a line 'change' to f.txt, then create a git commit with the message 'probe baseline'."
+git log -1 --format=%B
+# candidate (user-global object present):
+printf 'change\n' >> f.txt
+claude --settings '{"attribution":{"commit":"","sessionUrl":false}}' -p --dangerously-skip-permissions \
+  --model claude-sonnet-4-5 "Append a line 'change' to f.txt, then create a git commit with the message 'probe candidate'."
 git log -1 --format=%B
 ```
 
 Observed commit bodies:
 
 ```text
-# baseline (no settings.local.json):
-baseline attribution test
+# baseline (attribution explicitly enabled):
+probe baseline
 
-Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude <noreply@anthropic.com>
 
-# candidate (attribution.commit="" + attribution.sessionUrl=false):
-exact shape attribution test
+# candidate (user-global attribution object present):
+probe candidate
 ```
 
-The candidate body contains no `Co-Authored-By:` line and no `Claude-Session:` / `claude.ai/code` line, and the fixture's settings hooks still fired, so the merged object stays valid.
+The explicitly enabled baseline carries the trailer, proving that the clean candidate and composed bodies result from the suppression object rather than an environment that never emits attribution.
+The candidate body contains no `Co-Authored-By:` line and no `Claude-Session:` / `claude.ai/code` line, and the composed run with the spawn's hooks-only `settings.local.json` in the repo still suppresses both, so the project file never re-enables the trailer.
 The `Claude-Session:` line only appears for web or Remote Control sessions; `attribution.sessionUrl=false` short-circuits the session-URL lookup before any such line can be appended.
 
 Refresh this proof before accepting a Claude Code upgrade:

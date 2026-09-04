@@ -297,6 +297,14 @@ The full cmux home label also includes a short hash of the resolved `FM_ROOT` pa
 ## Harness support
 
 claude, codex, opencode, pi, pi-signed, grok, kimi, and cursor are empirically verified for crewmate and secondmate launches; [README requirements](../README.md#requirements) own the set supported for the primary session.
+Claude commit attribution suppression is a user-global setting rather than a spawned-worktree setting: set `attribution.commit` to an empty string and `attribution.sessionUrl` to `false` in `~/.claude/settings.json` if Claude crew commits must omit the `Co-Authored-By` trailer and `Claude-Session` link.
+`bin/fm-spawn.sh` deliberately writes only lifecycle hooks to each Claude crew's `.claude/settings.local.json`, so it neither installs nor overrides this user-global choice.
+
+```json
+{"attribution":{"commit":"","sessionUrl":false}}
+```
+
+The [runtime-backend verification](verification/runtime-backends.md#claude-commit-attribution-suppression) owns the current Claude-version evidence and refresh command for this setting.
 A cursor secondmate or primary runs the tracked project-scope `.cursor/hooks.json` in its own home and must be launched with `--trust`, or no project hook loads; [`docs/supervision-protocols/cursor.md`](supervision-protocols/cursor.md) owns its supervision protocol.
 Cursor typed-submit confirmation is verified on tmux and Herdr only.
 On Zellij, cmux, and Orca a typed-plane Cursor send (a harness-native invocation or an explicit backend target; ordinary text steers ride the durable inbox and exit 0 at enqueue) lands, but `fm-send` reports delivery unconfirmed and exits non-zero because their shared submit core does not consult the busy footer; [runtime backend verification](verification/runtime-backends.md#cursor-agent-cli) owns the evidence and transcript-state boundary.
@@ -859,9 +867,9 @@ FM_BUSY_TURN_MAX_SECS=3600         # maximum age of a busy pane's latest state/<
 FM_PAUSE_RESURFACE_SECS=3600       # seconds before the watcher re-surfaces a declared external wait or verified captain-held transfer for a recheck, including a live busy pane past FM_BUSY_TURN_MAX_SECS; the away-mode daemon uses the same setting for a declared external wait or verified captain-held transfer, ageing its window against the crew's own latest status line rather than pane busy state
 FM_SECONDMATE_WAKE_STALL_SECS=60   # minimum age of the oldest valid foreign wake-queue row before an endpoint-recorded local secondmate produces one durable parent wake-loop-stall notification; zero or invalid values use 60
 FM_WEDGE_DEMAND_INSPECT_COUNT=3    # consecutive provably-working stale escalations on the same unchanged pane before demand-deep-inspection is added
-FM_NM_KEEPWARM_SECS=1800           # maximum quiet interval before a Claude crew waiting out its own active no-mistakes run receives one benign keep-warm activation; 0 disables it
+FM_NM_KEEPWARM_SECS=1800           # maximum quiet interval before a Claude crew waiting out its own live no-mistakes run, whether working or parked at an attributed gate, receives one benign keep-warm activation; 0 disables it
 FM_NM_KEEPWARM_HARNESSES=claude    # space-separated harness prefixes that opt into that activation; every other crew harness stays an untouched no-op
-FM_NM_KEEPWARM_RETRY_SECS=300      # first retry delay after an evaluation that delivered nothing (no active run, composer not confirmed-empty, refused send); doubles per consecutive miss of the same kind, is capped at FM_NM_KEEPWARM_SECS, and is cleared by a real crew turn
+FM_NM_KEEPWARM_RETRY_SECS=300      # first retry delay after an evaluation that delivered nothing (no eligible live run, composer not confirmed-empty, refused send); doubles per consecutive miss of the same kind, is capped at FM_NM_KEEPWARM_SECS, and is cleared by a real crew turn
 FM_WORKTREE_WRITE_PRUNE='.git node_modules .venv venv __pycache__ .mypy_cache .pytest_cache .ruff_cache .tox target dist build .next .cache vendor'   # directory names the wedge detector's task-worktree write probe skips; the default keeps .git out so a supervisor's own read-only git command can never look like crew progress; set it to the empty string to prune nothing, which widens the probe to the whole depth-bounded tree rather than disabling it
 FM_WORKTREE_WRITE_MAXDEPTH=6       # depth that same probe walks below the recorded worktree; it runs only at the moment a wedge escalation would otherwise fire, never on every poll; no probe knob applies to a secondmate, whose recorded worktree is a provisioned home the probe skips entirely
 FM_WORKTREE_WRITE_TIMEOUT=10       # wall-clock seconds that one walk may take, so a worktree on a hung mount cannot stall the watcher poll that started it; hitting the bound reads as no write evidence, which leaves the escalation schedule exactly as it was; a value that is not a positive integer falls back to the default

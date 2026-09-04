@@ -168,14 +168,29 @@ out=$(tick activeturn $((NOW + 3600)))
 [ "$(sent_count activeturn)" = 0 ] || fail "no activation may be sent to a working pane"
 pass "an active turn without an attributed run is suppressed"
 
-# --- parked-decision suppression --------------------------------------------
-
+# --- parked-gate activation -------------------------------------------------
+#
+# A crew parked at a no-mistakes gate awaiting a firstmate/captain decision can
+# sit cold for well over an hour, so a gate-parked run is kept warm exactly
+# like an active one: a benign keep-waiting turn that never answers or advances
+# the gate.
 make_task parked
 export FAKE_CREW_STATE="$PARKED"
 out=$(tick parked $((NOW + 3600)))
-[ "$out" = no-active-run ] || fail "a parked gate must never be activated (got '$out')"
-[ "$(sent_count parked)" = 0 ] || fail "no activation may reach a crew parked on a decision"
-pass "a parked decision is suppressed"
+[ "$out" = sent ] || fail "a gate-parked run must be kept warm (got '$out')"
+[ "$(sent_count parked)" = 1 ] || fail "exactly one activation for a parked crew"
+assert_grep "$FM_NM_KEEPWARM_MESSAGE" "$SENT_LOG" "the parked activation must carry the benign keep-warm text"
+pass "a gate-parked run is kept warm"
+
+# The parked verdict only remains the crew's run when it is attributed to a
+# run-step. A status-log-only parked verdict - a needs-decision line with no
+# run at all - is decision history, not a live gate, and must never be warmed.
+make_task logparked
+export FAKE_CREW_STATE='state: parked · source: status-log · needs-decision'
+out=$(tick logparked $((NOW + 3600)))
+[ "$out" = no-active-run ] || fail "a status-log-only parked verdict must not be warmed (got '$out')"
+[ "$(sent_count logparked)" = 0 ] || fail "no activation may reach a crew with no attributed run"
+pass "a status-log-only parked verdict is never kept warm"
 
 # --- terminal run behavior --------------------------------------------------
 
@@ -188,6 +203,23 @@ out=$(tick terminal $((NOW + 3600)))
 out=$(tick terminal $((NOW + 3601)))
 [ "$out" = not-due ] || fail "a terminal refusal must re-anchor the clock (got '$out')"
 pass "a terminal run is never kept warm"
+
+# A failed run is terminal the same way, however its verdict is phrased.
+make_task failed
+export FAKE_CREW_STATE='state: failed · source: run-step · nm run r1 failed'
+out=$(tick failed $((NOW + 3600)))
+[ "$out" = no-active-run ] || fail "a failed run must not be kept warm (got '$out')"
+[ "$(sent_count failed)" = 0 ] || fail "no activation may reach a crew whose run failed"
+pass "a failed run is never kept warm"
+
+# A gate log the run has moved past reads as a superseded terminal verdict: the
+# run finished, so the crew is not waiting anything out any more.
+make_task superseded
+export FAKE_CREW_STATE='state: done · source: run-step · nm run r1 checks-passed · status-log superseded (run done)'
+out=$(tick superseded $((NOW + 3600)))
+[ "$out" = no-active-run ] || fail "a superseded terminal run must not be kept warm (got '$out')"
+[ "$(sent_count superseded)" = 0 ] || fail "no activation may reach a crew whose superseding run is terminal"
+pass "a superseded terminal run is never kept warm"
 
 # A crew with no attributed run at all (pre-validation) is the same no-op.
 make_task norun

@@ -1186,12 +1186,12 @@ families_for_changed_path() {
       printf '%s\n' watcher-wake-lock
       printf '%s\n' "__script__:fm-procevent-quota.test.sh"
       ;;
-    bin/fm-pr-*|bin/fm-merge-local.sh|bin/fm-task-register.sh|bin/fm-teardown.sh|bin/fm-review-diff.sh|\
+    bin/fm-pr-*|bin/fm-merge-local.sh|bin/fm-task-register.sh|bin/fm-task-adhoc-lib.sh|bin/fm-teardown.sh|bin/fm-review-diff.sh|\
     bin/fm-x-*|bin/fm-check*)
       printf '%s\n' pr-forge
       ;;
 
-    bin/fm-nm-guard-lib.sh|bin/fm-nm-guard-shim.sh|bin/fm-nm-status-lib.sh|bin/shims/*)
+    bin/fm-nm-guard-lib.sh|bin/fm-nm-guard-shim.sh|bin/shims/*)
       printf '%s\n' pure-contract-unit
       ;;
     bin/fm-nm-keepwarm-lib.sh)
