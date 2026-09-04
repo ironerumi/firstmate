@@ -94,7 +94,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
 | `fm-worktree-guard-lib.sh` | Decide whether a worker command would destroy a path outside its own task worktree (docs/worktree-guard.md) |
 | `fm-worktree-guard-shim.sh` | PATH-shim transport for that decision, reached as `bin/shims/rm`, `rmdir`, `unlink`, `mv`, and `treehouse`; `bin/shims/git` carries it through `fm-nm-guard-shim.sh` |
-| `fm-nm-keepwarm-lib.sh`  | Decide whether a Claude crew quietly waiting out its own no-mistakes run or parked at a gate is due one benign keep-warm activation |
+| `fm-nm-keepwarm-lib.sh`  | Decide whether a Claude crew quietly waiting out its own live no-mistakes run, working or parked at an attributed gate, is due one benign keep-warm activation |
 | `fm-merge-wait-lib.sh`   | Shared predicate for a ready PR waiting on the captain with no durable record of that wait |
 | `fm-tangle-lib.sh`       | Shared default-branch resolution and primary-checkout tangle classification          |
 | `fm-timeout-lib.sh`      | Single owner of hard-bounded command execution and its fallback watchdog |

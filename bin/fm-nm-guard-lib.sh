@@ -9,8 +9,7 @@
 # pipeline work in one twelve-day window, none of it a review-quality signal.
 #
 # This library classifies what a worker command WOULD DO to the live run, and
-# combines that with the run state it reads from the worktree itself (the run
-# read below is folded in from the former bin/fm-nm-status-lib.sh). It never
+# combines that with the run state it reads from the worktree itself. It never
 # executes the command, and it is deliberately blind to everything that does not
 # take ownership away from a live run: inspection, attachment, and the gate
 # response path are always allowed, and any command that is not a no-mistakes

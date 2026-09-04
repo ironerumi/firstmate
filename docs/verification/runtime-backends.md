@@ -976,11 +976,12 @@ FM_HARNESS_LIVENESS_DRIFT=1 bin/fm-test-run.sh tests/fm-harness-liveness-drift-l
 
 ## Claude commit attribution suppression
 
-Claude crew commits carry no vendor attribution because the user-global `~/.claude/settings.json` carries the attribution object, verified on 2026-09-04 with Claude Code 2.1.260 (macOS arm64).
+[`docs/configuration.md`](../configuration.md#harness-support) owns the current operator setup and the boundary between user-global attribution settings and spawned-worktree lifecycle hooks.
+That configuration was verified on 2026-09-04 with Claude Code 2.1.260 (macOS arm64).
 
 `bin/fm-spawn.sh` writes no per-worker attribution any more: the project-level `settings.local.json` it generates for claude crews carries only the lifecycle hooks, byte-identical to upstream; the global object does not get overridden because that project file sets no attribution key.
 
-The user-global object has the following shape:
+The verified user-global object has the following shape:
 
 ```json
 {"attribution":{"commit":"","sessionUrl":false}}
