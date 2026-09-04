@@ -989,13 +989,15 @@ The user-global object has the following shape:
 `attribution.commit` is an empty string, which hides the `Co-Authored-By` commit trailer, and `attribution.sessionUrl` is `false`, which omits the `Claude-Session:` claude.ai link.
 The deprecated `includeCoAuthoredBy` key is not used.
 
-The live guard injects the object through `claude --settings`, the same merged settings view a user-global settings file resolves into, because `CLAUDE_CONFIG_DIR` redirection breaks OAuth refresh in this install; the real HOME and managed auth stay in place.
+All three live-guard arms pass an explicit attribution object through `claude --settings`, so none depends on the ambient user-global settings file.
+This is the same merged settings view a user-global settings file resolves into, because `CLAUDE_CONFIG_DIR` redirection breaks OAuth refresh in this install; the real HOME and managed auth stay in place.
 
 Reproduction, in a throwaway git repo with the production settings in effect and `claude --version` reporting `2.1.260`:
 
 ```sh
-# baseline (no attribution anywhere):
-claude -p --dangerously-skip-permissions --model claude-sonnet-4-5 \
+# baseline (attribution explicitly enabled):
+claude --settings '{"attribution":{"commit":"Co-Authored-By: Claude <noreply@anthropic.com>","sessionUrl":false}}' \
+  -p --dangerously-skip-permissions --model claude-sonnet-4-5 \
   "Append a line 'change' to f.txt, then create a git commit with the message 'probe baseline'."
 git log -1 --format=%B
 # candidate (user-global object present):
@@ -1008,15 +1010,16 @@ git log -1 --format=%B
 Observed commit bodies:
 
 ```text
-# baseline:
+# baseline (attribution explicitly enabled):
 probe baseline
 
-Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude <noreply@anthropic.com>
 
 # candidate (user-global attribution object present):
 probe candidate
 ```
 
+The explicitly enabled baseline carries the trailer, proving that the clean candidate and composed bodies result from the suppression object rather than an environment that never emits attribution.
 The candidate body contains no `Co-Authored-By:` line and no `Claude-Session:` / `claude.ai/code` line, and the composed run with the spawn's hooks-only `settings.local.json` in the repo still suppresses both, so the project file never re-enables the trailer.
 The `Claude-Session:` line only appears for web or Remote Control sessions; `attribution.sessionUrl=false` short-circuits the session-URL lookup before any such line can be appended.
 

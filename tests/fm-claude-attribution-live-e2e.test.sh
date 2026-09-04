@@ -5,8 +5,9 @@
 # (attribution.commit="" + attribution.sessionUrl=false, captain-approved);
 # bin/fm-spawn.sh writes no per-worker attribution any more, only the lifecycle
 # hooks in <worktree>/.claude/settings.local.json. This guard drives the real
-# installed Claude Code twice, proving that shape end to end:
-#   baseline - no attribution anywhere: the Co-Authored-By trailer appears.
+# installed Claude Code three times, proving that shape end to end:
+#   baseline - attribution explicitly enabled: the Co-Authored-By trailer
+#     appears.
 #   candidate - the user-global attribution object present: the same commit
 #     carries neither the trailer nor any Claude-Session claude.ai line.
 #   composed - the spawn's hooks-only settings.local.json sits in the repo
@@ -14,10 +15,11 @@
 #     production composition never re-enables the trailer.
 # The baseline run keeps the guard from going quietly vacuous - a regression
 # that lets the trailer through fails loudly naming the harness and version.
-# The attribution object is injected through `claude --settings`, the same
-# merged settings view a user-global settings.json resolves into, because
-# CLAUDE_CONFIG_DIR redirection breaks OAuth refresh in this install; the real
-# HOME and managed auth stay in place.
+# All three arms pass an explicit attribution object through `claude
+# --settings`, so none depends on the ambient user-global settings file.
+# This is the same merged settings view a user-global settings.json resolves
+# into, because CLAUDE_CONFIG_DIR redirection breaks OAuth refresh in this
+# install; the real HOME and managed auth stay in place.
 # The project is isolated under a lab root.
 set -u
 
@@ -39,6 +41,8 @@ command -v claude >/dev/null 2>&1 || fail "claude not found: the attribution liv
 CLAUDE_VERSION=$(claude --version) || fail "claude --version failed"
 CLAUDE_BIN=$(command -v claude)
 CLAUDE_MODEL=${FM_CLAUDE_ATTRIBUTION_MODEL:-claude-sonnet-4-5}
+# The explicit attribution shape that makes the baseline's trailer observable.
+ENABLED_SHAPE='{"attribution":{"commit":"Co-Authored-By: Claude <noreply@anthropic.com>","sessionUrl":false}}'
 # The user-global attribution shape firstmate deploys to ~/.claude/settings.json.
 GLOBAL_SHAPE='{"attribution":{"commit":"","sessionUrl":false}}'
 # The hooks-only settings.local.json bin/fm-spawn.sh now writes for claude
@@ -95,11 +99,11 @@ no_co_author() {  # <commit-body>
   return 0
 }
 
-# Baseline: no attribution anywhere. The trailer must appear; if it does not,
-# the guard's divergence assumption is broken and it must not pass silently.
-BASELINE_BODY=$(claude_commit "attribution live guard baseline")
+# Baseline: attribution is explicitly enabled. The trailer must appear to prove
+# that the candidate and composed suppression results are not vacuous.
+BASELINE_BODY=$(claude_commit "attribution live guard baseline" --settings "$ENABLED_SHAPE")
 printf '%s\n' "$BASELINE_BODY" | grep -q '^Co-Authored-By: ' \
-  || fail "claude $CLAUDE_VERSION baseline commit carried no Co-Authored-By trailer; divergence assumption broken"
+  || fail "claude $CLAUDE_VERSION emitted no Co-Authored-By trailer with attribution explicitly enabled; suppression comparison is vacuous"
 
 # Candidate: the user-global attribution object present (via --settings, the
 # merged settings view the global file resolves into, with the real global
