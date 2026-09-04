@@ -1,0 +1,94 @@
+ok - quiet just under 30 minutes sends nothing
+ok - quiet reaching 30 minutes sends exactly one activation
+ok - an activation resets the cadence; no duplicate before the next interval
+ok - a normal worker turn resets the cadence
+ok - a crew-authored status event resets the cadence
+ok - an active turn without an attributed run is suppressed
+ok - a gate-parked run is kept warm
+ok - a status-log-only parked verdict is never kept warm
+ok - a terminal run is never kept warm
+ok - a failed run is never kept warm
+ok - a superseded terminal run is never kept warm
+ok - a crew with no run is never kept warm
+ok - restart replays the same anchor without duplicating the activation
+ok - a first sighting seeds the clock rather than activating immediately
+ok - a refused send retries after the bounded delay, not another full interval
+ok - only a delivered activation restarts the full interval
+ok - only a confirmed-empty composer is typed into
+ok - a deferral retries after the bounded delay
+ok - an endpoint that cannot be read is never typed into
+ok - a backend with no composer classifier is never typed into
+ok - the retry delay doubles and is capped at one interval
+ok - a real worker turn clears the miss history
+ok - having no run to keep warm never consumes the delivery retry
+ok - every non-Claude harness is an untouched no-op
+ok - a secondmate's idle-by-charter pane is never kept warm
+ok - keep-warm can be disabled for a home
+ok - a task with no metadata is a no-op
+ok - keep-warm rides the existing watcher loop with one call site
+ok - fm-task-register creates private ad-hoc metadata with the fields its consumers read
+ok - fm-task-register never overwrites an existing task identity
+ok - fm-task-register rejects unsafe task IDs before writing state
+ok - a drifted ad-hoc record is refused at teardown with state preserved
+ok - a registered ad-hoc identity supports guarded merge recording and non-destructive cleanup
+ok - claude spawn settings carry the hooks and no per-worker attribution object
+ok - non-claude spawn carries no claude settings file
+# all fm-spawn-claude-attribution tests passed
+ok - a second axi run is refused while a run is live
+ok - rerun is refused while a run is live
+ok - aborting a working run is refused and names the run
+ok - a superseding push is refused while a run is live
+ok - inspection and reconnection stay permitted under a live run
+ok - the axi respond continuation path is permitted and passes arguments through
+ok - help for a refused subcommand stays readable
+ok - unrelated git commands and dry-run pushes are never refused
+ok - abandoning an answerable gate is refused and points at the gate response
+ok - the parked gate can still be answered
+ok - a replacement run after an unreported failure is refused with the evidence path
+ok - recording the failure clears the refusal
+ok - a failed run outside this worktree's history never gates it
+ok - a run cancelled at a gate stays terminal and clears through the reporting path
+ok - a gate row never bypasses the failed-run code-identity test
+ok - an unrecognized run word stays permissive even with a gate row
+ok - a genuinely new run and push after a terminal run are not interfered with
+ok - another branch's run never gates this one
+ok - a task with no branch of its own is never gated
+ok - an unreadable pipeline answer fails open
+ok - an absent no-mistakes binary fails open
+ok - FM_NM_GUARD_ALLOW=1 allows an authorized recovery
+ok - argv classification is exact for every documented shape
+ok - the decision table matches the documented contract
+ok - fm-spawn wires the shims once, through the backend-agnostic pane environment
+ok - both shims are one owner reached under two names
+ok - fm-nm-guard.test.sh
+ok - the decision matrix matches the documented contract
+ok - the temp namespace is an explicit, configurable allowance rather than a hole
+ok - rm of a sibling worktree is refused end to end and the sibling survives
+ok - mv out of the home's state directory is refused end to end
+ok - a dotted sibling task id cannot collide with this task's allowances
+ok - intermediate symlinks cannot escape the worker's root
+ok - in-root symlinks preserve the fronted tool's final-component semantics
+ok - remove tools judge trailing-slash symlink targets physically
+ok - move destinations follow directory symlinks without widening source semantics
+ok - ordinary long options preserve move destination classification
+ok - move sources preserve trailing-slash dereference semantics
+ok - mv attached option arguments are classified by their option semantics
+ok - the worker's own worktree, records, and scratch stay fully usable
+ok - git worktree remove of a live sibling worktree is refused end to end
+ok - an external canonical common directory refuses a linked worker's nested removal
+ok - an in-root canonical common directory permits a standalone nested removal
+ok - worktree pruning is refused while its dry run stays available
+ok - git worktree refusal uses the portable bounded-execution owner
+ok - git worktree commands judge the selected repository
+ok - FM_WORKTREE_GUARD_ALLOW=1 allows a removal firstmate has authorized
+ok - an authorized firstmate-owned parent process is not refused
+ok - the cleanup path that owns worktree removal is not itself guarded
+ok - the guard is inert wherever the worker's own root cannot be established
+ok - every public filesystem and pool shim enforces observable behavior
+ok - a second firstmate home's shims on PATH cannot loop the transport
+ok - a wrapper that resolves back to the shim fails fast instead of hanging
+ok - fm-worktree-guard.test.sh
+ok - documentation inventory classifies every maintained prose surface exactly once
+ok - classification, setup routing, and maintained-prose scope fail safely
+ok - required documentation owner pointers cannot silently disappear
+ok - local links resolve while dates, versions, commands, and incident prose remain semantically reviewed
