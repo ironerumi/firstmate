@@ -10,10 +10,10 @@
 # backend because bin/fm-spawn.sh sends it through the backend-agnostic text
 # path. docs/nm-validation-owner-guard.md owns the full contract and its reach.
 #
-# The classification lives in bin/fm-nm-guard-lib.sh and the run read lives in
-# bin/fm-nm-status-lib.sh. This file only resolves the real tool, asks those two
-# owners, renders one refusal, and otherwise execs the real tool with the
-# arguments it was given, unchanged. It also asks the worktree-isolation guard
+# The classification and the run read both live in bin/fm-nm-guard-lib.sh. This
+# file only resolves the real tool, asks that owner, renders one refusal, and
+# otherwise execs the real tool with the arguments it was given, unchanged. It
+# also asks the worktree-isolation guard
 # (bin/fm-worktree-guard-lib.sh, docs/worktree-guard.md) first, because `git` is
 # a tool both guards front; that guard renders its own refusal and never changes
 # this one's classification.

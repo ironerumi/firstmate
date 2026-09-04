@@ -12,6 +12,11 @@
 # from its last model turn to the pipeline's next gate without making a single
 # turn in between. Its prompt cache expires in that gap, so the continuation
 # re-reads the whole conversation prefix at full price and latency.
+# The longest gaps are exactly the parked-at-gate waits: a crew held on an
+# ask-user finding can sit cold for well over an hour with no pipeline turn of
+# its own in between. A parked gate is therefore kept warm exactly like an
+# active step, and the activation text still forbids answering or advancing the
+# gate while it is.
 #
 # What warms the cache is a MODEL TURN, not terminal activity: a repainted pane,
 # a spinner, or a keystroke that never submits leaves the cache untouched. So
@@ -28,12 +33,14 @@
 #     cosmetic one.
 #
 # Safety. The activation is benign by construction: it asks the worker to
-# inspect its existing run and keep waiting. It is sent only while
-# bin/fm-crew-state.sh reports `working` from an attributed `run-step`, so a
-# parked gate, a terminal run, and a crew with no run at all are all excluded,
-# and callers only reach the tick on a confirmed-idle pane so an active turn is
-# never interrupted. Nothing here queues a wake, writes a status line, or
-# otherwise reaches the captain.
+# inspect its existing run and keep waiting, and it is read-only toward the
+# gate: a keep-warm turn on a parked crew must not answer, disturb, or advance
+# the gate while it sits there. It is sent only while bin/fm-crew-state.sh
+# reports `working` or a gate-`parked` state from an attributed `run-step`, so
+# a terminal run, a status-log-only parked verdict (no run at all), and a crew
+# with no run are all excluded, and callers only reach the tick on a
+# confirmed-idle pane so an active turn is never interrupted. Nothing here
+# queues a wake, writes a status line, or otherwise reaches the captain.
 #
 # Idle is not the same as ready to receive, so the last gate before typing is
 # the same composer guard the away-mode daemon's unattended injection enforces
@@ -100,7 +107,7 @@ FM_NM_KEEPWARM_HARNESSES_DEFAULT='claude'
 # action the crew must not take while the pipeline owns the branch: no second
 # run, no push, no gate answer, and no status line (which would surface routine
 # progress to the captain).
-FM_NM_KEEPWARM_MESSAGE='Keep-warm check while your no-mistakes run is still active: run no-mistakes axi status to confirm it is still progressing, then keep waiting. Do not start or restart a run, do not push, do not abort or answer a gate on your own, and do not append a status line for this check.'
+FM_NM_KEEPWARM_MESSAGE='Keep-warm check while your no-mistakes run is still in progress or parked at a gate: run no-mistakes axi status to confirm where it is, then keep waiting. Do not start or restart a run, do not push, do not abort or answer a gate on your own, and do not append a status line for this check.'
 
 fm_nm_keepwarm_now() {
   if [ -n "${FM_NM_KEEPWARM_NOW:-}" ]; then
@@ -251,10 +258,12 @@ fm_nm_keepwarm_last_activation() {  # <state> <id>
   printf '%s' "$newest"
 }
 
-# 0 when bin/fm-crew-state.sh reports an attributed no-mistakes run that is
-# actively working. `parked` (a gate awaiting a decision), the terminal states,
-# and a `pane`-sourced working verdict all fail this on purpose: only a run the
-# crew is genuinely waiting out earns an activation.
+# 0 when bin/fm-crew-state.sh reports an attributed no-mistakes run the crew is
+# still waiting out: `working` mid-pipeline or `parked` at a no-mistakes gate
+# awaiting a firstmate/captain decision. Both are long quiet stretches that
+# earn an activation. The terminal states, a status-log-only parked verdict
+# (no run attributed), and a `pane`-sourced working verdict all fail this on
+# purpose: only an attributed live run earns an activation.
 # The home is passed explicitly because bin/fm-crew-state.sh resolves its state
 # directory from FM_HOME: a watcher that inherited no exported home would
 # otherwise read another home's records to decide whether to steer this crew.
@@ -263,7 +272,7 @@ fm_nm_keepwarm_run_active() {  # <home> <id>
   line=$(env FM_HOME="$home" "$FM_CREW_STATE_BIN" "$id" 2>/dev/null) || return 1
   case "$line" in state:*) ;; *) return 1 ;; esac
   state=${line#state: }; state=${state%% *}
-  [ "$state" = working ] || return 1
+  case "$state" in working|parked) ;; *) return 1 ;; esac
   case "$line" in *"source: "*) ;; *) return 1 ;; esac
   src=${line#*source: }; src=${src%% *}
   [ "$src" = run-step ]
@@ -307,7 +316,7 @@ fm_nm_keepwarm_send() {  # <home> <id>
 #   disabled      keep-warm turned off for this home
 #   seeded        first sighting with no prior signal; the clock starts now
 #   not-due       still inside the quiet interval
-#   no-active-run no attributed, actively-working no-mistakes run to keep warm
+#   no-active-run no attributed live no-mistakes run (working or parked at a gate) to keep warm
 #   deferred      the pane is not a confirmed-empty composer, so nothing was typed
 #   sent          activation delivered
 #   send-failed   the send path refused or could not confirm submission

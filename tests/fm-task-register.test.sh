@@ -96,6 +96,51 @@ test_refuses_invalid_id() {
   pass "fm-task-register rejects unsafe task IDs before writing state"
 }
 
+test_refuses_drifted_or_forged_adhoc_record_at_teardown() {
+  # The ad-hoc metadata-only authorization admits only exactly what the
+  # register script writes. A drifted or forged kind=adhoc record that gains an
+  # endpoint, worktree, or temp root must be refused at teardown with its
+  # durable records preserved, so it can never skip endpoint validation and
+  # still reach the branch deletion and worktree return teardown performs.
+  local case_dir meta rc before after
+  case_dir=$(make_case forged)
+  meta="$case_dir/state/adhoc-forged.meta"
+  add_merge_mocks "$case_dir"
+  cat > "$meta" <<EOF
+window=
+worktree=
+project=$ROOT
+harness=adhoc
+kind=adhoc
+mode=no-mistakes
+yolo=on
+tasktmp=
+model=default
+effort=default
+home=$(cd "$case_dir/home" && pwd -P)
+EOF
+  printf '%s\n' 'window=fulcrum:live-crew' >> "$meta"
+  before=$(shasum -a 256 "$meta" | awk '{print $1}')
+
+  set +e
+  FM_ROOT_OVERRIDE="$ROOT" \
+  FM_HOME="$case_dir/home" \
+  FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_DATA_OVERRIDE="$case_dir/home/data" \
+  FM_CONFIG_OVERRIDE="$case_dir/home/config" \
+  PATH="$case_dir/fakebin:$PATH" \
+    "$TEARDOWN" adhoc-forged > "$case_dir/teardown.stdout" 2> "$case_dir/teardown.stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "forged: teardown must refuse a drifted ad-hoc record"
+  assert_grep 'non-empty window' "$case_dir/teardown.stderr" \
+    "forged: refusal did not name the drifted endpoint key"
+  after=$(shasum -a 256 "$meta" | awk '{print $1}')
+  [ "$before" = "$after" ] || fail "forged: a refused teardown changed the durable record"
+  pass "a drifted ad-hoc record is refused at teardown with state preserved"
+}
+
 add_merge_mocks() {
   local case_dir=$1
   # fm-pr-merge.sh reads the pull request back and refuses an outcome it cannot
@@ -160,4 +205,5 @@ test_registered_identity_merges_and_cleans_up() {
 test_registers_private_adhoc_meta
 test_refuses_existing_meta_without_mutation
 test_refuses_invalid_id
+test_refuses_drifted_or_forged_adhoc_record_at_teardown
 test_registered_identity_merges_and_cleans_up

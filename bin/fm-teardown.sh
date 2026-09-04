@@ -61,9 +61,8 @@
 # captain's active tab, and restore the exact response-derived pre-close tab
 # if Herdr's last-pane cleanup focuses an unrelated neighboring workspace.
 # Ad-hoc primary-session tasks (kind=adhoc in meta) have no worker endpoint or
-# isolated worktree. Their cleanup removes only volatile task records and never
-# kills an endpoint, removes a worktree, refreshes a clone, or emits a backlog
-# reminder. bin/fm-task-register.sh owns that metadata shape.
+# isolated worktree. Their cleanup removes only volatile task records;
+# bin/fm-task-adhoc-lib.sh owns that metadata-only shape and its authorization.
 # Secondmates (kind=secondmate in meta) are retired explicitly. Normal
 # teardown refuses while their home has in-flight crewmate meta files; --force
 # is the approved discard path that prevalidates child removal targets, locks each
@@ -182,6 +181,8 @@ SUB_HOME_PARENT_MARKER=".fm-secondmate-parent"
 . "$SCRIPT_DIR/fm-backlog-transition-lib.sh"
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-task-adhoc-lib.sh
+. "$SCRIPT_DIR/fm-task-adhoc-lib.sh"
 # shellcheck source=bin/fm-control-lib.sh
 . "$SCRIPT_DIR/fm-control-lib.sh"
 # shellcheck source=bin/fm-lock-lib.sh
@@ -730,50 +731,14 @@ else
 fi
 [ "$remote_teardown_rc" -eq 3 ] || exit "$remote_teardown_rc"
 
-# An ad-hoc primary-session ship (bin/fm-task-register.sh) deliberately records
-# no window, worktree, or runtime endpoint, so fm_backend_validate_task_endpoint
-# can never pass for it. This is the equivalent metadata-only authorization for
-# that shape: it admits only exactly what fm-task-register.sh writes, so a
-# drifted or forged kind=adhoc record cannot skip endpoint validation and still
-# reach the branch deletion and worktree return below.
-validate_adhoc_task_record() {  # <meta-file> <task-id>
-  local meta=$1 id=$2 harness project key
-  [ -f "$meta" ] && [ ! -L "$meta" ] || {
-    echo "REFUSED: task $id has no regular endpoint metadata at $meta; preserving task state." >&2
-    return 1
-  }
-  case "$id" in ''|*[!A-Za-z0-9._-]*)
-    echo "REFUSED: task endpoint identity has an invalid task id; preserving task state." >&2
-    return 1
-    ;;
-  esac
-  harness=$(fm_backend_meta_exact_value "$meta" harness) || harness=
-  [ "$harness" = adhoc ] || {
-    echo "REFUSED: task $id has a missing, ambiguous, or non-ad-hoc harness identity; preserving task state." >&2
-    return 1
-  }
-  project=$(fm_backend_meta_exact_value "$meta" project) || {
-    echo "REFUSED: task $id has a missing, empty, or ambiguous project identity; preserving task state." >&2
-    return 1
-  }
-  case "$project" in *$'\r'*|*$'\t'*)
-    echo "REFUSED: task $id has malformed endpoint metadata; preserving task state." >&2
-    return 1
-    ;;
-  esac
-  for key in window worktree tasktmp; do
-    if grep -q "^$key=." "$meta" 2>/dev/null; then
-      echo "REFUSED: ad-hoc task $id records a non-empty $key it must not own; preserving task state." >&2
-      return 1
-    fi
-  done
-}
-
 # This is the first cleanup authorization check. It is metadata-only and must
 # complete before fm-guard, a backend command, file removal, branch deletion,
 # worktree return, registry change, or process termination can run.
-KIND_EXACT=$(fm_backend_meta_exact_value "$META" kind) || KIND_EXACT=
-if [ "$KIND_EXACT" = adhoc ]; then
+# A direct primary-session ship (kind=adhoc) has no endpoint or worktree by
+# design; bin/fm-task-adhoc-lib.sh owns the metadata-only authorization for
+# that shape, and the kind=adhoc exclusions below are its no-endpoint,
+# no-worktree, no-clone consequences.
+if fm_task_adhoc_is_record "$META"; then
   validate_adhoc_task_record "$META" "$ID" || exit 1
   BACKEND=adhoc
   T=

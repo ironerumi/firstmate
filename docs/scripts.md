@@ -90,12 +90,11 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-supervise-daemon.sh` | Presence-gated away-mode sub-supervisor: self-handle routine wakes, guard injection by the detected primary harness, escalate batched digests, alert on failed delivery |
 | `fm-crew-state.sh`       | Print one deterministic current-state line for a crew                                |
 | `fm-nm-run-lib.sh`       | Single owner of shared no-mistakes run-attribution primitives and rules             |
-| `fm-nm-status-lib.sh`    | Shared bounded read of a worktree's no-mistakes run: invocation, TOON field, code identity, run state, used by the validation-owner guard |
-| `fm-nm-guard-lib.sh`     | Decide whether a worker command would take validation ownership from a live run (docs/nm-validation-owner-guard.md) |
+| `fm-nm-guard-lib.sh`     | Own the validation-owner decision: classify what a worker command would do to a live run and read that run from the worktree (bounded invocation, TOON field, code identity, run state), then refuse only ownership-taking commands (docs/nm-validation-owner-guard.md) |
 | `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
 | `fm-worktree-guard-lib.sh` | Decide whether a worker command would destroy a path outside its own task worktree (docs/worktree-guard.md) |
 | `fm-worktree-guard-shim.sh` | PATH-shim transport for that decision, reached as `bin/shims/rm`, `rmdir`, `unlink`, `mv`, and `treehouse`; `bin/shims/git` carries it through `fm-nm-guard-shim.sh` |
-| `fm-nm-keepwarm-lib.sh`  | Decide whether a Claude crew quietly waiting out its own no-mistakes run is due one benign keep-warm activation |
+| `fm-nm-keepwarm-lib.sh`  | Decide whether a Claude crew quietly waiting out its own no-mistakes run or parked at a gate is due one benign keep-warm activation |
 | `fm-merge-wait-lib.sh`   | Shared predicate for a ready PR waiting on the captain with no durable record of that wait |
 | `fm-tangle-lib.sh`       | Shared default-branch resolution and primary-checkout tangle classification          |
 | `fm-timeout-lib.sh`      | Single owner of hard-bounded command execution and its fallback watchdog |
@@ -136,6 +135,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-merge-outcome-lib.sh` | Publish a confirmed merge's durable, role-routed supervision outcome                 |
 | `fm-promote.sh`          | Promote a scout task in place to a protected ship task with an explicit delivery mode, and write the ship instructions carrying that mode's definition of done |
 | `fm-task-register.sh`    | Create-only register an ad-hoc primary-session ship's task identity so PR recording, guarded merge, and cleanup have meta |
+| `fm-task-adhoc-lib.sh`   | Metadata-only cleanup contract for a direct primary-session ship (kind=adhoc): shape predicate and the refusal that admits only exactly what fm-task-register.sh writes |
 | `fm-teardown.sh`         | Fail-closed teardown: return landed ship worktrees, require completed scout deliverables, retire secondmate homes |
 | `fm-harness.sh`          | Detect the running harness and resolve crew or secondmate harness, model, and effort |
 | `fm-lock.sh`             | Per-home firstmate session lock                                                      |
