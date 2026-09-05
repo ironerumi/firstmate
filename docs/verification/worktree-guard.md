@@ -44,7 +44,8 @@ ok - fm-worktree-guard.test.sh
 
 `tests/fm-backend-orca.test.sh` proves the spawn wiring line carries `FM_WORKTREE_GUARD_META` and the shim PATH through a non-default backend's own send path.
 
-Because the shimmed tool set grows from two names to seven, the whole affected suite was also re-run with this branch's `bin/shims` at the front of `PATH` - the pane every worker gets once this lands - and every fixture that captures a real tool now resolves it with `fm_real_tool`, or strips the shim directory from `PATH` in the one suite that cannot load `lib.sh`.
+`tests/fm-test-run.test.sh` proves the canonical runner removes every inherited `bin/shims` entry while preserving empty and newline-terminated `PATH` components.
+Fixtures that deliberately construct a guarded `PATH` continue to use `fm_real_tool` where they need to reach the underlying tool.
 
 ## Live worker evidence
 
