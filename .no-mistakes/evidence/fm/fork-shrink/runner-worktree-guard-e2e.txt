@@ -1,0 +1,32 @@
+FM_TEST_BEGIN 2026-09-05T14:02:42Z tests/fm-worktree-guard.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - the decision matrix matches the documented contract
+ok - the temp namespace is an explicit, configurable allowance rather than a hole
+ok - rm of a sibling worktree is refused end to end and the sibling survives
+ok - mv out of the home's state directory is refused end to end
+ok - a dotted sibling task id cannot collide with this task's allowances
+ok - intermediate symlinks cannot escape the worker's root
+ok - in-root symlinks preserve the fronted tool's final-component semantics
+ok - remove tools judge trailing-slash symlink targets physically
+ok - move destinations follow directory symlinks without widening source semantics
+ok - ordinary long options preserve move destination classification
+ok - move sources preserve trailing-slash dereference semantics
+ok - mv attached option arguments are classified by their option semantics
+ok - the worker's own worktree, records, and scratch stay fully usable
+ok - git worktree remove of a live sibling worktree is refused end to end
+ok - an external canonical common directory refuses a linked worker's nested removal
+ok - an in-root canonical common directory permits a standalone nested removal
+ok - worktree pruning is refused while its dry run stays available
+ok - git worktree refusal uses the portable bounded-execution owner
+ok - git worktree commands judge the selected repository
+ok - FM_WORKTREE_GUARD_ALLOW=1 allows a removal firstmate has authorized
+ok - an authorized firstmate-owned parent process is not refused
+ok - the cleanup path that owns worktree removal is not itself guarded
+ok - the guard is inert wherever the worker's own root cannot be established
+ok - every public filesystem and pool shim enforces observable behavior
+ok - a second firstmate home's shims on PATH cannot loop the transport
+ok - a wrapper that resolves back to the shim fails fast instead of hanging
+ok - fm-worktree-guard.test.sh
+FM_TEST_END 2026-09-05T14:02:47Z tests/fm-worktree-guard.test.sh exit=0 duration_ms=5393 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=5451
+FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=1 duration_ms=5393 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-worktree-guard.test.sh duration_ms=5393
