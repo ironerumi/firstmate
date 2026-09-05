@@ -143,7 +143,7 @@ cd "$ROOT" || exit 1
 # not by this task's own $ROOT, so it catches a shim directory exported by any
 # firstmate home.
 fm_test_run_strip_shims_from_path() {
-  local entry out= remaining="${PATH-}:" separator=
+  local entry out='' remaining="${PATH-}:" separator=''
   while [[ $remaining == *:* ]]; do
     entry=${remaining%%:*}
     remaining=${remaining#*:}
