@@ -166,7 +166,7 @@ mkdir -p "$SM_HOME/state" "$SM_HOME/config" "$SM_HOME/projects" "$SM_HOME/bin" "
 printf 'off\n' > "$SM_HOME/config/herdr-presentation-spaces"
 printf '# scratch secondmate home AGENTS.md placeholder\n' > "$SM_HOME/AGENTS.md"
 printf '%s\n' "$SM_ID" > "$SM_HOME/.fm-secondmate-home"
-printf 'source: human\nbatch_id: test-fixture\ntrivial e2e secondmate charter: nothing to do.\n' > "$SM_HOME/data/charter.md"
+printf 'trivial e2e secondmate charter: nothing to do.\n' > "$SM_HOME/data/charter.md"
 
 SM2_ID="lwsm2"
 SM2_HOME="$TMP_ROOT/secondmate-home-2"
@@ -174,7 +174,7 @@ mkdir -p "$SM2_HOME/state" "$SM2_HOME/config" "$SM2_HOME/projects" "$SM2_HOME/bi
 printf 'off\n' > "$SM2_HOME/config/herdr-presentation-spaces"
 printf '# scratch secondmate home AGENTS.md placeholder\n' > "$SM2_HOME/AGENTS.md"
 printf '%s\n' "$SM2_ID" > "$SM2_HOME/.fm-secondmate-home"
-printf 'source: human\nbatch_id: test-fixture\ntrivial e2e secondmate charter: nothing to do.\n' > "$SM2_HOME/data/charter.md"
+printf 'trivial e2e secondmate charter: nothing to do.\n' > "$SM2_HOME/data/charter.md"
 
 # A third primary-shaped home that keeps presentation spaces ON through the
 # historical empty opt-in file, so the default-on migration is exercised against
@@ -185,12 +185,12 @@ mkdir -p "$PRES_HOME/state" "$PRES_HOME/config"
 
 for id in uniqA uniqB dupC dupD staleF smE presU presD; do
   mkdir -p "$PRIMARY_HOME/data/$id" "$SM_HOME/data/$id" "$PRES_HOME/data/$id"
-  printf 'source: human\nbatch_id: test-fixture\ntrivial launcher-placement brief: nothing to do.\n' > "$PRIMARY_HOME/data/$id/brief.md"
-  printf 'source: human\nbatch_id: test-fixture\ntrivial launcher-placement brief: nothing to do.\n' > "$SM_HOME/data/$id/brief.md"
-  printf 'source: human\nbatch_id: test-fixture\ntrivial launcher-placement brief: nothing to do.\n' > "$PRES_HOME/data/$id/brief.md"
+  printf 'trivial launcher-placement brief: nothing to do.\n' > "$PRIMARY_HOME/data/$id/brief.md"
+  printf 'trivial launcher-placement brief: nothing to do.\n' > "$SM_HOME/data/$id/brief.md"
+  printf 'trivial launcher-placement brief: nothing to do.\n' > "$PRES_HOME/data/$id/brief.md"
 done
 mkdir -p "$PRIMARY_HOME/data/$SM2_ID"
-printf 'source: human\nbatch_id: test-fixture\ntrivial secondmate charter brief: nothing to do.\n' > "$PRIMARY_HOME/data/$SM2_ID/brief.md"
+printf 'trivial secondmate charter brief: nothing to do.\n' > "$PRIMARY_HOME/data/$SM2_ID/brief.md"
 
 PROJ="$TMP_ROOT/scratch-project"; make_scratch_project "$PROJ"
 

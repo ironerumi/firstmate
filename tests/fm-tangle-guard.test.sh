@@ -88,7 +88,13 @@ test_guard_banner() {
   assert_contains "$out" "WORKTREE TANGLE" "read-only guard did not keep the tangle alarm"
   assert_contains "$out" "read-only session must leave restore work" "read-only guard did not explain restore ownership"
   assert_not_contains "$out" "checkout main" "read-only guard printed a state-changing restore command"
-  pass "fm-guard: bordered tangle banner fires only for a feature branch and suppresses repair commands in read-only mode"
+
+  git -C "$repo" branch develop main
+  git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/develop
+  out=$(run_guard "$repo")
+  assert_contains "$out" "not its default branch 'develop'" "guard did not resolve a non-main default branch"
+  assert_contains "$out" "checkout develop" "guard used the wrong restore branch for a non-main repository"
+  pass "fm-guard: bordered tangle banner resolves the default branch and suppresses repair commands in read-only mode"
 }
 
 # --- GUARD 2b: fm-bootstrap problem line ------------------------------------

@@ -38,8 +38,8 @@ fi
 BIN_DIR=$(CDPATH='' cd -- "$(dirname -- "$SELF")" 2>/dev/null && pwd -P) || BIN_DIR=""
 
 # True when <path>, followed through its whole symlink chain, is one of
-# firstmate's guard shims. A fixture that captured `command -v <tool>` inside a
-# worker pane holds a link to a shim link, so one hop is not enough.
+# firstmate's guard shims. A wrapper built while guard shims are deliberately on
+# PATH can hold a link to a shim link, so one hop is not enough.
 fm_worktree_guard_is_guard_shim() { # <path>
   local p=$1 link links=0
   while [ -L "$p" ] && [ "$links" -lt 10 ]; do
@@ -79,9 +79,8 @@ fm_worktree_guard_real_bin() { # <name>
     return 0
   done
   # Last resort: the standard system locations, when PATH held no usable
-  # candidate at all. A fixture that captures `command -v <tool>` inside a
-  # worker pane captures THIS shim, and a closed PATH built from those captures
-  # then contains no real tool - firstmate's own suites do exactly that.
+  # candidate at all. A closed PATH built from a captured shim contains no real
+  # tool; firstmate's guard regression suite constructs exactly that case.
   # Refusing to run the tool there would make the shim, rather than the guard,
   # the thing that broke the command.
   for entry in /bin /usr/bin /usr/local/bin /opt/homebrew/bin; do

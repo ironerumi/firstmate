@@ -58,7 +58,7 @@ make_case() {
   wt="$case_dir/wt"
   fakebin=$(make_fakebin "$case_dir/fake")
   mkdir -p "$home/data/$id" "$home/projects" "$home/state" "$home/config"
-  printf 'source: human\nbatch_id: test-fixture\nbrief for %s\n' "$id" > "$home/data/$id/brief.md"
+  printf 'brief for %s\n' "$id" > "$home/data/$id/brief.md"
   touch "$home/state/.last-watcher-beat"
   fm_git_worktree "$proj" "$wt" "wt-$name"
   printf '%s\n' "$case_dir|$home|$proj|$wt|$fakebin"

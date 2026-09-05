@@ -1254,7 +1254,33 @@ test_serial_drift_default_weight_guard() {
   pass "current portable-serial lane stays within the default-weight drift budget"
 }
 
+test_preserves_guard_shims_on_path() {
+  local tmp fixture out fake_shims
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-shims.XXXXXX")
+  fake_shims="$tmp/fake-home/bin/shims"
+  mkdir -p "$fake_shims"
+  ln -s "$ROOT/bin/fm-worktree-guard-shim.sh" "$fake_shims/rm"
+  fixture="$tmp/probe.test.sh"
+  out="$tmp/out.txt"
+  cat >"$fixture" <<'SH'
+#!/usr/bin/env bash
+resolved=$(command -v rm)
+[ "$resolved" = "$EXPECTED_RM" ] || {
+  echo "runner resolved rm outside the inherited guard shims: $resolved" >&2
+  exit 1
+}
+echo "ok - probe"
+SH
+  chmod +x "$fixture"
+  EXPECTED_RM="$fake_shims/rm" PATH="$fake_shims:$PATH" "$RUNNER" "$fixture" >"$out" 2>&1 \
+    || { rm -rf "$tmp"; fail "runner should preserve guard shims for test children: $(cat "$out")"; }
+  grep -q '^ok - probe$' "$out" || { rm -rf "$tmp"; fail "probe fixture did not run: $(cat "$out")"; }
+  rm -rf "$tmp"
+  pass "runner preserves inherited worktree-guard shims for test children"
+}
+
 test_list_all_exact_suite_coverage
+test_preserves_guard_shims_on_path
 test_family_selection
 test_single_script_selection
 test_changed_file_selection_is_conservative

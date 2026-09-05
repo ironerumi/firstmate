@@ -98,7 +98,7 @@ make_spawn_case() {
   touch "$home/state/.last-watcher-beat"
   id=$name-z1
   mkdir -p "$home/data/$id"
-  printf 'source: human\nbatch_id: test-fixture\nbrief for %s\n' "$id" > "$home/data/$id/brief.md"
+  printf 'brief for %s\n' "$id" > "$home/data/$id/brief.md"
   printf '%s\n' "$home|$proj|$wt|$fakebin|$launchlog|$id"
 }
 
@@ -186,12 +186,12 @@ run_two_level() {
   mkdir -p "$sm/bin" "$sm/data"
   printf '# Firstmate\n' > "$sm/AGENTS.md"
   printf 'sm-%s\n' "$name" > "$sm/.fm-secondmate-home"
-  printf 'source: human\nbatch_id: test-fixture\ncharter\n' > "$sm/data/charter.md"
+  printf 'charter\n' > "$sm/data/charter.md"
 
   # Spawn 1: the primary launches the secondmate; capture what it injects.
   sm_id="sm-$name"
   mkdir -p "$prim/data/$sm_id"
-  printf 'source: human\nbatch_id: test-fixture\ncharter brief\n' > "$prim/data/$sm_id/brief.md"
+  printf 'charter brief\n' > "$prim/data/$sm_id/brief.md"
   smlog="$base/sm-launch.log"
   smfake=$(make_spawn_fakebin "$base/sm-fake")
   : > "$smlog"
@@ -215,7 +215,7 @@ run_two_level() {
   wwt="$base/wwt"
   fm_git_worktree "$wproj" "$wwt" "wt-$name"
   mkdir -p "$sm/state" "$sm/projects" "$sm/data/$worker_id"
-  printf 'source: human\nbatch_id: test-fixture\nworker brief\n' > "$sm/data/$worker_id/brief.md"
+  printf 'worker brief\n' > "$sm/data/$worker_id/brief.md"
   touch "$sm/state/.last-watcher-beat"
   start_trace_session "$sm" "$TL_ENV_TC"
   wlog="$base/worker-launch.log"
@@ -357,13 +357,13 @@ test_duplicate_secondmate_spawn_does_not_converge_trace_context() {
   log="$base/launch.log"
   mkdir -p "$prim/config" "$prim/data/$id" "$prim/state" "$prim/projects"
   : > "$prim/config/trace-context"
-  printf 'source: human\nbatch_id: test-fixture\ncharter brief\n' > "$prim/data/$id/brief.md"
+  printf 'charter brief\n' > "$prim/data/$id/brief.md"
   touch "$prim/state/.last-watcher-beat"
   start_trace_session "$prim"
   mkdir -p "$sm/bin" "$sm/data"
   printf '# Firstmate\n' > "$sm/AGENTS.md"
   printf '%s\n' "$id" > "$sm/.fm-secondmate-home"
-  printf 'source: human\nbatch_id: test-fixture\ncharter\n' > "$sm/data/charter.md"
+  printf 'charter\n' > "$sm/data/charter.md"
   fake=$(make_spawn_fakebin "$base/fake")
 
   out=$(env -u FM_TRACE_CONTEXT \
@@ -503,8 +503,8 @@ test_two_routed_tasks_through_one_secondmate_root_distinct_traces() {
   fm_git_worktree "$proj_a" "$wt_a" wt-routed-a
   fm_git_worktree "$proj_b" "$wt_b" wt-routed-b
   mkdir -p "$sm/data/$id_a" "$sm/data/$id_b"
-  printf 'source: human\nbatch_id: test-fixture\nbrief a\n' > "$sm/data/$id_a/brief.md"
-  printf 'source: human\nbatch_id: test-fixture\nbrief b\n' > "$sm/data/$id_b/brief.md"
+  printf 'brief a\n' > "$sm/data/$id_a/brief.md"
+  printf 'brief b\n' > "$sm/data/$id_b/brief.md"
   log_a="$base/launch-a.log"
   log_b="$base/launch-b.log"
 
