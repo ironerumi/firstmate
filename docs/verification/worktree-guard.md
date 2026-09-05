@@ -44,8 +44,8 @@ ok - fm-worktree-guard.test.sh
 
 `tests/fm-backend-orca.test.sh` proves the spawn wiring line carries `FM_WORKTREE_GUARD_META` and the shim PATH through a non-default backend's own send path.
 
-`tests/fm-test-run.test.sh` proves the canonical runner removes every inherited `bin/shims` entry while preserving empty and newline-terminated `PATH` components.
-Fixtures that deliberately construct a guarded `PATH` continue to use `fm_real_tool` where they need to reach the underlying tool.
+`tests/fm-test-run.test.sh` proves the canonical runner preserves an inherited worktree-guard shim for every test child.
+Fixtures use `fm_real_tool` when they need to reach the underlying tool without capturing a guard shim.
 
 ## Live worker evidence
 

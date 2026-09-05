@@ -132,32 +132,6 @@ RUN_STARTED_MS=$(now_ms)
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 
-# A crewmate's own pane carries a firstmate home's bin/shims ahead of the real
-# tools (bin/fm-spawn.sh's launch PATH export names the SPAWNING home's root,
-# which is not necessarily this task's own $ROOT), so a test invoked from that
-# pane would otherwise inherit a PATH where `command -v git` (or mv/rm/rmdir/
-# unlink/treehouse/no-mistakes) resolves to firstmate's guard shim instead of
-# the real tool. Strip every such entry once here, centrally, before running
-# any test, rather than requiring every fixture to route real-tool lookups
-# around it. Matched by the fixed "bin/shims" suffix fm-spawn.sh always uses,
-# not by this task's own $ROOT, so it catches a shim directory exported by any
-# firstmate home.
-fm_test_run_strip_shims_from_path() {
-  local entry out='' remaining="${PATH-}:" separator=''
-  while [[ $remaining == *:* ]]; do
-    entry=${remaining%%:*}
-    remaining=${remaining#*:}
-    case $entry in
-      */bin/shims | bin/shims) continue ;;
-    esac
-    out="$out$separator$entry"
-    separator=:
-  done
-  PATH=$out
-}
-fm_test_run_strip_shims_from_path
-export PATH
-
 MODE=
 LIST_ONLY=0
 LIST_SCHEDULED=0

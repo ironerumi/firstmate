@@ -131,8 +131,8 @@ In the ordinary case that export changes nothing, because teardown runs from a f
 
 The shim has to be able to hand off to the tool it fronts under every arrangement of `PATH`, because a guard that made `rm` unreachable would cost more than the class it catches.
 Its walk skips its own directory, skips any OTHER firstmate home's shim of the same name - a worker pane already carries one shim directory, so a task working on a second firstmate checkout would otherwise have two shims exec each other - and falls back to the standard system locations when `PATH` yields no usable candidate at all.
-The canonical test runner removes inherited `bin/shims` entries before launching fixtures, so an ordinary fixture's `command -v <tool>` reaches the real tool.
-Tests that deliberately put guard shims back on `PATH` use `fm_real_tool` from `tests/lib.sh`; it also avoids the one arrangement resolution cannot repair, where a wrapper that execs a captured shim as its "real tool" would trade places with the shim inside a single process forever.
+The canonical test runner preserves inherited `bin/shims` entries so every test child retains the worktree guard's command interception.
+`fm_real_tool` in `tests/lib.sh` is how a fixture reaches an underlying tool without capturing the shim; it also avoids the one arrangement resolution cannot repair, where a wrapper that execs a captured shim as its "real tool" would trade places with the shim inside a single process forever.
 For any wrapper that still does that, each shim carries a pid-marked backstop that stops with a diagnosable error instead of hanging.
 
 ## Cost

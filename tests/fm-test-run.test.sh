@@ -445,7 +445,7 @@ assert doc["scripts"] == []
 assert doc["families"] == []
 ' "$json" || { rm -rf "$tmp"; fail "empty selection JSON summary is wrong"; }
   fake_bin="$tmp/fake-bin"
-  real_git=$(command -v git)
+  real_git=$(fm_real_tool git)
   mkdir -p "$fake_bin"
   cat >"$fake_bin/git" <<'SH'
 #!/usr/bin/env bash
@@ -1254,56 +1254,33 @@ test_serial_drift_default_weight_guard() {
   pass "current portable-serial lane stays within the default-weight drift budget"
 }
 
-test_strips_guard_shims_from_path() {
-  local tmp fixture out fake_shims path_probe newline_tools
+test_preserves_guard_shims_on_path() {
+  local tmp fixture out fake_shims
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-shims.XXXXXX")
   fake_shims="$tmp/fake-home/bin/shims"
   mkdir -p "$fake_shims"
-  cat >"$fake_shims/git" <<'SH'
-#!/usr/bin/env bash
-echo "shim git must never run in a test subprocess" >&2
-exit 1
-SH
-  chmod +x "$fake_shims/git"
-  path_probe="$tmp/cwd-path-probe"
-  cat >"$path_probe" <<'SH'
-#!/usr/bin/env bash
-echo "cwd PATH component preserved"
-SH
-  chmod +x "$path_probe"
-  newline_tools="$tmp/tools"$'\n'
-  mkdir -p "$newline_tools"
-  cat >"$newline_tools/newline-path-probe" <<'SH'
-#!/usr/bin/env bash
-echo "newline PATH component preserved"
-SH
-  chmod +x "$newline_tools/newline-path-probe"
+  ln -s "$ROOT/bin/fm-worktree-guard-shim.sh" "$fake_shims/rm"
   fixture="$tmp/probe.test.sh"
   out="$tmp/out.txt"
   cat >"$fixture" <<'SH'
 #!/usr/bin/env bash
-echo "GIT=$(command -v git)"
-cd "$PROBE_DIR" || exit 1
-cwd-path-probe
-newline-path-probe
+resolved=$(command -v rm)
+[ "$resolved" = "$EXPECTED_RM" ] || {
+  echo "runner resolved rm outside the inherited guard shims: $resolved" >&2
+  exit 1
+}
 echo "ok - probe"
 SH
   chmod +x "$fixture"
-  PROBE_DIR="$tmp" PATH=":$fake_shims:$PATH:$newline_tools" "$RUNNER" "$fixture" >"$out" 2>&1 \
-    || { rm -rf "$tmp"; fail "runner should pass with a fake shims dir on PATH"; }
-  grep -q "^GIT=$fake_shims/git$" "$out" \
-    && { rm -rf "$tmp"; fail "runner leaked a bin/shims entry into the test subprocess PATH"; }
-  grep -q '^cwd PATH component preserved$' "$out" \
-    || { rm -rf "$tmp"; fail "runner dropped empty PATH components: $(cat "$out")"; }
-  grep -q '^newline PATH component preserved$' "$out" \
-    || { rm -rf "$tmp"; fail "runner changed a newline-terminated PATH component: $(cat "$out")"; }
+  EXPECTED_RM="$fake_shims/rm" PATH="$fake_shims:$PATH" "$RUNNER" "$fixture" >"$out" 2>&1 \
+    || { rm -rf "$tmp"; fail "runner should preserve guard shims for test children: $(cat "$out")"; }
   grep -q '^ok - probe$' "$out" || { rm -rf "$tmp"; fail "probe fixture did not run: $(cat "$out")"; }
   rm -rf "$tmp"
-  pass "runner strips bin/shims while preserving PATH components exactly"
+  pass "runner preserves inherited worktree-guard shims for test children"
 }
 
 test_list_all_exact_suite_coverage
-test_strips_guard_shims_from_path
+test_preserves_guard_shims_on_path
 test_family_selection
 test_single_script_selection
 test_changed_file_selection_is_conservative

@@ -9,7 +9,7 @@ set -u
 UNREGISTER="$ROOT/bin/fm-check-unregister.sh"
 REGISTER="$ROOT/bin/fm-check-register.sh"
 TMP_ROOT=$(fm_test_tmproot fm-check-unregister)
-REAL_RM=$(command -v rm)
+REAL_RM=$(fm_real_tool rm)
 
 make_home() {
   local name=$1 home
