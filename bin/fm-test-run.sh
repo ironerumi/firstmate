@@ -35,6 +35,9 @@
 #                   scripts have no measured weight hint. <aggregate.json> may
 #                   be absent (e.g. no lane timing was produced); the
 #                   default-weight check still runs on the current repo state.
+#                   An existing aggregate must be valid JSON, and every
+#                   portable-serial shard lane must carry a nonnegative integer
+#                   duration_ms; malformed timing data fails closed.
 #
 # Options:
 #   --json <path>   write a deterministic timing artifact after the run

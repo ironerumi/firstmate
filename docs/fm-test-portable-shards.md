@@ -98,11 +98,12 @@ If no single run has every shard green, the newest run where all currently-confi
 ## Prevention
 
 `bin/fm-test-run.sh --check-serial-drift <aggregate.json>` is a tripwire against this exact incident recurring silently.
-It fails when either condition holds:
+It evaluates two drift conditions:
 
 - a portable-serial lane in `<aggregate.json>` (the `tests-timing-aggregate` job's merged artifact) measured a wall above `PORTABLE_SERIAL_DRIFT_WALL_MS` (60% of `ci.yml`'s 20-minute job timeout; keep both in sync if the timeout changes);
 - more than `PORTABLE_SERIAL_DEFAULT_WEIGHT_MAX` current portable-serial scripts have no entry in `portable_serial_weight_hints` (`count_portable_serial_defaulted`).
 
+When `<aggregate.json>` exists, the check also fails closed if the file is invalid JSON or a portable-serial shard lane's `duration_ms` is not a nonnegative integer instead of treating malformed timing data as a zero-duration measurement.
 `.github/workflows/ci.yml`'s `tests-timing-aggregate` job runs this check right after building the aggregate artifact, so a drifting remainder fails CI with the refresh procedure above named in the log, instead of waiting for a shard to hit the job timeout.
 `<aggregate.json>` may be absent (for example, no lane produced timing JSON); the default-weight half of the check still runs against the current repo state.
 
