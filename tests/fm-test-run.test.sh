@@ -1255,7 +1255,7 @@ test_serial_drift_default_weight_guard() {
 }
 
 test_strips_guard_shims_from_path() {
-  local tmp fixture out fake_shims path_probe
+  local tmp fixture out fake_shims path_probe newline_tools
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-shims.XXXXXX")
   fake_shims="$tmp/fake-home/bin/shims"
   mkdir -p "$fake_shims"
@@ -1271,6 +1271,13 @@ SH
 echo "cwd PATH component preserved"
 SH
   chmod +x "$path_probe"
+  newline_tools="$tmp/tools"$'\n'
+  mkdir -p "$newline_tools"
+  cat >"$newline_tools/newline-path-probe" <<'SH'
+#!/usr/bin/env bash
+echo "newline PATH component preserved"
+SH
+  chmod +x "$newline_tools/newline-path-probe"
   fixture="$tmp/probe.test.sh"
   out="$tmp/out.txt"
   cat >"$fixture" <<'SH'
@@ -1278,18 +1285,21 @@ SH
 echo "GIT=$(command -v git)"
 cd "$PROBE_DIR" || exit 1
 cwd-path-probe
+newline-path-probe
 echo "ok - probe"
 SH
   chmod +x "$fixture"
-  PROBE_DIR="$tmp" PATH=":$fake_shims:$PATH:" "$RUNNER" "$fixture" >"$out" 2>&1 \
+  PROBE_DIR="$tmp" PATH=":$fake_shims:$PATH:$newline_tools" "$RUNNER" "$fixture" >"$out" 2>&1 \
     || { rm -rf "$tmp"; fail "runner should pass with a fake shims dir on PATH"; }
   grep -q "^GIT=$fake_shims/git$" "$out" \
     && { rm -rf "$tmp"; fail "runner leaked a bin/shims entry into the test subprocess PATH"; }
   grep -q '^cwd PATH component preserved$' "$out" \
     || { rm -rf "$tmp"; fail "runner dropped empty PATH components: $(cat "$out")"; }
+  grep -q '^newline PATH component preserved$' "$out" \
+    || { rm -rf "$tmp"; fail "runner changed a newline-terminated PATH component: $(cat "$out")"; }
   grep -q '^ok - probe$' "$out" || { rm -rf "$tmp"; fail "probe fixture did not run: $(cat "$out")"; }
   rm -rf "$tmp"
-  pass "runner strips bin/shims while preserving empty PATH components"
+  pass "runner strips bin/shims while preserving PATH components exactly"
 }
 
 test_list_all_exact_suite_coverage

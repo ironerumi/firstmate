@@ -153,9 +153,9 @@ fm_test_run_strip_shims_from_path() {
     out="$out$separator$entry"
     separator=:
   done
-  printf '%s' "$out"
+  PATH=$out
 }
-PATH=$(fm_test_run_strip_shims_from_path)
+fm_test_run_strip_shims_from_path
 export PATH
 
 MODE=
