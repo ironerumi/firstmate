@@ -282,7 +282,7 @@ new_git_world() {
   git -C "$root" worktree add -q --detach "$w/sm" "$c1"
   printf '%s\n' sm > "$w/sm/.fm-secondmate-home"
   mkdir -p "$w/sm/data" "$w/sm/state" "$w/sm/config" "$w/sm/projects"
-  printf 'source: human\nbatch_id: test-fixture\ncharter\n' > "$w/sm/data/charter.md"
+  printf 'charter\n' > "$w/sm/data/charter.md"
   write_shared "$home/data/captain-shared.md" "shared from primary"
   printf '%s|%s|%s|%s\n' "$w" "$root" "$home" "$w/sm"
 }

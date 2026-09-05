@@ -443,7 +443,7 @@ make_seeded_home() {
   mkdir -p "$home/bin" "$home/data"
   printf '# Firstmate\n' > "$home/AGENTS.md"
   printf '%s\n' "$id" > "$home/.fm-secondmate-home"
-  printf 'source: human\nbatch_id: test-fixture\ncharter\n' > "$home/data/charter.md"
+  printf 'charter\n' > "$home/data/charter.md"
 }
 
 # spawn_secondmate <world> <id> <home> [explicit-harness]
@@ -965,7 +965,7 @@ test_spawn_fallback_chain_and_crew_scout_unaffected() {
   fakebin=$(make_launch_capturing_tmux "$w/tmux-crew")
   fm_git_worktree "$proj" "$wt" "wt-crew"
   mkdir -p "$home/data/$id" "$home/projects" "$home/state"
-  printf 'source: human\nbatch_id: test-fixture\nbrief\n' > "$home/data/$id/brief.md"
+  printf 'brief\n' > "$home/data/$id/brief.md"
   : > "$launchlog"
   PATH="$fakebin:$BASE_PATH" TMUX="fake,1,0" CLAUDECODE=1 \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \

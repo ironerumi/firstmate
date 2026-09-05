@@ -336,7 +336,7 @@ add_sm_home() {
   mkdir -p "$home/bin" "$home/data" "$home/state" "$home/config" "$home/projects"
   printf '%s\n' "$id" > "$home/.fm-secondmate-home"
   printf '# Firstmate\n' > "$home/AGENTS.md"
-  printf 'source: human\nbatch_id: test-fixture\ncharter\n' > "$home/data/charter.md"
+  printf 'charter\n' > "$home/data/charter.md"
   {
     printf 'window=%s\n' "$window"
     printf 'kind=secondmate\n'
