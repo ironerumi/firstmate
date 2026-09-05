@@ -1169,6 +1169,91 @@ assert len(doc["scripts"])==3
   pass "aggregate-json merges lane timing artifacts"
 }
 
+test_serial_drift_wall_threshold() {
+  local tmp out rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-serialdrift.XXXXXX")
+  cat >"$tmp/over.json" <<'JSON'
+{
+  "lanes": [
+    {"selection": "lane=portable-serial-1of7", "summary": {"duration_ms": 900000}}
+  ]
+}
+JSON
+  set +e
+  out=$("$RUNNER" --check-serial-drift "$tmp/over.json" 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || { rm -rf "$tmp"; fail "drift check must fail when a shard wall exceeds the threshold"; }
+  assert_contains "$out" "portable-serial-1of7" "drift failure names the lane"
+  assert_contains "$out" "900000ms" "drift failure names the measured wall"
+
+  cat >"$tmp/under.json" <<'JSON'
+{
+  "lanes": [
+    {"selection": "lane=portable-serial-1of7", "summary": {"duration_ms": 60000}}
+  ]
+}
+JSON
+  "$RUNNER" --check-serial-drift "$tmp/under.json" \
+    || { rm -rf "$tmp"; fail "drift check must pass when every shard wall is under the threshold"; }
+  rm -rf "$tmp"
+  pass "check-serial-drift fails only when a measured shard wall passes the threshold"
+}
+
+test_serial_drift_rejects_malformed_aggregate() {
+  local tmp out rc case_name payload
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-serialdrift-malformed.XXXXXX")
+  printf '{' >"$tmp/truncated.json"
+  set +e
+  out=$("$RUNNER" --check-serial-drift "$tmp/truncated.json" 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || { rm -rf "$tmp"; fail "drift check must reject truncated aggregate JSON"; }
+  assert_contains "$out" "could not read aggregate timing JSON" "truncated aggregate failure is actionable"
+
+  cat >"$tmp/nonnumeric.json" <<'JSON'
+{
+  "lanes": [
+    {"selection": "lane=portable-serial-1of7", "summary": {"duration_ms": "bad"}}
+  ]
+}
+JSON
+  set +e
+  out=$("$RUNNER" --check-serial-drift "$tmp/nonnumeric.json" 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || { rm -rf "$tmp"; fail "drift check must reject a nonnumeric shard wall"; }
+  assert_contains "$out" "could not read aggregate timing JSON" "nonnumeric shard wall failure is actionable"
+
+  for case_name in missing null boolean negative; do
+    case "$case_name" in
+      missing) payload='{"lanes":[{"selection":"lane=portable-serial-1of7","summary":{}}]}' ;;
+      null) payload='{"lanes":[{"selection":"lane=portable-serial-1of7","summary":{"duration_ms":null}}]}' ;;
+      boolean) payload='{"lanes":[{"selection":"lane=portable-serial-1of7","summary":{"duration_ms":true}}]}' ;;
+      negative) payload='{"lanes":[{"selection":"lane=portable-serial-1of7","summary":{"duration_ms":-1}}]}' ;;
+    esac
+    printf '%s\n' "$payload" >"$tmp/$case_name.json"
+    set +e
+    out=$("$RUNNER" --check-serial-drift "$tmp/$case_name.json" 2>&1)
+    rc=$?
+    set -e
+    [ "$rc" -ne 0 ] || { rm -rf "$tmp"; fail "drift check must reject a $case_name shard wall"; }
+    assert_contains "$out" "could not read aggregate timing JSON" "$case_name shard wall failure is actionable"
+  done
+  rm -rf "$tmp"
+  pass "check-serial-drift rejects malformed aggregate timing data"
+}
+
+test_serial_drift_default_weight_guard() {
+  local out
+  # Regression: the current portable-serial lane must stay inside the
+  # configured default-weight budget, so a drifting hint table fails loudly
+  # here (and in CI) rather than silently overloading a shard again.
+  out=$("$RUNNER" --check-serial-drift /nonexistent-aggregate.json 2>&1) \
+    || fail "current repo state must pass the default-weight drift guard: $out"
+  pass "current portable-serial lane stays within the default-weight drift budget"
+}
+
 test_list_all_exact_suite_coverage
 test_family_selection
 test_single_script_selection
@@ -1194,3 +1279,6 @@ test_max_wall_ms_is_a_result_not_advice
 test_jobs_parallel_scheduler_and_failure_propagation
 test_herdr_ci_family_run_has_a_step_timeout
 test_aggregate_json
+test_serial_drift_wall_threshold
+test_serial_drift_rejects_malformed_aggregate
+test_serial_drift_default_weight_guard
