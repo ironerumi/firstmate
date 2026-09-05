@@ -304,7 +304,7 @@ test_fail_open_missing_node() {
   local fakebin tool tool_path out rc
   fakebin=$(fm_fakebin "$TMP_ROOT/nonode")
   for tool in bash sh git dirname cat printf sed tr jq; do
-    tool_path=$(fm_real_tool "$tool") || continue
+    tool_path=$(command -v "$tool") || continue
     ln -s "$tool_path" "$fakebin/$tool"
   done
   # node deliberately absent from this PATH.
@@ -318,7 +318,7 @@ test_fail_open_missing_jq_on_stdin() {
   local fakebin tool tool_path out rc
   fakebin=$(fm_fakebin "$TMP_ROOT/nojq")
   for tool in bash sh git dirname cat printf sed tr node; do
-    tool_path=$(fm_real_tool "$tool") || continue
+    tool_path=$(command -v "$tool") || continue
     ln -s "$tool_path" "$fakebin/$tool"
   done
   # jq deliberately absent: the stdin transport cannot extract the command.
@@ -337,7 +337,7 @@ test_prefilter_skips_node_without_cd_substring() {
   fakebin=$(fm_fakebin "$TMP_ROOT/prefilter-fake")
   marker="$TMP_ROOT/prefilter-node-called"
   for tool in bash sh git dirname cat printf sed tr jq; do
-    tool_path=$(fm_real_tool "$tool") || continue
+    tool_path=$(command -v "$tool") || continue
     ln -s "$tool_path" "$fakebin/$tool"
   done
   cat > "$fakebin/node" <<EOF

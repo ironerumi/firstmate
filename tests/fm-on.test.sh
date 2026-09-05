@@ -332,7 +332,7 @@ assert_contains "$out" 'required herdr=MISSING' "the remote doctor did not mark 
 assert_contains "$out" 'required tasks-axi=MISSING' "the remote doctor did not mark every missing required tool"
 assert_contains "$out" 'required tools do not resolve on the remote runtime PATH: herdr tasks-axi treehouse harness' "the remote doctor did not name the missing tools"
 assert_contains "$out" '.local/bin' "the remote doctor did not offer the wrapper escape hatch"
-ln -sf "$(fm_real_tool git)" "$DOCTOR_BIN/git"
+ln -sf "$(command -v git)" "$DOCTOR_BIN/git"
 # The direct doctor fixture needs the complete required tool set. These stubs
 # exercise resolution only; the dedicated doctor suite owns worker and Herdr
 # lifecycle behavior against controlled launchctl fixtures.

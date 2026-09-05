@@ -58,7 +58,7 @@ fm_git_identity fmtest fmtest@example.invalid
 TEARDOWN="$ROOT/bin/fm-teardown.sh"
 PR_CHECK="$ROOT/bin/fm-pr-check.sh"
 TMP_ROOT=$(fm_test_tmproot fm-teardown-tests)
-REAL_GIT_FOR_TEST=$(fm_real_tool git)
+REAL_GIT_FOR_TEST=$(command -v git)
 export REAL_GIT_FOR_TEST
 REAL_PS_FOR_TEST=$(command -v ps)
 export REAL_PS_FOR_TEST
@@ -557,7 +557,7 @@ make_path_without_lsof() {  # <case-dir>
   mkdir -p "$path_dir"
   for cmd in awk bash basename cat chmod cp cut date dirname env find git grep head hostname id ln \
     mkdir mktemp mv perl ps readlink realpath rm sed sh sleep sort stat tail timeout tr uname wc xargs; do
-    resolved=$(fm_real_tool "$cmd" 2>/dev/null) || continue
+    resolved=$(command -v "$cmd" 2>/dev/null) || continue
     case "$resolved" in /*) ln -sf "$resolved" "$path_dir/$cmd" ;; esac
   done
   printf '%s\n' "$path_dir"

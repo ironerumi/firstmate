@@ -357,7 +357,7 @@ test_concurrent_stale_lease_claims_have_one_winner() {
   mkdir -p "$home/state" "$fakebin"
   printf '%s\n' "$$" > "$home/state/.lock"
   printf 'branch\t999999\t123\n' > "$home/state/.lease-task-race"
-  real_mv=$(fm_real_tool mv)
+  real_mv=$(command -v mv)
   cat > "$fakebin/mv" <<'SH'
 #!/usr/bin/env bash
 last=${!#}
@@ -395,7 +395,7 @@ test_guard_stale_clear_cannot_delete_a_new_claim() {
   mkdir -p "$home/state" "$fakebin"
   printf '%s\n' "$$" > "$home/state/.lock"
   printf 'main\t999999\t123\n' > "$home/state/.lease-task-race"
-  real_rm=$(fm_real_tool rm)
+  real_rm=$(command -v rm)
   cat > "$fakebin/rm" <<'SH'
 #!/usr/bin/env bash
 last=${!#}

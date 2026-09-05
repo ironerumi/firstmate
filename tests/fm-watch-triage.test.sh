@@ -3477,7 +3477,7 @@ test_procevent_marker_keys_are_injective() {
 
 install_marker_mv_fault() {  # <dir>
   local dir=$1
-  REAL_MV=$(fm_real_tool mv)
+  REAL_MV=$(command -v mv)
   export REAL_MV
   cat > "$dir/fakebin/mv" <<'SH'
 #!/usr/bin/env bash

@@ -445,7 +445,7 @@ assert doc["scripts"] == []
 assert doc["families"] == []
 ' "$json" || { rm -rf "$tmp"; fail "empty selection JSON summary is wrong"; }
   fake_bin="$tmp/fake-bin"
-  real_git=$(fm_real_tool git)
+  real_git=$(command -v git)
   mkdir -p "$fake_bin"
   cat >"$fake_bin/git" <<'SH'
 #!/usr/bin/env bash
@@ -1254,7 +1254,36 @@ test_serial_drift_default_weight_guard() {
   pass "current portable-serial lane stays within the default-weight drift budget"
 }
 
+test_strips_guard_shims_from_path() {
+  local tmp fixture out fake_shims
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-shims.XXXXXX")
+  fake_shims="$tmp/fake-home/bin/shims"
+  mkdir -p "$fake_shims"
+  cat >"$fake_shims/git" <<'SH'
+#!/usr/bin/env bash
+echo "shim git must never run in a test subprocess" >&2
+exit 1
+SH
+  chmod +x "$fake_shims/git"
+  fixture="$tmp/probe.test.sh"
+  out="$tmp/out.txt"
+  cat >"$fixture" <<'SH'
+#!/usr/bin/env bash
+echo "GIT=$(command -v git)"
+echo "ok - probe"
+SH
+  chmod +x "$fixture"
+  PATH="$fake_shims:$PATH" "$RUNNER" "$fixture" >"$out" 2>&1 \
+    || { rm -rf "$tmp"; fail "runner should pass with a fake shims dir on PATH"; }
+  grep -q "^GIT=$fake_shims/git$" "$out" \
+    && { rm -rf "$tmp"; fail "runner leaked a bin/shims entry into the test subprocess PATH"; }
+  grep -q '^ok - probe$' "$out" || { rm -rf "$tmp"; fail "probe fixture did not run: $(cat "$out")"; }
+  rm -rf "$tmp"
+  pass "runner strips any bin/shims PATH entry before running a test"
+}
+
 test_list_all_exact_suite_coverage
+test_strips_guard_shims_from_path
 test_family_selection
 test_single_script_selection
 test_changed_file_selection_is_conservative

@@ -310,7 +310,7 @@ seed_env() {
   "$@"
 }
 
-REAL_GIT=$(fm_real_tool git)
+REAL_GIT=$(command -v git)
 cat > "$FAKEBIN/git" <<SH
 #!/usr/bin/env bash
 if [ "\${1:-}" = clone ] && [ "\${!#}" = "$TMP_ROOT/concurrent-home" ]; then
