@@ -1,0 +1,105 @@
+{
+  "kind": "aggregate",
+  "lanes": [
+    {
+      "finished_at": null,
+      "path": "/Users/gu_yifu/.no-mistakes/evidence/01M1RNNSDXK8T1KS1VHG34XP2F/serial-lane-1.json",
+      "run_id": "serial-1",
+      "selection": "lane=portable-serial-1of7",
+      "started_at": null,
+      "summary": {
+        "duration_ms": 516001,
+        "failed": 0,
+        "skipped_gate": 0,
+        "total": 1
+      }
+    },
+    {
+      "finished_at": null,
+      "path": "/Users/gu_yifu/.no-mistakes/evidence/01M1RNNSDXK8T1KS1VHG34XP2F/serial-lane-2.json",
+      "run_id": "serial-2",
+      "selection": "lane=portable-serial-2of7",
+      "started_at": null,
+      "summary": {
+        "duration_ms": 516002,
+        "failed": 0,
+        "skipped_gate": 0,
+        "total": 1
+      }
+    },
+    {
+      "finished_at": null,
+      "path": "/Users/gu_yifu/.no-mistakes/evidence/01M1RNNSDXK8T1KS1VHG34XP2F/serial-lane-3.json",
+      "run_id": "serial-3",
+      "selection": "lane=portable-serial-3of7",
+      "started_at": null,
+      "summary": {
+        "duration_ms": 516003,
+        "failed": 0,
+        "skipped_gate": 0,
+        "total": 1
+      }
+    },
+    {
+      "finished_at": null,
+      "path": "/Users/gu_yifu/.no-mistakes/evidence/01M1RNNSDXK8T1KS1VHG34XP2F/serial-lane-4.json",
+      "run_id": "serial-4",
+      "selection": "lane=portable-serial-4of7",
+      "started_at": null,
+      "summary": {
+        "duration_ms": 516004,
+        "failed": 0,
+        "skipped_gate": 0,
+        "total": 1
+      }
+    },
+    {
+      "finished_at": null,
+      "path": "/Users/gu_yifu/.no-mistakes/evidence/01M1RNNSDXK8T1KS1VHG34XP2F/serial-lane-5.json",
+      "run_id": "serial-5",
+      "selection": "lane=portable-serial-5of7",
+      "started_at": null,
+      "summary": {
+        "duration_ms": 516005,
+        "failed": 0,
+        "skipped_gate": 0,
+        "total": 1
+      }
+    },
+    {
+      "finished_at": null,
+      "path": "/Users/gu_yifu/.no-mistakes/evidence/01M1RNNSDXK8T1KS1VHG34XP2F/serial-lane-6.json",
+      "run_id": "serial-6",
+      "selection": "lane=portable-serial-6of7",
+      "started_at": null,
+      "summary": {
+        "duration_ms": 516006,
+        "failed": 0,
+        "skipped_gate": 0,
+        "total": 1
+      }
+    },
+    {
+      "finished_at": null,
+      "path": "/Users/gu_yifu/.no-mistakes/evidence/01M1RNNSDXK8T1KS1VHG34XP2F/serial-lane-7.json",
+      "run_id": "serial-7",
+      "selection": "lane=portable-serial-7of7",
+      "started_at": null,
+      "summary": {
+        "duration_ms": 516007,
+        "failed": 0,
+        "skipped_gate": 0,
+        "total": 1
+      }
+    }
+  ],
+  "scripts": [],
+  "slowest": [],
+  "summary": {
+    "critical_path_duration_ms": 516007,
+    "failed": 0,
+    "lanes": 7,
+    "skipped_gate": 0,
+    "total": 7
+  }
+}

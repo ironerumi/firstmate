@@ -1,0 +1,16 @@
+$ bin/fm-test-run.sh --aggregate-json healthy.json lane-{1..7}.json
+FM_TEST_AGGREGATE lanes=7 total=7 failed=0 skipped_gate=0 critical_path_duration_ms=516007
+$ bin/fm-test-run.sh --check-serial-drift healthy.json
+exit=0 (all seven measured shard walls accepted)
+$ bin/fm-test-run.sh --check-serial-drift over.json
+fm-test-run: serial drift: lane=portable-serial-7of7 measured 720001ms, over 720000ms (drift threshold)
+fm-test-run: refresh: see docs/fm-test-portable-shards.md refresh procedure
+exit=1 (timeout-risk wall rejected)
+$ bin/fm-test-run.sh --check-serial-drift malformed.json
+Traceback (most recent call last):
+  File "<stdin>", line 9, in <module>
+ValueError: invalid duration_ms for lane=portable-serial-3of7
+fm-test-run: serial drift: could not read aggregate timing JSON at /Users/gu_yifu/.no-mistakes/evidence/01M1RNNSDXK8T1KS1VHG34XP2F/serial-malformed.json
+exit=1 (missing duration rejected fail-closed)
+$ bin/fm-test-run.sh --check-coverage
+FM_TEST_COVERAGE ok total=184 parallel=24 serial=148 serial_shards=7 herdr=12
