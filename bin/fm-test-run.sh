@@ -997,7 +997,7 @@ PY
 # portable-serial shard wall or the count of default-weighted scripts has
 # drifted enough to risk the job timeout recurring silently.
 check_serial_drift() {
-  local agg=$1 fail=0 defaulted
+  local agg=$1 fail=0 defaulted lane_rows
   defaulted=$(count_portable_serial_defaulted)
   if [ "$defaulted" -gt "$PORTABLE_SERIAL_DEFAULT_WEIGHT_MAX" ]; then
     log "serial drift: $defaulted portable-serial scripts have no measured weight hint (max $PORTABLE_SERIAL_DEFAULT_WEIGHT_MAX)"
@@ -1006,14 +1006,7 @@ check_serial_drift() {
   fi
   if [ -f "$agg" ]; then
     command -v python3 >/dev/null 2>&1 || die "--check-serial-drift requires python3"
-    while IFS=$'\t' read -r lane_selection ms; do
-      [ -n "$lane_selection" ] || continue
-      if [ "$ms" -gt "$PORTABLE_SERIAL_DRIFT_WALL_MS" ]; then
-        log "serial drift: $lane_selection measured ${ms}ms, over ${PORTABLE_SERIAL_DRIFT_WALL_MS}ms (drift threshold)"
-        log "refresh: see docs/fm-test-portable-shards.md refresh procedure"
-        fail=1
-      fi
-    done < <(python3 - "$agg" <<'PY'
+    if ! lane_rows=$(python3 - "$agg" <<'PY'
 import json, sys
 doc = json.loads(open(sys.argv[1], encoding="utf-8").read())
 for lane in doc.get("lanes") or []:
@@ -1023,7 +1016,19 @@ for lane in doc.get("lanes") or []:
     ms = int((lane.get("summary") or {}).get("duration_ms") or 0)
     print(f"{selection}\t{ms}")
 PY
-    )
+    ); then
+      log "serial drift: could not read aggregate timing JSON at $agg"
+      fail=1
+    else
+      while IFS=$'\t' read -r lane_selection ms; do
+        [ -n "$lane_selection" ] || continue
+        if [ "$ms" -gt "$PORTABLE_SERIAL_DRIFT_WALL_MS" ]; then
+          log "serial drift: $lane_selection measured ${ms}ms, over ${PORTABLE_SERIAL_DRIFT_WALL_MS}ms (drift threshold)"
+          log "refresh: see docs/fm-test-portable-shards.md refresh procedure"
+          fail=1
+        fi
+      done <<<"$lane_rows"
+    fi
   else
     log "serial drift: no aggregate timing JSON at $agg; skipping measured-wall check"
   fi

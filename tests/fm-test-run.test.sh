@@ -1200,6 +1200,34 @@ JSON
   pass "check-serial-drift fails only when a measured shard wall passes the threshold"
 }
 
+test_serial_drift_rejects_malformed_aggregate() {
+  local tmp out rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-serialdrift-malformed.XXXXXX")
+  printf '{' >"$tmp/truncated.json"
+  set +e
+  out=$("$RUNNER" --check-serial-drift "$tmp/truncated.json" 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || { rm -rf "$tmp"; fail "drift check must reject truncated aggregate JSON"; }
+  assert_contains "$out" "could not read aggregate timing JSON" "truncated aggregate failure is actionable"
+
+  cat >"$tmp/nonnumeric.json" <<'JSON'
+{
+  "lanes": [
+    {"selection": "lane=portable-serial-1of7", "summary": {"duration_ms": "bad"}}
+  ]
+}
+JSON
+  set +e
+  out=$("$RUNNER" --check-serial-drift "$tmp/nonnumeric.json" 2>&1)
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || { rm -rf "$tmp"; fail "drift check must reject a nonnumeric shard wall"; }
+  assert_contains "$out" "could not read aggregate timing JSON" "nonnumeric shard wall failure is actionable"
+  rm -rf "$tmp"
+  pass "check-serial-drift rejects malformed aggregate timing data"
+}
+
 test_serial_drift_default_weight_guard() {
   local out
   # Regression: the current portable-serial lane must stay inside the
@@ -1236,4 +1264,5 @@ test_jobs_parallel_scheduler_and_failure_propagation
 test_herdr_ci_family_run_has_a_step_timeout
 test_aggregate_json
 test_serial_drift_wall_threshold
+test_serial_drift_rejects_malformed_aggregate
 test_serial_drift_default_weight_guard
