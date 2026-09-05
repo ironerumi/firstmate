@@ -64,30 +64,47 @@ Each shard is still strictly serial in itself, and separate runners mean no two 
 `.github/workflows/ci.yml` derives the same `n` from `strategy.job-total` rather than a literal, so changing the shard count in either file without the other fails the lane loudly instead of leaving part of the required suite unrun.
 
 Assignment is longest-processing-time bin packing over per-script duration hints embedded in `bin/fm-test-run.sh`.
-The hints came from the `fm-test-timing-portable-serial-*` artifacts of green CI run [32491999845](https://github.com/kunchenguid/firstmate/actions/runs/32491999845) on 2026-08-21, where the lane ran 116 scripts in 2541548 ms of serial work.
-`tests/fm-tool-update-check.test.sh` did not exist on that run, so its 12846 ms hint comes from the shard 3 artifact of run [32461816719](https://github.com/kunchenguid/firstmate/actions/runs/32461816719), which is the first run that measured it.
+The hints came from the `fm-test-timing-portable-serial-*` artifacts of CI run [33538680131](https://github.com/ironerumi/firstmate/actions/runs/33538680131) on 2026-09-01 (all four portable-serial shards then configured passed; the workflow's overall conclusion was a failure in the unrelated required-Herdr job), where the lane ran 147 scripts in 3592722 ms of serial work.
+The `of4` split had drifted stale by this point: run [32491999845](https://github.com/kunchenguid/firstmate/actions/runs/32491999845)'s 2026-08-21 hints measured only 116 scripts at 2541548 ms, and two fork upstream merges plus new fork tests grew the remainder to 147 scripts without a hint refresh, so unmeasured scripts packed at the conservative default and the four shards drifted to real walls of roughly 11-20 minutes against the 20-minute timeout (main runs [33596220269](https://github.com/ironerumi/firstmate/actions/runs/33596220269) and [33850394698](https://github.com/ironerumi/firstmate/actions/runs/33850394698) each lost one shard to the job timeout).
+`tests/fm-nm-config-keydiff.test.sh` landed after run 33538680131 and has no measured hint yet; it currently packs at the conservative default, which is expected until its next refresh picks it up.
 A script with no hint gets the conservative `PORTABLE_SERIAL_DEFAULT_WEIGHT_MS` default.
 Hints only affect balance: the coverage guard keeps the partition complete and disjoint whatever they say, so a stale hint costs a slower shard rather than lost coverage.
 Balance is still worth keeping current, because enough unmeasured scripts let one shard carry more than twice another shard's real work and reach the job cap while another runner sits idle.
-Refresh the hints whenever the serial lane gains scripts, rather than waiting for a shard to time out.
+Refresh the hints whenever the serial lane gains scripts, rather than waiting for a shard to time out; the "Prevention" section below now fails CI automatically once drift reaches that point.
 
 | Lane | Script count | Estimated duration |
 |---|---:|---:|
-| `portable-serial-1of4` | 29 | 638602 ms (~638.6 s) |
-| `portable-serial-2of4` | 28 | 638594 ms (~638.6 s) |
-| `portable-serial-3of4` | 30 | 638607 ms (~638.6 s) |
-| `portable-serial-4of4` | 30 | 638591 ms (~638.6 s) |
-| imbalance | | 16 ms |
+| `portable-serial-1of7` | 21 | 516107 ms (~8.6 min) |
+| `portable-serial-2of7` | 20 | 516101 ms (~8.6 min) |
+| `portable-serial-3of7` | 21 | 516102 ms (~8.6 min) |
+| `portable-serial-4of7` | 23 | 516110 ms (~8.6 min) |
+| `portable-serial-5of7` | 21 | 516098 ms (~8.6 min) |
+| `portable-serial-6of7` | 22 | 516106 ms (~8.6 min) |
+| `portable-serial-7of7` | 20 | 516098 ms (~8.6 min) |
+| imbalance | | 12 ms |
 
-The single longest script, `tests/fm-pr-check-security.test.sh` at 250417 ms, is the floor for any shard count.
+The single longest script, `tests/fm-watch-triage.test.sh` at 255458 ms, is the floor for any shard count.
 
 Refresh the hints by downloading the per-shard timing artifacts from a green CI run, replacing the `portable_serial_weight_hints` table in `bin/fm-test-run.sh` with the measured `path`/`duration_ms` pairs, and updating the table above:
 
 ```sh
-gh run download <run-id> -R kunchenguid/firstmate --pattern 'fm-test-timing-portable-serial-*' -D /tmp/fm-serial
+gh run download <run-id> -R ironerumi/firstmate --pattern 'fm-test-timing-portable-serial-*' -D /tmp/fm-serial
 jq -r '.scripts[] | [.path, .duration_ms] | @tsv' /tmp/fm-serial/*.json | LC_ALL=C sort
 bin/fm-test-run.sh --check-coverage
 ```
+
+If no single run has every shard green, the newest run where all currently-configured serial shards completed (regardless of the overall workflow conclusion) is an acceptable source, since only the portable-serial jobs' own outcomes bear on hint validity.
+
+## Prevention
+
+`bin/fm-test-run.sh --check-serial-drift <aggregate.json>` is a tripwire against this exact incident recurring silently.
+It fails when either condition holds:
+
+- a portable-serial lane in `<aggregate.json>` (the `tests-timing-aggregate` job's merged artifact) measured a wall above `PORTABLE_SERIAL_DRIFT_WALL_MS` (60% of `ci.yml`'s 20-minute job timeout; keep both in sync if the timeout changes);
+- more than `PORTABLE_SERIAL_DEFAULT_WEIGHT_MAX` current portable-serial scripts have no entry in `portable_serial_weight_hints` (`count_portable_serial_defaulted`).
+
+`.github/workflows/ci.yml`'s `tests-timing-aggregate` job runs this check right after building the aggregate artifact, so a drifting remainder fails CI with the refresh procedure above named in the log, instead of waiting for a shard to hit the job timeout.
+`<aggregate.json>` may be absent (for example, no lane produced timing JSON); the default-weight half of the check still runs against the current repo state.
 
 ## Coverage guard
 
@@ -98,7 +115,7 @@ It separately verifies that the portable serial CI shards are non-empty, disjoin
 ## Timing artifacts
 
 Portable shards, each portable serial shard, and the Herdr lane upload runner-generated timing JSON.
-`bin/fm-test-run.sh --aggregate-json` creates the combined summary artifact.
+`bin/fm-test-run.sh --aggregate-json` creates the combined summary artifact, which `--check-serial-drift` (see "Prevention" above) then reads.
 `.github/workflows/ci.yml` owns the exact artifact names and aggregation wiring.
 
 ## Local entry points
@@ -111,7 +128,7 @@ Portable shards, each portable serial shard, and the Herdr lane upload runner-ge
 | Lane | Bound | Rationale |
 |---|---|---|
 | portable parallel 1/2 | job `timeout-minutes: 10` | The measured shard sums are about three minutes and the timeout is a hang tripwire. |
-| portable serial 1-4 | job `timeout-minutes: 20` | Each balanced shard is about eleven minutes of measured script time, leaving roughly 2x hang-tripwire margin for job setup and runner-speed spread. |
+| portable serial 1-7 | job `timeout-minutes: 20` | Each balanced shard is about 8.6 minutes of measured script time, leaving roughly 2.3x hang-tripwire margin for job setup and runner-speed spread. |
 | Herdr | family-run step `timeout-minutes: 20`; job `timeout-minutes: 75` backstop | Healthy runs finish around 7 minutes, so the step bound is the hang tripwire (cleanup and timing artifacts still upload) while the job cap stays a last-resort backstop. |
 
 Timeouts are hang tripwires rather than expected healthy durations.

@@ -129,15 +129,17 @@ jobs:
   tests-portable-serial:
     name: Behavior portable serial ${{ matrix.shard }}
     runs-on: ubuntu-latest
-    # Measured whole remainder is ~42 min of serial work; the balanced shards
-    # are ~10.6 min each. Cap is a hang tripwire with roughly 2x margin, not the
-    # expected healthy end of the lane.
+    # Measured whole remainder is ~60 min of serial work; the balanced shards
+    # are ~8.6 min each. Cap is a hang tripwire with roughly 2.3x margin, not
+    # the expected healthy end of the lane. bin/fm-test-run.sh --check-serial-
+    # drift (wired into tests-timing-aggregate below) fails CI before that
+    # margin erodes back to the point of a real timeout.
     timeout-minutes: 20
     strategy:
       # Every shard reports so one failure never hides another shard's result.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -346,6 +348,12 @@ jobs:
           name: fm-test-timing-aggregate
           path: ${{ runner.temp }}/fm-test/fm-test-timing-aggregate.json
           if-no-files-found: warn
+      # Prevention tripwire for the 2026-09 serial-shard timeout drift
+      # (docs/fm-test-portable-shards.md "Prevention"): fails before the
+      # per-script hints in bin/fm-test-run.sh drift stale enough to risk the
+      # tests-portable-serial job timeout recurring silently.
+      - name: Check portable serial shard drift
+        run: bin/fm-test-run.sh --check-serial-drift "$RUNNER_TEMP/fm-test/fm-test-timing-aggregate.json"
 
   macos-stock-bash:
     name: Stock macOS Bash snapshot compatibility
