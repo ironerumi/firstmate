@@ -1201,7 +1201,7 @@ JSON
 }
 
 test_serial_drift_rejects_malformed_aggregate() {
-  local tmp out rc
+  local tmp out rc case_name payload
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-serialdrift-malformed.XXXXXX")
   printf '{' >"$tmp/truncated.json"
   set +e
@@ -1224,6 +1224,22 @@ JSON
   set -e
   [ "$rc" -ne 0 ] || { rm -rf "$tmp"; fail "drift check must reject a nonnumeric shard wall"; }
   assert_contains "$out" "could not read aggregate timing JSON" "nonnumeric shard wall failure is actionable"
+
+  for case_name in missing null boolean negative; do
+    case "$case_name" in
+      missing) payload='{"lanes":[{"selection":"lane=portable-serial-1of7","summary":{}}]}' ;;
+      null) payload='{"lanes":[{"selection":"lane=portable-serial-1of7","summary":{"duration_ms":null}}]}' ;;
+      boolean) payload='{"lanes":[{"selection":"lane=portable-serial-1of7","summary":{"duration_ms":true}}]}' ;;
+      negative) payload='{"lanes":[{"selection":"lane=portable-serial-1of7","summary":{"duration_ms":-1}}]}' ;;
+    esac
+    printf '%s\n' "$payload" >"$tmp/$case_name.json"
+    set +e
+    out=$("$RUNNER" --check-serial-drift "$tmp/$case_name.json" 2>&1)
+    rc=$?
+    set -e
+    [ "$rc" -ne 0 ] || { rm -rf "$tmp"; fail "drift check must reject a $case_name shard wall"; }
+    assert_contains "$out" "could not read aggregate timing JSON" "$case_name shard wall failure is actionable"
+  done
   rm -rf "$tmp"
   pass "check-serial-drift rejects malformed aggregate timing data"
 }

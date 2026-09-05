@@ -1013,7 +1013,9 @@ for lane in doc.get("lanes") or []:
     selection = lane.get("selection") or ""
     if not selection.startswith("lane=portable-serial-"):
         continue
-    ms = int((lane.get("summary") or {}).get("duration_ms") or 0)
+    ms = (lane.get("summary") or {}).get("duration_ms")
+    if type(ms) is not int or ms < 0:
+        raise ValueError(f"invalid duration_ms for {selection}")
     print(f"{selection}\t{ms}")
 PY
     ); then
