@@ -1,0 +1,27 @@
+SCENARIO: equivalent HTTPS/scp origins identify Firstmate
+scaffolded: /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-live-brief.wyEIfc/equiv/data/worker/brief.md (ship, mode=no-mistakes; replace {TASK} and {FIRSTMATE_SPEC})
+boundary_sections=1
+## Control-plane boundary
+
+This brief targets Firstmate's own repository, so Firstmate's entire control plane sits in your worktree.
+`bin/fm-*.sh` lifecycle entrypoints and the agent-only skills under `.agents/skills/` are Firstmate's controls, not tools for you to run.
+Do not run any Firstmate control or lifecycle script, including `fm-spawn`, `fm-send`, `fm-control`, `fm-teardown`, `fm-promote`, `fm-wake-drain`, `fm-captain-hold`, `fm-pr-merge`, `fm-pr-check`, `fm-merge-local`, and `fm-task-register`.
+Do not run any `tasks-axi` lifecycle verb (`hold`, `complete`, `answer`, `done`, `start`).
+Do not run the commands documented inside Firstmate's authority skills, such as `captain-hold-lifecycle` and `ask-user-authority`.
+You may and must edit those scripts as source code where the task calls for it: editing them is the work, running them as controls is not.
+You may run ordinary development tooling, including `git`, `bin/fm-lint.sh`, `bin/fm-test-run.sh`, individual `tests/*.test.sh`, and the validation pipeline when Firstmate tells you to validate.
+Firstmate files every decision, hold, and merge.
+
+SCENARIO: secondmate charter is transparent
+scaffolded: /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-live-brief.wyEIfc/secondmate/data/mate/brief.md (secondmate charter; replace {TASK})
+scaffolded: /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-live-brief.wyEIfc/secondmate/data/mate/brief.md (secondmate charter; replace {TASK})
+raw_sha256=a22157af9018af7348fd0a78289983decd87e5f8b676f60afd46f9d89e62d09e
+guarded_sha256=a22157af9018af7348fd0a78289983decd87e5f8b676f60afd46f9d89e62d09e
+boundary_sections=0
+
+SCENARIO: same-name foreign origin is transparent
+scaffolded: /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-live-brief.wyEIfc/foreign/data/foreign/brief.md (ship, mode=no-mistakes; replace {TASK} and {FIRSTMATE_SPEC})
+scaffolded: /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-live-brief.wyEIfc/foreign/data/foreign/brief.md (ship, mode=no-mistakes; replace {TASK} and {FIRSTMATE_SPEC})
+raw_sha256=7ba719033346d78aebfa5150c3b10b8da04496d9a04f014e67c52f71ba29b93f
+guarded_sha256=7ba719033346d78aebfa5150c3b10b8da04496d9a04f014e67c52f71ba29b93f
+boundary_sections=0

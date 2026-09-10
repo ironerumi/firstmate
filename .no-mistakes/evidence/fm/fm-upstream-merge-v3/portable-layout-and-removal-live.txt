@@ -1,0 +1,21 @@
+SCENARIO: portable CI exposes exactly five serial shards
+portable-parallel-1
+portable-parallel-2
+portable-serial
+portable-serial-1of5
+portable-serial-2of5
+portable-serial-3of5
+portable-serial-4of5
+portable-serial-5of5
+real-herdr-gated
+
+SCENARIO: complete-regression coverage guard and unhinted-percent bound
+FM_TEST_COVERAGE ok total=202 parallel=24 serial=165 serial_shards=5 serial_unhinted=19 herdr=13
+
+SCENARIO: stale seven-shard request is refused
+fm-test-run: lane 'portable-serial-1of7' asks for 7 portable serial shards but this runner is configured for 5 (see --list-lanes)
+exit_code=2
+
+SCENARIO: removed merge-wait command cannot be invoked
+zsh:15: no such file or directory: bin/fm-merge-wait-lib.sh
+exit_code=127

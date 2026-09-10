@@ -1,0 +1,18 @@
+SCENARIO: ordinary merge path refuses an unreleased captain hold
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+armed: state/held-task.check.sh
+error: task held-task is still held for the captain; release it before merging
+exit_code=1
+gh_axi_available_in_safe_path=no
+
+SCENARIO: --admin path also refuses an unreleased captain hold
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+armed: state/held-task.check.sh
+error: task held-task is still held for the captain; release it before merging
+exit_code=1
