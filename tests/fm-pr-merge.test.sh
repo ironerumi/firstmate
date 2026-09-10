@@ -72,8 +72,9 @@
 #       --admin) while metadata recording and the default --squash still apply
 #   (ay) near-miss --admin=<value> spellings fail fast before recording
 #   (az) repo overrides are still refused on the admin path
-#   (ba) a landed merge clears only the hold that recorded ITS captain merge
-#       wait, leaving any other captain hold in place
+#   (ba) a task still held for the captain refuses the merge before the forge
+#       is reached, and the same task merges once the hold is released, on
+#       both the gh-axi path and the --admin path
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -102,7 +103,10 @@ make_case() {
   local name=$1 case_dir fakebin
   case_dir="$TMP_ROOT/$name"
   fakebin="$case_dir/fakebin"
-  mkdir -p "$case_dir/state" "$fakebin"
+  mkdir -p "$case_dir/state" "$case_dir/home/data" "$case_dir/home/config" "$fakebin"
+  cp "$ROOT/.tasks.toml" "$case_dir/home/.tasks.toml"
+  printf '%s\n' '## In flight' '' '## Queued' '' '## Done' \
+    > "$case_dir/home/data/backlog.md"
   fm_write_meta "$case_dir/state/task-x1.meta" \
     "window=fm-task-x1" \
     "worktree=$case_dir/wt" \
@@ -361,7 +365,7 @@ glab_merge_line() {
 run_pr_merge() {
   local case_dir=$1 rc; shift
   FM_ROOT_OVERRIDE="$ROOT" \
-  FM_HOME="${FM_TEST_HOME:-$ROOT}" \
+  FM_HOME="${FM_TEST_HOME:-$case_dir/home}" \
   FM_STATE_OVERRIDE="$case_dir/state" \
   FM_TEST_GH_AXI_LOG="$case_dir/gh-axi.log" \
   FM_TEST_GH_LOG="$case_dir/gh.log" \
@@ -371,6 +375,7 @@ run_pr_merge() {
   FM_TEST_REAL_MV="$REAL_MV" \
   FM_TEST_GLAB_LOG="$case_dir/glab.log" \
   FM_TEST_GLAB_JSON="$case_dir/mr.json" \
+  HOME="${FM_TEST_USER_HOME:-$case_dir/user-home}" \
   PATH="$case_dir/fakebin:$PATH" \
     "$PR_MERGE" "$@"
   rc=$?
@@ -1551,38 +1556,75 @@ test_parses_pr_url_for_gh_axi() {
   pass "fm-pr-merge parses a GitHub PR URL into gh-axi number and --repo arguments"
 }
 
-# Landing a PR answers the wait for THAT merge and nothing else. A
-# captain-reserved post-merge release or operational step is recorded as a
-# captain hold in exactly the same way, and the captain's merge/release
-# decoupling only works if it survives the merge that precedes it.
-test_merge_clears_only_the_merge_wait_hold() {
-  local case_dir home
+# The merge gate refuses a task that is still held for the captain. Under the
+# captain-hold lifecycle the hold is released by the captain's answer before
+# this entrypoint is invoked, so a still-held task never reaches the forge, and
+# releasing the hold is what unblocks the merge.
+test_hold_gate_refuses_until_released() {
+  local case_dir home rc
   if ! command -v tasks-axi >/dev/null 2>&1; then
-    pass "SKIP (tasks-axi not found): merge clears only the merge-wait hold"
+    pass "SKIP (tasks-axi not found): a held task blocks the merge"
     return
   fi
-  case_dir=$(make_case merge-wait-hold)
+  case_dir=$(make_case hold-gate)
   mkdir -p "$case_dir/wt"
   add_gh_mocks "$case_dir" bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
   : > "$case_dir/gh-axi.log"
   home="$case_dir/home"
-  mkdir -p "$home/data"
-  cp "$ROOT/.tasks.toml" "$home/.tasks.toml"
-  printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
   (cd "$home" && tasks-axi add task-x1 "sample ship" --repo sample --start) >/dev/null
   (cd "$home" && tasks-axi hold task-x1 --reason "green PR waiting on the captain to merge" --kind captain) >/dev/null
 
-  FM_TEST_HOME="$home" run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/41 \
-    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "merge-wait-hold: fm-pr-merge failed"
-  (cd "$home" && tasks-axi show task-x1 --full) | grep -q '^  held: no' \
-    || fail "merge-wait-hold: landing the PR did not clear the merge-wait hold"
+  set +e
+  FM_TEST_HOME="$home" run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/71 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
 
-  (cd "$home" && tasks-axi hold task-x1 --reason "captain-reserved production release after merge" --kind captain) >/dev/null
-  FM_TEST_HOME="$home" run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/41 \
-    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "merge-wait-hold: second fm-pr-merge failed"
-  (cd "$home" && tasks-axi show task-x1 --full) | grep -q '^  held: yes' \
-    || fail "merge-wait-hold: landing the PR cleared a captain-reserved post-merge step"
-  pass "fm-pr-merge clears the merge-wait hold and preserves a reserved post-merge step"
+  expect_code 1 "$rc" "hold-gate: a still-held task must refuse the merge"
+  assert_grep 'still held for the captain' "$case_dir/stderr" \
+    "hold-gate: the refusal did not name the unreleased captain hold"
+  assert_no_grep 'pr merge' "$case_dir/gh-axi.log" \
+    "hold-gate: the forge was invoked for a still-held task"
+
+  (cd "$home" && tasks-axi unhold task-x1) >/dev/null
+  FM_TEST_HOME="$home" run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/71 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "hold-gate: the merge failed after the hold was released"
+  grep -qxF 'pr merge 71 --repo example/repo --squash' "$case_dir/gh-axi.log" \
+    || fail "hold-gate: the released task did not reach gh-axi"
+  pass "fm-pr-merge refuses a still-held task and merges once the hold is released"
+}
+
+# The admin path is the captain's branch-protection override, not an exemption
+# from the hold gate: a still-held task refuses before plain gh is reached.
+test_admin_path_passes_through_the_hold_gate() {
+  local case_dir home rc
+  if ! command -v tasks-axi >/dev/null 2>&1; then
+    pass "SKIP (tasks-axi not found): the admin path respects the hold gate"
+    return
+  fi
+  case_dir=$(make_case admin-hold-gate)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" cccccccccccccccccccccccccccccccccccccccc
+  : > "$case_dir/gh-axi.log"
+  : > "$case_dir/gh.log"
+  home="$case_dir/home"
+  (cd "$home" && tasks-axi add task-x1 "sample ship" --repo sample --start) >/dev/null
+  (cd "$home" && tasks-axi hold task-x1 --reason "green PR waiting on the captain to merge" --kind captain) >/dev/null
+
+  set +e
+  FM_TEST_HOME="$home" run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/72 -- --admin \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "admin-hold-gate: an admin merge of a still-held task must refuse"
+  assert_grep 'still held for the captain' "$case_dir/stderr" \
+    "admin-hold-gate: the refusal did not name the unreleased captain hold"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" \
+    "admin-hold-gate: the admin path reached plain gh for a still-held task"
+  assert_no_grep 'pr merge' "$case_dir/gh-axi.log" \
+    "admin-hold-gate: the gh-axi path was invoked for a still-held task"
+  pass "the --admin path refuses a still-held task before reaching the forge"
 }
 
 test_gitlab_url_resolves_and_merges() {
@@ -1941,15 +1983,21 @@ test_secondmate_merge_reports_upward_once() {
 
   assert_grep "done [key=merged-task-x1]: merged task-x1 $url" "$replies" \
     "secondmate-merge-reports: the landed PR was not reported upward"
-  [ "$(wc -l <"$replies")" -eq 1 ] \
-    || fail "secondmate-merge-reports: one merge produced more than one upward line"
+  [ "$(grep -c 'merged-task-x1' "$replies")" -eq 1 ] \
+    || fail "secondmate-merge-reports: one merge produced more than one upward merge line"
+  # The merge path registers the PR first, and that registration publishes the
+  # child's ready line on the same channel from fm-pr-check itself.
+  assert_grep "done [key=child-pr-task-x1]: child task-x1 PR ready: $url" "$replies" \
+    "secondmate-merge-reports: the registration's ready line was not reported upward"
 
   # The same merge again: the forge accepts it in this fixture, so only the
   # at-most-once contract can keep the parent from being told twice.
   FM_TEST_HOME="$case_dir/home" run_pr_merge "$case_dir" task-x1 "$url" \
     >"$case_dir/stdout2" 2>"$case_dir/stderr2" || fail "secondmate-merge-reports: repeat merge failed"
-  [ "$(parent_reply_lines "$replies" "$url")" -eq 1 ] \
+  [ "$(grep -c 'merged-task-x1' "$replies")" -eq 1 ] \
     || fail "secondmate-merge-reports: a repeat merge of the same PR duplicated the upward line"
+  [ "$(parent_reply_lines "$replies" "$url")" -eq 2 ] \
+    || fail "secondmate-merge-reports: a repeat merge changed the upward lines: $(cat "$replies")"
   pass "a merge a secondmate home performs itself is reported upward exactly once"
 }
 
@@ -1985,7 +2033,9 @@ test_failed_merge_reports_nothing() {
   set -e
 
   expect_code 1 "$rc" "failed-merge-silent: a failed merge should propagate"
-  assert_absent "$case_dir/state/parent-replies.status" \
+  # The registration's ready line is a fact of its own; only a merge line
+  # would misreport the unlanded merge.
+  assert_no_grep 'merged-task-x1' "$case_dir/state/parent-replies.status" \
     "failed-merge-silent: a merge that never landed was reported as landed"
   pass "a refused or failed merge reports no outcome"
 }
@@ -2004,7 +2054,9 @@ test_gitlab_refusal_reports_nothing() {
   set -e
 
   expect_code 1 "$rc" "gitlab-refusal-silent: a refused GitLab merge should exit non-zero"
-  assert_absent "$case_dir/state/parent-replies.status" \
+  # Registration succeeds before the later GitLab pre-merge refusal, so the
+  # PR-ready fact is expected; only a merged outcome would be false.
+  assert_no_grep 'merged-task-x1' "$case_dir/state/parent-replies.status" \
     "gitlab-refusal-silent: a refused merge request was reported as landed"
   pass "a GitLab merge refused before the forge call reports no outcome"
 }
@@ -2195,7 +2247,8 @@ test_github_agreeing_queue_rules_keep_retry_guidance
 test_github_conflicting_queue_rules_report_ambiguity
 test_verified_merge_records_pr_and_head
 test_pr_metadata_is_recorded_before_the_forge_call
-test_merge_clears_only_the_merge_wait_hold
+test_hold_gate_refuses_until_released
+test_admin_path_passes_through_the_hold_gate
 test_admin_flag_routes_through_gh
 test_admin_variant_refused_before_recording
 test_admin_with_repo_override_refused
@@ -2242,6 +2295,183 @@ test_gitlab_stale_recorded_head_is_reported
 test_gitlab_unreadable_state_refuses
 test_gitlab_invalid_head_refuses
 test_gitlab_missing_tool_refuses_before_recording
+
+# The merge gate asks whether the task is still held for the captain. A home
+# that carries no backlog records no captain calls at all, so nothing can be
+# held and the merge must proceed; a backlog that EXISTS but cannot be read may
+# hide a live hold, so that one must refuse. The two states are distinct and
+# only the second is a refusal.
+test_absent_backlog_still_merges() {
+  local case_dir rc
+  case_dir=$(make_case absent-backlog-merges)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" 6161616161616161616161616161616161616161
+  : > "$case_dir/gh-axi.log"
+  rm -f "$case_dir/home/data/backlog.md"
+
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/61 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "absent-backlog-merges: a home with no backlog must still merge"
+  assert_no_grep 'held for the captain' "$case_dir/stderr" \
+    "absent-backlog-merges: an absent backlog was read as a captain hold"
+  grep -qxF 'pr merge 61 --repo example/repo --squash' "$case_dir/gh-axi.log" \
+    || fail "absent-backlog-merges: the merge was not attempted"
+  pass "fm-pr-merge proceeds when the home carries no backlog at all"
+}
+
+test_unreadable_backlog_refuses_the_merge() {
+  local case_dir rc
+  case_dir=$(make_case unreadable-backlog-refuses)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" 6262626262626262626262626262626262626262
+  : > "$case_dir/gh-axi.log"
+  chmod 000 "$case_dir/home/data/backlog.md"
+
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/62 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  chmod 644 "$case_dir/home/data/backlog.md"
+
+  expect_code 1 "$rc" "unreadable-backlog-refuses: an unreadable authority record must refuse"
+  assert_grep 'refusing to merge' "$case_dir/stderr" \
+    "unreadable-backlog-refuses: the refusal did not say it refused to merge"
+  [ ! -s "$case_dir/gh-axi.log" ] \
+    || fail "unreadable-backlog-refuses: the forge was called despite an unreadable record"
+  pass "fm-pr-merge refuses when the backlog exists but cannot be read"
+}
+
+test_unreadable_backend_config_refuses_the_merge() {
+  local case_dir rc
+  case_dir=$(make_case unreadable-backend-config-refuses)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" 6363636363636363636363636363636363636363
+  : > "$case_dir/gh-axi.log"
+  rm -f "$case_dir/home/data/backlog.md"
+  chmod 000 "$case_dir/home/.tasks.toml"
+
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/63 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  chmod 644 "$case_dir/home/.tasks.toml"
+
+  expect_code 1 "$rc" "unreadable-backend-config-refuses: an unreadable authority route must refuse"
+  assert_grep 'tasks-axi backend configuration cannot be read' "$case_dir/stderr" \
+    "unreadable-backend-config-refuses: the unreadable authority route was not named"
+  [ ! -s "$case_dir/gh-axi.log" ] \
+    || fail "unreadable-backend-config-refuses: the forge was called despite an unreadable authority route"
+  pass "fm-pr-merge refuses when its configured backend cannot be read"
+}
+
+test_unreadable_user_backend_config_refuses_the_merge() {
+  local case_dir rc user_config
+  case_dir=$(make_case unreadable-user-backend-config-refuses)
+  user_config="$case_dir/user-home/.tasks-axi/config.toml"
+  mkdir -p "$case_dir/wt" "${user_config%/*}"
+  add_gh_mocks "$case_dir" 6464646464646464646464646464646464646464
+  : > "$case_dir/gh-axi.log"
+  rm -f "$case_dir/home/.tasks.toml" "$case_dir/home/data/backlog.md"
+  printf '%s\n' 'backend = "beads"' > "$user_config"
+  chmod 000 "$user_config"
+
+  set +e
+  FM_TEST_USER_HOME="$case_dir/user-home" \
+    run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/64 \
+      > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  chmod 644 "$user_config"
+
+  expect_code 1 "$rc" "unreadable-user-backend-config-refuses: an unreadable authority route must refuse"
+  assert_grep "tasks-axi backend configuration cannot be read at $user_config" "$case_dir/stderr" \
+    "unreadable-user-backend-config-refuses: the unreadable authority route was not named"
+  [ ! -s "$case_dir/gh-axi.log" ] \
+    || fail "unreadable-user-backend-config-refuses: the forge was called despite an unreadable authority route"
+  pass "fm-pr-merge refuses when its user backend configuration cannot be read"
+}
+
+test_untraversable_user_backend_config_directory_refuses_the_merge() {
+  local case_dir rc user_config
+  case_dir=$(make_case untraversable-user-backend-config-directory-refuses)
+  user_config="$case_dir/user-home/.tasks-axi/config.toml"
+  mkdir -p "$case_dir/wt" "${user_config%/*}"
+  add_gh_mocks "$case_dir" 6666666666666666666666666666666666666666
+  : > "$case_dir/gh-axi.log"
+  rm -f "$case_dir/home/.tasks.toml" "$case_dir/home/data/backlog.md"
+  printf '%s\n' 'backend = "beads"' > "$user_config"
+  chmod 000 "${user_config%/*}"
+
+  set +e
+  FM_TEST_USER_HOME="$case_dir/user-home" \
+    run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/66 \
+      > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  chmod 755 "${user_config%/*}"
+
+  expect_code 1 "$rc" "untraversable-user-backend-config-directory-refuses: an unreadable authority route must refuse"
+  assert_grep "tasks-axi backend configuration cannot be read at $user_config" "$case_dir/stderr" \
+    "untraversable-user-backend-config-directory-refuses: the unreadable authority route was not named"
+  [ ! -s "$case_dir/gh-axi.log" ] \
+    || fail "untraversable-user-backend-config-directory-refuses: the forge was called despite an unreadable authority route"
+  pass "fm-pr-merge refuses when its user backend configuration directory cannot be traversed"
+}
+
+test_absent_user_backend_config_directory_and_backlog_still_merge() {
+  local case_dir rc
+  case_dir=$(make_case absent-user-backend-config-directory-and-backlog-merges)
+  mkdir -p "$case_dir/wt" "$case_dir/user-home"
+  add_gh_mocks "$case_dir" 6767676767676767676767676767676767676767
+  : > "$case_dir/gh-axi.log"
+  rm -f "$case_dir/home/.tasks.toml" "$case_dir/home/data/backlog.md"
+
+  set +e
+  FM_TEST_USER_HOME="$case_dir/user-home" \
+    run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/67 \
+      > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "absent-user-backend-config-directory-and-backlog-merges: sound defaults and no backlog must permit merging"
+  [ "$(grep -c '^pr merge ' "$case_dir/gh-axi.log")" -eq 1 ] \
+    || fail "absent-user-backend-config-directory-and-backlog-merges: the forge must merge exactly once"
+  grep -qxF 'pr merge 67 --repo example/repo --squash' "$case_dir/gh-axi.log" \
+    || fail "absent-user-backend-config-directory-and-backlog-merges: the expected merge was not attempted"
+  pass "fm-pr-merge proceeds once when its user configuration directory and backlog are genuinely absent"
+}
+
+test_backend_override_bypasses_unreadable_user_config() {
+  local case_dir rc user_config
+  case_dir=$(make_case backend-override-bypasses-unreadable-user-config)
+  user_config="$case_dir/user-home/.tasks-axi/config.toml"
+  mkdir -p "$case_dir/wt" "${user_config%/*}"
+  add_gh_mocks "$case_dir" 6565656565656565656565656565656565656565
+  : > "$case_dir/gh-axi.log"
+  rm -f "$case_dir/home/.tasks.toml" "$case_dir/home/data/backlog.md"
+  printf '%s\n' 'backend = "beads"' > "$user_config"
+  chmod 000 "$user_config"
+
+  set +e
+  TASKS_AXI_BACKEND=markdown FM_TEST_USER_HOME="$case_dir/user-home" \
+    run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/65 \
+      > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  chmod 644 "$user_config"
+
+  expect_code 0 "$rc" "backend-override-bypasses-unreadable-user-config: an explicit backend must bypass config"
+  grep -qxF 'pr merge 65 --repo example/repo --squash' "$case_dir/gh-axi.log" \
+    || fail "backend-override-bypasses-unreadable-user-config: the merge was not attempted"
+  pass "fm-pr-merge honors a backend override over an unreadable user configuration"
+}
+
 test_gitlab_head_override_args_refuse_before_recording
 test_secondmate_merge_reports_upward_once
 test_secondmate_merge_reports_on_the_local_route
@@ -2254,3 +2484,10 @@ test_queued_github_merge_leaves_the_poll_armed
 test_distinct_merged_prs_keep_distinct_wakes
 test_uncommitted_marker_retry_is_never_silent
 test_secondmate_without_parent_binding_is_loud
+test_absent_backlog_still_merges
+test_unreadable_backlog_refuses_the_merge
+test_unreadable_backend_config_refuses_the_merge
+test_unreadable_user_backend_config_refuses_the_merge
+test_untraversable_user_backend_config_directory_refuses_the_merge
+test_absent_user_backend_config_directory_and_backlog_still_merge
+test_backend_override_bypasses_unreadable_user_config
