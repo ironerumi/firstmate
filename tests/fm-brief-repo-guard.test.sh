@@ -8,6 +8,7 @@
 #   (c) a non-firstmate target produces byte-identical brief content to a raw
 #       bin/fm-brief.sh run with the same arguments
 #   (d) a same-named project with a foreign origin remains byte-identical
+#   (e) equivalent supported origin spellings identify the Firstmate repo
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -90,6 +91,31 @@ test_same_named_foreign_origin_is_byte_identical() {
   pass "a same-named foreign repository scaffolds byte-identically through the wrapper"
 }
 
+test_equivalent_origin_spellings_append_the_boundary() {
+  local case_dir count label target_origin
+  while IFS='|' read -r label target_origin; do
+    case_dir=$(make_case "equivalent-origin-$label" renamed-root)
+    mkdir -p "$case_dir/fmroot/renamed-root/projects/firstmate"
+    git -C "$case_dir/fmroot/renamed-root" init -q
+    git -C "$case_dir/fmroot/renamed-root" remote add origin https://github.com/ironerumi/firstmate.git
+    git -C "$case_dir/fmroot/renamed-root/projects/firstmate" init -q
+    git -C "$case_dir/fmroot/renamed-root/projects/firstmate" remote add origin "$target_origin"
+
+    run_brief "$case_dir" "$GUARD" renamed-root "task-$label" firstmate --mode no-mistakes \
+      > "$case_dir/stdout" 2>&1 || fail "equivalent-origin-$label: the guarded scaffold failed"
+
+    count=$(grep -c '^## Control-plane boundary$' "$case_dir/home/data/task-$label/brief.md")
+    [ "$count" = 1 ] || fail "equivalent-origin-$label: expected exactly one boundary section, got $count"
+  done <<'EOF'
+https|https://GITHUB.COM/ironerumi/firstmate.git/
+http|http://github.com/ironerumi/firstmate.git
+ssh|ssh://git@github.com/ironerumi/firstmate.git
+git|git://GitHub.Com/ironerumi/firstmate.git
+scp|git@GITHUB.COM:ironerumi/firstmate.git
+EOF
+  pass "equivalent supported origin spellings identify the Firstmate repository"
+}
+
 test_firstmate_workers_append_the_boundary_once() {
   local kind case_dir brief count
   for kind in ship scout; do
@@ -138,3 +164,4 @@ test_firstmate_secondmate_charter_is_transparent
 test_firstmate_workers_append_the_boundary_once
 test_non_firstmate_target_is_byte_identical
 test_same_named_foreign_origin_is_byte_identical
+test_equivalent_origin_spellings_append_the_boundary

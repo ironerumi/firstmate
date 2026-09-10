@@ -12,8 +12,9 @@
 #
 # The caller-supplied repo string cannot identify Firstmate's own repo on its
 # own, so detection is explicit and conservative. The target counts as the
-# Firstmate repo when a registered project clone has the same origin as the code
-# root, or when its unresolved name matches the code root's origin repo name.
+# Firstmate repo when a registered project clone has the same canonical
+# host/owner/repo origin as the code root, or when its unresolved name matches
+# the code root's origin repo name.
 # The code-root basename is used only when neither origin can be resolved.
 # Anything else leaves the brief alone.
 #
@@ -75,17 +76,42 @@ fi
 BRIEF="$DATA/$ID/brief.md"
 [ -f "$BRIEF" ] || exit 0
 
-# strip_git_suffix <url>: drop a trailing slash and a trailing .git so two
-# spellings of one remote compare equal.
-strip_git_suffix() {
+# canonical_remote_identity <url>: normalize supported transport spellings to
+# a host/owner/repo identity while preserving path case.
+canonical_remote_identity() {
   local url=$1
+  local authority host path
   url=${url%/}
   url=${url%.git}
-  printf '%s\n' "$url"
+  case "$url" in
+    http://* | https://* | ssh://* | git://*)
+      url=${url#*://}
+      case "$url" in
+        */*) ;;
+        *) return 1 ;;
+      esac
+      authority=${url%%/*}
+      path=${url#*/}
+      host=${authority##*@}
+      ;;
+    *:*)
+      authority=${url%%:*}
+      path=${url#*:}
+      host=${authority##*@}
+      ;;
+    *) return 1 ;;
+  esac
+  [ -n "$host" ] && [ -n "$path" ] || return 1
+  case "$path" in
+    */*) ;;
+    *) return 1 ;;
+  esac
+  host=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')
+  printf '%s/%s\n' "$host" "$path"
 }
 
 is_firstmate_repo() {
-  local repo=$1 root_name root_origin target_origin
+  local repo=$1 root_identity root_name root_origin target_identity target_origin
   [ -n "$repo" ] || return 1
   root_origin=$(git -C "$FM_ROOT" config --get remote.origin.url 2>/dev/null || true)
   target_origin=
@@ -94,12 +120,14 @@ is_firstmate_repo() {
   fi
   if [ -n "$target_origin" ]; then
     [ -n "$root_origin" ] || return 1
-    [ "$(strip_git_suffix "$target_origin")" = "$(strip_git_suffix "$root_origin")" ]
+    root_identity=$(canonical_remote_identity "$root_origin") || return 1
+    target_identity=$(canonical_remote_identity "$target_origin") || return 1
+    [ "$target_identity" = "$root_identity" ]
     return
   fi
   if [ -n "$root_origin" ]; then
-    root_name=$(strip_git_suffix "$root_origin")
-    root_name=${root_name##*/}
+    root_identity=$(canonical_remote_identity "$root_origin") || return 1
+    root_name=${root_identity##*/}
     [ -n "$root_name" ] && [ "$repo" = "$root_name" ]
     return
   fi
