@@ -519,7 +519,7 @@ pass "confirmed marker cleanup cannot fail a completed remote handoff"
 
 CONFIRM_MV_FAKEBIN="$TMP_ROOT/confirm-mv-fakebin"
 mkdir -p "$CONFIRM_MV_FAKEBIN"
-REAL_MV=$(command -v mv)
+REAL_MV=$(fm_real_tool mv)
 cat > "$CONFIRM_MV_FAKEBIN/mv" <<'SH'
 #!/usr/bin/env bash
 last=${!#}
@@ -567,7 +567,7 @@ pass "delivered pending state cannot suppress a new handoff wake"
 
 MV_FAKEBIN="$TMP_ROOT/mv-fakebin"
 mkdir -p "$MV_FAKEBIN"
-REAL_MV=$(command -v mv)
+REAL_MV=$(fm_real_tool mv)
 cat > "$MV_FAKEBIN/mv" <<'SH'
 #!/usr/bin/env bash
 last=${!#}

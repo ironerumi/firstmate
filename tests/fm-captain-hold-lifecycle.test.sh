@@ -3623,7 +3623,7 @@ SH
     --decision-file "$local_home/race-answer.txt" >/dev/null \
     || fail "could not release the local teardown-race fixture"
 
-  real_git=$(command -v git)
+  real_git=$(fm_real_tool git)
   local_ready="$local_home/local-validation-ready"
   local_release="$local_home/local-validation-release"
   cat > "$local_home/fakebin/git" <<'SH'

@@ -253,7 +253,7 @@ test_receipt_commit_failure_repeats_the_already_presented_backstop() {
   out="$dir/failed.out"
   retry_out="$dir/retry.out"
   final_out="$dir/final.out"
-  real_mv=$(command -v mv)
+  real_mv=$(fm_real_tool mv)
   mkdir -p "$fakebin"
 
   printf 'done: presentation precedes its durable receipt\n' > "$state/atomic-task.status"

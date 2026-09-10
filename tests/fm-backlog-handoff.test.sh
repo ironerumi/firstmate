@@ -423,7 +423,7 @@ test_delivery_confirmation_crash_does_not_resend() {
 ## Done
 EOF
   printf '## Queued\n\n## Done\n' > "$sub/data/backlog.md"
-  real_rm=$(command -v rm)
+  real_rm=$(fm_real_tool rm)
   fm_fake_crash_injector "$fakebin"
   cat > "$fakebin/rm" <<'SH'
 #!/usr/bin/env bash
@@ -502,7 +502,7 @@ test_unresolved_delivery_attempt_refuses_immediate_resend() {
 ## Done
 EOF
   printf '## Queued\n\n## Done\n' > "$sub/data/backlog.md"
-  real_mv=$(command -v mv)
+  real_mv=$(fm_real_tool mv)
   fm_fake_crash_injector "$fakebin"
   cat > "$fakebin/mv" <<'SH'
 #!/usr/bin/env bash
@@ -693,7 +693,7 @@ test_local_teardown_preserves_wake_when_home_removal_fails() {
   printf 'pending:%s\n' "$corr" > "$marker"
   cp -p -- "$marker" "$marker_before"
   cp -p -- "$rec" "$rec_before"
-  real_rm=$(command -v rm)
+  real_rm=$(fm_real_tool rm)
   fail_home=$(cd "$sub" && pwd -P)
   cat > "$rm_bin/rm" <<'SH'
 #!/usr/bin/env bash
