@@ -12,13 +12,10 @@
 #
 # The caller-supplied repo string cannot identify Firstmate's own repo on its
 # own, so detection is explicit and conservative. The target counts as the
-# Firstmate repo when any of these holds:
-#   1. the repo name equals the basename of the Firstmate code root;
-#   2. the repo name equals the last path segment of the code root's origin URL
-#      (minus a trailing .git), so a renamed checkout directory still matches;
-#   3. <projects-dir>/<repo> is a clone whose origin URL equals the code root's
-#      origin URL, so a registered project clone of this repo matches too.
-# Anything else, including every unresolvable case, leaves the brief alone.
+# Firstmate repo when a registered project clone has the same origin as the code
+# root, or when its unresolved name matches the code root's origin repo name.
+# The code-root basename is used only when neither origin can be resolved.
+# Anything else leaves the brief alone.
 #
 # Usage: fm-brief-repo-guard.sh <same args as bin/fm-brief.sh>
 #   Run bin/fm-brief.sh --help for the authoritative scaffold usage; that help
@@ -87,32 +84,26 @@ strip_git_suffix() {
   printf '%s\n' "$url"
 }
 
-firstmate_origin_repo_name() {
-  local url
-  url=$(git -C "$FM_ROOT" config --get remote.origin.url 2>/dev/null || true)
-  [ -n "$url" ] || return 1
-  url=$(strip_git_suffix "$url")
-  url=${url##*/}
-  [ -n "$url" ] || return 1
-  printf '%s\n' "$url"
-}
-
 is_firstmate_repo() {
-  local repo=$1 root_name root_origin clone_origin
+  local repo=$1 root_name root_origin target_origin
   [ -n "$repo" ] || return 1
-  [ "$repo" = "$(basename "$FM_ROOT")" ] && return 0
-  if root_name=$(firstmate_origin_repo_name); then
-    [ "$repo" = "$root_name" ] && return 0
-  fi
+  root_origin=$(git -C "$FM_ROOT" config --get remote.origin.url 2>/dev/null || true)
+  target_origin=
   if [ -d "$PROJECTS/$repo" ]; then
-    root_origin=$(git -C "$FM_ROOT" config --get remote.origin.url 2>/dev/null || true)
-    clone_origin=$(git -C "$PROJECTS/$repo" config --get remote.origin.url 2>/dev/null || true)
-    if [ -n "$root_origin" ] && [ -n "$clone_origin" ] &&
-      [ "$(strip_git_suffix "$clone_origin")" = "$(strip_git_suffix "$root_origin")" ]; then
-      return 0
-    fi
+    target_origin=$(git -C "$PROJECTS/$repo" config --get remote.origin.url 2>/dev/null || true)
   fi
-  return 1
+  if [ -n "$target_origin" ]; then
+    [ -n "$root_origin" ] || return 1
+    [ "$(strip_git_suffix "$target_origin")" = "$(strip_git_suffix "$root_origin")" ]
+    return
+  fi
+  if [ -n "$root_origin" ]; then
+    root_name=$(strip_git_suffix "$root_origin")
+    root_name=${root_name##*/}
+    [ -n "$root_name" ] && [ "$repo" = "$root_name" ]
+    return
+  fi
+  [ "$repo" = "$(basename "$FM_ROOT")" ]
 }
 
 is_firstmate_repo "$REPO" || exit 0

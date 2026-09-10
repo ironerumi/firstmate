@@ -7,6 +7,7 @@
 #   (b) Firstmate-repo ship and scout briefs gain the boundary exactly once
 #   (c) a non-firstmate target produces byte-identical brief content to a raw
 #       bin/fm-brief.sh run with the same arguments
+#   (d) a same-named project with a foreign origin remains byte-identical
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -63,6 +64,32 @@ test_non_firstmate_target_is_byte_identical() {
   pass "a non-firstmate target scaffolds byte-identically through the wrapper"
 }
 
+test_same_named_foreign_origin_is_byte_identical() {
+  local case_dir raw_brief wrapped_brief
+  case_dir=$(make_case same-name-foreign-origin firstmate)
+  mkdir -p "$case_dir/fmroot/firstmate/projects/firstmate"
+  git -C "$case_dir/fmroot/firstmate" init -q
+  git -C "$case_dir/fmroot/firstmate" remote add origin git@example.test:ironerumi/firstmate.git
+  git -C "$case_dir/fmroot/firstmate/projects/firstmate" init -q
+  git -C "$case_dir/fmroot/firstmate/projects/firstmate" remote add origin git@example.test:another/firstmate.git
+
+  run_brief "$case_dir" "$RAW" firstmate taskd1 firstmate --mode no-mistakes \
+    > "$case_dir/raw.stdout" 2>&1 || fail "same-name-foreign-origin: the raw scaffold failed"
+  raw_brief="$case_dir/raw-brief.md"
+  cp "$case_dir/home/data/taskd1/brief.md" "$raw_brief"
+  rm -rf "$case_dir/home/data/taskd1"
+
+  run_brief "$case_dir" "$GUARD" firstmate taskd1 firstmate --mode no-mistakes \
+    > "$case_dir/wrapped.stdout" 2>&1 || fail "same-name-foreign-origin: the wrapped scaffold failed"
+  wrapped_brief="$case_dir/home/data/taskd1/brief.md"
+
+  cmp -s "$raw_brief" "$wrapped_brief" \
+    || fail "same-name-foreign-origin: the wrapper changed a foreign repository brief"
+  assert_no_grep '## Control-plane boundary' "$wrapped_brief" \
+    "same-name-foreign-origin: the boundary section was appended to a foreign repository brief"
+  pass "a same-named foreign repository scaffolds byte-identically through the wrapper"
+}
+
 test_firstmate_workers_append_the_boundary_once() {
   local kind case_dir brief count
   for kind in ship scout; do
@@ -110,3 +137,4 @@ test_firstmate_secondmate_charter_is_transparent() {
 test_firstmate_secondmate_charter_is_transparent
 test_firstmate_workers_append_the_boundary_once
 test_non_firstmate_target_is_byte_identical
+test_same_named_foreign_origin_is_byte_identical
