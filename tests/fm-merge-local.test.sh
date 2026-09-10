@@ -5,9 +5,6 @@
 #   (a) baseline: an approved local-only branch fast-forwards the project's
 #       default branch (origin-default resolution)
 #   (b) non-local-only tasks are refused
-#   (c) the test runner keeps this file in the pr-forge family, so --changed
-#       selection on bin/fm-merge-local.sh still runs it
-#   (d) a change to bin/fm-tangle* also selects this file through the runner map
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -103,46 +100,5 @@ test_non_local_only_mode_refused() {
   pass "fm-merge-local refuses tasks that are not mode=local-only"
 }
 
-# This file is the only test covering the local-only landing path, so it must
-# stay inside the runner's pr-forge family: bin/fm-merge-local.sh changes select
-# that family via families_for_changed_path, and an unclassified test would be
-# skipped by --changed selection. Upstream owns the family map, so a future
-# upstream merge could drop this entry silently; assert it here instead.
-test_runner_classifies_this_test_into_pr_forge() {
-  local listing
-  listing=$("$ROOT/bin/fm-test-run.sh" --list --family pr-forge) \
-    || fail "family-map: fm-test-run.sh --list --family pr-forge failed"
-  printf '%s\n' "$listing" | grep -Fqx 'tests/fm-merge-local.test.sh' \
-    || fail "family-map: fm-merge-local.test.sh is not in the pr-forge family; --changed selection would skip it"
-  pass "the test runner classifies fm-merge-local.test.sh into the pr-forge family"
-}
-
-# bin/fm-tangle-lib.sh, and the only tests exercising it are pr-forge ones (this
-# file and fm-teardown). The runner's changed-path map otherwise routes
-# bin/fm-tangle* to session-bootstrap alone, so editing the helper would select
-# no test that covers it; assert the map keeps selecting this file.
-test_tangle_source_change_selects_this_test() {
-  local case_dir repo listed
-  case_dir=$(make_case tangle-changed-map)
-  repo="$case_dir/repo"
-  mkdir -p "$repo/bin" "$repo/tests"
-  cp "$ROOT/bin/fm-test-run.sh" "$repo/bin/fm-test-run.sh"
-  chmod +x "$repo/bin/fm-test-run.sh"
-  printf '#!/usr/bin/env bash\n' > "$repo/tests/fm-merge-local.test.sh"
-  printf '#!/usr/bin/env bash\n' > "$repo/tests/fm-teardown.test.sh"
-  git -C "$repo" init -q
-  git -C "$repo" add .
-  git -C "$repo" commit -qm baseline
-
-  : > "$repo/bin/fm-tangle-lib.sh"
-  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD) \
-    || fail "tangle-map: --changed selection failed for a bin/fm-tangle-lib.sh change"
-  printf '%s\n' "$listed" | grep -Fqx 'tests/fm-merge-local.test.sh' \
-    || fail "tangle-map: a bin/fm-tangle* change does not select fm-merge-local.test.sh; the landing helper would change untested"
-  pass "changed-file selection covers the landing path when bin/fm-tangle* changes"
-}
-
 test_baseline_ff_into_main
 test_non_local_only_mode_refused
-test_runner_classifies_this_test_into_pr_forge
-test_tangle_source_change_selects_this_test

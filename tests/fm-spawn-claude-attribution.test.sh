@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
 # Regression test for the claude) branch of bin/fm-spawn.sh: the generated
 # <worktree>/.claude/settings.local.json must carry the lifecycle hooks it
-# exists for and NO attribution object, because Claude co-author suppression
-# moved to the user-global ~/.claude/settings.json (attribution.commit="" +
-# attribution.sessionUrl=false), which a project-level settings.local.json does
-# not override. The live proof of that global shape is
-# tests/fm-claude-attribution-live-e2e.test.sh.
+# exists for and NO attribution object.
 #
-# This pin is the zero-divergence guard: a regression that reintroduces the
-# per-worker attribution object into the spawned settings file - the fork line
-# this test exists to keep out - fails loudly. Exercises fm-spawn's real
-# interface: a full spawn run against a fake tmux, with the claude harness,
-# followed by a JSON parse of the generated settings artifact in the isolated
-# worktree. Never asserts source bytes. The behavior is scoped to the claude
-# branch, so a second spawn on another harness must produce no Claude settings
-# file at all.
+# Co-author suppression is owned upstream now: upstream 72bfdd0 (#3945) passes an
+# explicit `"attribution":{"commit":"","pr":"","sessionUrl":false}` object in
+# every claude launch's inline `--settings` JSON, which
+# tests/fm-spawn-dispatch-profile.test.sh asserts for the launch side. This file
+# stays the zero-divergence pin for the worktree artifact: a regression that
+# reintroduces a per-worker attribution object into the spawned settings file
+# fails loudly. Exercises fm-spawn's real interface: a full spawn run against a
+# fake tmux, with the claude harness, followed by a JSON parse of the generated
+# settings artifact in the isolated worktree. Never asserts source bytes. The
+# behavior is scoped to the claude branch, so a second spawn on another harness
+# must produce no Claude settings file at all.
 set -u
 
 # shellcheck source=tests/lib.sh
