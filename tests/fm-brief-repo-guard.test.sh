@@ -3,10 +3,10 @@
 # control-plane boundary section to briefs targeting Firstmate's own repo.
 #
 # Matrix:
-#   (a) a non-firstmate target produces byte-identical brief content to a raw
+#   (a) a Firstmate-repo secondmate charter is byte-identical to a raw scaffold
+#   (b) Firstmate-repo ship and scout briefs gain the boundary exactly once
+#   (c) a non-firstmate target produces byte-identical brief content to a raw
 #       bin/fm-brief.sh run with the same arguments
-#   (b) a firstmate target gains the boundary section exactly once, and the raw
-#       scaffold alone never contains it
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -63,35 +63,50 @@ test_non_firstmate_target_is_byte_identical() {
   pass "a non-firstmate target scaffolds byte-identically through the wrapper"
 }
 
-test_firstmate_target_appends_the_boundary_once() {
-  local case_dir brief count
-  case_dir=$(make_case firstmate-target firstmate)
+test_firstmate_workers_append_the_boundary_once() {
+  local kind case_dir brief count
+  for kind in ship scout; do
+    case_dir=$(make_case "firstmate-$kind-target" firstmate)
+    if [ "$kind" = ship ]; then
+      run_brief "$case_dir" "$GUARD" firstmate "task-$kind" firstmate --mode no-mistakes \
+        > "$case_dir/stdout" 2>&1 || fail "firstmate-$kind: the guarded scaffold failed"
+    else
+      run_brief "$case_dir" "$GUARD" firstmate "task-$kind" firstmate --scout \
+        > "$case_dir/stdout" 2>&1 || fail "firstmate-$kind: the guarded scaffold failed"
+    fi
 
-  run_brief "$case_dir" "$GUARD" firstmate taskb1 firstmate --mode no-mistakes \
-    > "$case_dir/stdout" 2>&1 || fail "firstmate-target: the guarded scaffold failed"
-
-  brief="$case_dir/home/data/taskb1/brief.md"
-  count=$(grep -c '^## Control-plane boundary$' "$brief")
-  [ "$count" = 1 ] || fail "firstmate-target: expected exactly one boundary section, got $count"
-  assert_grep 'Do not run any Firstmate control or lifecycle script' "$brief" \
-    "firstmate-target: the boundary did not forbid running the control scripts"
-  assert_grep 'If you find a decision that belongs to the captain, append' "$brief" \
-    "firstmate-target: the boundary did not route captain decisions to needs-decision"
-  pass "a firstmate target gains the control-plane boundary section exactly once"
+    brief="$case_dir/home/data/task-$kind/brief.md"
+    count=$(grep -c '^## Control-plane boundary$' "$brief")
+    [ "$count" = 1 ] || fail "firstmate-$kind: expected exactly one boundary section, got $count"
+    assert_grep 'Do not run any Firstmate control or lifecycle script' "$brief" \
+      "firstmate-$kind: the boundary did not forbid running the control scripts"
+    assert_grep 'If you find a decision that belongs to the captain, append' "$brief" \
+      "firstmate-$kind: the boundary did not route captain decisions to needs-decision"
+  done
+  pass "Firstmate ship and scout targets gain the control-plane boundary exactly once"
 }
 
-test_raw_scaffold_alone_has_no_boundary() {
-  local case_dir
-  case_dir=$(make_case raw-control firstmate)
+test_firstmate_secondmate_charter_is_transparent() {
+  local case_dir raw_brief wrapped_brief
+  case_dir=$(make_case firstmate-secondmate firstmate)
 
-  run_brief "$case_dir" "$RAW" firstmate taskc1 firstmate --mode no-mistakes \
-    > "$case_dir/stdout" 2>&1 || fail "raw-control: the raw scaffold failed"
+  run_brief "$case_dir" "$RAW" firstmate mate --secondmate firstmate \
+    > "$case_dir/raw.stdout" 2>&1 || fail "firstmate-secondmate: the raw scaffold failed"
+  raw_brief="$case_dir/raw-brief.md"
+  cp "$case_dir/home/data/mate/brief.md" "$raw_brief"
+  rm -rf "$case_dir/home/data/mate"
 
-  assert_no_grep '## Control-plane boundary' "$case_dir/home/data/taskc1/brief.md" \
-    "raw-control: the boundary section leaked into the unpatched upstream scaffold"
-  pass "the untouched bin/fm-brief.sh adds no boundary section of its own"
+  run_brief "$case_dir" "$GUARD" firstmate mate --secondmate firstmate \
+    > "$case_dir/wrapped.stdout" 2>&1 || fail "firstmate-secondmate: the wrapped scaffold failed"
+  wrapped_brief="$case_dir/home/data/mate/brief.md"
+
+  cmp -s "$raw_brief" "$wrapped_brief" \
+    || fail "firstmate-secondmate: the wrapper changed a secondmate charter"
+  assert_no_grep '## Control-plane boundary' "$wrapped_brief" \
+    "firstmate-secondmate: the boundary section was appended to a secondmate charter"
+  pass "a Firstmate-repo secondmate charter scaffolds byte-identically through the wrapper"
 }
 
+test_firstmate_secondmate_charter_is_transparent
+test_firstmate_workers_append_the_boundary_once
 test_non_firstmate_target_is_byte_identical
-test_firstmate_target_appends_the_boundary_once
-test_raw_scaffold_alone_has_no_boundary

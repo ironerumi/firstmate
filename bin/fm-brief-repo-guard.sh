@@ -4,11 +4,11 @@
 #
 # bin/fm-brief.sh is upstream-owned and hot, so this fork never patches it. This
 # wrapper takes exactly the same arguments, runs bin/fm-brief.sh unchanged, and
-# then, ONLY when the brief's target project resolves to the Firstmate repo
-# itself, appends one "Control-plane boundary" section to the generated
-# data/<task-id>/brief.md. Every other invocation is transparent: the child's
-# stdout, stderr, and exit status pass through untouched and the brief bytes are
-# unchanged.
+# then, ONLY when a ship or scout brief's target project resolves to the
+# Firstmate repo itself, appends one "Control-plane boundary" section to the
+# generated data/<task-id>/brief.md. Secondmate charters and every non-Firstmate
+# invocation are transparent: the child's stdout, stderr, and exit status pass
+# through untouched and the brief bytes are unchanged.
 #
 # The caller-supplied repo string cannot identify Firstmate's own repo on its
 # own, so detection is explicit and conservative. The target counts as the
@@ -35,17 +35,18 @@ PROJECTS="${FM_PROJECTS_OVERRIDE:-$FM_HOME/projects}"
 case "${1:-}" in
   -h | --help)
     "$REAL_BRIEF" --help
-    printf '\nThis wrapper additionally appends a control-plane boundary section when the brief targets the Firstmate repo itself.\n'
+    printf '\nThis wrapper additionally appends a control-plane boundary section when a ship or scout brief targets the Firstmate repo itself.\n'
     exit 0
     ;;
 esac
 
-# The first two positionals are <task-id> <repo-name> for a ship or scout brief,
-# and <task-id> <project>... for a secondmate charter. Scan the caller's own
-# arguments the same way bin/fm-brief.sh does, without re-implementing its
-# validation: a rejected argument list exits non-zero before anything is added.
+# The first two positionals are <task-id> <repo-name> for a ship or scout brief.
+# Scan the caller's own arguments the same way bin/fm-brief.sh does, without
+# re-implementing its validation: a rejected argument list exits non-zero before
+# anything is added.
 positionals=()
 want_value=
+KIND=ship
 for arg in "$@"; do
   if [ -n "$want_value" ]; then
     want_value=
@@ -53,6 +54,8 @@ for arg in "$@"; do
   fi
   case "$arg" in
     --mode) want_value=1 ;;
+    --scout) KIND=scout ;;
+    --secondmate) KIND=secondmate ;;
     --*) ;;
     *) positionals+=("$arg") ;;
   esac
@@ -62,6 +65,7 @@ REPO=${positionals[1]:-}
 
 "$REAL_BRIEF" "$@"
 
+[ "$KIND" != secondmate ] || exit 0
 [ -n "$ID" ] || exit 0
 
 # Resolve the brief path the same way bin/fm-brief.sh does, so the appended
