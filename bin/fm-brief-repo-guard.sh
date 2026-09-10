@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # fm-brief-repo-guard.sh - fork-added wrapper around bin/fm-brief.sh that adds a
-# control-plane boundary block to Firstmate-repo briefs.
+# control-plane boundary block to Firstmate-repo worker briefs.
 #
 # bin/fm-brief.sh is upstream-owned and hot, so this fork never patches it. This
 # wrapper takes exactly the same arguments, runs bin/fm-brief.sh unchanged, and

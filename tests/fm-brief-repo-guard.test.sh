@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests for bin/fm-brief-repo-guard.sh, the fork-added wrapper that appends a
-# control-plane boundary section to briefs targeting Firstmate's own repo.
+# control-plane boundary section to worker briefs targeting Firstmate's repo.
 #
 # Matrix:
 #   (a) a Firstmate-repo secondmate charter is byte-identical to a raw scaffold
@@ -19,8 +19,8 @@ RAW="$ROOT/bin/fm-brief.sh"
 TMP_ROOT=$(fm_test_tmproot fm-brief-repo-guard-tests)
 
 # Build one case dir with a data root, a state root, and a fake code root whose
-# basename is <root_name>. That basename is the wrapper's primary detection
-# signal, so the same fixture drives both the positive and negative cases.
+# basename is <root_name>. Cases can add origins when exercising the wrapper's
+# origin-authoritative detection; otherwise the basename is its final fallback.
 # Echoes the case dir.
 make_case() {
   local name=$1 root_name=$2 case_dir

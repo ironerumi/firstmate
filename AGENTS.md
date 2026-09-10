@@ -539,7 +539,7 @@ Preserve durable structured identifiers, dependencies, and completion artifact l
 `bin/fm-brief.sh` and its help own scaffold syntax, generated variants, status protocol, delivery-mode definitions of done, and exact safety mechanics.
 Use its scaffold as the contract, then fill `## Captain's intent` (`{TASK}`) with the captain's own ask plus the context needed to read it, including the substance of any report, decision, or PR the ask refers to, and fill `## Firstmate spec` (`{FIRSTMATE_SPEC}`) with Firstmate's build instructions.
 `bin/fm-dod-lib.sh` owns what a no-mistakes worker may pass as `--intent` and its rule that the string must be self-sufficient.
-When the brief targets the Firstmate repo itself, scaffold it through `bin/fm-brief-repo-guard.sh`, which runs the same scaffold and appends the control-plane boundary telling that worker not to run Firstmate's own control scripts and to route any captain decision to `needs-decision:`.
+When a ship or scout brief targets the Firstmate repo itself, scaffold it through `bin/fm-brief-repo-guard.sh`, which runs the same scaffold and appends the control-plane boundary telling that worker not to run Firstmate's own control scripts and to route any captain decision to `needs-decision:`.
 Keep additions task-specific rather than repeating lifecycle instructions, and alter generated sections only when the task genuinely differs from the standard shape.
 
 Every ship brief must retain the worktree-isolation assertion and stop if launched in the primary checkout.
