@@ -57,7 +57,16 @@ make_case() {
   wt="$case_dir/wt"
   fakebin=$(make_fakebin "$case_dir/fake")
   mkdir -p "$home/data/$id" "$home/projects" "$home/state" "$home/config"
-  printf 'brief for %s\n' "$id" > "$home/data/$id/brief.md"
+  # fm-spawn.sh refuses a ship brief with no filled intent/spec subsections.
+  cat > "$home/data/$id/brief.md" <<BRIEF
+# Task
+
+## Captain's intent
+brief for $id
+
+## Firstmate spec
+Exercise the spawn behavior under test.
+BRIEF
   touch "$home/state/.last-watcher-beat"
   fm_git_worktree "$proj" "$wt" "wt-$name"
   printf '%s\n' "$case_dir|$home|$proj|$wt|$fakebin"

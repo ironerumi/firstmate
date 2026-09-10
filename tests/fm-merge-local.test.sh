@@ -18,8 +18,10 @@ TMP_ROOT=$(fm_test_tmproot fm-merge-local-tests)
 make_case() {
   local name=$1 case_dir
   case_dir="$TMP_ROOT/$name"
-  mkdir -p "$case_dir/state"
+  mkdir -p "$case_dir/state" "$case_dir/home/data" "$case_dir/home/config"
   touch "$case_dir/state/.last-watcher-beat"
+  cp "$ROOT/.tasks.toml" "$case_dir/home/.tasks.toml"
+  printf '%s\n' '## In flight' '' '## Queued' '' '## Done'     > "$case_dir/home/data/backlog.md"
   printf '%s\n' "$case_dir"
 }
 
@@ -58,6 +60,7 @@ write_meta() {
 run_merge_local() {
   local case_dir=$1
   FM_ROOT_OVERRIDE="$ROOT" \
+  FM_HOME="$case_dir/home" \
   FM_STATE_OVERRIDE="$case_dir/state" \
     "$MERGE_LOCAL" task-x1
 }
