@@ -301,6 +301,21 @@ test_cursor_payload_stands_down() {
   pass "self-wake: a Cursor-delivered payload stands down"
 }
 
+test_missing_jq_stands_down() {
+  local dir rc no_jq_path
+  dir=$(make_primary_dir "$TMP_ROOT/no-jq")
+  no_jq_path=$(fm_test_base_path_sans "${PATH:-}" jq)
+  rc=0
+  printf '%s\n' '{"session_id":"sess-keepwarm","stop_hook_active":false}' \
+    | PATH="$no_jq_path" FM_HOME="$dir" FM_NM_KEEPWARM_SECS=1 "$FAKE_CLAUDE" -c '
+        printf "%s\n" "$$" > "$FM_HOME/state/.lock"
+        "$FM_HOME/bin/fm-claude-keepwarm-selfwake.sh"
+      ' > "$TMP_ROOT/no-jq.out" 2>&1 || rc=$?
+  expect_code 0 "$rc" "the self-wake must stand down when jq is unavailable"
+  assert_absent "$dir/state/.keepwarm-selfwake" "missing jq must not allow a self-wake to arm"
+  pass "self-wake: missing jq fails closed before arming"
+}
+
 # --- the crew keep-warm shares the same cap ----------------------------------------
 
 test_crew_keepwarm_shares_cap() {
@@ -336,4 +351,5 @@ test_config_cannot_widen_the_claude_gate
 test_disabled_home_is_noop
 test_crewmate_worktree_is_inert
 test_cursor_payload_stands_down
+test_missing_jq_stands_down
 test_crew_keepwarm_shares_cap

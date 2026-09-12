@@ -28,10 +28,13 @@
 # Cancellation. Every real turn ends in a Stop, so every real turn fires this
 # hook again. The new firing records itself as the current owner in
 # state/.keepwarm-selfwake (line 1 the anchor epoch, line 2 the owning pid,
-# line 3 the deadline epoch), terminates the superseded sleeper, and the
-# sleeper independently re-reads that record on every poll and stands down the
-# moment it is no longer the owner. Claude does not dedupe async hooks, so two
-# firings for one Stop simply race to the same record and the loser exits 0.
+# line 3 the deadline epoch), and the sleeper independently re-reads that
+# record on every poll and stands down the moment it is no longer the owner.
+# Marker cancellation covers all normal real turns. If a real turn crosses the
+# exact deadline before its Stop rewrites the marker, at most one extra benign
+# acknowledgement turn is delivered by design. Claude does not dedupe async
+# hooks, so two firings for one Stop simply race to the same record and the loser
+# exits 0.
 # The record is private state: bin/fm-teardown.sh never touches it, and a
 # missing or malformed record is harmless because the next Stop rewrites it.
 #
@@ -58,8 +61,7 @@
 # line and nothing else: no wake drain, no steer, no decision, no gate action,
 # no captain message. Nothing here queues a wake, writes a status line, or
 # reaches the captain. If the deadline passes while a real turn is already in
-# progress, Claude delivers the feedback when that turn ends and the extra
-# turn is one more benign acknowledgement.
+# progress, Claude delivers the feedback when that turn ends.
 #
 # Deadline check at fire time repeats every gate, so a session whose lock
 # changed hands or whose harness died while the hook slept exits 0 silently.
@@ -94,6 +96,14 @@ trap 'exit 0' TERM
 # Consume the Stop payload once so a slow writer never wedges on a full pipe,
 # and inspect its host before anything else runs.
 PAYLOAD=$(cat 2>/dev/null || true)
+command -v jq >/dev/null 2>&1 || exit 0
+if ! printf '%s' "$PAYLOAD" | jq -e '
+  type == "object" and
+  ((has("cursor_version") | not) or
+    (has("cursor_version") and (.cursor_version | type == "string")))
+' >/dev/null 2>&1; then
+  exit 0
+fi
 fm_hook_payload_is_foreign_host "$PAYLOAD" && exit 0
 
 # --- scope: genuine primary checkout only -----------------------------------
