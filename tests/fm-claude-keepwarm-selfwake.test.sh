@@ -192,16 +192,16 @@ test_default_interval_is_thirty_minutes() {
 test_real_turn_cancels_and_rearms() {
   local dir rc_a rc_b out_a out_b
   dir=$(make_primary_dir "$TMP_ROOT/cancel")
-  FM_NM_KEEPWARM_SECS=4 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/cancel-a"
+  FM_NM_KEEPWARM_SECS=40 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/cancel-a"
   wait_marker "$dir" || fail "first arm did not record"
   sleep 1
   # A real turn ended: the next Stop fires the hook again from the same session.
-  FM_NM_KEEPWARM_SECS=4 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/cancel-b"
-  rc_a=$(wait_rc "$TMP_ROOT/cancel-a" 3) || fail "the superseded sleeper must stand down promptly, not at its own deadline"
+  FM_NM_KEEPWARM_SECS=40 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/cancel-b"
+  rc_a=$(wait_rc "$TMP_ROOT/cancel-a" 35) || fail "the superseded sleeper must stand down within the fixed poll interval"
   out_a=$(cat "$TMP_ROOT/cancel-a.out")
   expect_code 0 "$rc_a" "the superseded wake must be cancelled silently"
   [ -z "$out_a" ] || fail "a cancelled wake must print nothing: $out_a"
-  rc_b=$(wait_rc "$TMP_ROOT/cancel-b" 15) || fail "the re-armed wake did not fire"
+  rc_b=$(wait_rc "$TMP_ROOT/cancel-b" 50) || fail "the re-armed wake did not fire"
   out_b=$(cat "$TMP_ROOT/cancel-b.out")
   expect_code 2 "$rc_b" "the re-armed wake fires at its own deadline"
   assert_contains "$out_b" "$BANNER_PREFIX" "the re-armed wake must be the marked banner"
@@ -313,6 +313,10 @@ test_crew_keepwarm_shares_cap() {
   [ "$v" = 3000 ] || fail "3000s is the cap itself and must pass through, got $v"
   v=$(FM_NM_KEEPWARM_SECS=600 fm_nm_keepwarm_interval_secs)
   [ "$v" = 600 ] || fail "a request under the cap must pass through, got $v"
+  v=$(FM_NM_KEEPWARM_SECS=008 fm_nm_keepwarm_interval_secs)
+  [ "$v" = 8 ] || fail "a leading-zero request must be normalized to decimal, got $v"
+  v=$(FM_NM_KEEPWARM_SECS=000 fm_nm_keepwarm_interval_secs)
+  [ "$v" = 0 ] || fail "an all-zero request must remain disabled, got $v"
   v=$(FM_NM_KEEPWARM_SECS=0 fm_nm_keepwarm_interval_secs)
   [ "$v" = 0 ] || fail "0 must still disable, got $v"
   v=$(env -u FM_NM_KEEPWARM_SECS bash -c ". '$ROOT/bin/fm-keepwarm-cadence-lib.sh'; fm_keepwarm_interval_secs")

@@ -33,6 +33,7 @@ FM_KEEPWARM_CAP_SECS=3000
 fm_keepwarm_interval_secs() {
   local v=${FM_NM_KEEPWARM_SECS:-$FM_NM_KEEPWARM_SECS_DEFAULT}
   case "$v" in ''|*[!0-9]*) v=$FM_NM_KEEPWARM_SECS_DEFAULT ;; esac
+  while [ "${#v}" -gt 1 ] && [ "${v#0}" != "$v" ]; do v=${v#0}; done
   [ "$v" -le "$FM_KEEPWARM_CAP_SECS" ] || v=$FM_KEEPWARM_CAP_SECS
   printf '%s' "$v"
 }

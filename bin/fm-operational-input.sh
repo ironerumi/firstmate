@@ -204,7 +204,7 @@ Usage:
 
 Current construction kinds:
   session-start watcher turn-end-guard away-supervisor from-firstmate launch-brief
-  branch-outcome
+  branch-outcome keep-warm
 
 The from-firstmate kind uses its established live-charter-compatible carrier.
 EOF

@@ -133,23 +133,11 @@ live_claude_supervisor || exit 0
 # --- arm: record this firing as the owner and cancel the superseded sleeper ---
 NOW=$(date +%s)
 DEADLINE=$((NOW + INTERVAL))
-PREV_PID=$(sed -n '2p' "$MARKER" 2>/dev/null | tr -d '[:space:]')
 TMP=$(mktemp "$STATE/.keepwarm-selfwake.XXXXXX" 2>/dev/null) || exit 0
 if ! printf '%s\n%s\n%s\n' "$NOW" "$$" "$DEADLINE" > "$TMP" || ! mv -f "$TMP" "$MARKER"; then
   rm -f "$TMP" 2>/dev/null
   exit 0
 fi
-case "$PREV_PID" in
-  ''|*[!0-9]*) ;;
-  "$$") ;;
-  *)
-    # Only ever terminate a process that is provably a sleeping sibling of this
-    # hook, never a recycled pid.
-    case "$(ps -o args= -p "$PREV_PID" 2>/dev/null)" in
-      *fm-claude-keepwarm-selfwake*) kill -TERM "$PREV_PID" 2>/dev/null || true ;;
-    esac
-    ;;
-esac
 
 still_owner() {
   [ "$(sed -n '2p' "$MARKER" 2>/dev/null | tr -d '[:space:]')" = "$$" ]
