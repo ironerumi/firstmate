@@ -56,6 +56,9 @@
 # Ownership. This adds no loop and no process: bin/fm-watch.sh calls the tick
 # from the pane scan it already runs. All state is one marker file per task, so
 # a watcher restart resumes the cadence instead of resetting or replaying it.
+# The supervisor sessions are NOT covered here: an idle primary keeps itself
+# warm through its own Stop-hook self-wake (bin/fm-claude-keepwarm-selfwake.sh),
+# which shares only this library's cadence (bin/fm-keepwarm-cadence-lib.sh).
 #
 # Coverage. The crew harness decides eligibility and only claude opts in, so
 # codex, opencode, pi, pi-signed, grok, and kimi crews keep their current
@@ -77,11 +80,10 @@ _FM_NM_KEEPWARM_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/nul
 # pre-submit input guard.
 # shellcheck source=bin/fm-backend.sh
 . "$_FM_NM_KEEPWARM_LIB_DIR/fm-backend.sh"
-
-# Maximum quiet interval, in seconds, during an active no-mistakes run. 1800
-# keeps every gap under Claude's one-hour extended cache window with room for a
-# missed poll. 0 disables keep-warm entirely.
-FM_NM_KEEPWARM_SECS_DEFAULT=1800
+# FM_NM_KEEPWARM_SECS, its default, and the fleet-wide cadence cap shared with
+# the supervisor self-wake (bin/fm-claude-keepwarm-selfwake.sh) live here.
+# shellcheck source=bin/fm-keepwarm-cadence-lib.sh
+. "$_FM_NM_KEEPWARM_LIB_DIR/fm-keepwarm-cadence-lib.sh"
 
 # First retry delay, in seconds, after an evaluation that did not deliver an
 # activation. Only a delivered activation restarts the full interval; a refused
@@ -133,10 +135,11 @@ else
   }
 fi
 
+# The quiet interval during an active no-mistakes run, bounded by the shared
+# cadence cap so a crew and a supervisor can never drift apart on how long a
+# Claude cache may sit untouched.
 fm_nm_keepwarm_interval_secs() {
-  local v=${FM_NM_KEEPWARM_SECS:-$FM_NM_KEEPWARM_SECS_DEFAULT}
-  case "$v" in ''|*[!0-9]*) v=$FM_NM_KEEPWARM_SECS_DEFAULT ;; esac
-  printf '%s' "$v"
+  fm_keepwarm_interval_secs
 }
 
 fm_nm_keepwarm_retry_secs() {
