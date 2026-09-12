@@ -68,7 +68,6 @@
 #
 # Environment:
 #   FM_NM_KEEPWARM_SECS            requested quiet interval, default 1800, clamped to 3000; 0 disables
-#   FM_KEEPWARM_SELFWAKE_POLL_SECS seconds between supersession checks while sleeping, default 30
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -76,8 +75,7 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 MARKER="$STATE/.keepwarm-selfwake"
-POLL=${FM_KEEPWARM_SELFWAKE_POLL_SECS:-30}
-case "$POLL" in ''|*[!0-9]*|0) POLL=30 ;; esac
+POLL=30
 
 # shellcheck source=bin/fm-primary-scope-lib.sh
 . "$SCRIPT_DIR/fm-primary-scope-lib.sh"

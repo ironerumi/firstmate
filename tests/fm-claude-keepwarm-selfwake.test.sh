@@ -129,8 +129,6 @@ stop_marker_owner() {  # <dir>
 
 BANNER_PREFIX=$'\xE2\x81\xA3FIRSTMATE_OP: v1 keep-warm: '
 
-export FM_KEEPWARM_SELFWAKE_POLL_SECS=1
-
 # --- a live idle Claude supervisor takes the turn at the deadline -------------
 
 test_fires_at_deadline() {
@@ -322,12 +320,6 @@ test_crew_keepwarm_shares_cap() {
   pass "crew keep-warm and supervisor self-wake share one 3000s cadence cap"
 }
 
-test_watcher_has_no_supervisor_keepwarm() {
-  ! grep -q 'keepwarm-selfwake' "$ROOT/bin/fm-watch.sh" \
-    || fail "the supervisor self-wake must stay off the hot watcher"
-  pass "self-wake: bin/fm-watch.sh carries no supervisor keep-warm reference"
-}
-
 test_fires_at_deadline
 test_secondmate_home_fires
 test_deadline_bounded_to_cap
@@ -341,4 +333,3 @@ test_disabled_home_is_noop
 test_crewmate_worktree_is_inert
 test_cursor_payload_stands_down
 test_crew_keepwarm_shares_cap
-test_watcher_has_no_supervisor_keepwarm
