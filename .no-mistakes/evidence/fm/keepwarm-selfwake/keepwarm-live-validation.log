@@ -1,0 +1,20 @@
+$ tests/fm-claude-keepwarm-selfwake.test.sh
+ok - self-wake: a live idle Claude supervisor gets one native wake at the deadline
+ok - self-wake: a secondmate's own Claude primary self-warms in its own home
+ok - self-wake: the deadline never exceeds 50 minutes after the turn boundary
+ok - self-wake: the unconfigured deadline is last turn + 1800s
+ok - self-wake: a real turn cancels the pending wake and arms a fresh one
+ok - self-wake: no live Claude supervisor session means no-op
+ok - self-wake: losing the session lock cancels the pending wake
+ok - self-wake: a non-Claude supervisor is a no-op regardless of config
+ok - self-wake: FM_NM_KEEPWARM_HARNESSES does not widen the hard Claude-only gate
+ok - self-wake: FM_NM_KEEPWARM_SECS=0 disables the supervisor path
+warning: re-init: ignored --initial-branch=main
+ok - self-wake: a crewmate worktree stays inert (crew keep-warm is the watcher-side library)
+ok - self-wake: a Cursor-delivered payload stands down
+ok - self-wake: missing jq fails closed before arming
+ok - crew keep-warm and supervisor self-wake share one 3000s cadence cap
+
+$ printf ... | bin/fm-operational-input.sh encode keep-warm && ... classify
+⁣FIRSTMATE_OP: v1 keep-warm: Print one short acknowledgement line and end the turn.
+keep-warm
