@@ -138,11 +138,6 @@ mkdir -p "$STATE"
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
-# Keep-warm for Claude crews waiting out their own long no-mistakes run.
-# bin/fm-nm-keepwarm-lib.sh owns that contract.
-# shellcheck source=bin/fm-nm-keepwarm-lib.sh
-. "$SCRIPT_DIR/fm-nm-keepwarm-lib.sh"
-
 # Steering-inbox loss detection: bin/fm-task-inbox-lib.sh owns the record,
 # doorbell, re-ring ladder, and unavailable-endpoint contracts; this watcher
 # supplies their live endpoint and busy checks plus wake emission
@@ -2176,16 +2171,6 @@ EOF
       n=$(( $(cat "$cf" 2>/dev/null || echo 0) + 1 ))
       echo "$n" > "$cf"
       if [ "$n" -ge 2 ] && [ "$busy_now" -ne 0 ]; then
-        # Keep-warm: this confirmed-idle pane is the only point that knows a
-        # crew is quiet without an active turn to interrupt. The tick is a
-        # cheap timestamp compare on every poll and reads crew state only once
-        # per quiet interval; it never touches triage, the wake queue, or the
-        # captain. bin/fm-nm-keepwarm-lib.sh owns the whole contract.
-        kw=$(fm_nm_keepwarm_tick "$FM_HOME" "$STATE" "$task") || true
-        case "$kw" in
-          ineligible|disabled|not-due) : ;;
-          *) triage_log "keep-warm $kw: $w" ;;
-        esac
         # The pane is idle/stale at hash $h. Triage decides whether this wakes
         # firstmate. Detection itself is unchanged from above.
         if [ "$kind" = secondmate ]; then

@@ -1,17 +1,16 @@
 # shellcheck shell=bash
-# fm-keepwarm-cadence-lib.sh - the one keep-warm cadence shared by every
-# Claude keep-warm path.
+# fm-keepwarm-cadence-lib.sh - the one keep-warm cadence for every Claude
+# session firstmate keeps warm.
 # Usage: . bin/fm-keepwarm-cadence-lib.sh
 #
-# Two paths keep a Claude prompt cache warm: bin/fm-nm-keepwarm-lib.sh warms a
-# crewmate waiting out its own no-mistakes run, and
-# bin/fm-claude-keepwarm-selfwake.sh warms an idle Claude supervisor session
-# (the main firstmate or a secondmate primary). Both read the same knob and are
-# bound by the same ceiling, so the longest gap between two real model turns
-# on any kept-warm Claude session is one value fleet-wide:
+# bin/fm-claude-keepwarm-selfwake.sh is the only keep-warm path: it warms an
+# idle Claude supervisor (the main firstmate or a secondmate primary) and every
+# idle Claude crew or scout alike. This library owns the interval it sleeps
+# toward, so the longest gap between two real model turns on any kept-warm
+# Claude session is one value fleet-wide:
 #
 #   - FM_NM_KEEPWARM_SECS (default 1800) is the requested quiet interval.
-#     0 disables keep-warm on every path.
+#     0 disables keep-warm for every session of the home.
 #   - FM_KEEPWARM_CAP_SECS (3000, not configurable) is the ceiling. Claude's
 #     extended prompt cache lives one hour after the last turn; 50 minutes
 #     leaves a ten-minute margin for a wake that lands late (a hook scheduled
@@ -21,8 +20,7 @@
 #     safe one instead of a cold cache.
 #
 # This library is deliberately dependency-free so the Stop hook can source it
-# without pulling the crew library's backend and classifier dependencies into
-# every turn boundary.
+# at every turn boundary without pulling anything else in.
 
 FM_NM_KEEPWARM_SECS_DEFAULT=1800
 FM_KEEPWARM_CAP_SECS=3000

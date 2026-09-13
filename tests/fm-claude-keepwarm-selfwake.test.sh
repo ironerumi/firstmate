@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Behavior tests for the Claude Stop-owned supervisor keep-warm self-wake
-# (bin/fm-claude-keepwarm-selfwake.sh) and the cadence cap it shares with the
-# crew keep-warm (bin/fm-keepwarm-cadence-lib.sh).
+# Behavior tests for the Claude Stop-owned keep-warm self-wake
+# (bin/fm-claude-keepwarm-selfwake.sh) and its cadence cap
+# (bin/fm-keepwarm-cadence-lib.sh).
 #
 # The hook fires as a Claude asyncRewake Stop hook. These tests run it
-# hermetically as a child of a fake harness (a bash symlink named "claude", or
-# "codex" for the non-Claude case) whose pid is written into the fixture home's
-# state/.lock, with a seconds-scale interval so the deadline is exercised for
-# real: a wake at the deadline is an observed exit 2 with the marked banner,
-# and a cancelled wake is an observed exit 0 before the deadline.
-# shellcheck disable=SC2016 # single quotes are deliberate: $FM_HOME expands inside the fake harness child
+# hermetically with a Claude-shaped Stop payload on stdin and a seconds-scale
+# interval so the deadline is exercised for real: a wake at the deadline is an
+# observed exit 2 with the marked banner, and a cancelled wake is an observed
+# exit 0 before the deadline. The bare form is the tracked supervisor
+# registration; `--task <id>` is the per-crew form bin/fm-spawn.sh injects
+# (tests/fm-spawn-claude-attribution.test.sh covers that injection end to end).
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -17,12 +17,6 @@ set -u
 
 TMP_ROOT=$(fm_test_tmproot fm-claude-keepwarm-selfwake)
 fm_git_identity fmtest fmtest@example.invalid
-
-FAKEBIN=$(fm_fakebin "$TMP_ROOT/fakebin")
-ln -s /bin/bash "$FAKEBIN/claude"
-ln -s /bin/bash "$FAKEBIN/codex"
-FAKE_CLAUDE="$FAKEBIN/claude"
-FAKE_CODEX="$FAKEBIN/codex"
 
 # Every sleeper started here is stopped at exit so a long-deadline case cannot
 # outlive the test.
@@ -42,7 +36,6 @@ install_scripts() {
   mkdir -p "$dir/bin"
   cp "$ROOT/bin/fm-claude-keepwarm-selfwake.sh" "$dir/bin/"
   cp "$ROOT/bin/fm-primary-scope-lib.sh" "$dir/bin/"
-  cp "$ROOT/bin/fm-session-lock-lib.sh" "$dir/bin/"
   cp "$ROOT/bin/fm-cursor-lib.sh" "$dir/bin/"
   cp "$ROOT/bin/fm-hook-host-lib.sh" "$dir/bin/"
   cp "$ROOT/bin/fm-keepwarm-cadence-lib.sh" "$dir/bin/"
@@ -76,22 +69,18 @@ make_crewmate_worktree_dir() {
   printf '%s\n' "$dir"
 }
 
-# Run the hook in the background as a child of a fake harness ($2) that writes
-# its own pid into the fixture's session lock (lock mode `own`) or leaves the
-# lock alone (`keep`). The hook's combined output lands in $3.out and its exit
-# code in $3.rc once it ends. Extra env is inherited from the caller.
-start_hook() {  # <dir> <harness-bin> <record-prefix> [lock-mode]
-  local dir=$1 harness=$2 rec=$3 lock_mode=${4:-own}
+CLAUDE_PAYLOAD='{"session_id":"sess-keepwarm","stop_hook_active":false}'
+
+# Run the hook in the background with a Claude-shaped Stop payload. Its
+# combined output lands in $2.out and its exit code in $2.rc once it ends.
+# Extra env is inherited from the caller; remaining arguments are the hook's.
+start_hook() {  # <dir> <record-prefix> [hook-args...]
+  local dir=$1 rec=$2
+  shift 2
   (
     rc=0
-    printf '%s\n' '{"session_id":"sess-keepwarm","stop_hook_active":false}' \
-      | FM_HOME="$dir" FM_LOCK_MODE="$lock_mode" "$harness" -c '
-          case "$FM_LOCK_MODE" in
-            own) printf "%s\n" "$$" > "$FM_HOME/state/.lock" ;;
-            keep) : ;;
-          esac
-          "$FM_HOME/bin/fm-claude-keepwarm-selfwake.sh"
-        ' > "$rec.out" 2>&1 || rc=$?
+    printf '%s\n' "$CLAUDE_PAYLOAD" \
+      | FM_HOME="$dir" "$dir/bin/fm-claude-keepwarm-selfwake.sh" "$@" > "$rec.out" 2>&1 || rc=$?
     printf '%s\n' "$rc" > "$rec.rc"
   ) &
   printf '%s\n' "$!" >> "$SLEEPERS"
@@ -107,20 +96,20 @@ wait_rc() {  # <record-prefix> <max-seconds>
   cat "$rec.rc"
 }
 
-wait_marker() {  # <dir>
+wait_marker() {  # <marker-path>
   local i=0
-  while [ ! -s "$1/state/.keepwarm-selfwake" ]; do
+  while [ ! -s "$1" ]; do
     i=$((i + 1))
     [ "$i" -le 20 ] || return 1
     sleep 0.1
   done
 }
 
-marker_line() {  # <dir> <n>
-  sed -n "${2}p" "$1/state/.keepwarm-selfwake"
+marker_line() {  # <marker-path> <n>
+  sed -n "${2}p" "$1"
 }
 
-stop_marker_owner() {  # <dir>
+stop_marker_owner() {  # <marker-path>
   local pid
   pid=$(marker_line "$1" 2)
   [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null
@@ -129,13 +118,13 @@ stop_marker_owner() {  # <dir>
 
 BANNER_PREFIX=$'\xE2\x81\xA3FIRSTMATE_OP: v1 keep-warm: '
 
-# --- a live idle Claude supervisor takes the turn at the deadline -------------
+# --- an idle Claude supervisor takes the turn at the deadline ------------------
 
 test_fires_at_deadline() {
   local dir rc out t0 t1
   dir=$(make_primary_dir "$TMP_ROOT/fires")
   t0=$(date +%s)
-  FM_NM_KEEPWARM_SECS=2 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/fires-rec"
+  FM_NM_KEEPWARM_SECS=2 start_hook "$dir" "$TMP_ROOT/fires-rec"
   rc=$(wait_rc "$TMP_ROOT/fires-rec" 15) || fail "hook did not finish within 15s"
   t1=$(date +%s)
   out=$(cat "$TMP_ROOT/fires-rec.out")
@@ -144,13 +133,13 @@ test_fires_at_deadline() {
   assert_contains "$out" "$BANNER_PREFIX" "the wake must carry the marked keep-warm operational input"
   assert_contains "$out" "Do not run the wake drain" "the wake must be benign toward wakes, decisions, and gates"
   assert_not_contains "$out" "captain," "the wake must not address the captain"
-  pass "self-wake: a live idle Claude supervisor gets one native wake at the deadline"
+  pass "self-wake: an idle Claude supervisor gets one native wake at the deadline"
 }
 
 test_secondmate_home_fires() {
   local dir rc out
   dir=$(make_secondmate_dir "$TMP_ROOT/secondmate")
-  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/secondmate-rec"
+  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$TMP_ROOT/secondmate-rec"
   rc=$(wait_rc "$TMP_ROOT/secondmate-rec" 15) || fail "secondmate hook did not finish"
   out=$(cat "$TMP_ROOT/secondmate-rec.out")
   expect_code 2 "$rc" "a secondmate primary is a supervisor and gets the wake in its own home"
@@ -158,32 +147,90 @@ test_secondmate_home_fires() {
   pass "self-wake: a secondmate's own Claude primary self-warms in its own home"
 }
 
+# --- an idle Claude crew takes the same turn through its --task form -----------
+
+test_crew_task_form_fires_with_its_own_marker() {
+  local dir rc out
+  dir=$(make_primary_dir "$TMP_ROOT/crew-task")
+  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$TMP_ROOT/crew-task-rec" --task crew-42
+  rc=$(wait_rc "$TMP_ROOT/crew-task-rec" 15) || fail "crew hook did not finish"
+  out=$(cat "$TMP_ROOT/crew-task-rec.out")
+  expect_code 2 "$rc" "an idle Claude crew must be woken at the deadline"
+  assert_contains "$out" "$BANNER_PREFIX" "the crew wake must be the marked banner"
+  assert_contains "$out" "respond to a validation gate" "the crew wake must stay read-only toward a parked gate"
+  assert_present "$dir/state/.keepwarm-crew-42" "the crew form must key its marker to the task"
+  assert_absent "$dir/state/.keepwarm-selfwake" "the crew form must not touch the supervisor marker"
+  pass "self-wake: a crew's --task form fires from its own task-keyed marker"
+}
+
+test_crew_task_form_fires_outside_a_primary_home() {
+  local base dir rc
+  base=$(make_primary_dir "$TMP_ROOT/crew-base")
+  dir=$(make_crewmate_worktree_dir "$base" "$TMP_ROOT/crew-wt")
+  # The crew form is the one bin/fm-spawn.sh injects, and it must warm a crew
+  # sitting in any project worktree, which is never a primary home.
+  FM_NM_KEEPWARM_SECS=1 FM_STATE_OVERRIDE="$base/state" \
+    start_hook "$dir" "$TMP_ROOT/crew-wt-rec" --task crew-wt
+  rc=$(wait_rc "$TMP_ROOT/crew-wt-rec" 15) || fail "crew hook did not finish"
+  expect_code 2 "$rc" "the crew form must fire from a non-primary worktree"
+  assert_present "$base/state/.keepwarm-crew-wt" "the crew marker must land in the spawning home's state dir"
+  pass "self-wake: the crew form fires from a project worktree into the spawning home"
+}
+
+test_crew_and_supervisor_do_not_cancel_each_other() {
+  local dir rc_s rc_c
+  dir=$(make_primary_dir "$TMP_ROOT/coexist")
+  FM_NM_KEEPWARM_SECS=2 start_hook "$dir" "$TMP_ROOT/coexist-s"
+  wait_marker "$dir/state/.keepwarm-selfwake" || fail "supervisor arm did not record"
+  FM_NM_KEEPWARM_SECS=2 start_hook "$dir" "$TMP_ROOT/coexist-c" --task crew-1
+  rc_s=$(wait_rc "$TMP_ROOT/coexist-s" 15) || fail "supervisor hook did not finish"
+  rc_c=$(wait_rc "$TMP_ROOT/coexist-c" 15) || fail "crew hook did not finish"
+  expect_code 2 "$rc_s" "a crew's Stop must not cancel the supervisor's pending wake"
+  expect_code 2 "$rc_c" "the crew's own wake must fire alongside the supervisor's"
+  pass "self-wake: sessions sharing one home keep independent wakes"
+}
+
+test_bad_task_id_is_noop() {
+  local dir rc
+  dir=$(make_primary_dir "$TMP_ROOT/bad-task")
+  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$TMP_ROOT/bad-task-rec" --task '../x'
+  rc=$(wait_rc "$TMP_ROOT/bad-task-rec" 10) || fail "hook did not finish"
+  expect_code 0 "$rc" "a task id that cannot name a marker must be a no-op"
+  [ -s "$TMP_ROOT/bad-task-rec.out" ] && fail "a no-op must be silent: $(cat "$TMP_ROOT/bad-task-rec.out")"
+  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$TMP_ROOT/bad-arg-rec" --bogus
+  rc=$(wait_rc "$TMP_ROOT/bad-arg-rec" 10) || fail "hook did not finish"
+  expect_code 0 "$rc" "an unknown argument must be a no-op"
+  pass "self-wake: a malformed task id or unknown argument stands down"
+}
+
 # --- the deadline is bounded to the shared 50-minute cap ----------------------
 
 test_deadline_bounded_to_cap() {
-  local dir anchor deadline
+  local dir marker anchor deadline
   dir=$(make_primary_dir "$TMP_ROOT/cap")
-  FM_NM_KEEPWARM_SECS=7200 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/cap-rec"
-  wait_marker "$dir" || fail "the hook did not record its arm"
-  anchor=$(marker_line "$dir" 1)
-  deadline=$(marker_line "$dir" 3)
+  marker="$dir/state/.keepwarm-selfwake"
+  FM_NM_KEEPWARM_SECS=7200 start_hook "$dir" "$TMP_ROOT/cap-rec"
+  wait_marker "$marker" || fail "the hook did not record its arm"
+  anchor=$(marker_line "$marker" 1)
+  deadline=$(marker_line "$marker" 3)
   [ $((deadline - anchor)) -eq 3000 ] \
     || fail "a 7200s request must be clamped to the 3000s cap, got $((deadline - anchor))"
   [ -f "$TMP_ROOT/cap-rec.rc" ] && fail "the hook must still be sleeping toward the capped deadline"
-  stop_marker_owner "$dir"
+  stop_marker_owner "$marker"
   pass "self-wake: the deadline never exceeds 50 minutes after the turn boundary"
 }
 
 test_default_interval_is_thirty_minutes() {
-  local dir anchor deadline
+  local dir marker anchor deadline
   dir=$(make_primary_dir "$TMP_ROOT/default")
-  (unset FM_NM_KEEPWARM_SECS; start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/default-rec")
-  wait_marker "$dir" || fail "the hook did not record its arm"
-  anchor=$(marker_line "$dir" 1)
-  deadline=$(marker_line "$dir" 3)
+  marker="$dir/state/.keepwarm-selfwake"
+  (unset FM_NM_KEEPWARM_SECS; start_hook "$dir" "$TMP_ROOT/default-rec")
+  wait_marker "$marker" || fail "the hook did not record its arm"
+  anchor=$(marker_line "$marker" 1)
+  deadline=$(marker_line "$marker" 3)
   [ $((deadline - anchor)) -eq 1800 ] \
     || fail "the default deadline must be 1800s after the turn boundary, got $((deadline - anchor))"
-  stop_marker_owner "$dir"
+  stop_marker_owner "$marker"
   pass "self-wake: the unconfigured deadline is last turn + 1800s"
 }
 
@@ -192,11 +239,11 @@ test_default_interval_is_thirty_minutes() {
 test_real_turn_cancels_and_rearms() {
   local dir rc_a rc_b out_a out_b
   dir=$(make_primary_dir "$TMP_ROOT/cancel")
-  FM_NM_KEEPWARM_SECS=40 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/cancel-a"
-  wait_marker "$dir" || fail "first arm did not record"
+  FM_NM_KEEPWARM_SECS=40 start_hook "$dir" "$TMP_ROOT/cancel-a"
+  wait_marker "$dir/state/.keepwarm-selfwake" || fail "first arm did not record"
   sleep 1
   # A real turn ended: the next Stop fires the hook again from the same session.
-  FM_NM_KEEPWARM_SECS=40 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/cancel-b"
+  FM_NM_KEEPWARM_SECS=40 start_hook "$dir" "$TMP_ROOT/cancel-b"
   rc_a=$(wait_rc "$TMP_ROOT/cancel-a" 35) || fail "the superseded sleeper must stand down within the fixed poll interval"
   out_a=$(cat "$TMP_ROOT/cancel-a.out")
   expect_code 0 "$rc_a" "the superseded wake must be cancelled silently"
@@ -208,82 +255,44 @@ test_real_turn_cancels_and_rearms() {
   pass "self-wake: a real turn cancels the pending wake and arms a fresh one"
 }
 
-# --- no live Claude supervisor: no-op ------------------------------------------
-
-test_no_live_supervisor_is_noop() {
-  local dir rc
-  dir=$(make_primary_dir "$TMP_ROOT/nolock")
-  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/nolock-rec" keep
-  rc=$(wait_rc "$TMP_ROOT/nolock-rec" 10) || fail "hook did not finish"
-  expect_code 0 "$rc" "a home with no session lock has no live supervisor"
-  assert_absent "$dir/state/.keepwarm-selfwake" "no arm may be recorded without a live supervisor"
-  [ -s "$TMP_ROOT/nolock-rec.out" ] && fail "a no-op must be silent: $(cat "$TMP_ROOT/nolock-rec.out")"
-
-  dir=$(make_primary_dir "$TMP_ROOT/deadlock")
-  printf '%s\n' 2147483000 > "$dir/state/.lock"
-  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/deadlock-rec" keep
-  rc=$(wait_rc "$TMP_ROOT/deadlock-rec" 10) || fail "hook did not finish"
-  expect_code 0 "$rc" "a lock held by another (dead) pid is not this session's supervision"
-  assert_absent "$dir/state/.keepwarm-selfwake" "a foreign lock must not arm"
-  pass "self-wake: no live Claude supervisor session means no-op"
-}
-
-test_lock_handover_cancels_pending_wake() {
-  local dir rc
-  dir=$(make_primary_dir "$TMP_ROOT/handover")
-  FM_NM_KEEPWARM_SECS=4 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/handover-rec"
-  wait_marker "$dir" || fail "arm did not record"
-  # The session lock passes to another live process: the armed session is no
-  # longer the supervisor, so its pending wake must not fire.
-  printf '%s\n' "$$" > "$dir/state/.lock"
-  rc=$(wait_rc "$TMP_ROOT/handover-rec" 15) || fail "hook did not finish"
-  expect_code 0 "$rc" "a session that lost the lock must not wake"
-  [ -s "$TMP_ROOT/handover-rec.out" ] && fail "a stood-down wake must be silent"
-  pass "self-wake: losing the session lock cancels the pending wake"
-}
-
-# --- Claude-only gate ------------------------------------------------------------
-
-test_non_claude_supervisor_is_noop() {
-  local dir rc
-  dir=$(make_primary_dir "$TMP_ROOT/codex")
-  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$FAKE_CODEX" "$TMP_ROOT/codex-rec"
-  rc=$(wait_rc "$TMP_ROOT/codex-rec" 10) || fail "hook did not finish"
-  expect_code 0 "$rc" "a non-Claude primary must be a no-op even when it owns the lock"
-  assert_absent "$dir/state/.keepwarm-selfwake" "a non-Claude primary must not arm"
-  pass "self-wake: a non-Claude supervisor is a no-op regardless of config"
-}
-
-test_config_cannot_widen_the_claude_gate() {
-  local dir rc
-  dir=$(make_primary_dir "$TMP_ROOT/codex-cfg")
-  FM_NM_KEEPWARM_HARNESSES='codex claude' FM_NM_KEEPWARM_SECS=1 \
-    start_hook "$dir" "$FAKE_CODEX" "$TMP_ROOT/codex-cfg-rec"
-  rc=$(wait_rc "$TMP_ROOT/codex-cfg-rec" 10) || fail "hook did not finish"
-  expect_code 0 "$rc" "the crew harness opt-in list must not widen the supervisor path"
-  assert_absent "$dir/state/.keepwarm-selfwake" "config must not arm a non-Claude supervisor"
-  pass "self-wake: FM_NM_KEEPWARM_HARNESSES does not widen the hard Claude-only gate"
-}
+# --- no-op cases -----------------------------------------------------------------
 
 test_disabled_home_is_noop() {
   local dir rc
   dir=$(make_primary_dir "$TMP_ROOT/disabled")
-  FM_NM_KEEPWARM_SECS=0 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/disabled-rec"
+  FM_NM_KEEPWARM_SECS=0 start_hook "$dir" "$TMP_ROOT/disabled-rec"
   rc=$(wait_rc "$TMP_ROOT/disabled-rec" 10) || fail "hook did not finish"
   expect_code 0 "$rc" "FM_NM_KEEPWARM_SECS=0 must disable the self-wake"
   assert_absent "$dir/state/.keepwarm-selfwake" "a disabled home must not arm"
-  pass "self-wake: FM_NM_KEEPWARM_SECS=0 disables the supervisor path"
+  FM_NM_KEEPWARM_SECS=0 start_hook "$dir" "$TMP_ROOT/disabled-crew-rec" --task crew-off
+  rc=$(wait_rc "$TMP_ROOT/disabled-crew-rec" 10) || fail "crew hook did not finish"
+  expect_code 0 "$rc" "FM_NM_KEEPWARM_SECS=0 must disable the crew form too"
+  assert_absent "$dir/state/.keepwarm-crew-off" "a disabled home must not arm a crew"
+  pass "self-wake: FM_NM_KEEPWARM_SECS=0 disables every session in the home"
 }
 
-test_crewmate_worktree_is_inert() {
+test_bare_form_in_crewmate_worktree_is_inert() {
   local base dir rc
-  base=$(make_primary_dir "$TMP_ROOT/crew-base")
-  dir=$(make_crewmate_worktree_dir "$base" "$TMP_ROOT/crew-wt")
-  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$FAKE_CLAUDE" "$TMP_ROOT/crew-rec"
-  rc=$(wait_rc "$TMP_ROOT/crew-rec" 10) || fail "hook did not finish"
-  expect_code 0 "$rc" "a crew worktree is not a supervisor home"
-  assert_absent "$dir/state/.keepwarm-selfwake" "a crew worktree must not arm"
-  pass "self-wake: a crewmate worktree stays inert (crew keep-warm is the watcher-side library)"
+  base=$(make_primary_dir "$TMP_ROOT/bare-base")
+  dir=$(make_crewmate_worktree_dir "$base" "$TMP_ROOT/bare-wt")
+  # A firstmate-repo crew worktree loads the tracked settings too; its bare
+  # entry must stand down so the crew carries only its injected --task wake.
+  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$TMP_ROOT/bare-wt-rec"
+  rc=$(wait_rc "$TMP_ROOT/bare-wt-rec" 10) || fail "hook did not finish"
+  expect_code 0 "$rc" "the bare form is the supervisor registration and must not arm in a crew worktree"
+  assert_absent "$dir/state/.keepwarm-selfwake" "the bare form must not arm outside a primary home"
+  pass "self-wake: the tracked bare form stays inert in a crew worktree"
+}
+
+test_missing_state_dir_is_noop() {
+  local dir rc
+  dir=$(make_primary_dir "$TMP_ROOT/nostate")
+  rmdir "$dir/state"
+  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$TMP_ROOT/nostate-rec" --task crew-nostate
+  rc=$(wait_rc "$TMP_ROOT/nostate-rec" 10) || fail "hook did not finish"
+  expect_code 0 "$rc" "a home with no state dir has no session to keep warm"
+  [ -s "$TMP_ROOT/nostate-rec.out" ] && fail "a no-op must be silent: $(cat "$TMP_ROOT/nostate-rec.out")"
+  pass "self-wake: a missing state dir stands down"
 }
 
 test_cursor_payload_stands_down() {
@@ -292,13 +301,17 @@ test_cursor_payload_stands_down() {
   command -v jq >/dev/null 2>&1 || fail "test host must provide jq"
   rc=0
   printf '%s\n' '{"cursor_version":"2026.08.11","stop_hook_active":false}' \
-    | FM_HOME="$dir" FM_NM_KEEPWARM_SECS=1 "$FAKE_CLAUDE" -c '
-        printf "%s\n" "$$" > "$FM_HOME/state/.lock"
-        "$FM_HOME/bin/fm-claude-keepwarm-selfwake.sh"
-      ' > "$TMP_ROOT/cursor.out" 2>&1 || rc=$?
+    | FM_HOME="$dir" FM_NM_KEEPWARM_SECS=1 "$dir/bin/fm-claude-keepwarm-selfwake.sh" \
+    > "$TMP_ROOT/cursor.out" 2>&1 || rc=$?
   expect_code 0 "$rc" "a Cursor-delivered payload must stand down"
   assert_absent "$dir/state/.keepwarm-selfwake" "a Cursor-delivered payload must not arm"
-  pass "self-wake: a Cursor-delivered payload stands down"
+  rc=0
+  printf '%s\n' '{"cursor_version":"2026.08.11","stop_hook_active":false}' \
+    | FM_HOME="$dir" FM_NM_KEEPWARM_SECS=1 "$dir/bin/fm-claude-keepwarm-selfwake.sh" --task crew-cursor \
+    > "$TMP_ROOT/cursor-crew.out" 2>&1 || rc=$?
+  expect_code 0 "$rc" "a Cursor-delivered payload must stand down on the crew form too"
+  assert_absent "$dir/state/.keepwarm-crew-cursor" "a Cursor-delivered payload must not arm a crew"
+  pass "self-wake: a Cursor-delivered payload stands down on both forms"
 }
 
 test_missing_jq_stands_down() {
@@ -306,50 +319,51 @@ test_missing_jq_stands_down() {
   dir=$(make_primary_dir "$TMP_ROOT/no-jq")
   no_jq_path=$(fm_test_base_path_sans "${PATH:-}" jq)
   rc=0
-  printf '%s\n' '{"session_id":"sess-keepwarm","stop_hook_active":false}' \
-    | PATH="$no_jq_path" FM_HOME="$dir" FM_NM_KEEPWARM_SECS=1 "$FAKE_CLAUDE" -c '
-        printf "%s\n" "$$" > "$FM_HOME/state/.lock"
-        "$FM_HOME/bin/fm-claude-keepwarm-selfwake.sh"
-      ' > "$TMP_ROOT/no-jq.out" 2>&1 || rc=$?
+  printf '%s\n' "$CLAUDE_PAYLOAD" \
+    | PATH="$no_jq_path" FM_HOME="$dir" FM_NM_KEEPWARM_SECS=1 "$dir/bin/fm-claude-keepwarm-selfwake.sh" \
+    > "$TMP_ROOT/no-jq.out" 2>&1 || rc=$?
   expect_code 0 "$rc" "the self-wake must stand down when jq is unavailable"
   assert_absent "$dir/state/.keepwarm-selfwake" "missing jq must not allow a self-wake to arm"
   pass "self-wake: missing jq fails closed before arming"
 }
 
-# --- the crew keep-warm shares the same cap ----------------------------------------
+# --- the cadence library --------------------------------------------------------
 
-test_crew_keepwarm_shares_cap() {
+test_cadence_cap() {
   local v
   # shellcheck disable=SC1091
-  . "$ROOT/bin/fm-nm-keepwarm-lib.sh"
-  v=$(FM_NM_KEEPWARM_SECS=7200 fm_nm_keepwarm_interval_secs)
-  [ "$v" = 3000 ] || fail "the crew interval must clamp to the shared 3000s cap, got $v"
-  v=$(FM_NM_KEEPWARM_SECS=3000 fm_nm_keepwarm_interval_secs)
+  . "$ROOT/bin/fm-keepwarm-cadence-lib.sh"
+  v=$(FM_NM_KEEPWARM_SECS=7200 fm_keepwarm_interval_secs)
+  [ "$v" = 3000 ] || fail "the interval must clamp to the 3000s cap, got $v"
+  v=$(FM_NM_KEEPWARM_SECS=3000 fm_keepwarm_interval_secs)
   [ "$v" = 3000 ] || fail "3000s is the cap itself and must pass through, got $v"
-  v=$(FM_NM_KEEPWARM_SECS=600 fm_nm_keepwarm_interval_secs)
+  v=$(FM_NM_KEEPWARM_SECS=600 fm_keepwarm_interval_secs)
   [ "$v" = 600 ] || fail "a request under the cap must pass through, got $v"
-  v=$(FM_NM_KEEPWARM_SECS=008 fm_nm_keepwarm_interval_secs)
+  v=$(FM_NM_KEEPWARM_SECS=008 fm_keepwarm_interval_secs)
   [ "$v" = 8 ] || fail "a leading-zero request must be normalized to decimal, got $v"
-  v=$(FM_NM_KEEPWARM_SECS=000 fm_nm_keepwarm_interval_secs)
+  v=$(FM_NM_KEEPWARM_SECS=000 fm_keepwarm_interval_secs)
   [ "$v" = 0 ] || fail "an all-zero request must remain disabled, got $v"
-  v=$(FM_NM_KEEPWARM_SECS=0 fm_nm_keepwarm_interval_secs)
-  [ "$v" = 0 ] || fail "0 must still disable, got $v"
+  v=$(FM_NM_KEEPWARM_SECS=abc fm_keepwarm_interval_secs)
+  [ "$v" = 1800 ] || fail "a non-numeric request must fall back to the default, got $v"
   v=$(env -u FM_NM_KEEPWARM_SECS bash -c ". '$ROOT/bin/fm-keepwarm-cadence-lib.sh'; fm_keepwarm_interval_secs")
-  [ "$v" = 1800 ] || fail "the shared default must stay 1800, got $v"
-  pass "crew keep-warm and supervisor self-wake share one 3000s cadence cap"
+  [ "$v" = 1800 ] || fail "the default must stay 1800, got $v"
+  pass "cadence: one interval with a 3000s cap for every Claude session"
 }
 
 test_fires_at_deadline
 test_secondmate_home_fires
+test_crew_task_form_fires_with_its_own_marker
+test_crew_task_form_fires_outside_a_primary_home
+test_crew_and_supervisor_do_not_cancel_each_other
+test_bad_task_id_is_noop
 test_deadline_bounded_to_cap
 test_default_interval_is_thirty_minutes
 test_real_turn_cancels_and_rearms
-test_no_live_supervisor_is_noop
-test_lock_handover_cancels_pending_wake
-test_non_claude_supervisor_is_noop
-test_config_cannot_widen_the_claude_gate
 test_disabled_home_is_noop
-test_crewmate_worktree_is_inert
+test_bare_form_in_crewmate_worktree_is_inert
+test_missing_state_dir_is_noop
 test_cursor_payload_stands_down
 test_missing_jq_stands_down
-test_crew_keepwarm_shares_cap
+test_cadence_cap
+
+echo "# all fm-claude-keepwarm-selfwake tests passed"
