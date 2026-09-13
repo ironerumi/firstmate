@@ -47,9 +47,9 @@ jobs:
   tests-portable-parallel-1:
     name: Behavior portable parallel 1
     runs-on: ubuntu-latest
-    # Measured shard wall is ~1 min of serial sum on proven scripts; this cap is
-    # a hang tripwire with margin, not the expected healthy end of the lane.
-    timeout-minutes: 10
+    # Measured healthy wall is ~7-8 minutes on a normal runner; 15 minutes keeps
+    # the hang tripwire with margin for a slow runner.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
@@ -92,7 +92,7 @@ jobs:
   tests-portable-parallel-2:
     name: Behavior portable parallel 2
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:

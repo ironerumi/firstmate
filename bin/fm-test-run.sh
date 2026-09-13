@@ -265,7 +265,7 @@ family_for_basename() {
     fm-documentation-audiences.test.sh|fm-ensure-agents-md.test.sh|fm-grok-harness.test.sh|\
     fm-kimi-harness.test.sh|fm-muse-harness.test.sh|fm-rovo-harness.test.sh|fm-omp-harness.test.sh|fm-herdr-lab.test.sh|fm-lint.test.sh|\
     fm-lint-workflows.test.sh|\
-    fm-nm-guard.test.sh|fm-nm-keepwarm.test.sh|\
+    fm-nm-guard.test.sh|\
     fm-operational-input.test.sh|fm-pi-primary-types.test.sh|\
     fm-harness-adapter-references.test.sh|\
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|\
@@ -369,7 +369,7 @@ family_for_basename() {
       ;;
     fm-branch-supervision.test.sh|fm-busy-adapter-wiring.test.sh|\
     fm-busy-state.test.sh|fm-classify-corr-token.test.sh|\
-    fm-claude-stop-autoarm.test.sh|fm-cursor-harness.test.sh|\
+    fm-claude-stop-autoarm.test.sh|fm-claude-keepwarm-selfwake.test.sh|fm-cursor-harness.test.sh|\
     fm-extension-binding.test.sh|fm-gitignore-config.test.sh|\
     fm-no-mistakes-required.test.sh|fm-peek-remote.test.sh|\
     fm-pending-reply.test.sh|fm-pi-branch-extension.test.sh|\
@@ -615,6 +615,7 @@ tests/fm-check-unregister.test.sh 481
 tests/fm-classify-corr-token.test.sh 38742
 tests/fm-classify-decision-key.test.sh 1167
 tests/fm-claude-stop-autoarm-live-e2e.test.sh 21
+tests/fm-claude-keepwarm-selfwake.test.sh 18000
 tests/fm-claude-stop-autoarm.test.sh 60709
 tests/fm-cmux-claude-composer-live-e2e.test.sh 23
 tests/fm-codex-continuity-live-e2e.test.sh 21

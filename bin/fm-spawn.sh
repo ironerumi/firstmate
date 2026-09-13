@@ -3250,8 +3250,15 @@ if [ "$KIND" != secondmate ]; then
       j_stop=$(json_escape "touch $(shell_quote "$TURNEND"); $busy_cmd_prefix idle $busy_suffix --event stop 2>/dev/null || true")
       j_stopfail=$(json_escape "$busy_cmd_prefix idle $busy_suffix --event stop-failure 2>/dev/null || true")
       j_sessionend=$(json_escape "$busy_cmd_prefix idle $busy_suffix --event session-end 2>/dev/null || true")
+      # Keep-warm self-wake (bin/fm-claude-keepwarm-selfwake.sh): the same
+      # asyncRewake Stop hook the tracked primary settings register, injected
+      # here per task so an idle Claude crew or scout inside any project repo
+      # warms its own prompt cache without that repo loading firstmate's
+      # settings. FM_STATE_OVERRIDE pins the marker to this home's state dir,
+      # --task keys it to this crew, and teardown removes it with the task.
+      j_keepwarm=$(json_escape "FM_STATE_OVERRIDE=$(shell_quote "$STATE_REAL") exec $(shell_quote "$FM_ROOT/bin/fm-claude-keepwarm-selfwake.sh") --task $(shell_quote "$ID")")
       cat > "$WT/.claude/settings.local.json" <<EOF
-{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
+{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"},{"type":"command","command":"$j_keepwarm","asyncRewake":true,"timeout":3600}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
 EOF
       exclude_path '.claude/settings.local.json'
       ;;

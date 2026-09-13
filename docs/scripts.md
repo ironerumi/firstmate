@@ -46,6 +46,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-primary-scope-lib.sh` | Shared marker-or-plain-checkout primary-home predicate for tracked hooks             |
 | `fm-session-lock-lib.sh` | Shared session-lock harness identity (ancestry walk and holder liveness) for fm-lock.sh and the Claude Stop auto-arm |
 | `fm-claude-stop-autoarm.sh` | Claude Stop `asyncRewake` hook owning tokenless watcher continuity with single-flight exit-2 rewake (docs/watcher-continuity.md) |
+| `fm-claude-keepwarm-selfwake.sh` | Claude Stop `asyncRewake` hook that keeps any idle Claude session warm, registered for supervisors in tracked settings and injected per task by `fm-spawn.sh` for crews; see [turnend-guard.md](turnend-guard.md#harness-integrations) for its contract |
 | `fm-turnend-guard.sh`    | Shared primary turn-end guard predicate so no turn ends blind (docs/turnend-guard.md) |
 | `fm-turnend-guard-grok.sh` | Grok Stop-hook adapter for the primary turn-end guard                              |
 | `fm-kimi-turnend-hook.sh` | Surgically install or remove Kimi's guarded global crew turn-end hook                |
@@ -98,7 +99,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
 | `fm-worktree-guard-lib.sh` | Decide whether a worker command would destroy a path outside its own task worktree (docs/worktree-guard.md) |
 | `fm-worktree-guard-shim.sh` | PATH-shim transport for that decision, reached as `bin/shims/rm`, `rmdir`, `unlink`, `mv`, and `treehouse`; `bin/shims/git` carries it through `fm-nm-guard-shim.sh` |
-| `fm-nm-keepwarm-lib.sh`  | Decide whether a Claude crew quietly waiting out its own live no-mistakes run, working or parked at an attributed gate, is due one benign keep-warm activation |
+| `fm-keepwarm-cadence-lib.sh` | Single owner of the keep-warm quiet interval and its fixed 3000-second cap |
 | `fm-tangle-lib.sh`       | Shared default-branch resolution and primary-checkout tangle classification          |
 | `fm-timeout-lib.sh`      | Single owner of hard-bounded command execution and its fallback watchdog |
 | `fm-timing-lib.sh`       | Single owner of the deferred network stage's per-step elapsed-time records, inert unless a run asks for them |
