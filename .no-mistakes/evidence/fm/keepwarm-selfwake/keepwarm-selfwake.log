@@ -1,0 +1,23 @@
+FM_TEST_BEGIN 2026-09-13T14:15:07Z tests/fm-claude-keepwarm-selfwake.test.sh family=standalone expected_gate_skip=none
+ok - self-wake: an idle Claude supervisor gets one native wake at the deadline
+ok - self-wake: a secondmate's own Claude primary self-warms in its own home
+ok - self-wake: a crew's --task form fires from its own task-keyed marker
+warning: re-init: ignored --initial-branch=main
+ok - self-wake: the crew form fires from a project worktree into the spawning home
+ok - self-wake: sessions sharing one home keep independent wakes
+ok - self-wake: a malformed task id or unknown argument stands down
+ok - self-wake: the deadline never exceeds 50 minutes after the turn boundary
+ok - self-wake: the unconfigured deadline is last turn + 1800s
+ok - self-wake: a real turn cancels the pending wake and arms a fresh one
+ok - self-wake: FM_NM_KEEPWARM_SECS=0 disables every session in the home
+warning: re-init: ignored --initial-branch=main
+ok - self-wake: the tracked bare form stays inert in a crew worktree
+ok - self-wake: a missing state dir stands down
+ok - self-wake: a Cursor-delivered payload stands down on both forms
+ok - self-wake: missing jq fails closed before arming
+ok - cadence: one interval with a 3000s cap for every Claude session
+# all fm-claude-keepwarm-selfwake tests passed
+FM_TEST_END 2026-09-13T14:16:13Z tests/fm-claude-keepwarm-selfwake.test.sh exit=0 duration_ms=66367 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=66501
+FM_TEST_SUMMARY_FAMILY family=standalone count=1 duration_ms=66367 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-claude-keepwarm-selfwake.test.sh duration_ms=66367

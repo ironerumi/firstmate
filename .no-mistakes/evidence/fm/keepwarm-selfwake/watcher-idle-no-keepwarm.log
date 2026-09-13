@@ -1,0 +1,5 @@
+watcher_live_after_two_polls=yes
+keepwarm_markers=0
+wake_queue_bytes=0
+stdout_bytes=       0
+stderr_bytes=       0

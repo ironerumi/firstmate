@@ -1,0 +1,5 @@
+hook_exit=2
+hook_fired=yes
+watcher_live_at_selfwake=yes
+marker_present=yes
+hook_output_has_banner=yes
