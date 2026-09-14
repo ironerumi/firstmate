@@ -210,6 +210,10 @@ test_home_defaults_preserve_absolute_or_resolve_relative_paths() {
 
   linked_home="$CASE_DIR/home-link"
   ln -s "$HOME_DIR" "$linked_home"
+  # One implementation task per repository at a time, so the landed first task's
+  # record is removed before the second spawn - exactly what its landing and
+  # teardown would have done to release the repository for the next ship.
+  rm -f "$HOME_DIR/state/$relative_id.meta"
   : > "$LAUNCH_LOG"
   out=$(
     FM_ROOT_OVERRIDE='' FM_HOME="$linked_home" \
@@ -630,12 +634,19 @@ test_native_pi_ultra_is_explicit_and_model_scoped() {
 }
 
 test_batch_preserves_native_ultra() {
-  local rec id1=ultra-batch-a id2=ultra-batch-b out launch
+  local rec id1=ultra-batch-a id2=ultra-batch-b out launch proj_b
   rec=$(make_spawn_case ultra-batch pi "$id1" "$id2")
   read_case_record "$rec"
+  # One implementation task per repository at a time, so a two-pair batch spans
+  # two repositories instead of racing two ships on one. The fake terminal
+  # reports one cwd for the whole batch, and the isolation screen only requires an
+  # isolated worktree distinct from the spawning project, so the second pair is
+  # given its own repository and the same fake cwd.
+  proj_b="$CASE_DIR/project-b"
+  fm_git_worktree "$proj_b" "$CASE_DIR/wt-b" "wt-b-ultra-batch"
   enable_dispatch_profile "$HOME_DIR"
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id1=$PROJ_DIR" "$id2=$PROJ_DIR" --harness pi --model codex-native/gpt-6-astra --effort ultra)
+    "$id1=$PROJ_DIR" "$id2=$proj_b" --harness pi --model codex-native/gpt-6-astra --effort ultra)
   expect_code 0 "$?" "native Ultra batch failed: $out"
   assert_meta_profile "$HOME_DIR/state/$id1.meta" pi codex-native/gpt-6-astra ultra
   assert_meta_profile "$HOME_DIR/state/$id2.meta" pi codex-native/gpt-6-astra ultra
@@ -787,15 +798,21 @@ test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity() {
 }
 
 test_batch_forwards_shared_profile_flags() {
-  local rec id1 id2 out status
+  local rec id1 id2 out status proj_b
   id1=profile-batch-a-z9
   id2=profile-batch-b-z10
   rec=$(make_spawn_case profile-batch claude "$id1" "$id2")
   read_case_record "$rec"
+  # One implementation task per repository at a time, so a two-pair batch spans
+  # two repositories rather than racing two ships on one; the batch shares one
+  # fake terminal cwd, which the isolation screen accepts as an isolated worktree
+  # distinct from either spawning project.
+  proj_b="$CASE_DIR/project-b"
+  fm_git_worktree "$proj_b" "$CASE_DIR/wt-b" "wt-b-profile-batch"
   enable_dispatch_profile "$HOME_DIR"
 
   out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" \
-    "$id1=$PROJ_DIR" "$id2=$PROJ_DIR" --harness codex --model gpt-5 --effort high)
+    "$id1=$PROJ_DIR" "$id2=$proj_b" --harness codex --model gpt-5 --effort high)
   status=$?
   expect_code 0 "$status" "batch spawn with shared profile flags should succeed"
   assert_contains "$out" "spawned $id1 harness=codex" "first batch task did not use shared harness"

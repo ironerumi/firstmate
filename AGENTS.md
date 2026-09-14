@@ -311,6 +311,8 @@ An unregistered project or absent registry resolves to `no-mistakes` with yolo o
 Record the resulting mode, `yolo` merge posture, and the one-line reason for any deviation in the backlog item note.
 
 Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately with no concurrency cap when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
+The one exception is mechanical rather than a judgment call: at most one implementation task per repository in each home at a time, enforced by `bin/fm-impl-concurrency-guard.sh` on fresh ship spawns, direct Firstmate ship registrations, and scout promotions, while scouts stay parallel.
+The guard deliberately scans only THIS home's state directory; a same-repository clone in another home, including a remote or separately cloned secondmate home, is a known limitation, and cross-home/cross-machine coordination is tracked as a separate follow-up task.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
 Write the task-specific brief under section 11 before spawning.
 Fill the task subsections according to section 11.

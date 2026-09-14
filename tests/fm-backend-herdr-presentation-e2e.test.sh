@@ -412,6 +412,12 @@ EOF
 
 spawn_task() {  # <id> <home> <project>
   local id=$1 home=$2 project=$3
+  # One implementation task per repository at a time (bin/fm-impl-concurrency-guard.sh),
+  # so each task gets its own repository instead of sharing one project with the
+  # other tasks in the same home. The per-task path keeps every retry targeting
+  # the same repository.
+  project="$project.$id"
+  [ -d "$project" ] || make_project "$project"
   FM_GATE_REFUSE_BYPASS=1 FM_SPAWN_NO_GUARD=1 FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$ROOT/bin/fm-spawn.sh" "$id" "$project" "sh -c 'while :; do sleep 60; done'" --mode no-mistakes --yolo off --backend herdr
 }

@@ -126,6 +126,17 @@ spawn_from_launcher() {
   local pane=$1 home=$2 id=$3 proj=$4
   shift 4
   SPAWN_OUT="$TMP_ROOT/$id.out"; SPAWN_ERR="$TMP_ROOT/$id.err"
+  # One implementation task per repository at a time (bin/fm-impl-concurrency-guard.sh),
+  # so every case here gets its own scratch repository instead of sharing one
+  # project across tasks in the same home. A --secondmate launch is exempt from
+  # that cap and takes a firstmate home, not a project, so it keeps its argument.
+  case " $* " in
+    *" --secondmate "*) ;;
+    *)
+      proj="$proj.$id"
+      [ -d "$proj" ] || make_scratch_project "$proj"
+      ;;
+  esac
   if [ -n "$pane" ]; then
     env HERDR_ENV=1 HERDR_PANE_ID="$pane" HERDR_SESSION="$HERDR_LAB_SESSION" \
       HERDR_SOCKET_PATH="$LAB_SOCKET" \

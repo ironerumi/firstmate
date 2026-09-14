@@ -34,6 +34,8 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-dod-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
 . "$SCRIPT_DIR/fm-pr-lib.sh"
+# shellcheck source=bin/fm-backend.sh
+. "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-tasks-axi-lib.sh
@@ -97,6 +99,8 @@ esac
 
 ID=${POS[0]}
 fm_task_id_creation_valid "$ID" || { echo "error: invalid task id" >&2; exit 2; }
+TASK_SET_LOCK=
+TASK_SET_LOCK_HELD=0
 CONTROL_LOCK="$STATE/.control-$ID.lock"
 CONTROL_LOCK_HELD=0
 META_LOCK=
@@ -113,9 +117,20 @@ promote_cleanup() {
     CONTROL_LOCK_HELD=0
     fm_lock_release "$CONTROL_LOCK" || true
   fi
+  if [ "$TASK_SET_LOCK_HELD" = 1 ]; then
+    TASK_SET_LOCK_HELD=0
+    fm_lock_release "$TASK_SET_LOCK" || true
+  fi
   return "$status"
 }
 trap promote_cleanup EXIT
+[ -d "$STATE" ] || { echo "error: state dir not found: $STATE" >&2; exit 1; }
+TASK_SET_LOCK=$(fm_task_set_lock_path "$STATE") || exit 1
+fm_lock_try_acquire "$TASK_SET_LOCK" || {
+  echo "error: this home's task set is locked by another operation; nothing was changed" >&2
+  exit 1
+}
+TASK_SET_LOCK_HELD=1
 fm_lock_try_acquire "$CONTROL_LOCK" || {
   echo "error: another lifecycle action is already running for task $ID; nothing was changed" >&2
   exit 1
@@ -123,7 +138,6 @@ fm_lock_try_acquire "$CONTROL_LOCK" || {
 CONTROL_LOCK_HELD=1
 "$FM_ROOT/bin/fm-guard.sh" || true
 META="$STATE/$ID.meta"
-[ -d "$STATE" ] || { echo "error: state dir not found: $STATE" >&2; exit 1; }
 META_LOCK=$(fm_meta_lock_path "$META") || exit 1
 fm_lock_acquire_wait "$META_LOCK"
 META_LOCK_HELD=1
@@ -132,6 +146,11 @@ if ! fm_backlog_record_present "$META" "task record" "$STATE"; then
   exit 1
 fi
 grep -qx 'kind=scout' "$META" || { echo "error: task $ID is not a scout task (kind=scout not in meta)" >&2; exit 1; }
+PROMOTE_PROJECT=$(fm_meta_get "$META" project)
+if [ -n "$PROMOTE_PROJECT" ]; then
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    "$SCRIPT_DIR/fm-impl-concurrency-guard.sh" "$STATE" "$PROMOTE_PROJECT" "$ID"
+fi
 
 SCOUT_BRIEF="$DATA/$ID/brief.md"
 if fm_brief_task_placeholders_present "$SCOUT_BRIEF"; then
