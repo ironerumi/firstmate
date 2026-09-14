@@ -99,6 +99,8 @@ esac
 
 ID=${POS[0]}
 fm_task_id_creation_valid "$ID" || { echo "error: invalid task id" >&2; exit 2; }
+TASK_SET_LOCK=
+TASK_SET_LOCK_HELD=0
 CONTROL_LOCK="$STATE/.control-$ID.lock"
 CONTROL_LOCK_HELD=0
 META_LOCK=
@@ -115,9 +117,20 @@ promote_cleanup() {
     CONTROL_LOCK_HELD=0
     fm_lock_release "$CONTROL_LOCK" || true
   fi
+  if [ "$TASK_SET_LOCK_HELD" = 1 ]; then
+    TASK_SET_LOCK_HELD=0
+    fm_lock_release "$TASK_SET_LOCK" || true
+  fi
   return "$status"
 }
 trap promote_cleanup EXIT
+[ -d "$STATE" ] || { echo "error: state dir not found: $STATE" >&2; exit 1; }
+TASK_SET_LOCK=$(fm_task_set_lock_path "$STATE") || exit 1
+fm_lock_try_acquire "$TASK_SET_LOCK" || {
+  echo "error: this home's task set is locked by another operation; nothing was changed" >&2
+  exit 1
+}
+TASK_SET_LOCK_HELD=1
 fm_lock_try_acquire "$CONTROL_LOCK" || {
   echo "error: another lifecycle action is already running for task $ID; nothing was changed" >&2
   exit 1
@@ -125,7 +138,6 @@ fm_lock_try_acquire "$CONTROL_LOCK" || {
 CONTROL_LOCK_HELD=1
 "$FM_ROOT/bin/fm-guard.sh" || true
 META="$STATE/$ID.meta"
-[ -d "$STATE" ] || { echo "error: state dir not found: $STATE" >&2; exit 1; }
 META_LOCK=$(fm_meta_lock_path "$META") || exit 1
 fm_lock_acquire_wait "$META_LOCK"
 META_LOCK_HELD=1

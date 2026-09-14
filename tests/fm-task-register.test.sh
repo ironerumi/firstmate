@@ -61,6 +61,28 @@ test_registers_private_adhoc_meta() {
   pass "fm-task-register creates private ad-hoc metadata with the fields its consumers read"
 }
 
+test_refuses_busy_repository() {
+  local case_dir rc
+  case_dir=$(make_case busy)
+
+  run_register "$case_dir" adhoc-first >/dev/null \
+    || fail "busy: the first registration failed"
+
+  set +e
+  run_register "$case_dir" adhoc-second > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "busy: a second registration should be refused"
+  assert_grep 'an implementation task is already in flight' "$case_dir/stderr" \
+    "busy: refusal did not come from the concurrency guard"
+  assert_grep 'adhoc-first' "$case_dir/stderr" \
+    "busy: refusal did not name the implementation already in flight"
+  assert_absent "$case_dir/state/adhoc-second.meta" \
+    "busy: refused registration published metadata"
+  pass "fm-task-register refuses a second implementation for a busy repository"
+}
+
 test_refuses_existing_meta_without_mutation() {
   local case_dir meta before after rc
   case_dir=$(make_case existing)
@@ -203,6 +225,7 @@ test_registered_identity_merges_and_cleans_up() {
 }
 
 test_registers_private_adhoc_meta
+test_refuses_busy_repository
 test_refuses_existing_meta_without_mutation
 test_refuses_invalid_id
 test_refuses_drifted_or_forged_adhoc_record_at_teardown

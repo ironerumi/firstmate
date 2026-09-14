@@ -60,8 +60,19 @@ read -r MODE YOLO <<EOF
 $(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-project-mode.sh" "$(basename "$PROJECT")")
 EOF
 
+TASK_SET_LOCK=$(fm_task_set_lock_path "$STATE") || {
+  echo "error: could not resolve the task-set lock for $STATE" >&2
+  exit 1
+}
+if ! fm_lock_try_acquire "$TASK_SET_LOCK"; then
+  echo "error: this home's task set is locked by another operation; refusing to register task $ID" >&2
+  exit 1
+fi
+TASK_SET_LOCK_HELD=1
 LOCK="$STATE/.spawn-$ID.lock"
 if ! fm_lock_try_acquire "$LOCK"; then
+  fm_lock_release "$TASK_SET_LOCK" || true
+  TASK_SET_LOCK_HELD=0
   echo "error: another task registration or spawn is already creating task $ID" >&2
   exit 1
 fi
@@ -69,6 +80,10 @@ TMP=
 cleanup() {
   [ -z "$TMP" ] || rm -f -- "$TMP"
   fm_lock_release "$LOCK" || true
+  if [ "${TASK_SET_LOCK_HELD:-0}" = 1 ]; then
+    TASK_SET_LOCK_HELD=0
+    fm_lock_release "$TASK_SET_LOCK" || true
+  fi
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
@@ -78,6 +93,8 @@ if [ -e "$META" ] || [ -L "$META" ]; then
   echo "error: task metadata already exists" >&2
   exit 1
 fi
+FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+  "$SCRIPT_DIR/fm-impl-concurrency-guard.sh" "$STATE" "$PROJECT" "$ID"
 
 old_umask=$(umask)
 umask 077
