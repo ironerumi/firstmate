@@ -38,3 +38,23 @@ commands:
 test:
   evidence:
     store_in_repo: true
+
+# These entries exist only to keep the accepted scope decision from re-surfacing;
+# the guard's own header and AGENTS.md section 7 remain the authority for this boundary.
+review:
+  path_instructions:
+    - path: bin/fm-impl-concurrency-guard.sh
+      instructions: |
+        The per-repository implementation-concurrency guard is intentionally scoped to a single firstmate home.
+        Cross-home/cross-workspace coordination is a deliberately deferred, accepted limitation tracked by follow-up fm-impl-guard-cross-home.
+        Do not raise cross-home or cross-workspace enforcement as a finding on this file.
+    - path: bin/fm-spawn.sh
+      instructions: |
+        The per-repository implementation-concurrency guard this file calls is intentionally scoped to a single firstmate home.
+        Cross-home/cross-workspace coordination is a deliberately deferred, accepted limitation tracked by follow-up fm-impl-guard-cross-home.
+        Do not raise cross-home or cross-workspace enforcement as a finding on this file.
+    - path: bin/fm-promote.sh
+      instructions: |
+        The per-repository implementation-concurrency guard this file calls is intentionally scoped to a single firstmate home.
+        Cross-home/cross-workspace coordination is a deliberately deferred, accepted limitation tracked by follow-up fm-impl-guard-cross-home.
+        Do not raise cross-home or cross-workspace enforcement as a finding on this file.
