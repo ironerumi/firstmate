@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Refuse a second implementation task for one repository in the same firstmate
-# home, so at most ONE ship can be in flight per repository at a time.
+# home, so at most ONE implementation task can be in flight per repository at a time.
 #
 # Why this is mechanical rather than a prose cap: GitHub's merge queue is not
 # available on this fleet's plan (Team private repositories), so two open PRs on
@@ -14,8 +14,9 @@
 #   Exit 1 - refused; stderr names the task(s) already in flight.
 #   Exit 2 - usage or argument error.
 #
-# The caller is bin/fm-spawn.sh's pre-flight pass, which invokes this for every
-# fresh ship spawn, so this script owns the whole trigger rule.
+# The callers are bin/fm-spawn.sh's pre-flight pass for every fresh ship spawn,
+# bin/fm-promote.sh for scout promotion, and bin/fm-task-register.sh for direct
+# Firstmate-repo ships, so this script owns the whole trigger rule.
 #
 # "In flight" is the presence of another ship or adhoc task record for the same
 # project in <state-dir>: bin/fm-teardown.sh removes that record only after
