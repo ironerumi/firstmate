@@ -9,17 +9,13 @@
 # nothing, which is pure wasted compute; one at a time per repository removes
 # that collision by construction instead of asking an agent to remember a cap.
 #
-# Usage: fm-impl-concurrency-guard.sh <state-dir> <project-dir> <task-id> <mode>
+# Usage: fm-impl-concurrency-guard.sh <state-dir> <project-dir> <task-id>
 #   Exit 0 - the repository is free for this implementation task.
 #   Exit 1 - refused; stderr names the task(s) already in flight.
 #   Exit 2 - usage or argument error.
 #
-# The caller is bin/fm-spawn.sh's pre-flight pass, which invokes this for a fresh
-# ship spawn and passes that task's resolved delivery mode, so this script owns
-# the whole trigger rule.
-# Only a spawn that will open a PR is screened (mode no-mistakes or direct-PR);
-# every other mode exits 0 immediately, so the call site stays one line and a
-# local-only ship, which opens no PR, is never refused here.
+# The caller is bin/fm-spawn.sh's pre-flight pass, which invokes this for every
+# fresh ship spawn, so this script owns the whole trigger rule.
 #
 # "In flight" is the presence of another ship task record for the same project in
 # <state-dir>: bin/fm-teardown.sh removes that record only after landing is
@@ -34,9 +30,6 @@
 # Both sides are compared as physical paths, because one home can reach a clone
 # through a symlinked path.
 #
-# FM_ALLOW_CONCURRENT_IMPL=1 is the deliberate escape hatch for the rare
-# authorized exception, the same shape as the other spawn-time guards
-# (docs/worktree-guard.md).
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,28 +42,24 @@ case "${1:-}" in
     exit 0
     ;;
 esac
-if [ "$#" -ne 4 ]; then
-  echo "usage: fm-impl-concurrency-guard.sh <state-dir> <project-dir> <task-id> <mode>" >&2
+if [ "$#" -ne 3 ]; then
+  echo "usage: fm-impl-concurrency-guard.sh <state-dir> <project-dir> <task-id>" >&2
   exit 2
 fi
 
 STATE_DIR=$1
 PROJECT=$2
 OWN_ID=$3
-MODE=$4
-
-case "$MODE" in
-  no-mistakes | direct-PR) ;;
-  *) exit 0 ;;
-esac
-if [ "${FM_ALLOW_CONCURRENT_IMPL:-}" = 1 ]; then
-  exit 0
-fi
 if [ ! -d "$STATE_DIR" ]; then
   echo "error: fm-impl-concurrency-guard.sh: state directory does not exist: $STATE_DIR" >&2
   exit 2
 fi
 
+# This guard deliberately scans THIS home's state directory only. A same-repository
+# clone in another home, including a remote or separately cloned secondmate home,
+# is a known documented limitation. Cross-home/cross-machine coordination is
+# tracked as a separate follow-up task.
+#
 # The physical form of a path, or the path itself when it cannot be resolved, so
 # a deleted clone still compares as the string its record holds.
 physical_path() { # <path>
@@ -98,5 +87,5 @@ for meta in "$STATE_DIR"/*.meta; do
 done
 [ -n "$BLOCKERS" ] || exit 0
 
-echo "error: spawn refused: an implementation task is already in flight for $(basename "$PROJECT"): $BLOCKERS; one implementation task per repository runs at a time, so a second PR cannot land behind the first merge and re-run CI. Start $OWN_ID after that task lands (teardown), or re-run this spawn with FM_ALLOW_CONCURRENT_IMPL=1 only if firstmate has deliberately authorized this exact concurrency" >&2
+echo "error: spawn refused: an implementation task is already in flight for $(basename "$PROJECT"): $BLOCKERS; one implementation task per repository runs at a time, so a second implementation task cannot land behind the first merge and re-run CI. Start $OWN_ID after that task lands (teardown)" >&2
 exit 1

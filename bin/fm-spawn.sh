@@ -2271,7 +2271,7 @@ if [ "$KIND" = ship ]; then
 fi
 
 # Pre-flight guard for the one-implementation-task-per-repository cap; that script owns the rule.
-if [ "$KIND" = ship ] && [ "$RELAUNCH" -eq 0 ]; then "$SCRIPT_DIR/fm-impl-concurrency-guard.sh" "$STATE" "$PROJ_ABS" "$ID" "$MODE"; fi
+if [ "$KIND" = ship ] && [ "$RELAUNCH" -eq 0 ]; then "$SCRIPT_DIR/fm-impl-concurrency-guard.sh" "$STATE" "$PROJ_ABS" "$ID"; fi
 
 BRIEF_DIR_REAL=$(cd "$(dirname "$BRIEF")" && pwd -P)
 BRIEF_REAL="$BRIEF_DIR_REAL/$(basename "$BRIEF")"

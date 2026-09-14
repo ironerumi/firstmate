@@ -164,55 +164,59 @@ EOF
   pass "a scout on a repository with a ship in flight is allowed"
 }
 
-test_escape_hatch_allows_authorized_concurrency() {
+test_second_local_only_ship_is_refused() {
   local repo_rec world home fakebin project slot_a slot_b out status
-  world=$(make_world escape-hatch)
+  world=$(make_world local-only-second)
   IFS='|' read -r _ home fakebin <<EOF
 $world
 EOF
-  repo_rec=$(make_repo escape-hatch project)
+  repo_rec=$(make_repo local-only-second project)
   IFS='|' read -r project slot_a <<EOF
 $repo_rec
 EOF
   slot_b=$(add_slot "$project" slot-b) || fail "could not add the second worktree"
-  write_brief "$home" impl-hatch-a-z9
-  write_brief "$home" impl-hatch-b-z10
+  write_brief "$home" impl-lo-first-z11
+  write_brief "$home" impl-lo-second-z12
 
-  out=$(run_spawn "$home" "$slot_a" "$fakebin" impl-hatch-a-z9 "$project" --mode no-mistakes --yolo off)
+  out=$(run_spawn "$home" "$slot_a" "$fakebin" impl-lo-first-z11 "$project" --mode local-only --yolo off)
   status=$?
-  expect_code 0 "$status" "the first ship spawn should succeed"$'\n'"$out"
+  expect_code 0 "$status" "the first local-only ship spawn should succeed"$'\n'"$out"
 
-  out=$(FM_ALLOW_CONCURRENT_IMPL=1 \
-    run_spawn "$home" "$slot_b" "$fakebin" impl-hatch-b-z10 "$project" --mode no-mistakes --yolo off)
+  out=$(run_spawn "$home" "$slot_b" "$fakebin" impl-lo-second-z12 "$project" --mode local-only --yolo off)
   status=$?
-  expect_code 0 "$status" "FM_ALLOW_CONCURRENT_IMPL=1 must bypass the cap"$'\n'"$out"
-  assert_contains "$out" "spawned impl-hatch-b-z10" "the authorized concurrent spawn did not report success"
-  pass "FM_ALLOW_CONCURRENT_IMPL=1 bypasses the per-repository cap"
+  [ "$status" -ne 0 ] || fail "a second local-only ship for the same repository should be refused"$'\n'"$out"
+  assert_contains "$out" "an implementation task is already in flight for project: impl-lo-first-z11" \
+    "the refusal did not name the local-only task already in flight"
+  if [ -e "$home/state/impl-lo-second-z12.meta" ]; then
+    fail "the refused local-only spawn published a task record"
+  fi
+  pass "a second local-only ship for a repository already in flight is refused"
 }
 
-test_local_only_ship_opens_no_pr_and_is_not_refused() {
+test_local_only_ship_blocks_pr_ship() {
   local repo_rec world home fakebin project slot_a slot_b out status
-  world=$(make_world local-only)
+  world=$(make_world local-only-blocks-pr)
   IFS='|' read -r _ home fakebin <<EOF
 $world
 EOF
-  repo_rec=$(make_repo local-only project)
+  repo_rec=$(make_repo local-only-blocks-pr project)
   IFS='|' read -r project slot_a <<EOF
 $repo_rec
 EOF
   slot_b=$(add_slot "$project" slot-b) || fail "could not add the second worktree"
-  write_brief "$home" impl-lo-a-z11
-  write_brief "$home" impl-lo-b-z12
+  write_brief "$home" impl-lo-prior-z13
+  write_brief "$home" impl-lo-pr-next-z14
 
-  out=$(run_spawn "$home" "$slot_a" "$fakebin" impl-lo-a-z11 "$project" --mode direct-PR --yolo off)
+  out=$(run_spawn "$home" "$slot_a" "$fakebin" impl-lo-prior-z13 "$project" --mode local-only --yolo off)
   status=$?
-  expect_code 0 "$status" "the direct-PR ship spawn should succeed"$'\n'"$out"
+  expect_code 0 "$status" "the local-only ship spawn should succeed"$'\n'"$out"
 
-  out=$(run_spawn "$home" "$slot_b" "$fakebin" impl-lo-b-z12 "$project" --mode local-only --yolo off)
+  out=$(run_spawn "$home" "$slot_b" "$fakebin" impl-lo-pr-next-z14 "$project" --mode direct-PR --yolo off)
   status=$?
-  expect_code 0 "$status" "a local-only spawn opens no PR and must not be refused"$'\n'"$out"
-  assert_contains "$out" "spawned impl-lo-b-z12" "the local-only spawn did not report success"
-  pass "a local-only ship is not screened by the per-repository cap"
+  [ "$status" -ne 0 ] || fail "a new direct-PR ship should be blocked by a local-only ship"$'\n'"$out"
+  assert_contains "$out" "an implementation task is already in flight for project: impl-lo-prior-z13" \
+    "the refusal did not name the local-only task blocking the PR ship"
+  pass "a local-only ship in flight blocks a new direct-PR ship"
 }
 
 test_torn_down_ship_releases_the_repository() {
@@ -310,8 +314,8 @@ EOF
 }
 
 # The script's own interface, exercised directly: it never counts the task it is
-# checking as its own blocker (the relaunch shape), it screens only a PR-opening
-# mode, and it reports a usage error rather than guessing.
+# checking as its own blocker (the relaunch shape), it screens every ship mode,
+# and it reports a usage error rather than guessing.
 test_guard_interface_is_a_standalone_command() {
   local repo_rec world home fakebin project slot guard out status
   world=$(make_world guard-interface)
@@ -330,19 +334,15 @@ EOF
     "project=$project" \
     "kind=ship"
 
-  out=$(env -u FM_ALLOW_CONCURRENT_IMPL "$guard" "$home/state" "$project" guard-self-z18 no-mistakes 2>&1)
+  out=$("$guard" "$home/state" "$project" guard-self-z18 2>&1)
   status=$?
   expect_code 0 "$status" "the guard must not count the checked task as its own blocker"$'\n'"$out"
 
-  out=$(env -u FM_ALLOW_CONCURRENT_IMPL "$guard" "$home/state" "$project" guard-other-z19 no-mistakes 2>&1)
+  out=$("$guard" "$home/state" "$project" guard-other-z19 2>&1)
   status=$?
   expect_code 1 "$status" "a different PR-mode task must be refused"$'\n'"$out"
 
-  out=$(env -u FM_ALLOW_CONCURRENT_IMPL "$guard" "$home/state" "$project" guard-other-z19 local-only 2>&1)
-  status=$?
-  expect_code 0 "$status" "a mode that opens no PR must pass the guard"$'\n'"$out"
-
-  out=$(env -u FM_ALLOW_CONCURRENT_IMPL "$guard" "$home/state" "$project" guard-other-z19 2>&1)
+  out=$("$guard" "$home/state" "$project" 2>&1)
   status=$?
   expect_code 2 "$status" "a missing argument must be a usage error"$'\n'"$out"
   assert_contains "$out" "usage: fm-impl-concurrency-guard.sh" "the usage error did not print the usage line"
@@ -353,8 +353,8 @@ test_second_ship_on_one_repo_is_refused
 test_direct_pr_second_ship_is_refused_too
 test_other_repository_is_independent
 test_scout_on_a_busy_repository_is_allowed
-test_escape_hatch_allows_authorized_concurrency
-test_local_only_ship_opens_no_pr_and_is_not_refused
+test_second_local_only_ship_is_refused
+test_local_only_ship_blocks_pr_ship
 test_torn_down_ship_releases_the_repository
 test_secondmate_and_scout_records_never_block
 test_record_without_kind_is_treated_as_ship
