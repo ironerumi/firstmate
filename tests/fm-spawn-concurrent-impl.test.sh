@@ -14,6 +14,7 @@ set -u
 . "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-spawn-concurrent-impl)
+PROMOTE="$ROOT/bin/fm-promote.sh"
 
 # make_world <name>: one isolated firstmate home plus the fake spawn toolchain.
 # Echoes "<case-dir>|<home>|<fakebin>".
@@ -54,6 +55,14 @@ run_spawn() {  # <home> <slot> <fakebin> [args...]
   local home=$1 slot=$2 fakebin=$3
   shift 3
   fm_test_run_spawn "$home" "$slot" "$fakebin" "$@"
+}
+
+run_promote() {  # <home> <id> [args...]
+  local home=$1 id=$2
+  shift 2
+  FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" \
+    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    "$PROMOTE" "$id" "$@"
 }
 
 test_second_ship_on_one_repo_is_refused() {
@@ -111,6 +120,37 @@ EOF
   pass "an open direct-PR task blocks another PR-mode ship for the same repository"
 }
 
+test_same_origin_clones_are_one_repository() {
+  local repo_rec world home fakebin project_a slot_a project_b slot_b origin out status
+  world=$(make_world same-origin-clones)
+  IFS='|' read -r _ home fakebin <<EOF
+$world
+EOF
+  repo_rec=$(make_repo same-origin-clones project-a)
+  IFS='|' read -r project_a slot_a <<EOF
+$repo_rec
+EOF
+  origin=$(git -C "$project_a" remote get-url origin) || fail "could not resolve the shared origin"
+  project_b="$TMP_ROOT/same-origin-clones/project-b"
+  git clone --quiet "$origin" "$project_b" || fail "could not clone the shared origin"
+  git -C "$project_b" worktree add --quiet -b slot-b "$project_b.slot" \
+    || fail "could not add the second clone's worktree"
+  slot_b="$project_b.slot"
+  write_brief "$home" impl-clone-first-z20
+  write_brief "$home" impl-clone-second-z21
+
+  out=$(run_spawn "$home" "$slot_a" "$fakebin" impl-clone-first-z20 "$project_a" --mode no-mistakes --yolo off)
+  status=$?
+  expect_code 0 "$status" "the first clone's ship spawn should succeed"$'\n'"$out"
+
+  out=$(run_spawn "$home" "$slot_b" "$fakebin" impl-clone-second-z21 "$project_b" --mode no-mistakes --yolo off)
+  status=$?
+  [ "$status" -ne 0 ] || fail "a second clone of the same origin should be refused"$'\n'"$out"
+  assert_contains "$out" "an implementation task is already in flight for project-b: impl-clone-first-z20" \
+    "the same-origin refusal did not name the task already in flight"
+  pass "separate clones of one origin share the implementation cap"
+}
+
 test_other_repository_is_independent() {
   local repo_a repo_b world home fakebin project_a slot_a project_b slot_b out status
   world=$(make_world other-repo)
@@ -137,6 +177,29 @@ EOF
   expect_code 0 "$status" "a different repository must not be blocked by the first"$'\n'"$out"
   assert_contains "$out" "spawned impl-repo-b-z6" "the second repository's spawn did not report success"
   pass "a ship spawn for a different repository is allowed"
+}
+
+test_adhoc_implementation_on_a_busy_repository_is_refused() {
+  local repo_rec world home fakebin project slot out status
+  world=$(make_world adhoc-busy)
+  IFS='|' read -r _ home fakebin <<EOF
+$world
+EOF
+  repo_rec=$(make_repo adhoc-busy project)
+  IFS='|' read -r project slot <<EOF
+$repo_rec
+EOF
+  fm_write_meta "$home/state/adhoc-inflight-z22.meta" \
+    "project=$project" \
+    "kind=adhoc"
+  write_brief "$home" impl-after-adhoc-z23
+
+  out=$(run_spawn "$home" "$slot" "$fakebin" impl-after-adhoc-z23 "$project" --mode no-mistakes --yolo off)
+  status=$?
+  [ "$status" -ne 0 ] || fail "a ship spawn should be refused while an adhoc implementation is in flight"$'\n'"$out"
+  assert_contains "$out" "an implementation task is already in flight for project: adhoc-inflight-z22" \
+    "the adhoc refusal did not name the implementation already in flight"
+  pass "a live adhoc implementation record blocks a new ship spawn"
 }
 
 test_scout_on_a_busy_repository_is_allowed() {
@@ -191,6 +254,67 @@ EOF
     fail "the refused local-only spawn published a task record"
   fi
   pass "a second local-only ship for a repository already in flight is refused"
+}
+
+test_promotion_is_refused_while_repository_is_busy() {
+  local repo_rec world home fakebin project slot out status meta before after
+  world=$(make_world promote-busy)
+  IFS='|' read -r _ home fakebin <<EOF
+$world
+EOF
+  repo_rec=$(make_repo promote-busy project)
+  IFS='|' read -r project slot <<EOF
+$repo_rec
+EOF
+  write_brief "$home" impl-promote-busy-z24
+  write_brief "$home" scout-promote-busy-z25
+  out=$(run_spawn "$home" "$slot" "$fakebin" impl-promote-busy-z24 "$project" --mode no-mistakes --yolo off)
+  status=$?
+  expect_code 0 "$status" "the implementation ship should succeed"$'\n'"$out"
+  meta="$home/state/scout-promote-busy-z25.meta"
+  fm_write_meta "$meta" \
+    "window=firstmate:fm-scout-promote-busy-z25" \
+    "worktree=$slot" \
+    "project=$project" \
+    "kind=scout"
+  before=$(shasum -a 256 "$meta" | awk '{print $1}')
+
+  out=$(run_promote "$home" scout-promote-busy-z25 --mode direct-PR --yolo off 2>&1)
+  status=$?
+  [ "$status" -ne 0 ] || fail "promotion should be refused while another implementation is in flight"$'\n'"$out"
+  assert_contains "$out" "an implementation task is already in flight for project: impl-promote-busy-z24" \
+    "promotion did not return the concurrency guard's refusal"
+  after=$(shasum -a 256 "$meta" | awk '{print $1}')
+  [ "$before" = "$after" ] || fail "refused promotion changed the scout metadata"
+  assert_absent "$home/data/scout-promote-busy-z25/ship-instructions.md" \
+    "refused promotion published ship instructions"
+  pass "promotion is refused without mutation while a repository is busy"
+}
+
+test_free_promotion_succeeds() {
+  local repo_rec world home fakebin project slot out status meta
+  world=$(make_world promote-free)
+  IFS='|' read -r _ home fakebin <<EOF
+$world
+EOF
+  repo_rec=$(make_repo promote-free project)
+  IFS='|' read -r project slot <<EOF
+$repo_rec
+EOF
+  write_brief "$home" scout-promote-free-z26
+  meta="$home/state/scout-promote-free-z26.meta"
+  fm_write_meta "$meta" \
+    "window=firstmate:fm-scout-promote-free-z26" \
+    "worktree=$slot" \
+    "project=$project" \
+    "kind=scout"
+
+  out=$(run_promote "$home" scout-promote-free-z26 --mode local-only --yolo off 2>&1)
+  status=$?
+  expect_code 0 "$status" "promotion should succeed when the repository is free"$'\n'"$out"
+  assert_grep 'kind=ship' "$meta" "free promotion did not change the task to ship"
+  assert_grep 'mode=local-only' "$meta" "free promotion did not record the delivery mode"
+  pass "promotion succeeds when the repository is free"
 }
 
 test_local_only_ship_blocks_pr_ship() {
@@ -351,9 +475,13 @@ EOF
 
 test_second_ship_on_one_repo_is_refused
 test_direct_pr_second_ship_is_refused_too
+test_same_origin_clones_are_one_repository
 test_other_repository_is_independent
+test_adhoc_implementation_on_a_busy_repository_is_refused
 test_scout_on_a_busy_repository_is_allowed
 test_second_local_only_ship_is_refused
+test_promotion_is_refused_while_repository_is_busy
+test_free_promotion_succeeds
 test_local_only_ship_blocks_pr_ship
 test_torn_down_ship_releases_the_repository
 test_secondmate_and_scout_records_never_block

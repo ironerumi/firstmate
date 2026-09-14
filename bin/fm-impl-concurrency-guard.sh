@@ -17,22 +17,25 @@
 # The caller is bin/fm-spawn.sh's pre-flight pass, which invokes this for every
 # fresh ship spawn, so this script owns the whole trigger rule.
 #
-# "In flight" is the presence of another ship task record for the same project in
-# <state-dir>: bin/fm-teardown.sh removes that record only after landing is
-# confirmed, so the record covers an agent still implementing, a validation run
-# still working, an open PR held for merge, and a finished agent whose PR has not
-# landed yet. A record carrying no kind= is read as ship, the same default
-# bin/fm-spawn.sh applies to a legacy record. kind=scout (read-only, no PR) and
-# kind=secondmate (not an implementation task) never block, and a project's own
-# other repositories never block each other.
+# "In flight" is the presence of another ship or adhoc task record for the same
+# project in <state-dir>: bin/fm-teardown.sh removes that record only after
+# landing is confirmed, so the record covers an agent still implementing, a
+# validation run still working, an open PR held for merge, and a finished agent
+# whose PR has not landed yet. A record carrying no kind= is read as ship, the
+# same default bin/fm-spawn.sh applies to a legacy record. kind=adhoc is a direct
+# Firstmate implementation record without a worker endpoint, so it counts as a
+# ship; kind=scout (read-only, no PR) and kind=secondmate (not an implementation
+# task) are the only exemptions, and a project's own other repositories never
+# block each other.
 # <task-id> is excluded from the scan, so the same task re-checking itself (a
 # relaunch) is never its own blocker.
-# Both sides are compared as physical paths, because one home can reach a clone
-# through a symlinked path.
+# Repository identity is shared by separate clones of one origin; physical paths
+# still distinguish origin-less clones and symlinked paths within one home.
 #
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GUARD_HOME=${FM_HOME:-}
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh" # fm_meta_get is the one owner of the meta key/value read
 
@@ -54,14 +57,25 @@ if [ ! -d "$STATE_DIR" ]; then
   echo "error: fm-impl-concurrency-guard.sh: state directory does not exist: $STATE_DIR" >&2
   exit 2
 fi
+if [ -n "$GUARD_HOME" ]; then
+  FM_HOME=$GUARD_HOME
+else
+  FM_HOME=$(CDPATH='' cd -- "$STATE_DIR/.." 2>/dev/null && pwd -P) || {
+    echo "error: fm-impl-concurrency-guard.sh: home directory cannot be resolved from state directory: $STATE_DIR" >&2
+    exit 2
+  }
+fi
+FM_STATE_OVERRIDE=${FM_STATE_OVERRIDE:-$STATE_DIR}
+# shellcheck source=bin/fm-wake-lib.sh
+. "$SCRIPT_DIR/fm-wake-lib.sh"
 
 # This guard deliberately scans THIS home's state directory only. A same-repository
 # clone in another home, including a remote or separately cloned secondmate home,
-# is a known documented limitation. Cross-home/cross-machine coordination is
+# is a known and documented limitation. Cross-home/cross-machine coordination is
 # tracked as a separate follow-up task.
 #
-# The physical form of a path, or the path itself when it cannot be resolved, so
-# a deleted clone still compares as the string its record holds.
+# The repository identity lock is preferred; the physical form of a path, or the
+# path itself when it cannot be resolved, is the fallback for an unresolvable clone.
 physical_path() { # <path>
   local path=$1 real
   if real=$(cd "$path" 2>/dev/null && pwd -P); then
@@ -71,7 +85,16 @@ physical_path() { # <path>
   fi
 }
 
-PROJECT_REAL=$(physical_path "$PROJECT")
+repository_identity() { # <project-dir>
+  local project=$1 lock
+  if lock=$(fm_treehouse_project_lock_path "$project" 2>/dev/null); then
+    printf 'lock:%s\n' "$lock"
+  else
+    printf 'path:%s\n' "$(physical_path "$project")"
+  fi
+}
+
+PROJECT_IDENTITY=$(repository_identity "$PROJECT")
 BLOCKERS=
 for meta in "$STATE_DIR"/*.meta; do
   [ -f "$meta" ] || continue
@@ -79,10 +102,13 @@ for meta in "$STATE_DIR"/*.meta; do
   [ "$id" != "$OWN_ID" ] || continue
   kind=$(fm_meta_get "$meta" kind)
   [ -n "$kind" ] || kind=ship
-  [ "$kind" = ship ] || continue
+  case "$kind" in
+    ship | adhoc) ;;
+    *) continue ;;
+  esac
   project=$(fm_meta_get "$meta" project)
   [ -n "$project" ] || continue
-  [ "$(physical_path "$project")" = "$PROJECT_REAL" ] || continue
+  [ "$(repository_identity "$project")" = "$PROJECT_IDENTITY" ] || continue
   BLOCKERS="${BLOCKERS:+$BLOCKERS, }$id"
 done
 [ -n "$BLOCKERS" ] || exit 0

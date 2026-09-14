@@ -175,8 +175,9 @@
 #   Before a secondmate launch, the home is fast-forwarded to the primary's
 #   default-branch commit when safe: directly for a local home, or through the
 #   configured host for a remote home. Skipped syncs warn and launch unchanged.
-#   A fresh PR-mode ship spawn is refused while this home already has a ship task
-#   for the same project (bin/fm-impl-concurrency-guard.sh owns that rule).
+#   A fresh ship spawn in any mode is refused while this home already has an
+#   implementation task in flight for the same repository
+#   (bin/fm-impl-concurrency-guard.sh owns that rule).
 #   Ship/scout spawns refuse to launch unless the resolved task path is a real
 #   git worktree root distinct from both the spawning project and its repository's
 #   primary checkout, including when the spawning project is a linked worktree.
