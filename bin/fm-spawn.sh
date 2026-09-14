@@ -175,6 +175,8 @@
 #   Before a secondmate launch, the home is fast-forwarded to the primary's
 #   default-branch commit when safe: directly for a local home, or through the
 #   configured host for a remote home. Skipped syncs warn and launch unchanged.
+#   A fresh PR-mode ship spawn is refused while this home already has a ship task
+#   for the same project (bin/fm-impl-concurrency-guard.sh owns that rule).
 #   Ship/scout spawns refuse to launch unless the resolved task path is a real
 #   git worktree root distinct from both the spawning project and its repository's
 #   primary checkout, including when the spawning project is a linked worktree.
@@ -2267,6 +2269,9 @@ if [ "$KIND" = ship ]; then
     echo "notice: $ID ships mode=$MODE while the standing posture for $PROJ_NAME is $STANDING_MODE - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state" >&2
   fi
 fi
+
+# Pre-flight guard for the one-implementation-task-per-repository cap; that script owns the rule.
+if [ "$KIND" = ship ] && [ "$RELAUNCH" -eq 0 ]; then "$SCRIPT_DIR/fm-impl-concurrency-guard.sh" "$STATE" "$PROJ_ABS" "$ID" "$MODE"; fi
 
 BRIEF_DIR_REAL=$(cd "$(dirname "$BRIEF")" && pwd -P)
 BRIEF_REAL="$BRIEF_DIR_REAL/$(basename "$BRIEF")"

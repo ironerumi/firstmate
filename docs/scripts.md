@@ -99,6 +99,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
 | `fm-worktree-guard-lib.sh` | Decide whether a worker command would destroy a path outside its own task worktree (docs/worktree-guard.md) |
 | `fm-worktree-guard-shim.sh` | PATH-shim transport for that decision, reached as `bin/shims/rm`, `rmdir`, `unlink`, `mv`, and `treehouse`; `bin/shims/git` carries it through `fm-nm-guard-shim.sh` |
+| `fm-impl-concurrency-guard.sh` | Refuse a fresh PR-mode ship spawn while this home already has a ship task in flight for the same project, so one repository runs one implementation task at a time |
 | `fm-keepwarm-cadence-lib.sh` | Single owner of the keep-warm quiet interval and its fixed 3000-second cap |
 | `fm-tangle-lib.sh`       | Shared default-branch resolution and primary-checkout tangle classification          |
 | `fm-timeout-lib.sh`      | Single owner of hard-bounded command execution and its fallback watchdog |
