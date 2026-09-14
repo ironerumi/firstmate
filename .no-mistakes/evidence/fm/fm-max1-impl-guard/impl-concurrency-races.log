@@ -1,0 +1,22 @@
+Registration race: two direct implementation registrations for one repository.
+race-register-a-z1: rc=1
+error: this home's task set is locked by another operation; refusing to register task race-register-a-z1
+race-register-b-z2: rc=0
+registered: state/race-register-b-z2.meta
+registration metadata count=1 (expected 1)
+
+Promotion race: two scout promotions for one repository.
+race-promote-a-z3: rc=0
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  2 task(s) in flight, but no live watcher process holds this home lock (last beat: 0s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/gu_yifu/.no-mistakes/worktrees/dd6dd5949f4a/01M2F0XNCEVZKCE4MBS3240V9N/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/gu_yifu/.no-mistakes/worktrees/dd6dd5949f4a/01M2F0XNCEVZKCE4MBS3240V9N/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+promoted race-promote-a-z3 to ship mode=local-only yolo=off (teardown protection restored)
+wrote ship instructions for mode=local-only: /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-impl-race.aiogki/promote/home/data/race-promote-a-z3/ship-instructions.md
+next: FM_HOME=/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-impl-race.aiogki/promote/home bin/fm-send.sh fm-race-promote-a-z3 "$(cat /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-impl-race.aiogki/promote/home/data/race-promote-a-z3/ship-instructions.md)"
+race-promote-b-z4: rc=1
+error: this home's task set is locked by another operation; nothing was changed
+promotion metadata: ship=1 scout=1 (expected 1/1)
