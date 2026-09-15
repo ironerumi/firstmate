@@ -13,8 +13,9 @@
 # The resulting model turn is what keeps the session's prompt cache warm, and
 # its own Stop re-arms the next self-wake, so an idle Claude session takes a
 # real turn at least once per interval for as long as it lives. The interval
-# is FM_NM_KEEPWARM_SECS clamped to the fleet-wide 3000-second cap
-# (bin/fm-keepwarm-cadence-lib.sh owns both), so the turn always lands inside
+# is FM_NM_KEEPWARM_SECS, else this home's config/keepwarm-secs, clamped to the
+# fleet-wide 3000-second cap (bin/fm-keepwarm-cadence-lib.sh owns the
+# resolution, the default, and the cap), so the turn always lands inside
 # Claude's one-hour cache window.
 #
 # Two registrations, one script:
@@ -62,7 +63,8 @@
 #     synchronous stop hook open (bin/fm-hook-host-lib.sh). The tracked
 #     settings entry itself stands down under Grok's markers.
 #   - The bare form only in a genuine primary home, as above.
-#   - FM_NM_KEEPWARM_SECS=0 disables the self-wake for the home.
+#   - FM_NM_KEEPWARM_SECS=0, or the same value in this home's
+#     config/keepwarm-secs, disables the self-wake for the home.
 #   Away mode is NOT a gate: an away session is the longest idle stretch of
 #   all, and the banner carries the operational-input prefix so the /afk
 #   contract reads it as an internal input rather than the captain's return.
@@ -80,7 +82,8 @@
 # Usage: fm-claude-keepwarm-selfwake.sh [--task <id>]
 #
 # Environment:
-#   FM_NM_KEEPWARM_SECS            requested quiet interval, default 1800, clamped to 3000; 0 disables
+#   FM_NM_KEEPWARM_SECS            optional per-process override for the requested quiet interval; unset or empty defers to this home's config/keepwarm-secs, then to the 1800 default; clamped to 3000; 0 disables
+#   FM_HOME                        the home whose config dir supplies config/keepwarm-secs, unless FM_CONFIG_OVERRIDE names one
 #   FM_HOME / FM_STATE_OVERRIDE    the home whose state dir holds the marker
 set -u
 

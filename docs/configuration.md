@@ -210,6 +210,18 @@ The bound is required rather than cosmetic because churn and pane staleness read
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes, which run their own crew mix.
 [`architecture.md`](architecture.md) owns the triage contract and `bin/fm-watch.sh`'s `signal_turnend_panes_churned` owns the exact evidence and fail-closed boundaries.
 
+## Claude keep-warm cadence (config/keepwarm-secs / FM_NM_KEEPWARM_SECS)
+
+`config/keepwarm-secs` is the optional local, gitignored cadence for the one keep-warm mechanism: the Claude Stop hook [`bin/fm-claude-keepwarm-selfwake.sh`](../bin/fm-claude-keepwarm-selfwake.sh) that gives an idle Claude session one benign self-wake turn before its prompt cache goes cold.
+It holds one integer number of seconds as its first non-empty line, in the same value space as `FM_NM_KEEPWARM_SECS`: `0` disables keep-warm for every session of the home, and any request above the fixed 3000-second (50-minute) cap is clamped to it rather than refused.
+A non-numeric value falls back to the 1800-second (30-minute) default, whichever source supplied it.
+Resolution order is a non-empty `FM_NM_KEEPWARM_SECS`, then this file, then the default; [`bin/fm-keepwarm-cadence-lib.sh`](../bin/fm-keepwarm-cadence-lib.sh) owns the path resolution, validation, and clamp.
+Create the file to set the cadence once per home instead of exporting anything into a shell or launch environment, because an exported variable reaches every Firstmate home started from that environment rather than only this one.
+The file is read from the effective home's `config/` dir, so it reaches that home's own supervisor session.
+`bin/fm-spawn.sh` additionally hands each spawned crew or scout the resolved value in its pane environment whenever the file is present, because that home's `config/` dir is not reachable from a project worktree; the crew's injected keep-warm hook then reads the same value.
+Absent, unreadable, or empty files mean unset.
+The file is inherited into secondmate homes through the [primary-authoritative configuration contract](../.agents/skills/secondmate-provisioning/SKILL.md), so a secondmate's own supervisor session and its crews keep the primary's cadence; a home that sets nothing keeps the default.
+
 ## Gate defaults (.no-mistakes.yaml)
 
 The tracked `.no-mistakes.yaml` sets `test.evidence.store_in_repo: true` and pins `commands.lint` to `bin/fm-lint.sh`, the same owner CI invokes.
@@ -367,7 +379,7 @@ OPENAI_API_KEY
 SSH_AUTH_SOCK
 ```
 
-Firstmate retains basic home, executable search, terminal, locale, temporary-directory, and backend routing variables, plus its explicit launch assignments, its ship and scout task marker, and enabled task trace.
+Firstmate retains basic home, executable search, terminal, locale, temporary-directory, and backend routing variables, plus its explicit launch assignments, its ship and scout task marker and keep-warm cadence, and enabled task trace.
 [`fm-spawn.sh --help`](../bin/fm-spawn.sh) owns the exact retained names and parsing mechanics.
 Other ambient names must be listed explicitly, including custom credential-store locations, proxy settings, and certificate overrides when required by the selected tools.
 The command shell and worker may still create their own variables.
@@ -1021,7 +1033,7 @@ FM_BUSY_TURN_MAX_SECS=3600         # maximum age without a completed turn or exp
 FM_PAUSE_RESURFACE_SECS=14400      # four hours between bounded rechecks of a declared external wait or verified captain-held transfer, and between repeated new-hash stale alarms for an ordinary crew task with an open backlog captain call; a structured until time can make an external-wait recheck occur sooner but cannot extend this bound; this includes a live idle pane after its first inconclusive stale wake and a live busy pane past FM_BUSY_TURN_MAX_SECS, while the away-mode daemon uses the same setting and ages its window against the crew's own latest status line rather than pane busy state; a captain-held transfer is never rechecked while the away-posture record exists
 FM_SECONDMATE_WAKE_STALL_SECS=180  # minimum interval with no change of the oldest actionable foreign wake-queue row (it advances as the mate drains, and a queue reprovisioned under the same task id starts a fresh interval at whatever sequence it restarts) before an endpoint-recorded local secondmate produces one durable parent wake-loop-stall notification for that no-progress episode; a mate that is provably inside an active turn (an exact busy verdict, bounded by the same FM_BUSY_TURN_MAX_SECS above) never escalates whatever this interval says, declared external-wait pause rows are excluded, and zero or invalid values use 180
 FM_WEDGE_DEMAND_INSPECT_COUNT=3    # consecutive provably-working stale escalations on the same unchanged pane before demand-deep-inspection is added
-FM_NM_KEEPWARM_SECS=1800           # quiet interval before an idle Claude session (the main firstmate, a secondmate primary, or any Claude crew or scout) takes one benign self-wake turn to keep its prompt cache warm; the one keep-warm mechanism is the Claude Stop hook bin/fm-claude-keepwarm-selfwake.sh, so nothing here touches the watcher; clamped to the fixed 3000-second (50-minute) fleet cap so the turn always lands inside Claude's one-hour prompt-cache window; 0 disables it for every session of the home; non-Claude hosts load the shared settings only to stand down before arming
+FM_NM_KEEPWARM_SECS=1800           # optional per-process override for the keep-warm quiet interval before an idle Claude session (the main firstmate, a secondmate primary, or any Claude crew or scout) takes one benign self-wake turn to keep its prompt cache warm; the one keep-warm mechanism is the Claude Stop hook bin/fm-claude-keepwarm-selfwake.sh, so nothing here touches the watcher; when it is unset or empty the home-local gitignored config/keepwarm-secs supplies the value (see "Claude keep-warm cadence"); clamped to the fixed 3000-second (50-minute) fleet cap so the turn always lands inside Claude's one-hour prompt-cache window; 0 disables it for every session of the home; non-Claude hosts load the shared settings only to stand down before arming
 FM_WORKTREE_WRITE_PRUNE='.git node_modules .venv venv __pycache__ .mypy_cache .pytest_cache .ruff_cache .tox target dist build .next .cache vendor'   # directory names the wedge detector's task-worktree write probe skips; the default keeps .git out so a supervisor's own read-only git command can never look like crew progress; set it to the empty string to prune nothing, which widens the probe to the whole depth-bounded tree rather than disabling it
 FM_WORKTREE_WRITE_MAXDEPTH=6       # depth that same probe walks below the recorded worktree; it runs only at the moment a wedge escalation would otherwise fire, never on every poll; no probe knob applies to a secondmate, whose recorded worktree is a provisioned home the probe skips entirely
 FM_WORKTREE_WRITE_TIMEOUT=10       # wall-clock seconds that one walk may take, so a worktree on a hung mount cannot stall the watcher poll that started it; hitting the bound reads as no write evidence, which leaves the escalation schedule exactly as it was; a value that is not a positive integer falls back to the default
