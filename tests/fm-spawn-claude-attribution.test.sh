@@ -129,12 +129,14 @@ pane_keepwarm_secs() {
 
 set_pane_keepwarm_secs() {
   local pane_env="$HOME_DIR/state/.fake-pane-env"
+  # shellcheck disable=SC2016  # Variables deliberately expand in the isolated child shell.
   env -i PANE_ENV="$pane_env" KEEPWARM_SECS="$1" bash -c \
     '. "$PANE_ENV"; export FM_NM_KEEPWARM_SECS="$KEEPWARM_SECS"; export -p > "$PANE_ENV.tmp"; mv "$PANE_ENV.tmp" "$PANE_ENV"'
 }
 
 unset_pane_keepwarm_secs() {
   local pane_env="$HOME_DIR/state/.fake-pane-env"
+  # shellcheck disable=SC2016  # Variables deliberately expand in the isolated child shell.
   env -i PANE_ENV="$pane_env" bash -c \
     '. "$PANE_ENV"; unset FM_NM_KEEPWARM_SECS; export -p > "$PANE_ENV.tmp"; mv "$PANE_ENV.tmp" "$PANE_ENV"'
 }

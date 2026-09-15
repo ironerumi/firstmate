@@ -3899,6 +3899,7 @@ if [ "$KIND" = ship ] || [ "$KIND" = scout ]; then
   # environment, so the injected Claude keep-warm hook never has to resolve
   # this home's config dir from a project worktree. Remove only an unchanged
   # value marked by an earlier launch before resolving this launch's setting.
+  # shellcheck disable=SC2016  # Pane variables deliberately expand in the crewmate shell.
   spawn_send_text_line "$T" 'if [ "${FM_FIRSTMATE_KEEPWARM_SECS_INJECTED+x}" = x ] && [ "${FM_NM_KEEPWARM_SECS-}" = "$FM_FIRSTMATE_KEEPWARM_SECS_INJECTED" ]; then unset FM_NM_KEEPWARM_SECS; fi; unset FM_FIRSTMATE_KEEPWARM_SECS_INJECTED'
   if fm_keepwarm_config_present; then
     KEEPWARM_SECS=$(fm_keepwarm_interval_secs)
