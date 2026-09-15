@@ -3902,7 +3902,7 @@ if [ "$KIND" = ship ] || [ "$KIND" = scout ]; then
   spawn_send_text_line "$T" 'if [ "${FM_FIRSTMATE_KEEPWARM_SECS_INJECTED+x}" = x ] && [ "${FM_NM_KEEPWARM_SECS-}" = "$FM_FIRSTMATE_KEEPWARM_SECS_INJECTED" ]; then unset FM_NM_KEEPWARM_SECS; fi; unset FM_FIRSTMATE_KEEPWARM_SECS_INJECTED'
   if fm_keepwarm_config_present; then
     KEEPWARM_SECS=$(fm_keepwarm_interval_secs)
-    spawn_send_text_line "$T" "export FM_NM_KEEPWARM_SECS=$KEEPWARM_SECS FM_FIRSTMATE_KEEPWARM_SECS_INJECTED=$KEEPWARM_SECS"
+    spawn_send_text_line "$T" "if [ -z \"\${FM_NM_KEEPWARM_SECS:-}\" ]; then export FM_NM_KEEPWARM_SECS=$KEEPWARM_SECS FM_FIRSTMATE_KEEPWARM_SECS_INJECTED=$KEEPWARM_SECS; fi"
   fi
 fi
 # Send through the exact channel that already ships GOTMPDIR, so every backend

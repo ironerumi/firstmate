@@ -127,6 +127,18 @@ pane_keepwarm_secs() {
   env -i bash -c ". '$HOME_DIR/state/.fake-pane-env'; printf '%s' \"\${FM_NM_KEEPWARM_SECS-}\""
 }
 
+set_pane_keepwarm_secs() {
+  local pane_env="$HOME_DIR/state/.fake-pane-env"
+  env -i PANE_ENV="$pane_env" KEEPWARM_SECS="$1" bash -c \
+    '. "$PANE_ENV"; export FM_NM_KEEPWARM_SECS="$KEEPWARM_SECS"; export -p > "$PANE_ENV.tmp"; mv "$PANE_ENV.tmp" "$PANE_ENV"'
+}
+
+unset_pane_keepwarm_secs() {
+  local pane_env="$HOME_DIR/state/.fake-pane-env"
+  env -i PANE_ENV="$pane_env" bash -c \
+    '. "$PANE_ENV"; unset FM_NM_KEEPWARM_SECS; export -p > "$PANE_ENV.tmp"; mv "$PANE_ENV.tmp" "$PANE_ENV"'
+}
+
 # The claude settings artifact must keep the lifecycle hooks and must NOT
 # reintroduce the per-worker attribution object: co-author suppression is
 # user-global now, and project settings must not carry it.
@@ -249,6 +261,20 @@ test_claude_spawn_injects_configured_keepwarm_cadence() {
   [ "$(pane_keepwarm_secs)" = 3000 ] \
     || fail "the configured cadence did not reach the pane environment"
 
+  set_pane_keepwarm_secs 600
+  out=$(run_relaunch "$id")
+  status=$?
+  expect_code 0 "$status" "claude relaunch should preserve an independent pane cadence: $out"
+  [ "$(pane_keepwarm_secs)" = 600 ] \
+    || fail "relaunch overwrote the pane's independent keep-warm cadence"
+
+  unset_pane_keepwarm_secs
+  out=$(run_relaunch "$id")
+  status=$?
+  expect_code 0 "$status" "claude relaunch should restore config cadence injection: $out"
+  [ "$(pane_keepwarm_secs)" = 3000 ] \
+    || fail "relaunch did not restore the configured cadence after clearing the pane override"
+
   rm -f "$HOME_DIR/config/keepwarm-secs"
   out=$(run_relaunch "$id")
   status=$?
@@ -268,7 +294,7 @@ test_claude_spawn_injects_configured_keepwarm_cadence() {
   assert_contains "$(cat "$HOME_DIR/state/.fake-tmux-send.log")" \
     "export FM_NM_KEEPWARM_SECS=3000" \
     "an above-cap config value must reach the crew already clamped"
-  pass "claude spawn hands crews the configured cadence and clears stale injected values on relaunch"
+  pass "claude spawn preserves pane overrides and clears stale injected cadence on relaunch"
 }
 
 test_claude_spawn_settings_carry_hooks_without_attribution
