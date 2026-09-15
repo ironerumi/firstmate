@@ -217,6 +217,7 @@ It holds one integer number of seconds as its first non-empty line, in the same 
 A non-numeric value falls back to the 1800-second (30-minute) default, whichever source supplied it.
 Resolution order is a non-empty `FM_NM_KEEPWARM_SECS`, then this file, then the default; [`bin/fm-keepwarm-cadence-lib.sh`](../bin/fm-keepwarm-cadence-lib.sh) owns the path resolution, validation, and clamp.
 Create the file to set the cadence once per home instead of exporting anything into a shell or launch environment, because an exported variable reaches every Firstmate home started from that environment rather than only this one.
+For the requested 50-minute cadence, run `mkdir -p config && printf '3000\n' > config/keepwarm-secs` from the effective Firstmate home.
 The file is read from the effective home's `config/` dir, so it reaches that home's own supervisor session.
 `bin/fm-spawn.sh` additionally hands each spawned crew or scout the resolved value in its pane environment whenever the file is readable, because that home's `config/` dir is not reachable from a project worktree; the crew's injected keep-warm hook then reads the same value.
 Each launch clears an unchanged cadence marked as injected by an earlier launch before applying the current file, so removing the file restores the default without clearing an independent pane override.
