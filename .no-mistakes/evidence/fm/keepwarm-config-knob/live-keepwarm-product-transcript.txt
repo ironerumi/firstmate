@@ -1,0 +1,22 @@
+SCENARIO local-config-deadline
+config=2 exit=2 elapsed=2s marker_delta=2
+output=⁣FIRSTMATE_OP: v1 keep-warm: Keep-warm turn - no supervision event, decision, pipeline gate, or captain message is attached. Print one short acknowledgement line and end the turn. Do not run the wake drain, steer a worker, answer a decision, respond to a validation gate, append a status line, change any record, or message the captain; this turn exists only to keep this session prompt cache warm, and any real event still arrives through its own wake.
+
+SCENARIO config-zero-disables
+config=0 exit=0 marker_exists=no output_bytes=0
+
+SCENARIO environment-precedence
+config=0 env=1 exit=2 elapsed=2s marker_delta=1
+
+SCENARIO cap-clamps
+config=7200 marker_delta=3000s
+
+SCENARIO invalid-defaults
+config=abc marker_delta=1800s
+
+
+SCENARIO unreadable-is-silent-unset
+mode=000 resolved=1800 stderr_bytes=0
+
+SCENARIO secondmate-inheritance
+copied_value=3000 removed_after_primary_removal=yes

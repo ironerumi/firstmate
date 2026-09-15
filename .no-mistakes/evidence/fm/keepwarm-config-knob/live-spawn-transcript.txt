@@ -1,0 +1,2 @@
+spawn_exit=3
+error: no-mistakes gate agent must not drive the fleet (NO_MISTAKES_GATE set)
