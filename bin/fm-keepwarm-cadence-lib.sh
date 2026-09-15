@@ -60,19 +60,22 @@ fm_keepwarm_config_secs() {
   local line
   local file
   file=$(fm_keepwarm_config_dir)/$FM_KEEPWARM_CONFIG_FILE
-  [ -f "$file" ] || return 0
+  [ -f "$file" ] && [ -r "$file" ] || return 0
   while IFS= read -r line || [ -n "$line" ]; do
     line=${line#"${line%%[![:space:]]*}"}
     line=${line%"${line##*[![:space:]]}"}
     [ -n "$line" ] || continue
     printf '%s' "$line"
     return 0
-  done < "$file"
+  done 2>/dev/null < "$file"
+  return 0
 }
 
 # True when this home has a config/keepwarm-secs file to read.
 fm_keepwarm_config_present() {
-  [ -f "$(fm_keepwarm_config_dir)/$FM_KEEPWARM_CONFIG_FILE" ]
+  local file
+  file=$(fm_keepwarm_config_dir)/$FM_KEEPWARM_CONFIG_FILE
+  [ -f "$file" ] && [ -r "$file" ]
 }
 
 # The effective quiet interval: FM_NM_KEEPWARM_SECS when it is a whole number

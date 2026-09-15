@@ -218,7 +218,8 @@ A non-numeric value falls back to the 1800-second (30-minute) default, whichever
 Resolution order is a non-empty `FM_NM_KEEPWARM_SECS`, then this file, then the default; [`bin/fm-keepwarm-cadence-lib.sh`](../bin/fm-keepwarm-cadence-lib.sh) owns the path resolution, validation, and clamp.
 Create the file to set the cadence once per home instead of exporting anything into a shell or launch environment, because an exported variable reaches every Firstmate home started from that environment rather than only this one.
 The file is read from the effective home's `config/` dir, so it reaches that home's own supervisor session.
-`bin/fm-spawn.sh` additionally hands each spawned crew or scout the resolved value in its pane environment whenever the file is present, because that home's `config/` dir is not reachable from a project worktree; the crew's injected keep-warm hook then reads the same value.
+`bin/fm-spawn.sh` additionally hands each spawned crew or scout the resolved value in its pane environment whenever the file is readable, because that home's `config/` dir is not reachable from a project worktree; the crew's injected keep-warm hook then reads the same value.
+Each launch clears an unchanged cadence marked as injected by an earlier launch before applying the current file, so removing the file restores the default without clearing an independent pane override.
 Absent, unreadable, or empty files mean unset.
 The file is inherited into secondmate homes through the [primary-authoritative configuration contract](../.agents/skills/secondmate-provisioning/SKILL.md), so a secondmate's own supervisor session and its crews keep the primary's cadence; a home that sets nothing keeps the default.
 

@@ -394,19 +394,38 @@ test_cadence_config_file() {
   rm -f "$dir/config/keepwarm-secs"
   v=$(config_interval "$dir")
   [ "$v" = 1800 ] || fail "an absent config file must fall back to the default, got $v"
+
+  printf '3000\n' > "$dir/config/keepwarm-secs"
+  chmod 000 "$dir/config/keepwarm-secs"
+  v=$(config_interval "$dir" 2>"$dir/unreadable.err")
+  [ "$v" = 1800 ] || fail "an unreadable config file must fall back to the default, got $v"
+  [ ! -s "$dir/unreadable.err" ] || fail "an unreadable config file must be silent: $(cat "$dir/unreadable.err")"
+  chmod 600 "$dir/config/keepwarm-secs"
   pass "cadence: config/keepwarm-secs sets the interval under the env var, with the same cap, disable, and invalid-value rules"
 }
 
 # The knob must reach a secondmate home too, or a secondmate's own supervisor
 # session and crews would silently drift back to the default cadence.
 test_keepwarm_config_is_inherited() {
+  local primary second
+  primary="$TMP_ROOT/inherit-primary"
+  second="$TMP_ROOT/inherit-secondmate"
+  mkdir -p "$primary/config" "$primary/data" "$second/config" "$second/data"
+  printf '3000\n' > "$primary/config/keepwarm-secs"
+
   # shellcheck source=/dev/null
   . "$ROOT/bin/fm-config-inherit-lib.sh"
-  case " $FM_INHERITABLE_CONFIG " in
-    *" keepwarm-secs "*) : ;;
-    *) fail "config/keepwarm-secs must be in FM_INHERITABLE_CONFIG so secondmate homes keep the primary's cadence" ;;
-  esac
-  pass "cadence: config/keepwarm-secs is inherited into secondmate homes"
+  propagate_secondmate_inheritance "$primary" "$second" >/dev/null \
+    || fail "secondmate inheritance rejected config/keepwarm-secs"
+  [ "$(cat "$second/config/keepwarm-secs")" = 3000 ] \
+    || fail "secondmate inheritance did not copy config/keepwarm-secs"
+
+  rm -f "$primary/config/keepwarm-secs"
+  propagate_secondmate_inheritance "$primary" "$second" >/dev/null \
+    || fail "secondmate inheritance rejected keepwarm-secs removal"
+  [ ! -e "$second/config/keepwarm-secs" ] \
+    || fail "secondmate inheritance did not mirror keepwarm-secs removal"
+  pass "cadence: config/keepwarm-secs copy and removal propagate into secondmate homes"
 }
 
 test_fires_at_deadline

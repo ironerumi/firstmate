@@ -195,11 +195,12 @@
 #   set (its header owns the refusal). A secondmate runs in its own home and is
 #   not marked.
 #   That same ship or scout pane also receives `export FM_NM_KEEPWARM_SECS=...`
-#   when this home has a config/keepwarm-secs, so the crew's injected Claude
-#   keep-warm hook sleeps toward the spawning home's cadence straight from the
-#   crew's own environment instead of resolving that home's config dir from a
-#   project worktree (bin/fm-keepwarm-cadence-lib.sh owns the resolution and
-#   the precedence). A home without that file leaves the pane unchanged.
+#   when this home has a readable config/keepwarm-secs, so the crew's injected
+#   Claude keep-warm hook sleeps toward the spawning home's cadence straight
+#   from the crew's own environment instead of resolving that home's config dir
+#   from a project worktree (bin/fm-keepwarm-cadence-lib.sh owns the resolution
+#   and the precedence). Each launch first clears an unchanged value that an
+#   earlier launch injected, so removing the file restores the default.
 #   Only after this isolation check, every fresh ship or scout requires a clean
 #   task worktree. When an origin configuration is detected, spawn fetches it,
 #   resolves the current remote default branch, and resets to its tip. When none
@@ -3896,11 +3897,12 @@ if [ "$KIND" = ship ] || [ "$KIND" = scout ]; then
   spawn_send_text_line "$T" "export FM_TASK_ID=$ID"
   # Hand the crew the spawning home's keep-warm cadence through its own
   # environment, so the injected Claude keep-warm hook never has to resolve
-  # this home's config dir from a project worktree. Only a home that actually
-  # configured the file changes the pane; otherwise the pane keeps today's
-  # behavior and the crew's hook resolves its own default.
+  # this home's config dir from a project worktree. Remove only an unchanged
+  # value marked by an earlier launch before resolving this launch's setting.
+  spawn_send_text_line "$T" 'if [ "${FM_FIRSTMATE_KEEPWARM_SECS_INJECTED+x}" = x ] && [ "${FM_NM_KEEPWARM_SECS-}" = "$FM_FIRSTMATE_KEEPWARM_SECS_INJECTED" ]; then unset FM_NM_KEEPWARM_SECS; fi; unset FM_FIRSTMATE_KEEPWARM_SECS_INJECTED'
   if fm_keepwarm_config_present; then
-    spawn_send_text_line "$T" "export FM_NM_KEEPWARM_SECS=$(fm_keepwarm_interval_secs)"
+    KEEPWARM_SECS=$(fm_keepwarm_interval_secs)
+    spawn_send_text_line "$T" "export FM_NM_KEEPWARM_SECS=$KEEPWARM_SECS FM_FIRSTMATE_KEEPWARM_SECS_INJECTED=$KEEPWARM_SECS"
   fi
 fi
 # Send through the exact channel that already ships GOTMPDIR, so every backend
