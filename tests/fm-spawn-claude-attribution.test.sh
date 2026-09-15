@@ -33,12 +33,31 @@ make_fakebin() {
 set -u
 case "$*" in
   *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:?FM_FAKE_PANE_PATH unset}"; exit 0 ;;
+  *"#{pane_current_command}"*) printf 'bash\n'; exit 0 ;;
+  *"#{pane_tty}"*) exit 0 ;;
 esac
 case "${1:-}" in
   display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
+  list-windows)
+    [ "${FM_FAKE_RELAUNCH:-0}" != 1 ] || printf '%s\n' "${FM_FAKE_WINDOW_ID:?FM_FAKE_WINDOW_ID unset}"
+    exit 0
+    ;;
   has-session|new-session|new-window|kill-window) exit 0 ;;
-  send-keys) exit 0 ;;
+  send-keys)
+    # Every text line and literal the spawn sends into the pane lands here, so a
+    # test can assert the pane environment fm-spawn.sh builds.
+    [ -n "${FM_FAKE_TMUX_LOG:-}" ] && printf '%s\n' "$*" >> "$FM_FAKE_TMUX_LOG"
+    if [ -n "${FM_FAKE_PANE_ENV:-}" ] && [ "${5:-}" = Enter ]; then
+      (
+        set +u
+        [ ! -f "$FM_FAKE_PANE_ENV" ] || . "$FM_FAKE_PANE_ENV"
+        eval "$4"
+        export -p > "$FM_FAKE_PANE_ENV.tmp"
+        mv "$FM_FAKE_PANE_ENV.tmp" "$FM_FAKE_PANE_ENV"
+      )
+    fi
+    exit 0
+    ;;
 esac
 exit 0
 SH
@@ -78,15 +97,48 @@ $1
 EOF
 }
 
-run_spawn() {
-  local id=$1 harness=$2
-  FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
+run_spawn_command() {
+  local fake_relaunch=0
+  [ "${2:-}" != --relaunch ] || fake_relaunch=1
+  : > "$HOME_DIR/state/.fake-tmux-send.log"
+  env -u FM_NM_KEEPWARM_SECS \
+    FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
     FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
     FM_PROJECTS_OVERRIDE="$HOME_DIR/projects" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
     FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" \
     FM_FAKE_PANE_PATH="$WT_DIR" \
+    FM_FAKE_TMUX_LOG="$HOME_DIR/state/.fake-tmux-send.log" \
+    FM_FAKE_PANE_ENV="$HOME_DIR/state/.fake-pane-env" \
+    FM_FAKE_RELAUNCH="$fake_relaunch" FM_FAKE_WINDOW_ID="fm-$1" \
     PATH="$FAKEBIN_DIR:$PATH" \
-    "$SPAWN" "$id" "$PROJ_DIR" "$harness" --mode no-mistakes --yolo off 2>&1
+    "$SPAWN" "$@" 2>&1
+}
+
+run_spawn() {
+  local id=$1 harness=$2
+  run_spawn_command "$id" "$PROJ_DIR" "$harness" --mode no-mistakes --yolo off
+}
+
+run_relaunch() {
+  run_spawn_command "$1" --relaunch
+}
+
+pane_keepwarm_secs() {
+  env -i bash -c ". '$HOME_DIR/state/.fake-pane-env'; printf '%s' \"\${FM_NM_KEEPWARM_SECS-}\""
+}
+
+set_pane_keepwarm_secs() {
+  local pane_env="$HOME_DIR/state/.fake-pane-env"
+  # shellcheck disable=SC2016  # Variables deliberately expand in the isolated child shell.
+  env -i PANE_ENV="$pane_env" KEEPWARM_SECS="$1" bash -c \
+    '. "$PANE_ENV"; export FM_NM_KEEPWARM_SECS="$KEEPWARM_SECS"; export -p > "$PANE_ENV.tmp"; mv "$PANE_ENV.tmp" "$PANE_ENV"'
+}
+
+unset_pane_keepwarm_secs() {
+  local pane_env="$HOME_DIR/state/.fake-pane-env"
+  # shellcheck disable=SC2016  # Variables deliberately expand in the isolated child shell.
+  env -i PANE_ENV="$pane_env" bash -c \
+    '. "$PANE_ENV"; unset FM_NM_KEEPWARM_SECS; export -p > "$PANE_ENV.tmp"; mv "$PANE_ENV.tmp" "$PANE_ENV"'
 }
 
 # The claude settings artifact must keep the lifecycle hooks and must NOT
@@ -174,8 +226,82 @@ test_claude_spawn_settings_inject_keepwarm_selfwake() {
   pass "claude spawn injects the task-keyed keep-warm self-wake into the crew's Stop hooks"
 }
 
+# A home that configures config/keepwarm-secs hands its spawned crew the
+# resolved cadence in the pane environment, so the crew's injected keep-warm
+# hook needs no reach into this home's config dir from a project worktree. A
+# home without that file leaves the pane exactly as it was before.
+test_claude_spawn_injects_configured_keepwarm_cadence() {
+  local rec id out status log
+  id=claude-keepwarm-config-off-z4
+  rec=$(make_case claude-keepwarm-config "$id" claude)
+  read_case_record "$rec"
+
+  out=$(run_spawn "$id" claude)
+  status=$?
+  expect_code 0 "$status" "claude spawn should succeed against the fake tmux"
+  log="$HOME_DIR/state/.fake-tmux-send.log"
+  assert_present "$log" "the fake tmux must record the text lines the spawn sends"
+  assert_contains "$(cat "$log")" "export FM_TASK_ID=$id" \
+    "the ship marker must still be sent into the pane"
+  assert_not_contains "$(cat "$log")" "export FM_NM_KEEPWARM_SECS=" \
+    "an unconfigured home must not inject a keep-warm cadence"
+  [ -z "$(pane_keepwarm_secs)" ] \
+    || fail "an unconfigured home must leave an unmarked pane cadence unset"
+
+  id=claude-keepwarm-config-on-z5
+  rec=$(make_case claude-keepwarm-config-set "$id" claude)
+  read_case_record "$rec"
+  printf '3000\n' > "$HOME_DIR/config/keepwarm-secs"
+  out=$(run_spawn "$id" claude)
+  status=$?
+  expect_code 0 "$status" "claude spawn should succeed against the fake tmux"
+  log="$HOME_DIR/state/.fake-tmux-send.log"
+  assert_contains "$(cat "$log")" "export FM_NM_KEEPWARM_SECS=3000" \
+    "a configured home must hand the crew the resolved keep-warm cadence"
+  assert_contains "$(cat "$log")" "export FM_TASK_ID=$id" \
+    "the ship marker must still be sent alongside it"
+  [ "$(pane_keepwarm_secs)" = 3000 ] \
+    || fail "the configured cadence did not reach the pane environment"
+
+  set_pane_keepwarm_secs 600
+  out=$(run_relaunch "$id")
+  status=$?
+  expect_code 0 "$status" "claude relaunch should preserve an independent pane cadence: $out"
+  [ "$(pane_keepwarm_secs)" = 600 ] \
+    || fail "relaunch overwrote the pane's independent keep-warm cadence"
+
+  unset_pane_keepwarm_secs
+  out=$(run_relaunch "$id")
+  status=$?
+  expect_code 0 "$status" "claude relaunch should restore config cadence injection: $out"
+  [ "$(pane_keepwarm_secs)" = 3000 ] \
+    || fail "relaunch did not restore the configured cadence after clearing the pane override"
+
+  rm -f "$HOME_DIR/config/keepwarm-secs"
+  out=$(run_relaunch "$id")
+  status=$?
+  expect_code 0 "$status" "claude relaunch should succeed after keepwarm-secs removal: $out"
+  [ -z "$(pane_keepwarm_secs)" ] \
+    || fail "relaunch retained a cadence injected from the removed config file"
+
+  # The injected value is the resolved interval, not the raw file: the cap
+  # clamps a request above 3000 exactly as it does for the environment variable.
+  id=claude-keepwarm-config-cap-z6
+  rec=$(make_case claude-keepwarm-config-cap "$id" claude)
+  read_case_record "$rec"
+  printf '7200\n' > "$HOME_DIR/config/keepwarm-secs"
+  out=$(run_spawn "$id" claude)
+  status=$?
+  expect_code 0 "$status" "claude spawn should succeed against the fake tmux"
+  assert_contains "$(cat "$HOME_DIR/state/.fake-tmux-send.log")" \
+    "export FM_NM_KEEPWARM_SECS=3000" \
+    "an above-cap config value must reach the crew already clamped"
+  pass "claude spawn preserves pane overrides and clears stale injected cadence on relaunch"
+}
+
 test_claude_spawn_settings_carry_hooks_without_attribution
 test_non_claude_spawn_has_no_claude_settings_file
 test_claude_spawn_settings_inject_keepwarm_selfwake
+test_claude_spawn_injects_configured_keepwarm_cadence
 
 echo "# all fm-spawn-claude-attribution tests passed"

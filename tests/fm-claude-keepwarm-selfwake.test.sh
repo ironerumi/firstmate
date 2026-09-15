@@ -329,6 +329,16 @@ test_missing_jq_stands_down() {
 
 # --- the cadence library --------------------------------------------------------
 
+# Print the cadence one fresh shell resolves from <home>'s own config/ dir, with
+# the environment variable cleared, so these cases never read the real repo
+# config (or an ambient FM_NM_KEEPWARM_SECS) by accident.
+config_interval() {  # <home-dir> [extra env assignments...]
+  local home=$1
+  shift
+  env -u FM_NM_KEEPWARM_SECS FM_HOME="$home" "$@" \
+    bash -c ". '$ROOT/bin/fm-keepwarm-cadence-lib.sh'; fm_keepwarm_interval_secs"
+}
+
 test_cadence_cap() {
   local v
   # shellcheck disable=SC1091
@@ -345,9 +355,77 @@ test_cadence_cap() {
   [ "$v" = 0 ] || fail "an all-zero request must remain disabled, got $v"
   v=$(FM_NM_KEEPWARM_SECS=abc fm_keepwarm_interval_secs)
   [ "$v" = 1800 ] || fail "a non-numeric request must fall back to the default, got $v"
-  v=$(env -u FM_NM_KEEPWARM_SECS bash -c ". '$ROOT/bin/fm-keepwarm-cadence-lib.sh'; fm_keepwarm_interval_secs")
+  v=$(config_interval "$TMP_ROOT/no-config-home")
   [ "$v" = 1800 ] || fail "the default must stay 1800, got $v"
   pass "cadence: one interval with a 3000s cap for every Claude session"
+}
+
+# The home-local file is the captain-facing knob: it sets the cadence for a home
+# without exporting anything into a shell or launch environment, and the
+# environment variable stays the per-process override above it.
+test_cadence_config_file() {
+  local dir v
+  dir="$TMP_ROOT/cadence-config"
+  mkdir -p "$dir/config"
+
+  printf '3000\n' > "$dir/config/keepwarm-secs"
+  v=$(FM_HOME="$dir" FM_NM_KEEPWARM_SECS=600 bash -c ". '$ROOT/bin/fm-keepwarm-cadence-lib.sh'; fm_keepwarm_interval_secs")
+  [ "$v" = 600 ] || fail "FM_NM_KEEPWARM_SECS must win over config/keepwarm-secs, got $v"
+  v=$(config_interval "$dir")
+  [ "$v" = 3000 ] || fail "config/keepwarm-secs must supply the interval when the env var is unset, got $v"
+  v=$(config_interval "$TMP_ROOT/other-home" FM_CONFIG_OVERRIDE="$dir/config")
+  [ "$v" = 3000 ] || fail "FM_CONFIG_OVERRIDE must select which home's config/keepwarm-secs is read, got $v"
+
+  printf '7200\n' > "$dir/config/keepwarm-secs"
+  v=$(config_interval "$dir")
+  [ "$v" = 3000 ] || fail "a config-sourced request above the cap must clamp to 3000, got $v"
+  printf '0\n' > "$dir/config/keepwarm-secs"
+  v=$(config_interval "$dir")
+  [ "$v" = 0 ] || fail "a config-sourced 0 must disable keep-warm, got $v"
+  printf '008\n' > "$dir/config/keepwarm-secs"
+  v=$(config_interval "$dir")
+  [ "$v" = 8 ] || fail "a config-sourced leading-zero value must be normalized, got $v"
+
+  for bad in 'abc' '' '12 34' '-5' '3.5'; do
+    printf '%s\n' "$bad" > "$dir/config/keepwarm-secs"
+    v=$(config_interval "$dir")
+    [ "$v" = 1800 ] || fail "an invalid config value ('$bad') must fall back to the default, got $v"
+  done
+  rm -f "$dir/config/keepwarm-secs"
+  v=$(config_interval "$dir")
+  [ "$v" = 1800 ] || fail "an absent config file must fall back to the default, got $v"
+
+  printf '3000\n' > "$dir/config/keepwarm-secs"
+  chmod 000 "$dir/config/keepwarm-secs"
+  v=$(config_interval "$dir" 2>"$dir/unreadable.err")
+  [ "$v" = 1800 ] || fail "an unreadable config file must fall back to the default, got $v"
+  [ ! -s "$dir/unreadable.err" ] || fail "an unreadable config file must be silent: $(cat "$dir/unreadable.err")"
+  chmod 600 "$dir/config/keepwarm-secs"
+  pass "cadence: config/keepwarm-secs sets the interval under the env var, with the same cap, disable, and invalid-value rules"
+}
+
+# The knob must reach a secondmate home too, or a secondmate's own supervisor
+# session and crews would silently drift back to the default cadence.
+test_keepwarm_config_is_inherited() {
+  local primary second
+  primary="$TMP_ROOT/inherit-primary"
+  second="$TMP_ROOT/inherit-secondmate"
+  mkdir -p "$primary/config" "$primary/data" "$second/config" "$second/data"
+  printf '3000\n' > "$primary/config/keepwarm-secs"
+
+  # shellcheck source=/dev/null
+  . "$ROOT/bin/fm-config-inherit-lib.sh"
+  propagate_secondmate_inheritance "$primary" "$second" >/dev/null \
+    || fail "secondmate inheritance rejected config/keepwarm-secs"
+  [ "$(cat "$second/config/keepwarm-secs")" = 3000 ] \
+    || fail "secondmate inheritance did not copy config/keepwarm-secs"
+
+  rm -f "$primary/config/keepwarm-secs"
+  propagate_secondmate_inheritance "$primary" "$second" >/dev/null \
+    || fail "secondmate inheritance rejected keepwarm-secs removal"
+  [ ! -e "$second/config/keepwarm-secs" ] \
+    || fail "secondmate inheritance did not mirror keepwarm-secs removal"
+  pass "cadence: config/keepwarm-secs copy and removal propagate into secondmate homes"
 }
 
 test_fires_at_deadline
@@ -365,5 +443,7 @@ test_missing_state_dir_is_noop
 test_cursor_payload_stands_down
 test_missing_jq_stands_down
 test_cadence_cap
+test_cadence_config_file
+test_keepwarm_config_is_inherited
 
 echo "# all fm-claude-keepwarm-selfwake tests passed"
