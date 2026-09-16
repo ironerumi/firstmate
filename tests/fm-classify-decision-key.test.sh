@@ -67,6 +67,49 @@ test_stated_key_is_honored_in_both_positions() {
   pass "a stated [key=X] opens X whether it precedes or follows the verb colon"
 }
 
+# The reported case: a worker opened a keyed decision in one home and firstmate
+# answered it, but the OPEN DECISIONS fold read the key as still open even after
+# the task's cursor was cleared. The two resolution shapes must close it
+# identically, whoever wrote them: the documented form fm-send's --resolve-key
+# writes (`resolved [key=X]: ...`, firstmate), and the colon-first form a worker
+# writes (`resolved: [key=X] ...`). Clearing the cursor forces the whole-file
+# re-fold the incremental path falls back to, so a key stranded only in
+# persisted cursor state would still close here.
+test_both_resolution_shapes_close_a_cleared_worker_key() {
+  local dir cursor a b
+  dir=$(case_dir resolution-shapes)
+  cursor="$dir/.mailcheck-190-empty-sample.open-decisions-cursor"
+
+  # Shape A: firstmate's writer (bin/fm-send.sh --resolve-key).
+  printf 'needs-decision [key=mailcheck-190-empty-sample]: which sample should the empty inbox use\n' \
+    > "$dir/a.status"
+  rm -f "$cursor"
+  assert_fold "$dir/a.status" \
+    "$(printf 'mailcheck-190-empty-sample\tneeds-decision\twhich sample should the empty inbox use\n')" \
+    "worker-opened key is open before any resolution"
+  printf 'resolved [key=mailcheck-190-empty-sample]: answered: keep the current sample\n' >> "$dir/a.status"
+  rm -f "$cursor"
+  assert_fold "$dir/a.status" "" "firstmate-shaped resolution closes after a cursor clear"
+
+  # Shape B: the colon-first worker form, over a blocked opener.
+  printf 'blocked [key=mailcheck-190-empty-sample]: no sample available for the empty inbox\n' \
+    > "$dir/b.status"
+  rm -f "$cursor"
+  assert_fold "$dir/b.status" \
+    "$(printf 'mailcheck-190-empty-sample\tblocked\tno sample available for the empty inbox\n')" \
+    "worker-opened blocked key is open before any resolution"
+  printf 'resolved: [key=mailcheck-190-empty-sample] cleared once a sample arrived\n' >> "$dir/b.status"
+  rm -f "$cursor"
+  assert_fold "$dir/b.status" "" "colon-first resolution closes after a cursor clear"
+
+  # Both shapes state the same key, so a stream using either one closes it.
+  a=$(status_open_decisions "$dir/a.status")
+  b=$(status_open_decisions "$dir/b.status")
+  [ -z "$a" ] && [ -z "$b" ] \
+    || fail "a resolution shape left the key open: firstmate='$a' worker='$b'"
+  pass "both resolution shapes close a worker-opened key, with or without a cursor"
+}
+
 test_bare_keyless_line_still_folds_to_default() {
   local dir
   dir=$(case_dir keyless)
@@ -275,6 +318,7 @@ test_corr_only_tag_opens_as_default_like_a_bare_line
 test_key_only_before_colon_still_opens_no_regression
 test_blocked_and_resolved_are_tag_order_independent
 test_incremental_agrees_with_full_fold_across_appends
+test_both_resolution_shapes_close_a_cleared_worker_key
 
 # status_key_closing_verb reports HOW the status side currently reads one key,
 # which is what lets a consumer tell a settled key from a key handed to a

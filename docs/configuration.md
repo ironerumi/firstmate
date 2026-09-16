@@ -153,6 +153,7 @@ These five sentences are the single owner of the task-selector vocabulary; backe
 Missing, empty, duplicate, malformed, backend-inconsistent, or task-mismatched endpoint records are preserved and refused.
 Legacy tmux metadata remains cleanup-compatible when its exact window name is `fm-<id>`; opaque non-tmux endpoints require their recorded `endpoint_task_id=` binding.
 An ad-hoc primary-session task has no endpoint to validate, so an unambiguous `kind=adhoc` is authorized by an equivalent metadata-only ad-hoc check instead: it admits only exactly the record `fm-task-register.sh` writes - `harness=adhoc`, one well-formed `project=`, and no non-empty `window=`, `worktree=`, or `tasktmp=` - and otherwise refuses and preserves task state like the endpoint gate.
+That same shape carries no endpoint an agent could be bound to, so it also satisfies the legacy-incarnation endpoint check, which otherwise reads the recorded endpoint through its backend and refuses anything not confidently dead or agent-less.
 A missing, empty, or ambiguous `kind=` is not ad-hoc and still goes through the endpoint gate.
 `FM_HOME` determines Herdr's home label: the primary home uses `firstmate`, and a secondmate home marked by `.fm-secondmate-home` uses `2ndmate-<secondmate-id>`.
 [`herdr-backend.md`](herdr-backend.md#watching-and-task-containers) owns launcher-bound workspace placement, the label-only fallback, collision handling, and recovery behavior.

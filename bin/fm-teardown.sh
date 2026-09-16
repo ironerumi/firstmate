@@ -130,7 +130,9 @@
 #   when the captain has explicitly said to discard the work.
 #   --legacy-record accepts a task record that predates the spawn_gen field:
 #   teardown then proceeds only when the recorded endpoint is confirmed dead or
-#   agent-less (bin/fm-backend.sh's recovery-grade classifier), and without
+#   agent-less (bin/fm-backend.sh's recovery-grade classifier; a kind=adhoc
+#   record has no endpoint by design, so that gate is satisfied without a
+#   backend read), and without
 #   --force the worktree still passes the ordinary landed-work checks. The
 #   accepted legacy incarnation is stamped into the record before its close is
 #   recorded and named in the teardown line; the flag never relaxes the
@@ -975,16 +977,30 @@ MODE=$(grep '^mode=' "$META" | cut -d= -f2- || true)
 # here; the record itself is stamped only once every landed-work refusal has
 # passed, immediately before the close marker binds to it, so any refusal
 # leaves the record byte-identical.
+#
+# kind=adhoc is the exception, and it satisfies the same gate by construction:
+# bin/fm-task-register.sh records an ad-hoc primary-session ship with no window,
+# worktree, or tasktmp, and validate_adhoc_task_record above has already proved
+# exactly that shape, so there is no endpoint an agent could still be bound to.
+# Asking the backend classifier about it would also be meaningless - 'adhoc' is
+# a harness/kind marker, not a runtime backend - and fm_backend_agent_state
+# reports it as unverified, which refused every ad-hoc teardown that reached
+# this gate (the 2026-09-15 kitpicker defect). So the endpoint is agent-less by
+# design, and no backend function is consulted for it.
 if [ "$TEARDOWN_LEGACY_PENDING" = 1 ]; then
-  TEARDOWN_LEGACY_ENDPOINT=$(fm_backend_agent_state "$BACKEND" "$T")
-  case "$TEARDOWN_LEGACY_ENDPOINT" in
-    dead|missing) ;;
-    *)
-      echo "REFUSED: task $ID's record predates spawn_gen and its recorded endpoint reads '$TEARDOWN_LEGACY_ENDPOINT', not confidently dead or agent-less; --legacy-record teardown is refused while an agent may still be bound to it. Nothing was changed." >&2
-      echo "Reconcile the endpoint first (bin/fm-crew-state.sh $ID), or relaunch the task to publish an unambiguous incarnation, then retry teardown." >&2
-      exit 1
-      ;;
-  esac
+  if [ "$BACKEND" = adhoc ]; then
+    TEARDOWN_LEGACY_ENDPOINT=agent-less
+  else
+    TEARDOWN_LEGACY_ENDPOINT=$(fm_backend_agent_state "$BACKEND" "$T")
+    case "$TEARDOWN_LEGACY_ENDPOINT" in
+      dead|missing) ;;
+      *)
+        echo "REFUSED: task $ID's record predates spawn_gen and its recorded endpoint reads '$TEARDOWN_LEGACY_ENDPOINT', not confidently dead or agent-less; --legacy-record teardown is refused while an agent may still be bound to it. Nothing was changed." >&2
+        echo "Reconcile the endpoint first (bin/fm-crew-state.sh $ID), or relaunch the task to publish an unambiguous incarnation, then retry teardown." >&2
+        exit 1
+        ;;
+    esac
+  fi
   if [ -n "$TEARDOWN_LEGACY_RETAINED_STAMP" ]; then
     TEARDOWN_META_SPAWN_GEN=$TEARDOWN_LEGACY_RETAINED_STAMP
   else
