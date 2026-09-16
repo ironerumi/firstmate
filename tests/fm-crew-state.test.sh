@@ -711,6 +711,56 @@ test_gate_block_parked_not_superseded() {
   pass "gate block parked run is not flagged superseded"
 }
 
+# Regression pair for the bare-PR substring bug in log_reports_ci_ready. The
+# predicate used to match the letters "PR" anywhere in the note, so a release
+# report containing "PROD" and "PROPERTIES" claimed a checks-green PR that did
+# not exist and read a still-monitoring run as done. Only a real pull-request
+# reference counts now, in the documented forms, and every legitimate form must
+# keep classifying exactly as before.
+test_ci_ready_requires_a_real_pr_reference() {
+  reset_fakes
+  local d out
+
+  # (i) A PR-substring word is not a PR. Pre-fix this read `done`/`status-log`.
+  d=$(new_case ci-ready-pr-substring)
+  make_repo_on_branch "$d/wt" fm/feat-prod
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-prod.meta" "window=fm:fm-feat-prod" "worktree=$d/wt" "kind=ship"
+  printf 'done: PROD deploy of the PROPERTIES bundle complete, checks green\n' \
+    > "$d/state/feat-prod.status"
+  FM_FAKE_AXI_STATUS="$(run_ci_monitoring fm/feat-prod)"
+  out=$(run_crew_state "$d" feat-prod)
+  assert_contains "$out" "state: working" "a PR-substring word must not read as checks-green"
+  assert_not_contains "$out" "source: status-log" \
+    "a PR-substring word must not be classified from the status log"
+
+  # (ii) The genuine delivery line firstmate relies on still classifies.
+  d=$(new_case ci-ready-pr-url)
+  make_repo_on_branch "$d/wt" fm/feat-url
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-url.meta" "window=fm:fm-feat-url" "worktree=$d/wt" "kind=ship"
+  printf 'done: PR https://github.com/x/y/pull/7 checks green\n' > "$d/state/feat-url.status"
+  FM_FAKE_AXI_STATUS="$(run_ci_monitoring fm/feat-url)"
+  out=$(run_crew_state "$d" feat-url)
+  assert_contains "$out" "state: done" "a real pull-request URL still reads as CI-ready"
+  assert_contains "$out" "source: status-log" "the URL form classifies from the status log"
+
+  # (iii) And so does a `#<n>` token, with or without the `PR` word.
+  d=$(new_case ci-ready-pr-number)
+  make_repo_on_branch "$d/wt" fm/feat-num
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-num.meta" "window=fm:fm-feat-num" "worktree=$d/wt" "kind=ship"
+  printf 'done: PR #7 checks green\n' > "$d/state/feat-num.status"
+  FM_FAKE_AXI_STATUS="$(run_ci_monitoring fm/feat-num)"
+  out=$(run_crew_state "$d" feat-num)
+  assert_contains "$out" "state: done" 'a "PR #<n>" reference still reads as CI-ready'
+
+  printf 'done: rebased onto #12, checks green\n' > "$d/state/feat-num.status"
+  out=$(run_crew_state "$d" feat-num)
+  assert_contains "$out" "state: done" 'a bare "#<n>" reference still reads as CI-ready'
+  pass "CI-ready classification requires a real PR reference, not the letters PR"
+}
+
 test_ci_ready_done_log_beats_monitoring_run() {
   reset_fakes
   local d; d=$(new_case ci-ready)
@@ -2433,6 +2483,7 @@ test_genuine_daemon_down_reports_blocked
 test_genuine_parked_not_superseded
 test_scalar_gate_parked_not_superseded
 test_gate_block_parked_not_superseded
+test_ci_ready_requires_a_real_pr_reference
 test_ci_ready_done_log_beats_monitoring_run
 test_ci_monitoring_checks_green_surfaces_done
 test_top_level_ci_checks_green_surfaces_done
