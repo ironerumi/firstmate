@@ -76,30 +76,31 @@ test_stated_key_is_honored_in_both_positions() {
 # re-fold the incremental path falls back to, so a key stranded only in
 # persisted cursor state would still close here.
 test_both_resolution_shapes_close_a_cleared_worker_key() {
-  local dir cursor a b
+  local dir a_cursor b_cursor a b
   dir=$(case_dir resolution-shapes)
-  cursor="$dir/.mailcheck-190-empty-sample.open-decisions-cursor"
+  a_cursor="$dir/.a.open-decisions-cursor"
+  b_cursor="$dir/.b.open-decisions-cursor"
 
   # Shape A: firstmate's writer (bin/fm-send.sh --resolve-key).
   printf 'needs-decision [key=mailcheck-190-empty-sample]: which sample should the empty inbox use\n' \
     > "$dir/a.status"
-  rm -f "$cursor"
+  rm -f "$a_cursor"
   assert_fold "$dir/a.status" \
     "$(printf 'mailcheck-190-empty-sample\tneeds-decision\twhich sample should the empty inbox use\n')" \
     "worker-opened key is open before any resolution"
   printf 'resolved [key=mailcheck-190-empty-sample]: answered: keep the current sample\n' >> "$dir/a.status"
-  rm -f "$cursor"
+  rm -f "$a_cursor"
   assert_fold "$dir/a.status" "" "firstmate-shaped resolution closes after a cursor clear"
 
   # Shape B: the colon-first worker form, over a blocked opener.
   printf 'blocked [key=mailcheck-190-empty-sample]: no sample available for the empty inbox\n' \
     > "$dir/b.status"
-  rm -f "$cursor"
+  rm -f "$b_cursor"
   assert_fold "$dir/b.status" \
     "$(printf 'mailcheck-190-empty-sample\tblocked\tno sample available for the empty inbox\n')" \
     "worker-opened blocked key is open before any resolution"
   printf 'resolved: [key=mailcheck-190-empty-sample] cleared once a sample arrived\n' >> "$dir/b.status"
-  rm -f "$cursor"
+  rm -f "$b_cursor"
   assert_fold "$dir/b.status" "" "colon-first resolution closes after a cursor clear"
 
   # Both shapes state the same key, so a stream using either one closes it.

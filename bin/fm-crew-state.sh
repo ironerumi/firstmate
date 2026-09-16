@@ -331,18 +331,14 @@ nm_gate_findings_count() {
 }
 # 0 when a status note names a REAL pull request: a forge pull-request URL
 # (GitHub/GitHub-Enterprise `/pull/<n>`, GitLab `/-/merge_requests/<n>`) or a
-# `#<n>` / `PR #<n>` token. The bare letters "PR" are deliberately NOT one:
+# `PR #<n>` / `PR#<n>` token. The bare letters "PR" are deliberately NOT one:
 # they match words like "PROD" and "PROPERTIES", so a release report naming no
 # PR at all read as "a PR is checks green" and turned a still-monitoring run
-# into a done task (2026-09-08). The URL arms stay provider-wide on purpose - a
-# GitLab merge request is a legitimate PR reference, and narrowing to `/pull/`
-# alone would silently stop classifying those tasks as CI-ready.
+# into a done task (2026-09-08).
 status_note_has_pr_reference() {  # <note>
   local note=$1
-  case "$note" in
-    *"/pull/"[0-9]*|*"/merge_requests/"[0-9]*) return 0 ;;
-  esac
-  printf '%s' "$note" | grep -Eq '(^|[^[:alnum:]])#[0-9]+([^0-9]|$)'
+  printf '%s' "$note" \
+    | grep -Eq '(^|[^[:alnum:]])PR[[:space:]]*#[0-9]+([^[:alnum:]]|$)|/pull/[0-9]+([^[:alnum:]]|$)|/merge_requests/[0-9]+([^[:alnum:]]|$)'
 }
 log_reports_ci_ready() {
   local note

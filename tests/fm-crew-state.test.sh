@@ -745,7 +745,7 @@ test_ci_ready_requires_a_real_pr_reference() {
   assert_contains "$out" "state: done" "a real pull-request URL still reads as CI-ready"
   assert_contains "$out" "source: status-log" "the URL form classifies from the status log"
 
-  # (iii) And so does a `#<n>` token, with or without the `PR` word.
+  # (iii) A PR number must be adjacent to the PR keyword, with either spacing.
   d=$(new_case ci-ready-pr-number)
   make_repo_on_branch "$d/wt" fm/feat-num
   make_fakebin "$d" >/dev/null
@@ -755,10 +755,29 @@ test_ci_ready_requires_a_real_pr_reference() {
   out=$(run_crew_state "$d" feat-num)
   assert_contains "$out" "state: done" 'a "PR #<n>" reference still reads as CI-ready'
 
-  printf 'done: rebased onto #12, checks green\n' > "$d/state/feat-num.status"
+  printf 'done: PR#8 checks green\n' > "$d/state/feat-num.status"
   out=$(run_crew_state "$d" feat-num)
-  assert_contains "$out" "state: done" 'a bare "#<n>" reference still reads as CI-ready'
-  pass "CI-ready classification requires a real PR reference, not the letters PR"
+  assert_contains "$out" "state: done" 'a "PR#<n>" reference still reads as CI-ready'
+
+  printf 'done: PR https://gitlab.example/team/project/-/merge_requests/9 checks green\n' \
+    > "$d/state/feat-num.status"
+  out=$(run_crew_state "$d" feat-num)
+  assert_contains "$out" "state: done" "a GitLab merge-request URL still reads as CI-ready"
+
+  # (iv) A bare issue/commit reference and malformed numeric references are not PRs.
+  for note in \
+    'done: rebased onto #12, checks green' \
+    'done: PR #7abc checks green' \
+    'done: PR https://github.com/x/y/pull/7abc checks green' \
+    'done: PR https://gitlab.example/team/project/-/merge_requests/7abc checks green'
+  do
+    printf '%s\n' "$note" > "$d/state/feat-num.status"
+    out=$(run_crew_state "$d" feat-num)
+    assert_contains "$out" "state: working" "malformed or bare reference is not CI-ready: $note"
+    assert_not_contains "$out" "source: status-log" \
+      "malformed or bare reference does not classify from the status log: $note"
+  done
+  pass "CI-ready classification requires a genuine PR reference"
 }
 
 test_ci_ready_done_log_beats_monitoring_run() {
