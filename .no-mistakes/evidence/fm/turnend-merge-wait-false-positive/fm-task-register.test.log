@@ -1,0 +1,9 @@
+ok - fm-task-register creates private ad-hoc metadata with the fields its consumers read
+ok - fm-task-register refuses a second implementation for a busy repository
+ok - fm-task-register never overwrites an existing task identity
+ok - fm-task-register rejects unsafe task IDs before writing state
+ok - a drifted ad-hoc record is refused at teardown with state preserved
+ok - a legacy ad-hoc record tears down with a real backlog, without a backend lookup
+ok - a registered ad-hoc identity supports guarded merge recording and non-destructive cleanup
+
+exit=0

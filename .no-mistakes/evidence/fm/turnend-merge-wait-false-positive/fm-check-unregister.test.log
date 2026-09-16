@@ -1,0 +1,5 @@
+ok - empty id or unusable state dir refuses loudly, and an empty state override falls back to FM_HOME/state
+ok - happy path removes only the named check.sh and check-trust
+ok - hard-linked or symlinked artifacts are refused and left in place
+
+exit=0

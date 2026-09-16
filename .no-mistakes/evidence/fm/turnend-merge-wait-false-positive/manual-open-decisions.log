@@ -1,0 +1,14 @@
+SCENARIO: documented resolution shape closes the worker key after clearing the derived cursor
+OPEN DECISIONS (still open, folded from the durable status logs - not just the latest line):
+a [key=mailcheck-190-empty-sample] needs-decision: choose sample
+OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'
+cursor_created=yes
+after_resolution=<no open decisions>
+SCENARIO: colon-first resolution shape closes the worker key after clearing the derived cursor
+OPEN DECISIONS (still open, folded from the durable status logs - not just the latest line):
+b [key=mailcheck-190-empty-sample] blocked: no sample available
+OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'
+cursor_created=yes
+after_resolution=<no open decisions>
+
+exit=0
