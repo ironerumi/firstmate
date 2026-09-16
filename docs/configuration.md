@@ -153,6 +153,7 @@ These five sentences are the single owner of the task-selector vocabulary; backe
 Missing, empty, duplicate, malformed, backend-inconsistent, or task-mismatched endpoint records are preserved and refused.
 Legacy tmux metadata remains cleanup-compatible when its exact window name is `fm-<id>`; opaque non-tmux endpoints require their recorded `endpoint_task_id=` binding.
 An ad-hoc primary-session task has no endpoint to validate, so an unambiguous `kind=adhoc` is authorized by an equivalent metadata-only ad-hoc check instead: it admits only exactly the record `fm-task-register.sh` writes - `harness=adhoc`, one well-formed `project=`, and no non-empty `window=`, `worktree=`, or `tasktmp=` - and otherwise refuses and preserves task state like the endpoint gate.
+That same shape carries no endpoint an agent could be bound to, so it also satisfies the legacy-incarnation endpoint check, which otherwise reads the recorded endpoint through its backend and refuses anything not confidently dead or agent-less.
 A missing, empty, or ambiguous `kind=` is not ad-hoc and still goes through the endpoint gate.
 `FM_HOME` determines Herdr's home label: the primary home uses `firstmate`, and a secondmate home marked by `.fm-secondmate-home` uses `2ndmate-<secondmate-id>`.
 [`herdr-backend.md`](herdr-backend.md#watching-and-task-containers) owns launcher-bound workspace placement, the label-only fallback, collision handling, and recovery behavior.
@@ -306,6 +307,7 @@ When it is unset, most scripts use the repo root as the home; when it is set, sc
 When `FM_HOME` is unset, it also behaves as the old whole-root override.
 `bin/fm-send.sh` is intentionally stricter than that general fallback: it requires `FM_HOME` to be set before resolving a target, so operator steers cannot silently resolve against the wrong home.
 `FM_STATE_OVERRIDE`, `FM_DATA_OVERRIDE`, `FM_PROJECTS_OVERRIDE`, and `FM_CONFIG_OVERRIDE` override individual operational directories for tests and specialized harness setup.
+An unset or empty `FM_STATE_OVERRIDE` falls back to `FM_HOME/state`.
 Before `fm-brief.sh`, `fm-spawn.sh`, or `fm-afk-launch.sh` persists a path or passes it to another process, it resolves each applicable relative `FM_HOME`, `FM_STATE_OVERRIDE`, or `FM_DATA_OVERRIDE` directory against the caller's working directory, preserves accepted absolute spellings unchanged, and rejects an unresolvable relative directory with the offending variable named.
 `fm-spawn.sh` additionally rejects control bytes in those raw directory inputs before shell or filesystem normalization can change which path the backlog gate checks.
 Lifecycle access to a backlog, task record, or pending-close record must resolve within its configured data or state root, and a final-component symlink is refused even when its target remains within that root.

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Behavior tests for fm-check-unregister.sh: refuse empty-variable retirement,
-# and remove only the two named custom-check files on the happy path.
+# Behavior tests for fm-check-unregister.sh: an unusable state directory (a
+# missing one, or an override pointing at a non-directory) refuses before a
+# removal, an inherited empty-but-set FM_STATE_OVERRIDE falls back to
+# FM_HOME/state instead of blanking the path, and the happy path removes only
+# the two named custom-check files.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -120,16 +123,13 @@ test_empty_id_and_empty_state_refuse_without_stray_rm() {
   : > "$log"
   PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_STATE_OVERRIDE='' \
     "$UNREGISTER" override-empty >"$out" 2>"$err" || status=$?
-  expect_code 1 "$status" "unregister with explicitly empty state override"
-  assert_contains "$(cat "$err")" "state directory is unavailable" \
-    "empty state override refusal used the wrong stderr"
-  assert_present "$home/state/override-empty.check.sh" \
-    "empty state override deleted the home state check"
-  assert_present "$home/state/override-empty.check-trust" \
-    "empty state override deleted the home state trust binding"
-  assert_rm_not_invoked "$log"
+  expect_code 0 "$status" "unregister with an inherited empty state override"
+  assert_absent "$home/state/override-empty.check.sh" \
+    "empty state override did not retire the home state check"
+  assert_absent "$home/state/override-empty.check-trust" \
+    "empty state override did not retire the home state trust binding"
 
-  pass "empty id or missing state dir refuses loudly and never rms a stray path"
+  pass "empty id or unusable state dir refuses loudly, and an empty state override falls back to FM_HOME/state"
 }
 
 test_happy_path_removes_only_check_and_trust() {
