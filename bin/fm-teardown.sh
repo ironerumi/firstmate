@@ -989,7 +989,7 @@ MODE=$(grep '^mode=' "$META" | cut -d= -f2- || true)
 # design, and no backend function is consulted for it.
 if [ "$TEARDOWN_LEGACY_PENDING" = 1 ]; then
   if [ "$BACKEND" = adhoc ]; then
-    TEARDOWN_LEGACY_ENDPOINT=agent-less
+    TEARDOWN_LEGACY_ENDPOINT='agent-less'
   else
     TEARDOWN_LEGACY_ENDPOINT=$(fm_backend_agent_state "$BACKEND" "$T")
     case "$TEARDOWN_LEGACY_ENDPOINT" in
