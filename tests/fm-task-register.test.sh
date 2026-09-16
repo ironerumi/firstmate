@@ -163,6 +163,76 @@ EOF
   pass "a drifted ad-hoc record is refused at teardown with state preserved"
 }
 
+# A home whose backlog gate APPLIES: .tasks.toml plus a markdown backlog row for
+# the task, so fm-teardown.sh reaches its incarnation gate (a record that
+# predates spawn_gen requires --legacy-record) and therefore the recorded-endpoint
+# read that used to be handed the harness marker 'adhoc' as if it were a runtime
+# backend. The ad-hoc shape has no endpoint by design, so that gate must be
+# satisfied without a backend lookup.
+seed_adhoc_backlog() {  # <case-dir> <task-id>
+  local case_dir=$1 id=$2
+  local home="$case_dir/home"
+  cp "$ROOT/.tasks.toml" "$home/.tasks.toml"
+  printf '%s\n' '# Backlog' '' '## In flight' '' '## Queued' '' '## Done' \
+    > "$home/data/backlog.md"
+  tasks-axi add "$id" "ad-hoc register fixture task" --kind ship \
+    --file "$home/data/backlog.md" >/dev/null
+  tasks-axi start "$id" --file "$home/data/backlog.md" >/dev/null
+}
+
+run_case_teardown() {  # <case-dir> <task-id> [extra args...]
+  local case_dir=$1 id=$2
+  shift 2
+  FM_ROOT_OVERRIDE="$ROOT" \
+  FM_HOME="$case_dir/home" \
+  FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_DATA_OVERRIDE="$case_dir/home/data" \
+  FM_CONFIG_OVERRIDE="$case_dir/home/config" \
+  PATH="$case_dir/fakebin:$PATH" \
+    "$TEARDOWN" "$id" "$@"
+}
+
+test_legacy_adhoc_record_tears_down_with_a_real_backlog() {
+  local case_dir meta rc row_state
+  if ! command -v tasks-axi >/dev/null 2>&1; then
+    pass "SKIP (tasks-axi not found): a legacy ad-hoc record tears down with a real backlog"
+    return
+  fi
+  case_dir=$(make_case adhoc-legacy-backlog)
+  meta="$case_dir/state/adhoc-legacy.meta"
+  add_merge_mocks "$case_dir"
+  seed_adhoc_backlog "$case_dir" adhoc-legacy
+
+  run_register "$case_dir" adhoc-legacy >/dev/null \
+    || fail "legacy-backlog: registration failed"
+  grep -qx 'harness=adhoc' "$meta" || fail "legacy-backlog: fixture is not an ad-hoc record"
+  assert_no_grep 'spawn_gen=' "$meta" \
+    "legacy-backlog: fixture unexpectedly carries an incarnation"
+
+  # Every ad-hoc registration predates spawn_gen, so teardown needs
+  # --legacy-record; the endpoint gate must then read the record's ad-hoc shape,
+  # never ask a backend about the marker 'adhoc'.
+  set +e
+  run_case_teardown "$case_dir" adhoc-legacy --legacy-record \
+    > "$case_dir/teardown.stdout" 2> "$case_dir/teardown.stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "legacy-backlog: an ad-hoc record should tear down"
+  assert_no_grep "unknown backend 'adhoc'" "$case_dir/teardown.stderr" \
+    "legacy-backlog: the endpoint gate asked a backend about the ad-hoc marker"
+  assert_grep 'teardown adhoc-legacy complete (ad-hoc primary-session ship)' "$case_dir/teardown.stdout" \
+    "legacy-backlog: cleanup did not report the ad-hoc completion"
+  assert_absent "$meta" "legacy-backlog: cleanup retained the ad-hoc metadata"
+  assert_absent "$case_dir/state/adhoc-legacy.check-trust" \
+    "legacy-backlog: cleanup retained a trust binding it never owned"
+  row_state=$(tasks-axi show adhoc-legacy --file "$case_dir/home/data/backlog.md" 2>/dev/null \
+    | sed -n 's/^  state: *//p' | head -1)
+  [ "$row_state" = "done" ] \
+    || fail "legacy-backlog: the backlog row was left '$row_state', not done"
+  pass "a legacy ad-hoc record tears down with a real backlog, without a backend lookup"
+}
+
 add_merge_mocks() {
   local case_dir=$1
   # fm-pr-merge.sh reads the pull request back and refuses an outcome it cannot
@@ -229,4 +299,5 @@ test_refuses_busy_repository
 test_refuses_existing_meta_without_mutation
 test_refuses_invalid_id
 test_refuses_drifted_or_forged_adhoc_record_at_teardown
+test_legacy_adhoc_record_tears_down_with_a_real_backlog
 test_registered_identity_merges_and_cleans_up

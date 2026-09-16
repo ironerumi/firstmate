@@ -329,12 +329,26 @@ nm_gate_findings_count() {
   case "$rest" in ''|*[!0-9]*) return 0 ;; esac
   printf '%s' "$rest"
 }
+# 0 when a status note names a REAL pull request: a forge pull-request URL
+# (GitHub/GitHub-Enterprise `/pull/<n>`, GitLab `/-/merge_requests/<n>`) or a
+# `PR #<n>` / `PR#<n>` token. The bare letters "PR" are deliberately NOT one:
+# they match words like "PROD" and "PROPERTIES", so a release report naming no
+# PR at all read as "a PR is checks green" and turned a still-monitoring run
+# into a done task (2026-09-08).
+status_note_has_pr_reference() {  # <note>
+  local note=$1
+  printf '%s' "$note" \
+    | grep -Eq '(^|[^[:alnum:]])PR[[:space:]]*#[0-9]+([^[:alnum:]]|$)|/pull/[0-9]+([^[:alnum:]]|$)|/merge_requests/[0-9]+([^[:alnum:]]|$)'
+}
 log_reports_ci_ready() {
+  local note
   [ "$LOG_VERB" = "done" ] || return 1
-  case "$(status_line_note "$LOG_LINE")" in
-    *PR*"checks green"*|*"checks green"*PR*) return 0 ;;
+  note=$(status_line_note "$LOG_LINE")
+  case "$note" in
+    *"checks green"*) ;;
     *) return 1 ;;
   esac
+  status_note_has_pr_reference "$note"
 }
 
 # 0 when a status-log line reports positive daemon socket failure rather than a

@@ -55,7 +55,7 @@ The proof covers ownership only, never freshness: the guard still requires a fre
 That beacon check uses the poll-derived grace described below rather than the flat `FM_GUARD_GRACE` default, because the daemon starts a fresh one-shot watcher only after it finishes handling the previous wake, and that handling can legitimately outrun a fixed 300-second window under load (a slow registered check, a busy supervisor pane) with the daemon perfectly healthy throughout.
 With away mode off the daemon lock proves nothing and the strict watcher predicate is unchanged.
 
-`FM_STATE_OVERRIDE` wins over `FM_HOME/state`, and `FM_HOME` wins over repository-root `state/`.
+The guard uses the state-directory precedence documented in [`configuration.md`](configuration.md#fm_home).
 `FM_GUARD_GRACE` controls beacon freshness and defaults to 300 seconds.
 If `jq` is missing or hook stdin is empty, the guard exits 0 because it cannot safely read loop-guard fields.
 
