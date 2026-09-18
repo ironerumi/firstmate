@@ -3273,8 +3273,12 @@ if [ "$KIND" != secondmate ]; then
       # settings. FM_STATE_OVERRIDE pins the marker to this home's state dir,
       # --task keys it to this crew, and teardown removes it with the task.
       j_keepwarm=$(json_escape "FM_STATE_OVERRIDE=$(shell_quote "$STATE_REAL") exec $(shell_quote "$FM_ROOT/bin/fm-claude-keepwarm-selfwake.sh") --task $(shell_quote "$ID")")
+      # autoCompactEnabled/autoCompactWindow: a crew in a project worktree would
+      # otherwise fall to the captain's own user-scope autoCompactEnabled:false
+      # and idle instead of compacting when it fills its context; 500000 matches
+      # the main home's own worktree window (its untracked .claude/settings.local.json).
       cat > "$WT/.claude/settings.local.json" <<EOF
-{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"},{"type":"command","command":"$j_keepwarm","asyncRewake":true,"timeout":3600}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
+{"autoCompactEnabled":true,"autoCompactWindow":500000,"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"},{"type":"command","command":"$j_keepwarm","asyncRewake":true,"timeout":3600}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
 EOF
       exclude_path '.claude/settings.local.json'
       ;;

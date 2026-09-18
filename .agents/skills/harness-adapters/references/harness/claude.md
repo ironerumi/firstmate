@@ -13,7 +13,7 @@ Busy hooks verified 2026-07-28 on Claude Code 2.1.220.
 | Model | `--model <model>`; discover through the interactive `/model` picker, with alias or full-name shape documented by `claude --help`. |
 | Effort | `--effort <low\|medium\|high\|xhigh\|max>`, verified on 2.1.196. |
 
-Claude auto-compaction is disabled in this environment; load `claude-crew-compaction` when a live Claude crewmate's displayed remaining context reads below 50%, rather than treating a low reading as harmless.
+A crew or scout's per-worktree `.claude/settings.local.json` carries `"autoCompactEnabled":true,"autoCompactWindow":500000`, so Claude auto-compacts on its own even though the captain's own user-scope `~/.claude/settings.json` sets `autoCompactEnabled` to `false`; `bin/fm-spawn.sh`'s claude `KIND != secondmate` branch owns the write. A low context reading on a live Claude crewmate is therefore the harness's own job to compact, not a manual `/compact` trigger.
 
 ## Workspace trust
 
