@@ -1,0 +1,35 @@
+Scenario: crew/scout Claude spawn emits usable per-worktree auto-compaction settings
+ok - claude spawn settings carry the hooks, auto-compaction, and no per-worker attribution object
+ok - non-claude spawn carries no claude settings file
+ok - claude spawn injects the task-keyed keep-warm self-wake into the crew's Stop hooks
+ok - claude spawn preserves pane overrides and clears stale injected cadence on relaunch
+# all fm-spawn-claude-attribution tests passed
+
+Scenario: Claude secondmate scope remains unchanged
+ok - a claude secondmate launch carries the attribution-off policy too
+ok - secondmate home has no crew auto-compaction settings artifact
+captain settings sha256 before=844d3ac17b94cf2d5b99d0db1b7f5baf6965e326cee0e82d920409e9a96a5511 after=844d3ac17b94cf2d5b99d0db1b7f5baf6965e326cee0e82d920409e9a96a5511
+
+Generated product artifact (semantic JSON consumed from the spawned worktree):
+ok - claude spawn settings carry the hooks, auto-compaction, and no per-worker attribution object
+settings=/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-spawn-claude-attribution.9nfMH1/claude-attrib/wt/.claude/settings.local.json
+{"autoCompactEnabled":true,"autoCompactWindow":500000}
+
+Generated product artifact (clean semantic JSON from the spawned worktree):
+ok - claude spawn settings carry the hooks, auto-compaction, and no per-worker attribution object
+settings=/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-spawn-claude-attribution.9LG2iS/claude-attrib/wt/.claude/settings.local.json
+{"autoCompactEnabled":true,"autoCompactWindow":500000}
+
+Generated product artifact (clean semantic JSON from the spawned worktree):
+ok - claude spawn settings carry the hooks, auto-compaction, and no per-worker attribution object
+settings=/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-spawn-claude-attribution.RGf3I3/claude-attrib/wt/.claude/settings.local.json
+{"autoCompactEnabled":true,"autoCompactWindow":500000}
+
+Generated product artifact (clean semantic JSON from the spawned worktree):
+ok - claude spawn settings carry the hooks, auto-compaction, and no per-worker attribution object
+settings=/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-spawn-claude-attribution.yNxxPp/claude-attrib/wt/.claude/settings.local.json
+{"autoCompactEnabled":true,"autoCompactWindow":500000}
+
+Scout variant (same real fm-spawn crew branch):
+{"autoCompactEnabled":true,"autoCompactWindow":500000}
+844d3ac17b94cf2d5b99d0db1b7f5baf6965e326cee0e82d920409e9a96a5511  /Users/gu_yifu/.claude/settings.json
