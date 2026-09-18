@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Regression test for the claude) branch of bin/fm-spawn.sh: the generated
 # <worktree>/.claude/settings.local.json must carry the lifecycle hooks it
-# exists for, the task-keyed keep-warm self-wake entry, and NO attribution object.
+# exists for, the task-keyed keep-warm self-wake entry, the crew auto-compaction
+# override, and NO attribution object.
 #
 # Co-author suppression is owned upstream now: upstream 72bfdd0 (#3945) passes an
 # explicit `"attribution":{"commit":"","pr":"","sessionUrl":false}` object in
@@ -162,11 +163,15 @@ test_claude_spawn_settings_carry_hooks_without_attribution() {
   command -v jq >/dev/null 2>&1 || fail "jq is required to parse the generated settings"
   jq -e 'has("attribution") | not' "$settings" >/dev/null \
     || fail "the per-worker attribution object was reintroduced into the spawned settings"
+  jq -e '.autoCompactEnabled == true' "$settings" >/dev/null \
+    || fail "generated settings did not enable auto-compaction for the crew"
+  jq -e '.autoCompactWindow == 500000' "$settings" >/dev/null \
+    || fail "generated settings did not set the crew's auto-compaction window"
   for hook in UserPromptSubmit Stop StopFailure SessionEnd; do
     jq -e ".hooks.\"$hook\" | length > 0" "$settings" >/dev/null \
       || fail "generated settings lost the $hook lifecycle hook"
   done
-  pass "claude spawn settings carry the hooks and no per-worker attribution object"
+  pass "claude spawn settings carry the hooks, auto-compaction, and no per-worker attribution object"
 }
 
 # Scope pin: another harness's spawn must not receive a Claude settings file,
