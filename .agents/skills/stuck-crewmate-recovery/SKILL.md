@@ -70,6 +70,6 @@ Escalate in order:
    Pass `--harness`, `--model`, or `--effort` on that same command when the worker should come back on a different runtime.
    Genuine wedging means looping, unresponsive, repeating the same obstacle, or truly dead.
    A low context reading is not wedging.
-   Every harness, including Claude, auto-compacts on its own and needs no action here: a crew or scout's per-worktree `.claude/settings.local.json` carries `"autoCompactEnabled":true,"autoCompactWindow":500000` (`bin/fm-spawn.sh`'s claude branch), so a low context reading on a Claude worker is the harness's own job to compact, not wedging.
+   A low context reading is not wedging; harness-specific compaction behavior belongs to the selected adapter reference, including the [Claude crew/scout contract](../harness-adapters/references/harness/claude.md).
    The worktree and commits persist, so relaunch is cheap.
 5. If a second relaunch fails too, write `failed` to the backlog and tell the captain the plain failure, preserved work, and consequence using `AGENTS.md` section 9; do not mention metadata, harness, window, or worktree unless the path itself is needed for action.
