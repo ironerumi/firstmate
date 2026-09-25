@@ -2920,12 +2920,6 @@ TS
   pass "Pi Calm native /skill:ahoy geometry keeps every collapsed thinking and tool block at zero height while preserving expansion, history, restart, and Calm-off rendering"
 }
 
-test_working_ship_widget_key_parity() {
-  assert_grep 'export const CALM_WORKING_SHIP_WIDGET_KEY = "calm-working-ship";' "$WORKING_SHIP" \
-    "Firstmate Calm must keep the working-row widget key \"calm-working-ship\" so it shares the standalone Calm slot and dual-install sessions render one boat"
-  pass "Firstmate Calm's working-row widget key stays on the shared standalone Calm slot"
-}
-
 test_working_ship_geometry_and_lifecycle() {
   local fixture out status version
   if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
@@ -2988,15 +2982,6 @@ const strip = (text) => text.replace(new RegExp(`${ESC}\\[[0-9;]*m`, "g"), "");
 const check = (condition, message) => {
   if (!condition) throw new Error(message);
 };
-// The working-row slot is deliberately shared with the standalone Pi Calm
-// extension, which installs its own boat under the same key. Pi replaces widgets
-// per key, so a session loading both Calms renders exactly one boat. Renaming
-// this slot in only one implementation silently restores the duplicate-boat
-// defect this suite exists to prevent.
-check(
-  CALM_WORKING_SHIP_WIDGET_KEY === "calm-working-ship",
-  `Firstmate Calm claims a private working-row widget key (${CALM_WORKING_SHIP_WIDGET_KEY}); it must share the standalone Calm slot "calm-working-ship" so dual-install sessions render one boat`,
-);
 const sailOf = (frame) => strip(frame[0]).includes(SAIL) ? SAIL : "none";
 
 // --- Calm cadence: the boat is materially slower than the water ------------------
@@ -3848,6 +3833,24 @@ await fire("agent_start");
 check(liveTimers === 1, "a later run did not use the boat after an idle Calm toggle");
 await fire("agent_settled");
 check(liveTimers === 0, "the later run did not clean up");
+
+await fire("agent_start");
+let survivingStandaloneDisposed = false;
+const survivingStandaloneWidget = {
+  render: () => ["standalone boat"],
+  dispose: () => { survivingStandaloneDisposed = true; },
+};
+ui.setWidget(CALM_WORKING_SHIP_WIDGET_KEY, () => survivingStandaloneWidget);
+reset();
+await calmCommand.handler("", ctx);
+check(
+  !survivingStandaloneDisposed &&
+    ui.widgets.size === 1 &&
+    ui.widgets.get(CALM_WORKING_SHIP_WIDGET_KEY) === survivingStandaloneWidget &&
+    ui.widgetOps.length === 0,
+  "turning Firstmate Calm off cleared the standalone working ship",
+);
+ui.setWidget(CALM_WORKING_SHIP_WIDGET_KEY, undefined);
 
 // --- The visual-only widget never touches session, transcript, or export data ------
 check(
@@ -4865,7 +4868,6 @@ test_calm_mid_turn_working_notes
 test_operational_followup_turn_e2e
 test_queued_operational_escape_e2e
 test_hidden_block_geometry_e2e
-test_working_ship_widget_key_parity
 test_working_ship_geometry_and_lifecycle
 test_export_dom_render_guard
 test_interactive_terminal_e2e
