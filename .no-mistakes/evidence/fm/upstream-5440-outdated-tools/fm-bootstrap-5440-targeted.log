@@ -1,0 +1,14 @@
+Targeted behavioral validation for upstream #5440
+Command: ./tests/fm-bootstrap.test.sh
+Exit status:
+0
+Relevant scenario results:
+ok - bootstrap reports treehouse lease + tasks-axi/quota-axi bootstrap contracts
+ok - bootstrap separates an absent no-mistakes from one below its version floor
+ok - bootstrap separates an absent gh-axi from one below its version floor
+ok - bootstrap permits nonvisual work without compatible lavish-axi and retains its presentation floor
+ok - bootstrap separates an absent tasks-axi from one below its floor or feature probe
+ok - bootstrap separates an absent quota-axi from one below its version floor
+Additional regression results:
+ok - bootstrap: the treehouse lease check follows the resolved backend's worktree provider
+ok - bootstrap: the tasks-axi compatibility verdict travels exactly one process hop
