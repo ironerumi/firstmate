@@ -143,6 +143,8 @@ export default function (pi: ExtensionAPI) {
 
   // Single owner of Calm's working-row presentation choice. The widget is only created
   // or removed on a real transition, so repeated starts cannot duplicate its timer.
+  // The slot is shared with standalone Pi Calm; the dispose signal prevents turning
+  // Firstmate Calm off from clearing a widget that the other extension installed.
   const applyWorkingPresentation = (
     ui: ExtensionUIContext,
     forceStockVisibility = false,
