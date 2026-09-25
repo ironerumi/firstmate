@@ -2920,6 +2920,12 @@ TS
   pass "Pi Calm native /skill:ahoy geometry keeps every collapsed thinking and tool block at zero height while preserving expansion, history, restart, and Calm-off rendering"
 }
 
+test_working_ship_widget_key_parity() {
+  assert_grep 'export const CALM_WORKING_SHIP_WIDGET_KEY = "calm-working-ship";' "$WORKING_SHIP" \
+    "Firstmate Calm must keep the working-row widget key \"calm-working-ship\" so it shares the standalone Calm slot and dual-install sessions render one boat"
+  pass "Firstmate Calm's working-row widget key stays on the shared standalone Calm slot"
+}
+
 test_working_ship_geometry_and_lifecycle() {
   local fixture out status version
   if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
@@ -3615,6 +3621,26 @@ const reset = () => {
   ui.visibilityCalls = 0;
 };
 const shipWidget = () => ui.widgets.get(CALM_WORKING_SHIP_WIDGET_KEY);
+
+let standaloneDisposed = false;
+const standaloneWidget = {
+  render: () => ["standalone boat"],
+  dispose: () => { standaloneDisposed = true; },
+};
+const firstmateWidget = {
+  render: () => ["firstmate boat"],
+  dispose: () => {},
+};
+ui.setWidget("calm-working-ship", () => standaloneWidget);
+ui.setWidget(CALM_WORKING_SHIP_WIDGET_KEY, () => firstmateWidget);
+const renderedDualInstallWidgets = [...ui.widgets.values()].map((widget) => widget.render(80));
+check(
+  standaloneDisposed &&
+    renderedDualInstallWidgets.length === 1 &&
+    renderedDualInstallWidgets[0][0] === "firstmate boat",
+  `dual Calm install rendered ${renderedDualInstallWidgets.length} working widgets instead of one`,
+);
+ui.setWidget(CALM_WORKING_SHIP_WIDGET_KEY, undefined);
 
 // --- Calm off leaves Pi's stock working behavior completely untouched -------------
 await fire("session_start", { reason: "startup" });
@@ -4839,6 +4865,7 @@ test_calm_mid_turn_working_notes
 test_operational_followup_turn_e2e
 test_queued_operational_escape_e2e
 test_hidden_block_geometry_e2e
+test_working_ship_widget_key_parity
 test_working_ship_geometry_and_lifecycle
 test_export_dom_render_guard
 test_interactive_terminal_e2e
