@@ -155,7 +155,18 @@ STATUS_FILE=${FM_NM_GUARD_STATUS:-}
 IFS=$'\t' read -r STATE RUN_ID STEP <<EOF
 $(fm_nm_run_state "$WT")
 EOF
-DECISION=$(fm_nm_guard_decide "$ACTION" "${STATE:-unknown}" "${RUN_ID:-}" "${STEP:-}" "$STATUS_FILE")
+# The review fix-round budget reads the run's own review step log, so the read
+# happens only for a review fix response and only when firstmate has not already
+# authorized one further round for this exact run. An unreadable count reports
+# the gap and leaves the command to the real tool.
+REVIEW_ROUNDS=
+if [ "$ACTION" = review-fix ] && [ "${FM_NM_GUARD_REVIEW_UNLOCK:-}" != "1" ]; then
+  REVIEW_ROUNDS=$(fm_nm_review_fix_rounds "$WT" "${RUN_ID:-}")
+  if [ -z "$REVIEW_ROUNDS" ]; then
+    printf '%s: the review fix-round budget was not applied because this run reports no readable review round count\n' "$FM_NM_GUARD_TOOL" >&2
+  fi
+fi
+DECISION=$(fm_nm_guard_decide "$ACTION" "${STATE:-unknown}" "${RUN_ID:-}" "${STEP:-}" "$STATUS_FILE" "$REVIEW_ROUNDS")
 case "$DECISION" in
   deny*) ;;
   *) exec_real "$@" ;;
