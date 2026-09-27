@@ -38,6 +38,9 @@ Always permitted:
   A nested removal is permitted only when the canonical common directory is genuinely inside the worker's own root, such as for a standalone repository created there.
 - This task's exact `state/<id>.status` file and paths under its `state/<id>.inbox/` directory - the brief itself tells a worker to `mv` its inbox messages into `handled/`.
   A sibling's records, including a dotted task ID that begins with this task's ID, and the fleet-wide records beside them stay protected.
+- This task's exact `state/.keepwarm-<id>` marker and its `state/.keepwarm-<id>.*` temp siblings - the Claude Stop hook arms by `mktemp "$MARKER.XXXXXX"` and `mv` into the marker, then cleans the temp file up, so both sides of that rename and its removal must resolve inside the allowed set.
+  The allowance is that prefix, not the `state/` directory: another task's `.keepwarm-<other-id>` record and the supervisor's `state/.keepwarm-selfwake` stay protected.
+  A sibling task ID that is this ID plus a dot and a suffix would share the prefix, which is accepted deliberately: a keep-warm marker is ephemeral runtime state the next Stop rewrites, so refusing a legitimate arm and stranding its temp file is the worse failure.
 - This task's own temp root (`tasktmp=` in the record, `/tmp/fm-<id>`) and the OS temp namespace. Unlanded work never lives in temp - firstmate puts each task's scratch there itself - and refusing an ordinary `rm` of a scratch file would make the guard something workers route around, which costs more than the class it catches.
 - `git worktree prune --dry-run`, which changes nothing.
 - `treehouse get`, `treehouse enter`, `treehouse status`, every other `git` subcommand, and every command that is not one of the fronted tools.

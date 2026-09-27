@@ -26,7 +26,8 @@
 #   fm_worktree_guard_decide <tool> <root> <cwd> [argv...]
 #       Pure decision. Prints "allow" or "deny<TAB><code><TAB><reason>".
 #   fm_worktree_guard_load
-#       Resolves this task's root and its two derived allowances into globals.
+#       Resolves this task's root and its derived state sidecar allowances into
+#       globals.
 #
 # Environment:
 #   FM_WORKTREE_GUARD_META   path to this task's state/<id>.meta; ABSENT MEANS
@@ -59,6 +60,8 @@ FM_WORKTREE_GUARD_STATE_STATUS=
 FM_WORKTREE_GUARD_STATE_STATUS_LEXICAL=
 FM_WORKTREE_GUARD_STATE_INBOX=
 FM_WORKTREE_GUARD_STATE_INBOX_LEXICAL=
+FM_WORKTREE_GUARD_STATE_KEEPWARM=
+FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL=
 FM_WORKTREE_GUARD_TASKTMP=
 FM_WORKTREE_GUARD_TASKTMP_LEXICAL=
 FM_WORKTREE_GUARD_PATH=
@@ -177,13 +180,29 @@ fm_worktree_guard_same_alias() { # <path> <other>
 # One resolved target's verdict: 0 when it is allowed, 1 when it escapes the
 # worker's own worktree. The allowed set is closed and small: the worker's own
 # worktree, this task's own state sidecars (the brief itself tells a worker to
-# `mv` its inbox messages into handled/), this task's own temp root, and the OS
-# temp namespace.
-fm_worktree_guard_target_allowed_by() { # <target> <root> <status> <inbox> <tasktmp>
-  local target=$1 root=$2 status=$3 inbox=$4 tasktmp=$5 entry spec
+# `mv` its inbox messages into handled/), this task's own keep-warm marker and
+# the temp siblings beside it, this task's own temp root, and the OS temp
+# namespace.
+#
+# The keep-warm allowance is the exact marker plus `marker.*`, because the
+# Claude Stop hook arms by `mktemp "$MARKER.XXXXXX"` then `mv` into `$MARKER` and
+# cleans the temp up. It is a prefix on one task's own marker, never the state
+# directory, so `.keepwarm-t2.*` and `state/.keepwarm-selfwake` stay protected.
+# A sibling task id that is this id plus a dot and a suffix would share the
+# prefix - the residual is accepted because a keep-warm marker is ephemeral
+# runtime state the next Stop rewrites, so refusing a legitimate arm (and
+# stranding its temp file) is the strictly worse failure.
+fm_worktree_guard_target_allowed_by() { # <target> <root> <status> <inbox> <tasktmp> <keepwarm>
+  local target=$1 root=$2 status=$3 inbox=$4 tasktmp=$5 keepwarm=$6 entry spec
   fm_worktree_guard_within_alias "$target" "$root" && return 0
   [ -z "$status" ] || ! fm_worktree_guard_same_alias "$target" "$status" || return 0
   [ -z "$inbox" ] || ! fm_worktree_guard_within_alias "$target" "$inbox" || return 0
+  [ -z "$keepwarm" ] || ! fm_worktree_guard_same_alias "$target" "$keepwarm" || return 0
+  if [ -n "$keepwarm" ]; then
+    case "$target" in
+      "$keepwarm".*) return 0 ;;
+    esac
+  fi
   [ -z "$tasktmp" ] || ! fm_worktree_guard_within_alias "$target" "$tasktmp" || return 0
   spec=${FM_WORKTREE_GUARD_TEMP_ROOTS-$FM_WORKTREE_GUARD_TEMP_DEFAULT}
   local IFS=:
@@ -212,7 +231,8 @@ fm_worktree_guard_target_allowed() { # <lexically-normalized-target>
     "$FM_WORKTREE_GUARD_ROOT_LEXICAL" \
     "$FM_WORKTREE_GUARD_STATE_STATUS_LEXICAL" \
     "$FM_WORKTREE_GUARD_STATE_INBOX_LEXICAL" \
-    "$FM_WORKTREE_GUARD_TASKTMP_LEXICAL" || return 1
+    "$FM_WORKTREE_GUARD_TASKTMP_LEXICAL" \
+    "$FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL" || return 1
 
   fm_worktree_guard_resolve_parent "$target" || return 0
   physical=$FM_WORKTREE_GUARD_PATH
@@ -220,13 +240,15 @@ fm_worktree_guard_target_allowed() { # <lexically-normalized-target>
     "$FM_WORKTREE_GUARD_ROOT_LEXICAL"|\
     "$FM_WORKTREE_GUARD_STATE_STATUS_LEXICAL"|\
     "$FM_WORKTREE_GUARD_STATE_INBOX_LEXICAL"|\
+    "$FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL"|\
     "$FM_WORKTREE_GUARD_TASKTMP_LEXICAL") return 0 ;;
   esac
   fm_worktree_guard_target_allowed_by "$physical" \
     "$FM_WORKTREE_GUARD_ROOT" \
     "$FM_WORKTREE_GUARD_STATE_STATUS" \
     "$FM_WORKTREE_GUARD_STATE_INBOX" \
-    "$FM_WORKTREE_GUARD_TASKTMP"
+    "$FM_WORKTREE_GUARD_TASKTMP" \
+    "$FM_WORKTREE_GUARD_STATE_KEEPWARM"
 }
 
 fm_worktree_guard_deny() { # <code> <target>
@@ -502,6 +524,15 @@ fm_worktree_guard_decide() { # <tool> <root> <cwd> [argv...]
       FM_WORKTREE_GUARD_STATE_INBOX=$FM_WORKTREE_GUARD_STATE_INBOX_LEXICAL
     fi
   fi
+  if [ -n "$FM_WORKTREE_GUARD_STATE_KEEPWARM" ]; then
+    fm_worktree_guard_normalize "$FM_WORKTREE_GUARD_STATE_KEEPWARM" /
+    FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL=$FM_WORKTREE_GUARD_PATH
+    if fm_worktree_guard_resolve_parent "$FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL"; then
+      FM_WORKTREE_GUARD_STATE_KEEPWARM=$FM_WORKTREE_GUARD_PATH
+    else
+      FM_WORKTREE_GUARD_STATE_KEEPWARM=$FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL
+    fi
+  fi
 
   case "$tool" in
     rm|rmdir|unlink) code=worktree-escape-delete ;;
@@ -564,8 +595,8 @@ fm_worktree_guard_decide() { # <tool> <root> <cwd> [argv...]
 
 # This task's own worktree root, read from the durable record rather than from
 # an exported copy, so a relaunch that moves the task to another checkout is
-# followed instead of judged against a stale path. Also publishes the two
-# derived allowances the decision needs. Returns non-zero when the root cannot
+# followed instead of judged against a stale path. Also publishes the derived
+# allowances the decision needs. Returns non-zero when the root cannot
 # be established, which is the inert case.
 fm_worktree_guard_load() {
   local meta=${FM_WORKTREE_GUARD_META:-} line key value id state_dir root=''
@@ -575,6 +606,8 @@ fm_worktree_guard_load() {
   FM_WORKTREE_GUARD_STATE_STATUS_LEXICAL=
   FM_WORKTREE_GUARD_STATE_INBOX=
   FM_WORKTREE_GUARD_STATE_INBOX_LEXICAL=
+  FM_WORKTREE_GUARD_STATE_KEEPWARM=
+  FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL=
   FM_WORKTREE_GUARD_TASKTMP=
   FM_WORKTREE_GUARD_TASKTMP_LEXICAL=
   [ -n "$meta" ] && [ -f "$meta" ] || return 1
@@ -603,12 +636,14 @@ fm_worktree_guard_load() {
   [ "$state_dir" != "$meta" ] || state_dir=.
   fm_worktree_guard_normalize "$state_dir" "${PWD:-/}"
   state_dir=$FM_WORKTREE_GUARD_PATH
-  # Exactly this task's own sidecars: state/<id>.status, state/<id>.inbox/... .
-  # A sibling's records, and the fleet-wide records next to them, stay
-  # protected.
+  # Exactly this task's own sidecars: state/<id>.status, state/<id>.inbox/... ,
+  # and the Claude keep-warm marker state/.keepwarm-<id> with the temp siblings
+  # state/.keepwarm-<id>.* that the Stop hook creates beside it. A sibling's
+  # records, and the fleet-wide records next to them, stay protected.
   if [ -n "$id" ]; then
     FM_WORKTREE_GUARD_STATE_STATUS="$state_dir/$id.status"
     FM_WORKTREE_GUARD_STATE_INBOX="$state_dir/$id.inbox"
+    FM_WORKTREE_GUARD_STATE_KEEPWARM="$state_dir/.keepwarm-$id"
   fi
   return 0
 }

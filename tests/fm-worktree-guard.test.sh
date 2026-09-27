@@ -61,6 +61,7 @@ decision_code() { # <tool> <cwd> [argv...]
     FM_WORKTREE_GUARD_REAL_GIT="$REAL_GIT" \
     FM_WORKTREE_GUARD_STATE_STATUS="$STATE/t1.status" \
     FM_WORKTREE_GUARD_STATE_INBOX="$STATE/t1.inbox" \
+    FM_WORKTREE_GUARD_STATE_KEEPWARM="$STATE/.keepwarm-t1" \
     FM_WORKTREE_GUARD_TASKTMP="$TASKTMP" \
     fm_worktree_guard_decide "$tool" "$OWN" "$cwd" "$@")
   case "$out" in
@@ -112,6 +113,13 @@ check_decision allow "an option that looks like a path" rm "$OWN" --one-file-sys
 check_decision allow "mv inside the root" mv "$OWN" src/a src/b
 check_decision allow "mv of this task's own inbox message" mv "$OWN" "$STATE/t1.inbox/001.msg" "$STATE/t1.inbox/handled/"
 check_decision allow "rm of this task's own status file" rm "$OWN" -f "$STATE/t1.status"
+check_decision allow "mv of this task's keep-warm temp file into its marker" mv "$OWN" "$STATE/.keepwarm-t1.9aBcDe" "$STATE/.keepwarm-t1"
+check_decision allow "rm of this task's keep-warm temp file" rm "$OWN" -f "$STATE/.keepwarm-t1.9aBcDe"
+check_decision allow "rm of this task's keep-warm marker" rm "$OWN" -f "$STATE/.keepwarm-t1"
+check_decision worktree-escape-delete "rm of a sibling task's keep-warm temp file" rm "$OWN" -f "$STATE/.keepwarm-t2.9aBcDe"
+check_decision worktree-escape-delete "rm of a sibling task's keep-warm marker" rm "$OWN" -f "$STATE/.keepwarm-t2"
+check_decision worktree-escape-delete "rm of the supervisor's keep-warm marker" rm "$OWN" -f "$STATE/.keepwarm-selfwake"
+check_decision worktree-escape-move "mv of a sibling task's keep-warm temp file into this marker" mv "$OWN" "$STATE/.keepwarm-t2.9aBcDe" "$STATE/.keepwarm-t1"
 check_decision allow "rm inside this task's own temp root" rm "$OWN" -rf "$TASKTMP/scratch"
 check_decision allow "mv -S consumes a suffix, not a path" mv "$OWN" -S ../backup src/a src/b
 check_decision allow "git worktree prune --dry-run changes nothing" git "$OWN" worktree prune --dry-run
@@ -180,6 +188,29 @@ out=$(guarded -- "$OWN" rm -f "$STATE/t1.other.meta" 2>&1)
 expect_code 3 $? "a dotted sibling task record removal must exit 3"
 assert_present "$STATE/t1.other.meta" "a dotted sibling task record must survive"
 pass "a dotted sibling task id cannot collide with this task's allowances"
+
+# The Claude Stop hook arms by mktemp + mv into state/.keepwarm-<id> and then
+# cleans the temp file up; both must run under the guard, or a crew's prompt
+# cache goes cold and every Stop strands one temp file beside the marker.
+printf 'now\npid\ndeadline\n' > "$STATE/.keepwarm-t1.a1B2c3"
+guarded -- "$OWN" mv -f "$STATE/.keepwarm-t1.a1B2c3" "$STATE/.keepwarm-t1"
+expect_code 0 $? "the keep-warm arm rename must run under the guard"
+assert_present "$STATE/.keepwarm-t1" "the keep-warm marker must be created"
+assert_absent "$STATE/.keepwarm-t1.a1B2c3" "the temp file must be renamed into the marker"
+: > "$STATE/.keepwarm-t1.a1B2c3"
+guarded -- "$OWN" rm -f "$STATE/.keepwarm-t1.a1B2c3"
+expect_code 0 $? "the keep-warm temp cleanup must run under the guard"
+assert_absent "$STATE/.keepwarm-t1.a1B2c3" "the stranded temp file must be removed"
+: > "$STATE/.keepwarm-t2.a1B2c3"
+out=$(guarded -- "$OWN" rm -f "$STATE/.keepwarm-t2.a1B2c3" 2>&1)
+expect_code 3 $? "a sibling task's keep-warm temp file must stay protected"
+assert_contains "$out" "REFUSED BY FIRSTMATE [worktree-escape-delete]" "the sibling refusal must name its code"
+assert_present "$STATE/.keepwarm-t2.a1B2c3" "a sibling task's keep-warm record must survive"
+: > "$STATE/.keepwarm-selfwake"
+out=$(guarded -- "$OWN" rm -f "$STATE/.keepwarm-selfwake" 2>&1)
+expect_code 3 $? "the supervisor's keep-warm marker must stay protected"
+assert_present "$STATE/.keepwarm-selfwake" "the supervisor's keep-warm record must survive"
+pass "the keep-warm arm and cleanup run under the guard while siblings stay protected"
 
 ln -s "$SIBLING" "$OWN/outside-link"
 out=$(guarded -- "$OWN" rm -f outside-link/src/unlanded.txt 2>&1)

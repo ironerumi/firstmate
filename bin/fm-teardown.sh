@@ -1272,6 +1272,28 @@ remove_pr_poll_artifacts() {
     "$state_dir/$id.check-trust" || return 1
 }
 
+# Bounded one-time sweep of this task's leftover keep-warm temp files
+# (state/.keepwarm-<id>.XXXXXX). bin/fm-claude-keepwarm-selfwake.sh arms by
+# writing one such temp file and renaming it into state/.keepwarm-<id>; before
+# the worktree guard allowed that rename, every Stop stranded one temp file.
+# Only this task's own records match - a sibling task's and the supervisor's
+# .keepwarm records are never touched - and the sweep stops after
+# FM_TEARDOWN_KEEPWARM_TEMP_LIMIT removals so a pathological directory cannot
+# make teardown unbounded. The marker itself is removed separately by the
+# caller. A swept failure is not fatal: the leftover temp is inert.
+FM_TEARDOWN_KEEPWARM_TEMP_LIMIT=${FM_TEARDOWN_KEEPWARM_TEMP_LIMIT:-2000}
+remove_keepwarm_temp_siblings() { # <state-dir> <id>
+  local state_dir=$1 id=$2 path removed=0
+  [ -d "$state_dir" ] || return 0
+  for path in "$state_dir/.keepwarm-$id".*; do
+    [ -e "$path" ] || [ -L "$path" ] || continue
+    rm -f -- "$path" || continue
+    removed=$((removed + 1))
+    [ "$removed" -lt "$FM_TEARDOWN_KEEPWARM_TEMP_LIMIT" ] || break
+  done
+  return 0
+}
+
 # Resolve the PR number for a worktree branch via gh-axi. Echoes the number on a
 # single match and returns 0; returns non-zero on no match or any lookup failure,
 # so the caller treats it as "no PR found" (fail-safe).
@@ -2970,6 +2992,7 @@ cleanup_firstmate_home_children() {
     remove_grok_turnend_auth "$sub_state" "$child_id" || return 1
     remove_kimi_turnend_auth "$sub_state" "$child_id" || return 1
     remove_pr_poll_artifacts "$sub_state" "$child_id" || return 1
+    remove_keepwarm_temp_siblings "$sub_state" "$child_id" || return 1
     child_busy_gen=$(meta_value "$child_meta" busy_gen)
     if [ -z "$child_busy_gen" ]; then
       child_busy_gen=$(cat "$sub_state/$child_id.busy-gen" 2>/dev/null || true)
@@ -3381,6 +3404,7 @@ fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.
 [ -n "$TASK_TMP" ] && rm -rf "$TASK_TMP"
 remove_pr_poll_artifacts "$STATE" "$ID" || exit 1
+remove_keepwarm_temp_siblings "$STATE" "$ID" || exit 1
 retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 status_retire_presentation_task "$STATE" "$ID" || exit 1
 rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
