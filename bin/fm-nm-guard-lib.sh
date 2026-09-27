@@ -215,7 +215,30 @@ fm_nm_run_state() {  # <worktree> [timeout-seconds]
 # never the subcommand.
 FM_NM_GUARD_GIT_VALUE_OPTS=' -C -c --git-dir --work-tree --namespace --exec-path --config-env '
 
-# What a command would do to a live run: run, abort, push, or none.
+# The review fix-round budget: how many review fix rounds one run may advance
+# before this guard stops the loop and requires one batch decision on the
+# leftovers instead of another fix response. Single owner; the refusal message,
+# the decision, and docs/nm-validation-owner-guard.md all read this constant.
+FM_NM_REVIEW_FIX_BUDGET=3
+
+# The `--action` value of an `axi respond` invocation, or empty. Accepts both
+# `--action fix` and `--action=fix`. The review-round budget is the only reason
+# this guard looks inside `axi respond`, which it otherwise leaves entirely to
+# the real tool, so the value cannot be read off the subcommand the way run and
+# abort are.
+fm_nm_respond_action() { # [args...]
+  local arg expect=0
+  for arg in "$@"; do
+    if [ "$expect" -eq 1 ]; then printf '%s' "$arg"; return 0; fi
+    case "$arg" in
+      --action) expect=1 ;;
+      --action=*) printf '%s' "${arg#*=}"; return 0 ;;
+    esac
+  done
+  return 0
+}
+
+# What a command would do to a live run: run, abort, push, review-fix, or none.
 # `none` covers every inspection and continuation path on purpose - axi status,
 # axi logs, axi respond, attach, runs, status, doctor, and any git command that
 # is not a push.
@@ -244,6 +267,11 @@ fm_nm_guard_action() {  # <tool> [args...]
       case "$axi:$sub" in
         1:run|0:rerun) printf 'run'; return 0 ;;
         1:abort) printf 'abort'; return 0 ;;
+        1:respond)
+          case "$(fm_nm_respond_action "$@")" in
+            fix) printf 'review-fix'; return 0 ;;
+          esac
+          ;;
       esac
       printf 'none'
       ;;
@@ -284,11 +312,61 @@ fm_nm_guard_failure_reported() {  # <status-file> <run-id>
   grep -qF "$run_id" "$status_file" 2>/dev/null
 }
 
+# How many review fix rounds the live run has already advanced, or empty when
+# that cannot be read. The pipeline writes one `user-fix round starting after
+# round N` line per fix round the user advanced, so the step log is the run's own
+# durable count; the round's own `axi status` report is not needed. A run whose
+# log is readable always yields a number, including 0 before its first fix
+# round, while an unreadable log yields empty and every caller treats that as
+# permissive. Auto-fix rounds (when the repository enables them) are bounded by
+# their own configured limit and are not counted here.
+fm_nm_review_fix_rounds() { # <worktree> <run-id> [timeout-seconds]
+  local wt=$1 run_id=$2 secs=${3:-${FM_NM_STATUS_TIMEOUT:-10}} out
+  if [ -n "$run_id" ]; then
+    out=$(fm_nm_call "$wt" "$secs" axi logs --run "$run_id" --step review --full)
+  else
+    out=$(fm_nm_call "$wt" "$secs" axi logs --step review --full)
+  fi
+  [ -n "$out" ] || return 0
+  printf '%s\n' "$out" \
+    | sed -n 's/.*user-fix round starting after round \([0-9][0-9]*\).*/\1/p' \
+    | sort -n | tail -1
+}
+
 # The decision. Prints `allow`, or `deny<TAB><code><TAB><reason>`.
-fm_nm_guard_decide() {  # <action> <state> <run-id> <step> <status-file>
-  local action=$1 state=$2 run_id=$3 step=$4 status_file=${5:-} where tab
+fm_nm_guard_decide() {  # <action> <state> <run-id> <step> <status-file> [<review-fix-rounds>]
+  local action=$1 state=$2 run_id=$3 step=$4 status_file=${5:-} rounds=${6:-} where tab
   tab=$(printf '\t')
   [ "$action" != none ] || { printf 'allow'; return 0; }
+  # The review fix-round budget is a property of the whole run, not of the live
+  # state machine, so it is decided before that switch and only for the review
+  # step. Every other gate's fix response is untouched.
+  if [ "$action" = review-fix ]; then
+    if [ "${FM_NM_GUARD_REVIEW_UNLOCK:-}" = "1" ]; then
+      printf 'allow'
+      return 0
+    fi
+    if [ "$step" != review ]; then
+      printf 'allow'
+      return 0
+    fi
+    case "$rounds" in
+      ''|*[!0-9]*)
+        # The round count could not be determined: stay permissive rather than
+        # blocking a run whose loop state is unknown to this guard. The shim
+        # reports the gap on stderr.
+        printf 'allow'
+        return 0
+        ;;
+    esac
+    if [ "$rounds" -lt "$FM_NM_REVIEW_FIX_BUDGET" ]; then
+      printf 'allow'
+      return 0
+    fi
+    # shellcheck disable=SC2016  # the refusal text is literal prose; its backticks quote commands for the reader, they never expand.
+    printf 'deny%snm-review-budget%sthis run (%s) has already advanced %s review fix rounds and the budget is %s, so another fix round is where the loop stops converging rather than improving the diff. Stop and take one batch decision instead: for every leftover finding propose `fix` for a real defect inside the accepted scope of this PR, `dismiss` with a one-line reason such as noise, false positive, or out of scope, or `attach` the existing ticket that owns it, with a new issue only by exception and a stated reason. The disposition is not yours to make: append one `needs-decision:` line listing every leftover finding with your proposed disposition and stop, and firstmate decides. Product, destructive, irreversible, and security findings still escalate as usual. Firstmate can authorize one further round for this exact run with `FM_NM_GUARD_REVIEW_UNLOCK=1` in front of the command.' "$tab" "$tab" "${run_id:-unknown}" "$rounds" "$FM_NM_REVIEW_FIX_BUDGET"
+    return 0
+  fi
   where="run ${run_id:-unknown}"
   [ -z "$step" ] || where="$where at its $step step"
   # shellcheck disable=SC2016  # the refusal text is literal prose; its backticks quote commands for the reader, they never expand.

@@ -22,6 +22,7 @@ It classifies what a command would do to a live run and refuses only that; it ne
 ## What is refused, and what is always permitted
 
 The discriminator is ownership of the live run, never risk, size, or step name.
+One refusal is not about ownership: the review fix-round budget below, which bounds a loop that has no convergence rule of its own and refuses exactly one response shape on one step.
 
 Refused, and only while a run attributed to this branch is active or parked:
 
@@ -38,15 +39,21 @@ Refused after a terminally failed run, until the failure is reported:
 | --- | --- | --- |
 | `no-mistakes axi run`, `no-mistakes rerun` | `nm-unreported-failure` | A replacement run starts from the first step and buries the evidence of why the last one failed. |
 
-That last refusal is the only one that is not about a live run, and it is a reporting requirement, not a prohibition.
+That refusal is a reporting requirement, not a prohibition.
 It clears deterministically: once the task's own status file names the failed run id - which is what the brief already asks for, `blocked:` with the run id and the failing step - the replacement run is permitted.
 The refusal text names the run id, the failing step, and the exact `no-mistakes axi logs --step <step> --run <id>` command that preserves the evidence, so the failure is read before it is replaced.
+
+Refused past the review fix-round budget, on the `review` step only, whatever the run's state:
+
+| Attempt | Code | Why |
+| --- | --- | --- |
+| `no-mistakes axi respond --action fix` once `FM_NM_REVIEW_FIX_BUDGET` review fix rounds have already advanced | `nm-review-budget` | The review loop has no convergence rule of its own, and measured review time is dominated by rounds past the third. The leftovers need one batch fix/dismiss/attach decision, not another round. |
 
 Always permitted, whatever the run state:
 
 - Every inspection path: `no-mistakes axi status`, `no-mistakes axi logs`, `no-mistakes status`, `no-mistakes runs`, `no-mistakes doctor`, and any `--help`.
 - Reconnection: `no-mistakes attach`.
-- The continuation path: `no-mistakes axi respond` in every form.
+- The continuation path: `no-mistakes axi respond` in every form, except the review fix response the round budget below refuses.
 - `git push --dry-run`, which moves no remote ref.
 - Every git command that is not a push, and every command that is not `no-mistakes` or `git` at all.
 - Everything, unconditionally, once the attributed run is terminal and reported, or when no run is attributed to this branch. A genuinely new run after a conclusively terminal one is exactly the authorized recovery path, and the guard does not stand in its way.
@@ -72,11 +79,28 @@ Every uncertainty resolves toward running the command:
 
 A guard that refused work because it could not read the pipeline would cost more than the duplicate runs it prevents.
 
+## Review fix-round budget
+
+A no-mistakes review loop has no convergence rule on firstmate's side: with `auto_fix.review: 0` every round is advanced by a human answer, and prose caps in preference files and hand-edited briefs have been shown not to hold.
+`bin/fm-nm-guard-lib.sh` therefore refuses a review fix response once the run has already advanced `FM_NM_REVIEW_FIX_BUDGET` (3) review fix rounds, with the `nm-review-budget` code.
+
+- The budget applies only to `no-mistakes axi respond --action fix` classified against a `review` step; every other step's fix response, and `approve` or `skip` anywhere, is untouched.
+- The count is read from the live run the guard already reads, through `fm_nm_review_fix_rounds`: the review step log carries one `user-fix round starting after round N` line per fix round the user advanced, so the highest N is the count.
+  The step log rather than `axi status` is the count's owner because `axi status` renders a step's `round` only while that step is actively running or fixing, so a run parked at its review gate reports no round count at all.
+  Auto-fix rounds, when the repository enables them, are bounded by their own configured limit and are not counted here.
+- When the count cannot be determined - the log is unreadable, empty, or carries no such line - the guard does not refuse; it prints a one-line note on stderr and lets the command through, because blocking a run whose loop state is unknown costs more than the round it might have saved.
+- The refusal tells the worker to stop and append one `needs-decision:` line listing every leftover finding with a proposed `fix` (a real defect inside the accepted scope of the PR), `dismiss` with a one-line reason, or `attach` to the existing ticket that owns it.
+  The worker never decides the disposition itself; firstmate does, and product, destructive, irreversible, and security findings escalate as usual.
+- Firstmate can authorize one further round for this exact run by handing the worker `FM_NM_GUARD_REVIEW_UNLOCK=1` as a prefix on the command, the same visible, per-invocation pattern as `FM_NM_GUARD_ALLOW`.
+
 ## The escape
 
 `FM_NM_GUARD_ALLOW=1` in the environment of the command allows a refused command deliberately.
 Firstmate hands that prefix to a worker verbatim when it has authorized the recovery - it is the mechanism behind "firstmate decides whether to spend a replacement run".
 It is deliberately visible in the command that used it rather than hidden in session state, so an authorized exception is legible afterwards.
+
+A second, narrower escape exists for the review fix-round budget alone: `FM_NM_GUARD_REVIEW_UNLOCK=1` on `no-mistakes axi respond --action fix` permits one further review round for that run without relaxing any ownership refusal.
+Firstmate hands it over the same visible way, and only after deciding a further round is worth its measured cost.
 
 ## Reach: one mechanism, every runtime and every backend
 
@@ -106,12 +130,13 @@ The threat model is a worker's mistake under pressure, the same as every other f
 ## Exit contract
 
 - Allowed: the shim `exec`s the real tool, so the tool's own exit status, stdout, and stderr are unchanged, and the shim leaves no trace.
+  The one exception is the review fix-round budget whose count cannot be read: the shim prints one explanatory note on stderr and still execs the real tool, because reporting the unreadable count is what keeps the gap visible.
 - Refused: exit status 3, one bordered banner on stderr carrying `[<code>] <reason>`, and no side effect at all.
 - Tool missing outside the shim directory: exit status 127 with a message naming the tool.
 
 ## Automated validation
 
-`tests/fm-nm-guard.test.sh` owns the acceptance matrix: the permitted continuation and inspection commands under a live run, each refused duplicate-run, push, and abort path, the terminal-failed recovery sequence in both its unreported and reported forms, a genuinely new run after a terminal run, non-no-mistakes tasks and unrelated commands, the fail-open degradations, and the shim's exec-through behavior including argument fidelity.
+`tests/fm-nm-guard.test.sh` owns the acceptance matrix: the permitted continuation and inspection commands under a live run, each refused duplicate-run, push, and abort path, the terminal-failed recovery sequence in both its unreported and reported forms, a genuinely new run after a terminal run, the review fix-round budget in every allowed and refused shape including its unlock and its non-review and undeterminable cases, non-no-mistakes tasks and unrelated commands, the fail-open degradations, and the shim's exec-through behavior including argument fidelity.
 
 Run:
 
