@@ -1,0 +1,9 @@
+Live product check: legacy supervisor-name task record
+
+Command: bin/shims/rm -f "$STATE/.keepwarm-selfwake" with FM_WORKTREE_GUARD_META="$STATE/selfwake.meta" where selfwake.meta contains worktree=<own>, kind=ship, tasktmp=<tmp>.
+
+Observed:
+legacy_selfwake_guard_rc=0
+marker_survived=no
+
+Expected: refusal (exit 3) and marker_survived=yes. The existing-record path derives .keepwarm-selfwake from the legacy meta filename and treats the supervisor marker as the task's own allowance.
