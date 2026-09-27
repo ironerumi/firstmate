@@ -200,7 +200,7 @@ test_crew_form_arms_under_the_worktree_guard() {
   rc=$(wait_rc "$TMP_ROOT/guard-rec" 15) || fail "the guarded crew hook did not finish"
   expect_code 2 "$rc" "the guarded crew form must still arm and fire"
   assert_present "$dir/state/.keepwarm-crew-guard" "the guarded arm must create its marker"
-  for leftover in "$dir/state/.keepwarm-crew-guard".*; do
+  for leftover in "$dir/state/.keepwarm-tmp/crew-guard"/*; do
     [ -e "$leftover" ] || [ -L "$leftover" ] || continue
     fail "the guarded arm must leave no temp file behind: $leftover"
   done

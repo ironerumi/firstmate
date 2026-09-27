@@ -1272,25 +1272,22 @@ remove_pr_poll_artifacts() {
     "$state_dir/$id.check-trust" || return 1
 }
 
-# Bounded one-time sweep of this task's leftover keep-warm temp files
-# (state/.keepwarm-<id>.XXXXXX). bin/fm-claude-keepwarm-selfwake.sh arms by
-# writing one such temp file and renaming it into state/.keepwarm-<id>; before
-# the worktree guard allowed that rename, every Stop stranded one temp file.
-# Only this task's own records match - a sibling task's and the supervisor's
-# .keepwarm records are never touched - and the sweep stops after
+# Bounded one-time sweep of this task's leftover keep-warm temp files.
+# The temp namespace is task-specific, and the sweep stops after
 # FM_TEARDOWN_KEEPWARM_TEMP_LIMIT removals so a pathological directory cannot
 # make teardown unbounded. The marker itself is removed separately by the
 # caller. A swept failure is not fatal: the leftover temp is inert.
 FM_TEARDOWN_KEEPWARM_TEMP_LIMIT=${FM_TEARDOWN_KEEPWARM_TEMP_LIMIT:-2000}
 remove_keepwarm_temp_siblings() { # <state-dir> <id>
-  local state_dir=$1 id=$2 path removed=0
-  [ -d "$state_dir" ] || return 0
-  for path in "$state_dir/.keepwarm-$id".*; do
+  local state_dir=$1 id=$2 temp_dir=$state_dir/.keepwarm-tmp/$id path removed=0
+  [ -d "$temp_dir" ] || return 0
+  for path in "$temp_dir"/*; do
     [ -e "$path" ] || [ -L "$path" ] || continue
     rm -f -- "$path" || continue
     removed=$((removed + 1))
     [ "$removed" -lt "$FM_TEARDOWN_KEEPWARM_TEMP_LIMIT" ] || break
   done
+  rmdir -- "$temp_dir" 2>/dev/null || true
   return 0
 }
 

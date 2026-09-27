@@ -181,26 +181,21 @@ fm_worktree_guard_same_alias() { # <path> <other>
 # worker's own worktree. The allowed set is closed and small: the worker's own
 # worktree, this task's own state sidecars (the brief itself tells a worker to
 # `mv` its inbox messages into handled/), this task's own keep-warm marker and
-# the temp siblings beside it, this task's own temp root, and the OS temp
+# task-specific temp directory, this task's own temp root, and the OS temp
 # namespace.
-#
-# The keep-warm allowance is the exact marker plus `marker.*`, because the
-# Claude Stop hook arms by `mktemp "$MARKER.XXXXXX"` then `mv` into `$MARKER` and
-# cleans the temp up. It is a prefix on one task's own marker, never the state
-# directory, so `.keepwarm-t2.*` and `state/.keepwarm-selfwake` stay protected.
-# A sibling task id that is this id plus a dot and a suffix would share the
-# prefix - the residual is accepted because a keep-warm marker is ephemeral
-# runtime state the next Stop rewrites, so refusing a legitimate arm (and
-# stranding its temp file) is the strictly worse failure.
 fm_worktree_guard_target_allowed_by() { # <target> <root> <status> <inbox> <tasktmp> <keepwarm>
-  local target=$1 root=$2 status=$3 inbox=$4 tasktmp=$5 keepwarm=$6 entry spec
+  local target=$1 root=$2 status=$3 inbox=$4 tasktmp=$5 keepwarm=$6 entry spec keepwarm_name keepwarm_tmp
   fm_worktree_guard_within_alias "$target" "$root" && return 0
   [ -z "$status" ] || ! fm_worktree_guard_same_alias "$target" "$status" || return 0
   [ -z "$inbox" ] || ! fm_worktree_guard_within_alias "$target" "$inbox" || return 0
   [ -z "$keepwarm" ] || ! fm_worktree_guard_same_alias "$target" "$keepwarm" || return 0
   if [ -n "$keepwarm" ]; then
-    case "$target" in
-      "$keepwarm".*) return 0 ;;
+    keepwarm_name=${keepwarm##*/}
+    case "$keepwarm_name" in
+      .keepwarm-*)
+        keepwarm_tmp="${keepwarm%/*}/.keepwarm-tmp/${keepwarm_name#.keepwarm-}"
+        fm_worktree_guard_within_alias "$target" "$keepwarm_tmp" && return 0
+        ;;
     esac
   fi
   [ -z "$tasktmp" ] || ! fm_worktree_guard_within_alias "$target" "$tasktmp" || return 0

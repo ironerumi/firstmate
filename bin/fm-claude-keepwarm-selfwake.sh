@@ -104,8 +104,10 @@ case "${1:-}" in
 esac
 if [ -n "$TASK" ]; then
   MARKER="$STATE/.keepwarm-$TASK"
+  TEMP_DIR="$STATE/.keepwarm-tmp/$TASK"
 else
   MARKER="$STATE/.keepwarm-selfwake"
+  TEMP_DIR="$STATE/.keepwarm-tmp/selfwake"
 fi
 
 # shellcheck source=bin/fm-primary-scope-lib.sh
@@ -146,7 +148,8 @@ INTERVAL=$(fm_keepwarm_interval_secs)
 # --- arm: record this firing as the owner and cancel the superseded sleeper ---
 NOW=$(date +%s)
 DEADLINE=$((NOW + INTERVAL))
-TMP=$(mktemp "$MARKER.XXXXXX" 2>/dev/null) || exit 0
+mkdir -p "$TEMP_DIR" 2>/dev/null || exit 0
+TMP=$(mktemp "$TEMP_DIR/XXXXXX" 2>/dev/null) || exit 0
 if ! printf '%s\n%s\n%s\n' "$NOW" "$$" "$DEADLINE" > "$TMP" || ! mv -f "$TMP" "$MARKER"; then
   rm -f "$TMP" 2>/dev/null
   exit 0
