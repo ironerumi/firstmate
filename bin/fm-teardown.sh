@@ -1279,7 +1279,8 @@ remove_pr_poll_artifacts() {
 # caller. A swept failure is not fatal: the leftover temp is inert.
 FM_TEARDOWN_KEEPWARM_TEMP_LIMIT=${FM_TEARDOWN_KEEPWARM_TEMP_LIMIT:-2000}
 remove_keepwarm_temp_siblings() { # <state-dir> <id>
-  local state_dir=$1 id=$2 temp_dir=$state_dir/.keepwarm-tmp/$id path removed=0
+  local state_dir=$1 id=$2
+  local temp_dir=$state_dir/.keepwarm-tmp/$id path removed=0
   [ -d "$temp_dir" ] || return 0
   for path in "$temp_dir"/*; do
     [ -e "$path" ] || [ -L "$path" ] || continue
