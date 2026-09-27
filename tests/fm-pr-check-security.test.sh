@@ -387,7 +387,9 @@ EOF
     fm_pr_task_id_valid "$id" || fail "task ID validator rejected a safe lifecycle-compatible slug"
   done
   fm_task_id_creation_valid _noncanonical \
-    || fail "creation validator rejected a task ID after its reserved namespace moved"
+    || fail "creation validator rejected a safe task ID"
+  ! fm_task_id_creation_valid selfwake \
+    || fail "creation validator accepted the supervisor keep-warm namespace"
   id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   fm_pr_task_id_valid "$id" || fail "operational validator rejected a path-safe legacy task ID"
   ! fm_task_id_creation_valid "$id" || fail "creation validator accepted an overlong task ID"

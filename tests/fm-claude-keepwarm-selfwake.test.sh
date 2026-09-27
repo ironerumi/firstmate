@@ -230,7 +230,13 @@ test_bad_task_id_is_noop() {
   FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$TMP_ROOT/bad-arg-rec" --bogus
   rc=$(wait_rc "$TMP_ROOT/bad-arg-rec" 10) || fail "hook did not finish"
   expect_code 0 "$rc" "an unknown argument must be a no-op"
-  pass "self-wake: a malformed task id or unknown argument stands down"
+  printf 'supervisor-sentinel\n' > "$dir/state/.keepwarm-selfwake"
+  FM_NM_KEEPWARM_SECS=1 start_hook "$dir" "$TMP_ROOT/reserved-task-rec" --task selfwake
+  rc=$(wait_rc "$TMP_ROOT/reserved-task-rec" 10) || fail "reserved task hook did not finish"
+  expect_code 0 "$rc" "the reserved supervisor namespace must be a no-op for task hooks"
+  [ "$(cat "$dir/state/.keepwarm-selfwake")" = supervisor-sentinel ] \
+    || fail "a selfwake task must not overwrite the supervisor marker"
+  pass "self-wake: malformed and reserved task forms stand down"
 }
 
 # --- the deadline is bounded to the shared 50-minute cap ----------------------

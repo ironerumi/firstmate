@@ -97,7 +97,7 @@ TASK=''
 case "${1:-}" in
   --task)
     TASK=${2:-}
-    case "$TASK" in ''|*[!A-Za-z0-9._-]*) exit 0 ;; esac
+    case "$TASK" in ''|selfwake|*[!A-Za-z0-9._-]*) exit 0 ;; esac
     ;;
   '') ;;
   *) exit 0 ;;

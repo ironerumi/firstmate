@@ -94,7 +94,7 @@ fm_task_id_path_safe() {
   local id=${1-}
   local LC_ALL=C
   case "$id" in
-    ''|.*|*[!A-Za-z0-9._-]*) return 1 ;;
+    ''|selfwake|.*|*[!A-Za-z0-9._-]*) return 1 ;;
   esac
 }
 
