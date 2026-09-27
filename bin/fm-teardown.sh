@@ -273,7 +273,7 @@ SUB_HOME_PARENT_MARKER=".fm-secondmate-parent"
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
 # shellcheck source=bin/fm-nm-run-lib.sh
 . "$SCRIPT_DIR/fm-nm-run-lib.sh"
-if [ "$#" -lt 1 ] || ! fm_task_id_path_safe "$1"; then
+if [ "$#" -lt 1 ] || ! fm_task_id_task_valid "$1"; then
   echo "error: invalid teardown request" >&2
   exit 2
 fi
