@@ -32,6 +32,7 @@ export const FIRSTMATE_OPERATIONAL_GENERIC_KINDS = [
   "away-supervisor",
   "launch-brief",
   "branch-outcome",
+  "keep-warm",
 ] as const;
 
 const FROMFIRST_LABEL = "[fm-from-firstmate]";
