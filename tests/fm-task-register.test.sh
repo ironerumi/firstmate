@@ -1,0 +1,341 @@
+#!/usr/bin/env bash
+# Tests for bin/fm-task-register.sh's create-only ad-hoc task identity.
+# Covers private metadata creation, collision/ID refusal, guarded PR merge
+# compatibility, and non-destructive ad-hoc cleanup through fm-teardown.sh.
+set -u
+
+# shellcheck source=tests/lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+REGISTER="$ROOT/bin/fm-task-register.sh"
+PR_MERGE="$ROOT/bin/fm-pr-merge.sh"
+TEARDOWN="$ROOT/bin/fm-teardown.sh"
+TMP_ROOT=$(fm_test_tmproot fm-task-register-tests)
+
+file_mode() {
+  if stat -f '%Lp' "$1" >/dev/null 2>&1; then
+    stat -f '%Lp' "$1"
+  else
+    stat -c '%a' "$1"
+  fi
+}
+
+make_case() {
+  local name=$1 case_dir project_name
+  case_dir="$TMP_ROOT/$name"
+  project_name=$(basename "$(cd "$ROOT" && pwd -P)")
+  mkdir -p "$case_dir/home/data" "$case_dir/home/config" "$case_dir/state" "$case_dir/fakebin"
+  printf '%s\n' "- $project_name [no-mistakes +yolo] - test Firstmate home" > "$case_dir/home/data/projects.md"
+  touch "$case_dir/state/.last-watcher-beat"
+  printf '%s\n' "$case_dir"
+}
+
+run_register() {
+  local case_dir=$1; shift
+  FM_ROOT_OVERRIDE="$ROOT" \
+  FM_HOME="$case_dir/home" \
+  FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_DATA_OVERRIDE="$case_dir/home/data" \
+    "$REGISTER" "$@"
+}
+
+test_registers_private_adhoc_meta() {
+  local case_dir meta
+  case_dir=$(make_case registers)
+  meta="$case_dir/state/adhoc-one.meta"
+
+  run_register "$case_dir" adhoc-one > "$case_dir/stdout" 2> "$case_dir/stderr" \
+    || fail "registers: registration failed"
+
+  grep -qxF 'registered: state/adhoc-one.meta' "$case_dir/stdout" \
+    || fail "registers: success output did not identify the metadata"
+  [ "$(file_mode "$meta")" = 600 ] || fail "registers: metadata mode was not 0600"
+  grep -qxF 'window=' "$meta" || fail "registers: ad-hoc metadata acquired a worker endpoint"
+  grep -qxF 'worktree=' "$meta" || fail "registers: ad-hoc metadata acquired a worktree"
+  grep -qxF "project=$ROOT" "$meta" || fail "registers: project did not resolve to the Firstmate code root"
+  grep -qxF 'harness=adhoc' "$meta" || fail "registers: harness marker missing"
+  grep -qxF 'kind=adhoc' "$meta" || fail "registers: kind marker missing"
+  grep -qxF 'mode=no-mistakes' "$meta" || fail "registers: project delivery mode missing"
+  grep -qxF 'yolo=on' "$meta" || fail "registers: project autonomy posture missing"
+  grep -qxF "home=$(cd "$case_dir/home" && pwd -P)" "$meta" || fail "registers: home field missing"
+  pass "fm-task-register creates private ad-hoc metadata with the fields its consumers read"
+}
+
+test_refuses_busy_repository() {
+  local case_dir rc
+  case_dir=$(make_case busy)
+
+  run_register "$case_dir" adhoc-first >/dev/null \
+    || fail "busy: the first registration failed"
+
+  set +e
+  run_register "$case_dir" adhoc-second > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "busy: a second registration should be refused"
+  assert_grep 'an implementation task is already in flight' "$case_dir/stderr" \
+    "busy: refusal did not come from the concurrency guard"
+  assert_grep 'adhoc-first' "$case_dir/stderr" \
+    "busy: refusal did not name the implementation already in flight"
+  assert_absent "$case_dir/state/adhoc-second.meta" \
+    "busy: refused registration published metadata"
+  pass "fm-task-register refuses a second implementation for a busy repository"
+}
+
+test_refuses_existing_meta_without_mutation() {
+  local case_dir meta before after rc
+  case_dir=$(make_case existing)
+  meta="$case_dir/state/adhoc-one.meta"
+  printf '%s\n' 'sentinel=preserve' > "$meta"
+  before=$(shasum -a 256 "$meta" | awk '{print $1}')
+
+  set +e
+  run_register "$case_dir" adhoc-one > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  after=$(shasum -a 256 "$meta" | awk '{print $1}')
+
+  expect_code 1 "$rc" "existing: registration should refuse an existing identity"
+  [ "$before" = "$after" ] || fail "existing: registration changed existing metadata"
+  assert_grep 'task metadata already exists' "$case_dir/stderr" \
+    "existing: refusal did not explain the collision"
+  pass "fm-task-register never overwrites an existing task identity"
+}
+
+test_refuses_invalid_id() {
+  local case_dir rc
+  case_dir=$(make_case invalid)
+
+  set +e
+  run_register "$case_dir" '../escape' > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 2 "$rc" "invalid: registration should reject path-like IDs"
+  assert_grep 'invalid task id' "$case_dir/stderr" "invalid: refusal did not explain the ID error"
+  assert_absent "$case_dir/escape.meta" "invalid: registration escaped the state directory"
+  pass "fm-task-register rejects unsafe task IDs before writing state"
+}
+
+test_refuses_drifted_or_forged_adhoc_record_at_teardown() {
+  # The ad-hoc metadata-only authorization admits only exactly what the
+  # register script writes. A drifted or forged kind=adhoc record that gains an
+  # endpoint, worktree, or temp root must be refused at teardown with its
+  # durable records preserved, so it can never skip endpoint validation and
+  # still reach the branch deletion and worktree return teardown performs.
+  local case_dir meta rc before after
+  case_dir=$(make_case forged)
+  meta="$case_dir/state/adhoc-forged.meta"
+  add_merge_mocks "$case_dir"
+  cat > "$meta" <<EOF
+window=
+worktree=
+project=$ROOT
+harness=adhoc
+kind=adhoc
+mode=no-mistakes
+yolo=on
+tasktmp=
+model=default
+effort=default
+home=$(cd "$case_dir/home" && pwd -P)
+EOF
+  printf '%s\n' 'window=fulcrum:live-crew' >> "$meta"
+  before=$(shasum -a 256 "$meta" | awk '{print $1}')
+
+  set +e
+  FM_ROOT_OVERRIDE="$ROOT" \
+  FM_HOME="$case_dir/home" \
+  FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_DATA_OVERRIDE="$case_dir/home/data" \
+  FM_CONFIG_OVERRIDE="$case_dir/home/config" \
+  PATH="$case_dir/fakebin:$PATH" \
+    "$TEARDOWN" adhoc-forged > "$case_dir/teardown.stdout" 2> "$case_dir/teardown.stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "forged: teardown must refuse a drifted ad-hoc record"
+  assert_grep 'non-empty window' "$case_dir/teardown.stderr" \
+    "forged: refusal did not name the drifted endpoint key"
+  after=$(shasum -a 256 "$meta" | awk '{print $1}')
+  [ "$before" = "$after" ] || fail "forged: a refused teardown changed the durable record"
+  pass "a drifted ad-hoc record is refused at teardown with state preserved"
+}
+
+# A home whose backlog gate APPLIES: .tasks.toml plus a markdown backlog row for
+# the task, so fm-teardown.sh reaches its incarnation gate (a record that
+# predates spawn_gen requires --legacy-record) and therefore the recorded-endpoint
+# read that used to be handed the harness marker 'adhoc' as if it were a runtime
+# backend. The ad-hoc shape has no endpoint by design, so that gate must be
+# satisfied without a backend lookup.
+seed_adhoc_backlog() {  # <case-dir> <task-id>
+  local case_dir=$1 id=$2
+  local home="$case_dir/home"
+  cp "$ROOT/.tasks.toml" "$home/.tasks.toml"
+  printf '%s\n' '# Backlog' '' '## In flight' '' '## Queued' '' '## Done' \
+    > "$home/data/backlog.md"
+  tasks-axi add "$id" "ad-hoc register fixture task" --kind ship \
+    --file "$home/data/backlog.md" >/dev/null
+  tasks-axi start "$id" --file "$home/data/backlog.md" >/dev/null
+}
+
+run_case_teardown() {  # <case-dir> <task-id> [extra args...]
+  local case_dir=$1 id=$2
+  shift 2
+  FM_ROOT_OVERRIDE="$ROOT" \
+  FM_HOME="$case_dir/home" \
+  FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_DATA_OVERRIDE="$case_dir/home/data" \
+  FM_CONFIG_OVERRIDE="$case_dir/home/config" \
+  PATH="$case_dir/fakebin:$PATH" \
+    "$TEARDOWN" "$id" "$@"
+}
+
+test_legacy_adhoc_record_tears_down_with_a_real_backlog() {
+  local case_dir meta rc row_state
+  if ! command -v tasks-axi >/dev/null 2>&1; then
+    pass "SKIP (tasks-axi not found): a legacy ad-hoc record tears down with a real backlog"
+    return
+  fi
+  case_dir=$(make_case adhoc-legacy-backlog)
+  meta="$case_dir/state/adhoc-legacy.meta"
+  add_merge_mocks "$case_dir"
+  seed_adhoc_backlog "$case_dir" adhoc-legacy
+
+  run_register "$case_dir" adhoc-legacy >/dev/null \
+    || fail "legacy-backlog: registration failed"
+  grep -qx 'harness=adhoc' "$meta" || fail "legacy-backlog: fixture is not an ad-hoc record"
+  assert_no_grep 'spawn_gen=' "$meta" \
+    "legacy-backlog: fixture unexpectedly carries an incarnation"
+
+  # Every ad-hoc registration predates spawn_gen, so teardown needs
+  # --legacy-record; the endpoint gate must then read the record's ad-hoc shape,
+  # never ask a backend about the marker 'adhoc'.
+  set +e
+  run_case_teardown "$case_dir" adhoc-legacy --legacy-record \
+    > "$case_dir/teardown.stdout" 2> "$case_dir/teardown.stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "legacy-backlog: an ad-hoc record should tear down"
+  assert_no_grep "unknown backend 'adhoc'" "$case_dir/teardown.stderr" \
+    "legacy-backlog: the endpoint gate asked a backend about the ad-hoc marker"
+  assert_grep 'teardown adhoc-legacy complete (ad-hoc primary-session ship)' "$case_dir/teardown.stdout" \
+    "legacy-backlog: cleanup did not report the ad-hoc completion"
+  assert_absent "$meta" "legacy-backlog: cleanup retained the ad-hoc metadata"
+  assert_absent "$case_dir/state/adhoc-legacy.check-trust" \
+    "legacy-backlog: cleanup retained a trust binding it never owned"
+  row_state=$(tasks-axi show adhoc-legacy --file "$case_dir/home/data/backlog.md" 2>/dev/null \
+    | sed -n 's/^  state: *//p' | head -1)
+  [ "$row_state" = "done" ] \
+    || fail "legacy-backlog: the backlog row was left '$row_state', not done"
+  pass "a legacy ad-hoc record tears down with a real backlog, without a backend lookup"
+}
+
+add_merge_mocks() {
+  local case_dir=$1
+  # fm-pr-merge.sh reads the pull request live through gh and requires it open,
+  # mergeable, and green at the verified head before it merges, then reads the
+  # outcome back; the mock answers those reads, records every invocation, and
+  # keeps a gh-axi fallback view so the merge can be proven whichever reader the
+  # wrapper reaches for.
+  cat > "$case_dir/fakebin/gh-axi" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FM_TEST_GH_AXI_LOG"
+case "${1:-} ${2:-}" in
+  "pr view") printf 'pull_request:\n  number: %s\n  state: merged\n' "${3:-}" ;;
+esac
+exit 0
+SH
+  cat > "$case_dir/fakebin/gh" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FM_TEST_GH_LOG"
+head_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+case "${1:-} ${2:-}" in
+  "pr view")
+    case " $* " in
+      *statusCheckRollup*)
+        printf '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","headRefOid":"%s","baseRefName":"main","statusCheckRollup":[{"__typename":"CheckRun","name":"ci","status":"COMPLETED","conclusion":"SUCCESS"}]}\n' "$head_sha"
+        ;;
+      *headRefOid*)
+        printf '%s\n' "$head_sha"
+        ;;
+      *isDraft*)
+        printf '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","headRefOid":"%s","baseRefName":"main","statusCheckRollup":[]}\n' "$head_sha"
+        ;;
+      *)
+        printf '{"state":"OPEN","isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","headRefOid":"%s","baseRefName":"main","statusCheckRollup":[]}\n' "$head_sha"
+        ;;
+    esac
+    ;;
+  "pr merge")
+    printf 'merged:\n  number: %s\n  status: ok\n' "${3:-}"
+    ;;
+  "api graphql")
+    printf 'state=MERGED\nmerged=true\nqueued=false\nbase=main\n'
+    ;;
+  api\ *)
+    case " $* " in
+      *" repos/"*"/rules/branches/"*) printf '[]\n' ;;
+      *" repos/"*"/branches/"*) printf '{"protected":false,"protection":{"enabled":false,"required_status_checks":{"enforcement_level":"off","contexts":[],"checks":[]}}}\n' ;;
+      *" repos/"*"/commits/"*"/check-runs"*) printf '{"check_runs":[]}\n' ;;
+      *) printf '{}\n' ;;
+    esac
+    ;;
+esac
+exit 0
+SH
+  chmod +x "$case_dir/fakebin/gh-axi" "$case_dir/fakebin/gh"
+}
+
+test_registered_identity_merges_and_cleans_up() {
+  local case_dir meta
+  case_dir=$(make_case merge-and-cleanup)
+  meta="$case_dir/state/adhoc-merge.meta"
+  add_merge_mocks "$case_dir"
+  : > "$case_dir/gh.log"
+  : > "$case_dir/gh-axi.log"
+
+  run_register "$case_dir" adhoc-merge >/dev/null \
+    || fail "merge-and-cleanup: registration failed"
+  FM_ROOT_OVERRIDE="$ROOT" \
+  FM_HOME="$case_dir/home" \
+  FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_DATA_OVERRIDE="$case_dir/home/data" \
+  FM_TEST_GH_LOG="$case_dir/gh.log" \
+  FM_TEST_GH_AXI_LOG="$case_dir/gh-axi.log" \
+  PATH="$case_dir/fakebin:$PATH" \
+    "$PR_MERGE" adhoc-merge https://github.com/example/repo/pull/41 \
+    > "$case_dir/merge.stdout" 2> "$case_dir/merge.stderr" \
+    || fail "merge-and-cleanup: guarded merge rejected registered metadata: $(cat "$case_dir/merge.stderr")"
+
+  grep -qxF 'pr=https://github.com/example/repo/pull/41' "$meta" \
+    || fail "merge-and-cleanup: fm-pr-check did not record the PR"
+  grep -qxF 'pr merge 41 --repo example/repo --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --squash' "$case_dir/gh.log" \
+    || fail "merge-and-cleanup: fm-pr-merge did not invoke the guarded merge CLI"
+
+  FM_ROOT_OVERRIDE="$ROOT" \
+  FM_HOME="$case_dir/home" \
+  FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_DATA_OVERRIDE="$case_dir/home/data" \
+  FM_CONFIG_OVERRIDE="$case_dir/home/config" \
+  PATH="$case_dir/fakebin:$PATH" \
+    "$TEARDOWN" adhoc-merge > "$case_dir/teardown.stdout" 2> "$case_dir/teardown.stderr" \
+    || fail "merge-and-cleanup: ad-hoc cleanup failed"
+
+  assert_absent "$meta" "merge-and-cleanup: cleanup retained ad-hoc metadata"
+  assert_grep 'teardown adhoc-merge complete' "$case_dir/teardown.stdout" \
+    "merge-and-cleanup: cleanup did not complete"
+  assert_no_grep 'Backlog:' "$case_dir/teardown.stdout" \
+    "merge-and-cleanup: ad-hoc cleanup emitted a worker backlog reminder"
+  pass "a registered ad-hoc identity supports guarded merge recording and non-destructive cleanup"
+}
+
+test_registers_private_adhoc_meta
+test_refuses_busy_repository
+test_refuses_existing_meta_without_mutation
+test_refuses_invalid_id
+test_refuses_drifted_or_forged_adhoc_record_at_teardown
+test_legacy_adhoc_record_tears_down_with_a_real_backlog
+test_registered_identity_merges_and_cleans_up
