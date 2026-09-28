@@ -84,5 +84,6 @@ fm_adhoc_teardown_select_endpoint() {  # <meta-file> <task-id>
   validate_adhoc_task_record "$1" "${2:-}" || return 1
   # shellcheck disable=SC2034  # Caller globals, read by bin/fm-teardown.sh.
   BACKEND=adhoc
+  # shellcheck disable=SC2034  # Caller globals, read by bin/fm-teardown.sh.
   T=
 }
