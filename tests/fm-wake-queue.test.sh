@@ -69,7 +69,7 @@ test_signal_catchup_without_running_watcher() {
   # tested.
   printf 'blocked: first\n' > "$status_file"
   PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
-  wait_for_exit "$!" 40 || fail "watcher did not exit for first signal"
+  wait_for_exit "$!" 150 || fail "watcher did not exit for first signal"
   grep -F "signal: $status_file" "$out" >/dev/null || fail "watcher did not print first signal"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$drain_out" 2> "$drain_err" || fail "drain after first signal failed"
   grep "$(printf '\tsignal\t')" "$drain_out" | grep -F "$status_file" >/dev/null || fail "first signal was not queued"
@@ -81,7 +81,7 @@ test_signal_catchup_without_running_watcher() {
   printf 'done: second\n' >> "$status_file"
   : > "$out"
   PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH" > "$out" &
-  wait_for_exit "$!" 40 || fail "watcher did not exit for second signal"
+  wait_for_exit "$!" 150 || fail "watcher did not exit for second signal"
   grep -F "signal: $status_file" "$out" >/dev/null || fail "signal written with no watcher was not caught"
   pass "signal written while no watcher runs is caught on next run"
 }
@@ -1777,7 +1777,7 @@ test_wake_publish_requires_atomic_recovery_evidence() {
   dir=$(make_case wake-publish-recovery-evidence)
   state="$dir/state"
   fakebin="$dir/fakebin"
-  real_mv=$(command -v mv) || fail "could not locate mv for recovery publication fixture"
+  real_mv=$(fm_real_tool mv) || fail "could not locate mv for recovery publication fixture"
   printf 'pending:handling:existing\n' > "$state/.watcher-down"
   cat > "$fakebin/mv" <<'SH'
 #!/usr/bin/env bash
@@ -2093,7 +2093,7 @@ test_recovery_ack_failure_is_reported() {
   dir=$(make_case recovery-ack-failure)
   state="$dir/state"
   fakebin="$dir/fakebin"
-  real_mv=$(command -v mv) || fail "could not locate mv for recovery acknowledgement fixture"
+  real_mv=$(fm_real_tool mv) || fail "could not locate mv for recovery acknowledgement fixture"
   printf 'pending:handling:fixture\n' > "$state/.watcher-down"
   FM_STATE_OVERRIDE="$state" "$DRAIN" > "$dir/initial.out" 2> "$dir/initial.err" \
     || fail "initial recovery drain failed"

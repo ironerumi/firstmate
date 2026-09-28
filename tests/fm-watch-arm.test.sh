@@ -417,7 +417,7 @@ test_slow_rearm_recovery_is_still_surfaced() {
   # stay at full speed and only the work after confirmation is slowed.
   rm -f "$state/.last-watcher-beat"
   for tool in mktemp readlink; do
-    real=$(command -v "$tool") || fail "no $tool to delay"
+    real=$(fm_real_tool "$tool") || fail "no $tool to delay"
     cat > "$fakebin/$tool" <<SH
 #!/bin/sh
 [ -e "$state/.last-watcher-beat" ] && sleep 0.6

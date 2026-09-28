@@ -20,7 +20,7 @@ TMP_ROOT=$(fm_test_tmproot fm-pr-check-security)
 fm_git_identity fmtest fmtest@example.invalid
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 REAL_CP=$(command -v cp)
-REAL_MV=$(command -v mv)
+REAL_MV=$(fm_real_tool mv)
 REAL_STAT=$(command -v stat)
 REAL_CHMOD=$(command -v chmod)
 # The merge path reads a merge request's JSON with the real jq, and BASE_PATH is
@@ -532,7 +532,11 @@ EOF
     fm_pr_task_id_valid "$id" || fail "task ID validator rejected a safe lifecycle-compatible slug"
   done
   fm_task_id_creation_valid _noncanonical \
-    || fail "creation validator rejected a task ID after its reserved namespace moved"
+    || fail "creation validator rejected a safe task ID"
+  fm_task_id_path_safe selfwake \
+    || fail "path validator rejected a process-event source namespace"
+  ! fm_pr_task_id_valid selfwake \
+    || fail "task validator accepted the supervisor keep-warm namespace"
   id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   fm_pr_task_id_valid "$id" || fail "operational validator rejected a path-safe legacy task ID"
   ! fm_task_id_creation_valid "$id" || fail "creation validator accepted an overlong task ID"

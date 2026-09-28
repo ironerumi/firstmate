@@ -18,7 +18,11 @@ command -v treehouse >/dev/null 2>&1 || { echo "skip: treehouse not found"; exit
 [ -x "$HERDR_LAB_HELPER" ] || { echo "skip: Herdr lab helper not executable at $HERDR_LAB_HELPER"; exit 0; }
 
 REAL_HERDR=$(command -v herdr)
-REAL_TREEHOUSE=$(command -v treehouse)
+# treehouse is one of the tools firstmate's guard shims front, and a worker's
+# pane puts that shim directory ahead of the real tool, so resolve past it: the
+# fake below execs REAL_TREEHOUSE, and a captured shim would send that straight
+# back into the fake. This suite loads no lib.sh, so it cannot use fm_real_tool.
+REAL_TREEHOUSE=$(PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/bin/shims$' | paste -sd: -) command -v treehouse)
 HERDR_ORIGINAL_PATH=$PATH
 TMP_ROOT=$(mktemp -d "$(cd "${TMPDIR:-/tmp}" && pwd -P)/fm-herdr-presentation.XXXXXX")
 FAKEBIN="$TMP_ROOT/fakebin"
@@ -408,6 +412,12 @@ EOF
 
 spawn_task() {  # <id> <home> <project>
   local id=$1 home=$2 project=$3
+  # One implementation task per repository at a time (bin/fm-impl-concurrency-guard.sh),
+  # so each task gets its own repository instead of sharing one project with the
+  # other tasks in the same home. The per-task path keeps every retry targeting
+  # the same repository.
+  project="$project.$id"
+  [ -d "$project" ] || make_project "$project"
   FM_GATE_REFUSE_BYPASS=1 FM_SPAWN_NO_GUARD=1 FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$ROOT/bin/fm-spawn.sh" "$id" "$project" "sh -c 'while :; do sleep 60; done'" --mode no-mistakes --yolo off --backend herdr
 }

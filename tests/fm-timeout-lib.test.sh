@@ -19,7 +19,7 @@ TMP_ROOT=$(fm_test_tmproot fm-timeout-lib)
 PERL_ONLY="$TMP_ROOT/perl-only-bin"
 mkdir -p "$PERL_ONLY"
 for tool in perl bash sleep; do
-  ln -s "$(command -v "$tool")" "$PERL_ONLY/$tool"
+  ln -s "$(fm_real_tool "$tool")" "$PERL_ONLY/$tool"
 done
 
 # exec_timed <path> <seconds> <grace> <command...>: source the library under
@@ -237,7 +237,7 @@ test_perl_is_preferred_over_timeout() {
   dir="$TMP_ROOT/prefer"
   mkdir -p "$dir/bin"
   for tool in perl bash; do
-    ln -s "$(command -v "$tool")" "$dir/bin/$tool"
+    ln -s "$(fm_real_tool "$tool")" "$dir/bin/$tool"
   done
   printf '#!/bin/sh\necho timeout-used > "%s"\nexit 99\n' "$dir/timeout-used" > "$dir/bin/timeout"
   chmod +x "$dir/bin/timeout"
@@ -288,7 +288,7 @@ test_gnu_timeout_kills_a_term_ignoring_command_after_the_grace() {
   mkdir -p "$fb"
   # No perl here, so the call falls back to GNU timeout.
   for tool in timeout bash sleep; do
-    ln -s "$(command -v "$tool")" "$fb/$tool"
+    ln -s "$(fm_real_tool "$tool")" "$fb/$tool"
   done
   started=$SECONDS
   exec_timed "$fb" 1 2 bash -c 'trap "" TERM; exec sleep 300' || rc=$?

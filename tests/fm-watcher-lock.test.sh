@@ -323,7 +323,9 @@ test_lock_single_winner_under_concurrency() {
         printf "%s\n" "$$" >> "$3"
         # Stay alive so the held lock names a live pid for the whole window;
         # otherwise a late contender could legitimately reclaim a dead-pid lock.
-        sleep 1
+        # The hold must outlast the time this loop takes to spawn its
+        # contenders, or the earliest winner exits before the last starts.
+        sleep 5
       fi
     ' _ "$LIB" "$lockdir" "$marker" &
     pids="$pids $!"

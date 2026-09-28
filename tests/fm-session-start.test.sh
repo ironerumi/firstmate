@@ -981,7 +981,10 @@ SH
   i=1
   while [ "$i" -le 40 ]; do
     (
-      harness_pid=$(sh -c 'printf "%s\n" "$PPID"')
+      # BASHPID arrived in bash 4.0; under stock macOS /bin/bash 3.2 it is empty
+      # and $$ is identical in every subshell, so all 40 contenders would present
+      # the same identity to the fake ps and none could be recognised as owner.
+      harness_pid=${BASHPID:-$(sh -c 'echo $PPID')}
       : > "$home/state/harness-$harness_pid"
       : > "$ready/$i"
       while [ "$(find "$ready" -type f | wc -l | tr -d ' ')" -lt 40 ]; do

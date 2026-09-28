@@ -107,7 +107,7 @@ node_free_path() {  # <case-dir> -> a bin dir holding the script's own tools but
   local dir=$1/nonode-bin tool
   mkdir -p "$dir"
   for tool in bash env git mkdir; do
-    ln -sf "$(command -v "$tool")" "$dir/$tool"
+    ln -sf "$(fm_real_tool "$tool")" "$dir/$tool"
   done
   printf '%s\n' "$dir"
 }

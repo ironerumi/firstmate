@@ -228,7 +228,7 @@ SH
 run_sync_guarded() {
   local home=$1 fakebin=$2 outf=$3 errf=$4 realgit
   shift 4
-  realgit=$(command -v git)
+  realgit=$(fm_real_tool git)
   PATH="$fakebin:$PATH" REAL_GIT_FOR_TEST="$realgit" \
   FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$ROOT/bin/fm-fleet-sync.sh" "$@" >"$outf" 2>"$errf"

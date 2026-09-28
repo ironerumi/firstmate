@@ -825,7 +825,7 @@ test_local_secondmate_seed_publishes_parent_before_identity() {
   entered="$TMP_ROOT/seed-publication-entered"
   release="$TMP_ROOT/seed-publication-release"
   manifest_out="$TMP_ROOT/seed-publication.out"
-  real_mv=$(command -v mv)
+  real_mv=$(fm_real_tool mv)
   cat > "$fakebin/mv" <<'SH'
 #!/usr/bin/env bash
 destination=${!#}
@@ -1701,11 +1701,11 @@ test_rechain_claims_delivered_source_once() {
   FAKE_CURL_LOG="$log" run_pf "$home" consume >/dev/null || fail "consume failed"
   FAKE_CURL_LOG="$log" run_pf "$home" deliver public-final-claim-a >/dev/null || fail "deliver failed"
 
-  FMX_NOW_OVERRIDE=1787539200 run_pf "$home" rechain public-final-claim-b \
+  FMX_NOW_OVERRIDE="$PF_TEST_NOW" run_pf "$home" rechain public-final-claim-b \
     --from public-final-claim-a --work-home main --work-id ship-claim-b \
     --expected pr-merged > "$home/rechain-b.out" 2>&1 &
   pid_b=$!
-  FMX_NOW_OVERRIDE=1787539200 run_pf "$home" rechain public-final-claim-c \
+  FMX_NOW_OVERRIDE="$PF_TEST_NOW" run_pf "$home" rechain public-final-claim-c \
     --from public-final-claim-a --work-home main --work-id ship-claim-c \
     --expected pr-merged > "$home/rechain-c.out" 2>&1 &
   pid_c=$!

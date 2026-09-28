@@ -243,7 +243,7 @@ test_delivered_ledger_done_skips_git_gate() {
   local real_git
   make_world gate-once; bind_secondmate local
   write_child "$MATE" child 'done: PR https://example.test/owner/repo/pull/2 checks green'
-  real_git=$(command -v git)
+  real_git=$(fm_real_tool git)
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> %q\nexec %q "$@"\n' \
     "$WORLD/git.log" "$real_git" > "$WORLD/fakebin/git"
   chmod +x "$WORLD/fakebin/git"

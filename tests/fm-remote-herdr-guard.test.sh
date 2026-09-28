@@ -33,7 +33,7 @@ SESSION=fm-remote
 TOOLS="$TMP_ROOT/tools"
 mkdir -p "$TOOLS"
 for tool in ps awk sed grep tr dirname basename sleep cat cp rm env bash sh id head; do
-  real=$(command -v "$tool") || fail "test host lacks $tool"
+  real=$(fm_real_tool "$tool") || fail "test host lacks $tool"
   ln -sf "$real" "$TOOLS/$tool"
 done
 ln -sf "$JQ" "$TOOLS/jq"

@@ -160,6 +160,10 @@ RUN_STARTED_MS=$(now_ms)
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
+if [ -f "$ROOT/bin/fm-test-run-fork.sh" ]; then
+  # shellcheck source=bin/fm-test-run-fork.sh
+  . "$ROOT/bin/fm-test-run-fork.sh"
+fi
 
 MODE=
 LIST_ONLY=0
@@ -276,6 +280,10 @@ cpu_count() {
 # is what lets `standalone` carry a concurrent proof while a brand-new test
 # lands in `unclassified` and stays serial until someone proves it.
 family_for_basename() {
+  if declare -F fm_fork_family_for_basename >/dev/null 2>&1 \
+    && fm_fork_family_for_basename "$1"; then
+    return 0
+  fi
   case "$1" in
     fm-arm-pretool-check.test.sh|fm-ask-user-authority.test.sh|\
     fm-bearings-board.test.sh|\
@@ -858,6 +866,9 @@ tests/fm-watch-recovery-loop.test.sh 58946
 tests/fm-watch-triage.test.sh 697969
 tests/fm-watcher-lock.test.sh 108940
 EOF
+  if declare -F fm_fork_serial_weight_hints >/dev/null 2>&1; then
+    fm_fork_serial_weight_hints
+  fi
 }
 
 # The portable-serial scripts with no measured hint, one per line. These fall
