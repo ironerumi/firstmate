@@ -224,6 +224,9 @@
 #   Before a secondmate launch, the home is fast-forwarded to the primary's
 #   default-branch commit when safe: directly for a local home, or through the
 #   configured host for a remote home. Skipped syncs warn and launch unchanged.
+#   A fresh ship spawn in any mode is refused while this home already has an
+#   implementation task in flight for the same repository
+#   (bin/fm-impl-concurrency-guard.sh owns that rule).
 #   Ship/scout spawns refuse to launch unless the resolved task path is a real
 #   git worktree root distinct from both the spawning project and its repository's
 #   primary checkout, including when the spawning project is a linked worktree.
@@ -240,6 +243,13 @@
 #   behavior suite from the repository primary checkout while that marker is
 #   set (its header owns the refusal). A secondmate runs in its own home and is
 #   not marked.
+#   That same ship or scout pane also receives `export FM_NM_KEEPWARM_SECS=...`
+#   when this home has a readable config/keepwarm-secs, so the crew's injected
+#   Claude keep-warm hook sleeps toward the spawning home's cadence straight
+#   from the crew's own environment instead of resolving that home's config dir
+#   from a project worktree (bin/fm-keepwarm-cadence-lib.sh owns the resolution
+#   and the precedence). Each launch first clears an unchanged value that an
+#   earlier launch injected, so removing the file restores the default.
 #   Only after this isolation check, every fresh ship or scout requires a clean
 #   task worktree. When an origin configuration is detected, spawn fetches it,
 #   resolves the current remote default branch, and resets to its tip. When none
@@ -292,10 +302,11 @@
 #   TMUX TMUX_PANE HERDR_ENV HERDR_SESSION HERDR_SOCKET_PATH HERDR_PANE_ID
 #   CMUX_WORKSPACE_ID CMUX_SURFACE_ID CMUX_TAB_ID CMUX_PANEL_ID CMUX_SOCKET_PATH
 #   ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID FM_ZELLIJ_SESSION, plus the task
-#   marker FM_TASK_ID that ship and scout panes receive above, plus the
-#   compact-adviser kill switch COMPACT_ADVISER_DISABLE, which the floor also
-#   pins to 1 with a literal assignment so it survives the cleared environment
-#   even on a host that never had it set.
+#   marker FM_TASK_ID and the keep-warm cadence FM_NM_KEEPWARM_SECS that ship
+#   and scout panes receive above, plus the compact-adviser kill switch
+#   COMPACT_ADVISER_DISABLE, which the floor also pins to 1 with a literal
+#   assignment so it survives the cleared environment even on a host that
+#   never had it set.
 #   An enabled task trace also retains TRACEPARENT. Explicit Firstmate launch
 #   assignments still apply inside the filtered environment. Raw commands must
 #   be POSIX sh compatible under this opt-in; the absent-file path is unchanged.
@@ -609,6 +620,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
+# shellcheck source=bin/fm-keepwarm-cadence-lib.sh
+. "$SCRIPT_DIR/fm-keepwarm-cadence-lib.sh"
 # shellcheck source=bin/fm-cursor-lib.sh
 . "$SCRIPT_DIR/fm-cursor-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
@@ -3090,6 +3103,9 @@ if [ "$KIND" = ship ]; then
   fi
 fi
 
+# Pre-flight guard for the one-implementation-task-per-repository cap; that script owns the rule.
+if [ "$KIND" = ship ] && [ "$RELAUNCH" -eq 0 ]; then "$SCRIPT_DIR/fm-impl-concurrency-guard.sh" "$STATE" "$PROJ_ABS" "$ID"; fi
+
 BRIEF_DIR_REAL=$(cd "$(dirname "$BRIEF")" && pwd -P)
 BRIEF_REAL="$BRIEF_DIR_REAL/$(basename "$BRIEF")"
 
@@ -4375,8 +4391,19 @@ if [ "$KIND" != secondmate ]; then
     j_stop=$(json_escape "touch $(shell_quote "$TURNEND"); $busy_cmd_prefix idle $busy_suffix --event stop 2>/dev/null || true")
     j_stopfail=$(json_escape "$busy_cmd_prefix idle $busy_suffix --event stop-failure 2>/dev/null || true")
     j_sessionend=$(json_escape "$busy_cmd_prefix idle $busy_suffix --event session-end 2>/dev/null || true")
+    # Keep-warm self-wake (bin/fm-claude-keepwarm-selfwake.sh): the same
+    # asyncRewake Stop hook the tracked primary settings register, injected
+    # here per task so an idle Claude crew or scout inside any project repo
+    # warms its own prompt cache without that repo loading firstmate's
+    # settings. FM_STATE_OVERRIDE pins the marker to this home's state dir,
+    # --task keys it to this crew, and teardown removes it with the task.
+    j_keepwarm=$(json_escape "FM_STATE_OVERRIDE=$(shell_quote "$STATE_REAL") exec $(shell_quote "$FM_ROOT/bin/fm-claude-keepwarm-selfwake.sh") --task $(shell_quote "$ID")")
+    # autoCompactEnabled/autoCompactWindow: a crew in a project worktree would
+    # otherwise fall to the captain's own user-scope autoCompactEnabled:false
+    # and idle instead of compacting when it fills its context; 500000 matches
+    # the main home's own worktree window (its untracked .claude/settings.local.json).
     cat >"$WT/.claude/settings.local.json" <<EOF
-{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
+{"autoCompactEnabled":true,"autoCompactWindow":500000,"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"},{"type":"command","command":"$j_keepwarm","asyncRewake":true,"timeout":3600}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
 EOF
     exclude_path '.claude/settings.local.json'
     ;;
@@ -5108,6 +5135,16 @@ fi
 # syntax of its own.
 if [ "$KIND" = ship ] || [ "$KIND" = scout ]; then
   spawn_send_text_line "$T" "export FM_TASK_ID=$ID"
+  # Hand the crew the spawning home's keep-warm cadence through its own
+  # environment, so the injected Claude keep-warm hook never has to resolve
+  # this home's config dir from a project worktree. Remove only an unchanged
+  # value marked by an earlier launch before resolving this launch's setting.
+  # shellcheck disable=SC2016  # Pane variables deliberately expand in the crewmate shell.
+  spawn_send_text_line "$T" 'if [ "${FM_FIRSTMATE_KEEPWARM_SECS_INJECTED+x}" = x ] && [ "${FM_NM_KEEPWARM_SECS-}" = "$FM_FIRSTMATE_KEEPWARM_SECS_INJECTED" ]; then unset FM_NM_KEEPWARM_SECS; fi; unset FM_FIRSTMATE_KEEPWARM_SECS_INJECTED'
+  if fm_keepwarm_config_present; then
+    KEEPWARM_SECS=$(fm_keepwarm_interval_secs)
+    spawn_send_text_line "$T" "if [ -z \"\${FM_NM_KEEPWARM_SECS:-}\" ]; then export FM_NM_KEEPWARM_SECS=$KEEPWARM_SECS FM_FIRSTMATE_KEEPWARM_SECS_INJECTED=$KEEPWARM_SECS; fi"
+  fi
 fi
 # Send through the exact channel that already ships GOTMPDIR, so every backend
 # and harness - ship, scout, and secondmate - gets it before launch. Skipped
@@ -5135,7 +5172,7 @@ if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
     TMPDIR TMP TEMP GOTMPDIR TMUX TMUX_PANE HERDR_ENV HERDR_SESSION HERDR_SOCKET_PATH \
     HERDR_PANE_ID CMUX_WORKSPACE_ID CMUX_SURFACE_ID CMUX_TAB_ID CMUX_PANEL_ID \
     CMUX_SOCKET_PATH ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID FM_ZELLIJ_SESSION \
-    FM_TASK_ID COMPACT_ADVISER_DISABLE LAVISH_AXI_HOST \
+    FM_TASK_ID FM_NM_KEEPWARM_SECS COMPACT_ADVISER_DISABLE LAVISH_AXI_HOST \
     $LAUNCH_ENV_NAMES; do
     # Only validated names enter shell syntax. Values expand once, quoted, in
     # the pane shell and never become source text or spawn-process snapshots.
@@ -5206,6 +5243,30 @@ if ! (umask 077 && printf '%s\n' "$LAUNCH" >"$LAUNCH_STAGE" &&
   echo "error: could not stage the launch command at $LAUNCH_FILE" >&2
   exit 1
 fi
+sleep 0.3
+# Put firstmate's tool shims ahead of the real tools in the pane's PATH, and bind
+# them to this task's status file and durable record. The shims refuse only two
+# narrow classes and exec the real tool for everything else: the commands that
+# would take validation ownership away from a live no-mistakes run - a second
+# run, a superseding push, an abandoned gate (bin/fm-nm-guard-shim.sh;
+# docs/nm-validation-owner-guard.md) - and the destructive commands that would
+# reach OUTSIDE this task's own worktree, which is how a sibling task lost its
+# unlanded work (bin/fm-worktree-guard-shim.sh; docs/worktree-guard.md).
+#
+# FM_WORKTREE_GUARD_META names the durable record rather than the worktree path
+# itself, so the guard reads the same `worktree=` a relaunch rewrites instead of
+# an exported copy that a relaunch would leave stale. A secondmate is
+# deliberately not guarded - it runs a fleet of its own, whose teardown and
+# lease returns are exactly the commands this guard refuses - and the library
+# enforces that from kind= in the record rather than trusting this call site.
+#
+# Sent here, before the launch command, for the same reason GOTMPDIR is: the
+# harness starts inside this shell and every tool call it makes inherits the
+# environment, so ONE line covers every supported harness with no per-harness
+# hook, and it reaches every runtime backend because spawn_send_text_line is the
+# backend-agnostic text path.
+spawn_send_text_line "$T" \
+  "export FM_NM_GUARD_STATUS=$(shell_quote "$STATE_REAL/$ID.status") FM_WORKTREE_GUARD_META=$(shell_quote "$STATE_REAL/$ID.meta") PATH=$(shell_quote "$FM_ROOT/bin/shims"):\$PATH"
 sleep 0.3
 SPAWN_LAUNCH_SENT=1
 spawn_send_literal "$T" ". $(shell_quote "$LAUNCH_FILE")"

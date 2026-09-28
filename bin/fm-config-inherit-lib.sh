@@ -13,7 +13,9 @@
 # preference - an absent primary file and an absent destination file both mean
 # the same unconfigured default, so the generic absence mirror below converges
 # a secondmate without deciding the release-dependent floor; explicit "on" and
-# "off" preferences propagate as files. Primary
+# "off" preferences propagate as files. Primary config/keepwarm-secs carries the
+# same Claude keep-warm cadence into that home's own supervisor and crews, which
+# is a byte-copied scalar with the same absent-means-unset contract. Primary
 # config/trace-context is copied at the launch convergence point as part of the
 # default-off W3C trace-context setup, while live convergence leaves it unchanged.
 # Primary config/lavish-axi-host carries the one per-machine Lavish server address
@@ -79,7 +81,7 @@ FM_SHARED_CAPTAIN_MODE="444"
 # The declared inheritable set (space-separated, config-dir-relative item paths).
 # Extend here to inherit more of the primary's local config; override via the
 # environment only in tests. Items must not contain whitespace.
-FM_INHERITABLE_CONFIG="${FM_INHERITABLE_CONFIG:-crew-dispatch.json dispatch-never-send crew-harness backlog-backend backend herdr-presentation-spaces startup-memory-budget trace-context launch-env-allowlist claude-permission-mode lavish-axi-host keep-ai-trailers}"
+FM_INHERITABLE_CONFIG="${FM_INHERITABLE_CONFIG:-crew-dispatch.json dispatch-never-send crew-harness backlog-backend backend herdr-presentation-spaces startup-memory-budget trace-context launch-env-allowlist claude-permission-mode lavish-axi-host keep-ai-trailers keepwarm-secs}"
 
 # Items whose value is a home-SESSION enablement decision rather than durable
 # local configuration. They are inherited at the launch convergence point, where

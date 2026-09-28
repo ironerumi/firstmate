@@ -144,6 +144,9 @@
 # Projected closes share the presentation-order lock, refuse to close the
 # captain's active tab, and restore the exact response-derived pre-close tab
 # if Herdr's last-pane cleanup focuses an unrelated neighboring workspace.
+# Ad-hoc primary-session tasks (kind=adhoc in meta) have no worker endpoint or
+# isolated worktree. Their cleanup removes only volatile task records;
+# bin/fm-task-adhoc-lib.sh owns that metadata-only shape and its authorization.
 # Secondmates (kind=secondmate in meta) are retired explicitly. Normal
 # teardown refuses while their home has in-flight crewmate meta files; --force
 # is the approved discard path that prevalidates child removal targets, locks each
@@ -167,7 +170,9 @@
 #   when the captain has explicitly said to discard the work.
 #   --legacy-record accepts a task record that predates the spawn_gen field:
 #   teardown then proceeds only when the recorded endpoint is confirmed dead or
-#   agent-less (bin/fm-backend.sh's recovery-grade classifier), and without
+#   agent-less (bin/fm-backend.sh's recovery-grade classifier; a kind=adhoc
+#   record has no endpoint by design, so that gate is satisfied without a
+#   backend read), and without
 #   --force the worktree still passes the ordinary landed-work checks. The
 #   accepted legacy incarnation is stamped into the record before its close is
 #   recorded and named in the teardown line; the flag never relaxes the
@@ -285,6 +290,15 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 SECONDMATE_REG="$DATA/secondmates.md"
+# This script IS firstmate's authorized worktree-removal path, and it reaches the
+# checkout, the pool lease, and the state sidecars of the task it is retiring -
+# all of them outside any worker's own worktree. Its landed-work test above is
+# what makes that safe, so it declares itself to the worktree-isolation guard
+# (docs/worktree-guard.md) rather than being refused by it. This changes nothing
+# in the ordinary case, where teardown runs from a firstmate session the guard is
+# already inert in; it is what keeps the authorized path working if teardown is
+# ever run from a guarded pane.
+export FM_WORKTREE_GUARD_ALLOW=1
 SUB_HOME_MARKER=".fm-secondmate-home"
 SUB_HOME_PARENT_MARKER=".fm-secondmate-parent"
 # A missing `.` target is not a teardown result. Stock Bash 3.2 can abort it
@@ -338,6 +352,8 @@ unset _teardown_source
 . "$SCRIPT_DIR/fm-backlog-transition-lib.sh"
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-task-adhoc-lib.sh
+. "$SCRIPT_DIR/fm-task-adhoc-lib.sh"
 # shellcheck source=bin/fm-control-lib.sh
 . "$SCRIPT_DIR/fm-control-lib.sh"
 # shellcheck source=bin/fm-lock-lib.sh
@@ -358,7 +374,7 @@ unset _teardown_source
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
 # shellcheck source=bin/fm-nm-run-lib.sh
 . "$SCRIPT_DIR/fm-nm-run-lib.sh"
-if [ "$#" -lt 1 ] || ! fm_task_id_path_safe "$1"; then
+if [ "$#" -lt 1 ] || ! fm_task_id_task_valid "$1"; then
   echo "error: invalid teardown request" >&2
   exit 2
 fi
@@ -1089,10 +1105,16 @@ fi
 # A windowless record names no endpoint: the shared validator would refuse it
 # (and must keep refusing it for control/kill callers), so teardown skips the
 # validator rather than probing or closing an ambient current window.
+# Fork delta: a direct primary-session ship (kind=adhoc) has that same shape by
+# design; bin/fm-task-adhoc-lib.sh owns its metadata-only authorization and the
+# kind=adhoc exclusions below are its no-endpoint, no-worktree, no-clone
+# consequences.
 WT=$(fm_meta_get "$META" worktree)
 PROJ=$(fm_meta_get "$META" project)
 T_ORCA=
-if [ "$TEARDOWN_WINDOWLESS" = 1 ]; then
+if fm_task_adhoc_is_record "$META"; then
+  fm_adhoc_teardown_select_endpoint "$META" "$ID" || exit 1
+elif [ "$TEARDOWN_WINDOWLESS" = 1 ]; then
   BACKEND=tmux
   T=
 else
@@ -1104,7 +1126,12 @@ fi
 # The recorded backend, including every sibling its adapter sources, has to
 # be readable before the first destructive step. --force does not override
 # this. A forced descendant is proved in validate_firstmate_home_children_removal.
-teardown_require_backend_prerequisites "$BACKEND" "$ID" || exit 1
+# Fork delta: a kind=adhoc record has no runtime backend to source, so the
+# upstream prerequisite check is skipped for it; validate_adhoc_task_record
+# above already proved its metadata-only shape.
+if [ "$BACKEND" != adhoc ]; then
+  teardown_require_backend_prerequisites "$BACKEND" "$ID" || exit 1
+fi
 if [ "${FM_TEARDOWN_GUARD_DONE:-0}" != 1 ]; then
   "$FM_ROOT/bin/fm-guard.sh" || true
 fi
@@ -1151,8 +1178,20 @@ MODE=$(grep '^mode=' "$META" | cut -d= -f2- || true)
 # here; the record itself is stamped only once every landed-work refusal has
 # passed, immediately before the close marker binds to it, so any refusal
 # leaves the record byte-identical.
+#
+# kind=adhoc is the exception, and it satisfies the same gate by construction:
+# bin/fm-task-register.sh records an ad-hoc primary-session ship with no window,
+# worktree, or tasktmp, and validate_adhoc_task_record above has already proved
+# exactly that shape, so there is no endpoint an agent could still be bound to.
+# Asking the backend classifier about it would also be meaningless - 'adhoc' is
+# a harness/kind marker, not a runtime backend - and fm_backend_agent_state
+# reports it as unverified, which refused every ad-hoc teardown that reached
+# this gate (the 2026-09-15 kitpicker defect). So the endpoint is agent-less by
+# design, and no backend function is consulted for it.
 if [ "$TEARDOWN_LEGACY_PENDING" = 1 ]; then
-  if [ "$TEARDOWN_WINDOWLESS" = 1 ]; then
+  if [ "$BACKEND" = adhoc ]; then
+    TEARDOWN_LEGACY_ENDPOINT='agent-less'
+  elif [ "$TEARDOWN_WINDOWLESS" = 1 ]; then
     TEARDOWN_LEGACY_ENDPOINT=missing
   else
     TEARDOWN_LEGACY_ENDPOINT=$(fm_backend_agent_state "$BACKEND" "$T")
@@ -1438,6 +1477,26 @@ remove_pr_poll_artifacts() {
     "$state_dir/$id.merge-authority" "$state_dir/$id.check-trust" || return 1
 }
 
+# Bounded one-time sweep of this task's leftover keep-warm temp files.
+# The temp namespace is task-specific, and the sweep stops after
+# FM_TEARDOWN_KEEPWARM_TEMP_LIMIT removals so a pathological directory cannot
+# make teardown unbounded. The marker itself is removed separately by the
+# caller. A swept failure is not fatal: the leftover temp is inert.
+FM_TEARDOWN_KEEPWARM_TEMP_LIMIT=${FM_TEARDOWN_KEEPWARM_TEMP_LIMIT:-2000}
+remove_keepwarm_temp_siblings() { # <state-dir> <id>
+  local state_dir=$1 id=$2
+  local temp_dir=$state_dir/.keepwarm-tmp/$id path removed=0
+  [ -d "$temp_dir" ] || return 0
+  for path in "$temp_dir"/*; do
+    [ -e "$path" ] || [ -L "$path" ] || continue
+    rm -f -- "$path" || continue
+    removed=$((removed + 1))
+    [ "$removed" -lt "$FM_TEARDOWN_KEEPWARM_TEMP_LIMIT" ] || break
+  done
+  rmdir -- "$temp_dir" 2>/dev/null || true
+  return 0
+}
+
 # Resolve the PR number for a worktree branch via gh-axi. Echoes the number on a
 # single match and returns 0; returns non-zero on no match or any lookup failure,
 # so the caller treats it as "no PR found" (fail-safe).
@@ -1612,7 +1671,7 @@ backlog_done_args() {
 # only where a human still owes the edit.
 backlog_refresh_reminder() {
   local backlog_display root backend=markdown
-  [ "$KIND" = secondmate ] && return 0
+  case "$KIND" in secondmate|adhoc) return 0 ;; esac
   [ "$CLEANUP_RECOVERY" = orca ] && return 0
   if root=$(fm_backlog_root "$DATA"); then
     backend=$(fm_tasks_axi_backend "$root") || return 2
@@ -3273,6 +3332,7 @@ cleanup_firstmate_home_children() {
     remove_grok_turnend_auth "$sub_state" "$child_id" || return 1
     remove_kimi_turnend_auth "$sub_state" "$child_id" || return 1
     remove_pr_poll_artifacts "$sub_state" "$child_id" || return 1
+    remove_keepwarm_temp_siblings "$sub_state" "$child_id" || return 1
     child_busy_gen=$(meta_value "$child_meta" busy_gen)
     if [ -z "$child_busy_gen" ]; then
       child_busy_gen=$(cat "$sub_state/$child_id.busy-gen" 2>/dev/null || true)
@@ -3286,6 +3346,7 @@ cleanup_firstmate_home_children() {
       "$sub_state/$child_id.grok-turnend-token" "$sub_state/$child_id.kimi-turnend-token" \
       "$sub_state/$child_id.muse-session" "$sub_state/$child_id.muse-session-current" \
       "$sub_state/$child_id.cursor-session" "$sub_state/$child_id.reconcile-nudged" \
+      "$sub_state/.keepwarm-$child_id" \
       "$sub_state/$child_id.devin-config.json" \
       "$sub_state/.$child_id.branch-outcome-index"
     chmod u+w "$sub_state/$child_id.git-hooks" 2>/dev/null || true
@@ -3409,7 +3470,7 @@ if [ -n "$X_REQUEST" ]; then
   echo "warning: task $ID still carries an unreconciled Relay request link ($X_REQUEST) on its task record." >&2
 fi
 
-if [ "$BACKEND" = orca ] && [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$FORCE" != "--force" ]; then
+if [ "$BACKEND" = orca ] && [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$KIND" != adhoc ] && [ "$FORCE" != "--force" ]; then
   if ! inspectable_git_worktree "$WT"; then
     echo "REFUSED: Orca ship task $ID has no inspectable git worktree at ${WT:-<missing>}." >&2
     echo "Cannot verify dirty or unlanded work; restore the worktree path or get explicit OK to discard, then --force." >&2
@@ -3534,7 +3595,7 @@ fi
 # kind=secondmate: a secondmate home's own runtime lifecycle is owned by the
 # dedicated process-event and firstmate-home removal machinery further below,
 # not by task-worktree cleanup.
-if [ "$KIND" != secondmate ] && teardown_owns_worktree; then
+if [ "$KIND" != secondmate ] && [ "$KIND" != adhoc ] && teardown_owns_worktree; then
   conclude_task_no_mistakes_run "$WT"
   reap_task_worktree_processes worktree "$WT" "$TASK_TMP"
 elif [ "$KIND" != secondmate ]; then
@@ -3642,7 +3703,7 @@ elif [ "$BACKEND" = herdr ]; then
   else
     echo "warning: herdr session presentation lock path is unavailable; skipping the pane close rather than closing unlocked" >&2
   fi
-elif [ "$BACKEND" != orca ] && [ "$TEARDOWN_WINDOWLESS" != 1 ]; then
+elif [ "$BACKEND" != orca ] && [ "$TEARDOWN_WINDOWLESS" != 1 ] && [ "$KIND" != adhoc ]; then
   fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
     || endpoint_close_refusal "$ID" "$BACKEND" "$T" 1 || exit 1
 fi
@@ -3662,7 +3723,7 @@ fi
 # the locked close. Only a structured not-found proves the pane gone; unknown
 # presence, missing or malformed endpoint identity, and missing confirmation
 # machinery all refuse.
-if [ "$BACKEND" = herdr ]; then
+if [ "$KIND" != adhoc ] && [ "$BACKEND" = herdr ]; then
   fm_backend_source herdr || true
   if ! declare -F fm_backend_herdr_endpoint_confirmed_gone >/dev/null 2>&1; then
     echo "error: herdr endpoint confirmation is unavailable for $ID; retaining every durable task record" >&2
@@ -3730,6 +3791,7 @@ if [ -n "$LAUNCH_HOME_TOKEN" ]; then
   rm -rf "/tmp/fm-$ID+$LAUNCH_HOME_TOKEN"
 fi
 remove_pr_poll_artifacts "$STATE" "$ID" || exit 1
+remove_keepwarm_temp_siblings "$STATE" "$ID" || exit 1
 retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 # Opt-in fleet activity ledger (docs/fleet-ledger.md), before the status log is
 # retired so its last lines are captured; off costs one file test.
@@ -3743,6 +3805,7 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
   "$STATE/$ID.control-relaunch" "$STATE/$ID.control-relaunch.meta-prior" \
   "$STATE/$ID.control-relaunch.brief-prior" "$STATE/$ID.control-relaunch.note" \
   "$STATE/$ID.reconcile-nudged" "$STATE/$ID.gemini-settings.json" "$STATE/$ID.devin-config.json" \
+  "$STATE/.keepwarm-$ID" \
   "$STATE/.$ID.branch-outcome-index" \
   "$STATE/.secondmate-relaunch-$ID" "$STATE/.secondmate-relaunch-bound-$ID"
 # The steering inbox (bin/fm-task-inbox-lib.sh) is runtime state for the
@@ -3785,7 +3848,7 @@ else
 fi
 fm_lock_release "$META_LOCK"
 META_LOCK_HELD=0
-if [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$MODE" != local-only ]; then
+if [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$KIND" != adhoc ] && [ "$MODE" != local-only ]; then
   "$FM_ROOT/bin/fm-fleet-sync.sh" "$PROJ" || true
 fi
 # A secondmate retirement may remove the home containing an overridden control
@@ -3793,7 +3856,9 @@ fi
 if [ -d "$STATE" ]; then
   "$SCRIPT_DIR/fm-home-summary-refresh.sh" --best-effort || true
 fi
-if [ "$TEARDOWN_LEGACY_ACCEPTED" = 1 ]; then
+if [ "$KIND" = adhoc ]; then
+  echo "teardown $ID complete (ad-hoc primary-session ship)"
+elif [ "$TEARDOWN_LEGACY_ACCEPTED" = 1 ]; then
   echo "teardown $ID complete (window ${T:-none}, worktree $WT, legacy record accepted without spawn_gen: endpoint $TEARDOWN_LEGACY_ENDPOINT, incarnation $TEARDOWN_META_SPAWN_GEN)"
 elif teardown_owns_worktree; then
   echo "teardown $ID complete (window ${T:-none}, worktree $WT)"

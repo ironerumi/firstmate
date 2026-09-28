@@ -300,6 +300,7 @@ This replaces the no-mistakes skill's advice to enrich \`--intent\` with decisio
 Do not hand-edit, commit, or fix findings yourself while a run is active - the pipeline applies every fix.
 
 One drive call blocks until the next gate or outcome, which routinely outlives what your harness lets a single command run: Claude Code kills a command at ten minutes maximum, while one fix round is capped around thirty minutes and up to three rounds chain.
+The review loop is budgeted at three fix rounds: once a run has advanced three, the worker-side guard refuses another review fix response, and the leftovers need one batched decision - a real fix, a dismissal with a one-line reason, or attachment to the existing ticket - escalated to firstmate as a single \`needs-decision:\` line and never decided by the worker.
 So background the drive call instead of sitting in one blocking hold your harness will kill, and read its return when it finishes.
 Declare that wait using the brief's status-reporting rule before waiting on the backgrounded drive call.
 Where a harness's own command limit is not established, assume it bounds commands and use that same backgrounded shape.
@@ -460,11 +461,22 @@ fm_dod_ref_contains() {  # <repo> <ref-namespace> <sha>
 # 0 when a done: note reports the no-mistakes CI-ready PR (`PR <url> checks
 # green`, with any surrounding text). bin/fm-crew-state.sh takes its CI-ready
 # path on this same test, so every CI-ready line it acts on is gated.
+# Fork delta: the note must name a REAL pull request - a forge pull-request URL
+# (GitHub `/pull/<n>`, GitLab `/-/merge_requests/<n>`) or a `PR #<n>` /
+# `PR#<n>` token - never the bare letters "PR", which match words like "PROD"
+# and "PROPERTIES" and once turned a still-monitoring run into a done task
+# (2026-09-08).
+fm_dod_note_has_pr_reference() {  # <note>
+  printf '%s' "$1" \
+    | grep -Eq '(^|[^[:alnum:]])PR[[:space:]]*#[0-9]+([^[:alnum:]]|$)|/pull/[0-9]+([^[:alnum:]]|$)|/merge_requests/[0-9]+([^[:alnum:]]|$)'
+}
+
 fm_dod_note_reports_ci_ready() {  # <note>
   case "$1" in
-    *PR*"checks green"*|*"checks green"*PR*) return 0 ;;
+    *"checks green"*) ;;
+    *) return 1 ;;
   esac
-  return 1
+  fm_dod_note_has_pr_reference "$1"
 }
 
 # 0 when a done: note reports a change published to a Gerrit review server
