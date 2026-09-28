@@ -1,6 +1,6 @@
 # Fork divergence is budgeted on upstream-owned hot files; fork-added surfaces are free
 
-This repo is a fork of `kunchenguid/firstmate` that merges upstream continuously (measured 2026-08-16: 35 ahead / 9 behind, merge-base one day old). Merge pain comes exclusively from overlapping edits to upstream-owned files — and churn is extreme where it matters: `AGENTS.md` saw 188 upstream commits in 60 days, `bin/fm-brief.sh` 35 (22 of them in its Definition-of-done heredoc region alone). New files never conflict.
+This repo is a fork of `kunchenguid/firstmate` that merges upstream continuously (measured 2026-08-16: 35 ahead / 9 behind, merge-base one day old; measured again 2026-09-28: 66 ahead / 226 behind, 23 conflicting files, with 87% of the 7,114 inserted lines in fork-added files and only 877 lines across 75 modified upstream files). Merge pain comes exclusively from overlapping edits to upstream-owned files — and churn is extreme where it matters: `AGENTS.md` saw 188 upstream commits in 60 days, `bin/fm-brief.sh` 35 (22 of them in its Definition-of-done heredoc region alone). New files never conflict.
 
 **Decision**: divergence is budgeted per upstream-owned file, weighted by its upstream churn; fork-added files and directories are free. Fork behavior therefore ships preferentially as fork-added surfaces (new `bin/` scripts, fork-added `.agents/skills/`, wrapper scripts that call upstream tooling unchanged) rather than as edits to hot upstream files. Prose additions to `AGENTS.md` are the most expensive change in the repo and are rationed accordingly.
 
@@ -8,6 +8,16 @@ Three corollaries:
 
 - **Crew-facing contracts must be emission-based, not recall-based.** A contract that must reach a crewmate's brief is appended deterministically by a fork-added wrapper around the upstream scaffolder — never left as prose an agent must remember to paste, and never patched into the upstream scaffolder's own heredocs (see churn numbers above).
 - **Fork-added docs are free but not registration-free.** The doc-audience CI gate requires every tracked prose surface to be classified exactly once in `docs/documentation-audiences.json` — an already-fork-diverged file. Every fork-added `.md` therefore lands together with its inventory entry, or the portable-serial CI shard goes red (learned on this ADR's own commit).
-- **Upstream-seed universal improvements, but never wait on them.** Changes with nothing fork-specific may additionally be filed as upstream PRs so the fork copy can be deleted if merged. Upstream is currently unresponsive to this fork's asks (PRs/issues open since 2026-07 without response), so seeding is a bet, not a delivery path.
+- **Upstream-seed universal improvements, but never wait on them.** Changes with nothing fork-specific may additionally be filed as upstream PRs so the fork copy can be deleted if merged. Upstream is active rather than silent: it merges several PRs per day, `#5688`/`#5684` received a live triage reply from the maintainer's own agent on 2026-09-25, and `#5440`/`#1242` carry real dialogue (all checked 2026-09-28). The fork's own record is 3 open PRs and 0 merged ever, and `#1854` (the Calm widget, open since 2026-08-07) has drifted 178+/38- against the current tip while upstream rewrote that file more than five times. Seeding is therefore a bet with live odds, not a delivery path: still fork-first, still never wait on the merge.
 
 **Considered and rejected**: patching hot upstream files directly (recurring conflicts on every merge); carrying crew-facing contracts in `data/captain.md`/`learnings.md` (zero divergence but recall-based and home-local — right surface for captain preferences and per-home deviations, wrong for gate contracts and shared SOPs, which the repo's own architecture assigns to tracked files).
+
+## Sync recipe (recorded 2026-09-28, fork sync #51)
+
+The 2026-09-28 absorb merged `upstream/main` `8c5493a0` into fork main `18953d4` (66 ahead / 226 behind, 23 conflicting files), then rebuilt history from `upstream/main` with per-theme squashed commits. The next absorb follows the same five steps.
+
+1. Enable `rerere.enabled=true` before the first merge, so every conflict resolution is recorded once and replayed on later absorbs.
+2. Resolve each conflict by intent, not habit: heavily churned upstream files (`bin/fm-teardown.sh`, `bin/fm-spawn.sh`) take upstream as the base with only the fork's hunks re-applied; fork behavior hunks keep the fork side; comment-only divergences revert to upstream; append-only docs take both sides.
+3. Verify the merged tree with the full behavior suite and `bin/fm-lint.sh`, then rebuild from `upstream/main` with one squashed commit per fork theme.
+4. Gate the rebuild on `git diff <rebuilt> <merged>` being empty, upstream ancestry intact, and a commit count near the theme count.
+5. Treat the rebuilt branch as the new fork main only after the captain signs off on the force-push; seed branches based on `upstream/main` (`fm/upstream-5440-outdated-tools`, `fm/upstream-1242-bsd-sed-fixture`) are unaffected by the rebuild.
