@@ -14,6 +14,9 @@ Busy hooks verified 2026-07-28 on Claude Code 2.1.220.
 | Effort | `--effort <low\|medium\|high\|xhigh\|max>`, verified on 2.1.196. |
 | Permissions | `--dangerously-skip-permissions` by default, or `--permission-mode auto` when `config/claude-permission-mode` is `auto`; the `auto` shape verified on 2.1.269, and `../../../../../docs/configuration.md` "Claude permission mode" owns the file. |
 
+A crew or scout's per-worktree `.claude/settings.local.json` carries `"autoCompactEnabled":true,"autoCompactWindow":500000`, so Claude auto-compacts on its own even though the captain's own user-scope `~/.claude/settings.json` sets `autoCompactEnabled` to `false`.
+`bin/fm-spawn.sh`'s Claude `KIND != secondmate` branch owns that per-worktree write, and a low context reading on a live Claude crewmate is therefore the harness's own job to compact, not a manual `/compact` trigger.
+
 ## Workspace trust
 
 Claude gates a folder it has never seen behind an interactive workspace-trust dialog (titled "Quick safety check: Is this a project you created or one you trust?"), so every fresh task worktree would hit it, and so would every secondmate home no operator has opened by hand.

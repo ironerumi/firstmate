@@ -60,6 +60,7 @@ Each secondmate has a persistent isolated `FM_HOME`, including its own state, ba
 Tracked files hold shared instructions and tooling; `data/` holds durable private fleet records; `state/` holds runtime records and append-only status events; `config/` holds local operating choices; and `projects/` contains clones that are read-only to firstmate except under hard rule 1's concrete captain-approved project operation exception.
 
 Load `operational-home-layout` when locating, interpreting, or changing Firstmate home, config, data, state, project, or generated runtime paths.
+This fork additionally owns `config/keepwarm-secs`, the optional home-local Claude keep-warm cadence (LOCAL, gitignored; see `docs/configuration.md` "Claude keep-warm cadence"), and the `state/.keepwarm-selfwake`, `state/.keepwarm-<id>`, and `state/.keepwarm-tmp/` records written only by `bin/fm-claude-keepwarm-selfwake.sh` and removed by teardown.
 
 
 A `state/<id>.status` line is a wake event, not current-state truth; `bin/fm-crew-state.sh` owns current-state reconciliation.
@@ -194,6 +195,8 @@ An unregistered project or absent registry resolves to `no-mistakes` with yolo o
 Record the resulting mode, `yolo` merge posture, and the one-line reason for any deviation in the backlog item note.
 
 Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately with no concurrency cap when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
+The one exception is mechanical rather than a judgment call: at most one implementation task per repository in each home at a time, enforced by `bin/fm-impl-concurrency-guard.sh` on fresh ship spawns, direct Firstmate ship registrations, and scout promotions, while scouts stay parallel.
+The guard deliberately scans only THIS home's state directory; a same-repository clone in another home, including a remote or separately cloned secondmate home, is a known limitation, and cross-home/cross-machine coordination is tracked as a separate follow-up task.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
 Write the task-specific brief under section 11 before spawning.
 Fill the task subsections according to section 11.
@@ -236,15 +239,21 @@ Destructive, irreversible, and security-sensitive merges still escalate.
 Without a current explicit captain instruction that states the concrete merge, the green default stands, and standing `yolo` cannot authorize a red merge; section 1 owns when such an instruction overrides a Firstmate-written standing rule within its exact scope.
 Load `ask-user-authority` and `validation-supervision` before deciding or answering any ask-user finding; the implementation worker never answers its own finding.
 Use `bin/fm-pr-merge.sh` for every task PR merge so merge metadata is recorded and an unproved merge is refused instead of reported as landed, and use `bin/fm-merge-local.sh` for approved local-only landing; never call a lower-level merge command around their guards.
+An administrator merge that overrides branch protection is carried only by an exact `bin/fm-pr-merge.sh` `--admin` invocation that firstmate runs or hands verbatim to the task's worker, never inferred from `yolo` or green CI alone and never issued as a raw worker merge command.
+It is authorized either by the captain's explicit authorization for that blocked PR, or by an explicit standing captain preference for routine admin merges that applies only when review is complete, CI is green, and the repository's required-review or branch-protection rule is the sole blocker.
+That standing authority stays merge-only and never answers an ask-user finding, a red or unresolved check, a conflict or behind-base uncertainty, a destructive or irreversible non-merge action, a release or tag, a security-sensitive change, or any bypass outside the recorded standing condition.
+When a ready PR waits on the captain, hold the task through the captain-hold lifecycle and merge only after the captain's answer releases that hold; `bin/fm-pr-merge.sh` refuses a still-unreleased captain hold, so firstmate releases the hold and then merges and proves the merge.
 After an autonomous merge, give the captain a one-line full-URL or local-main outcome.
 
 ### Validate
 
 Load `validation-supervision` when a ship starts or already has an active no-mistakes validation run, including a mid-run requirement change or finding.
+A worker's own session refuses the commands that would duplicate pipeline ownership deterministically (`docs/nm-validation-owner-guard.md`), so a reported refusal is a signal to steer back to the gate response flow, and `FM_NM_GUARD_ALLOW=1` is the only exception, handed over only when firstmate has authorized that recovery.
 
 ### PR ready, landing, and teardown
 
 Load `ship-landing` when a ship reports a PR or ready branch, when deciding or monitoring landing, and before task cleanup.
+For a direct Firstmate-repo ship executed by the primary session rather than a worker, register its task identity through `bin/fm-task-register.sh` before PR check or merge.
 
 ### Scout outcome and promotion
 
@@ -382,15 +391,18 @@ Preserve durable structured identifiers, dependencies, and completion artifact l
 Use its scaffold as the contract, then fill `## Captain's intent` (`{TASK}`) with the captain's own ask and any boundary the captain stated, plus the context needed to read it, including the substance of any report, decision, or PR the ask refers to; never widen the ask there into a general goal or an enumerated coverage list, because the reviewer treats that subsection as acceptance criteria.
 Fill `## Firstmate spec` (`{FIRSTMATE_SPEC}`) with only the build instructions that ask requires, naming what stays out of scope when the ask is narrow; a generalization, consistency sweep, or extra hardening the captain did not ask for is follow-up work to note, not scope to add.
 `bin/fm-dod-lib.sh` owns intent authoring without added speaker labels or direct address, its provenance markers, what a no-mistakes worker may pass as `--intent`, and the string's self-sufficiency rule.
+When a ship or scout brief targets the Firstmate repo itself, scaffold it through `bin/fm-brief-repo-guard.sh`, which runs the same scaffold and appends the control-plane boundary telling that worker not to run Firstmate's own control scripts and to route any captain decision to `needs-decision:`.
 Keep additions task-specific rather than repeating lifecycle instructions, and alter generated sections only when the task genuinely differs from the standard shape.
 
 Every ship brief must retain the worktree-isolation assertion and stop if launched in the primary checkout.
+A worker's own session then refuses destructive commands reaching outside its own worktree deterministically (`docs/worktree-guard.md`), so a reported refusal is a signal to check what the worker was reaching for; `FM_WORKTREE_GUARD_ALLOW=1` is the only exception, handed over only for a removal firstmate has authorized.
 If a ship task touches firstmate's shared tracked material, explicitly require `firstmate-coding-guidelines` before editing.
 If a task will drive Herdr lifecycle behavior, scaffold with `--herdr-lab`; if that need appears after an unguarded scaffold, stop and regenerate rather than adding commands by hand.
 The generated Herdr contract must use a named non-`default` isolated lab and its guarded helper for every lifecycle action.
 
 Load `secondmate-provisioning` before creating or using a charter brief and preserve its idle-by-default and marked-return-channel contracts.
 Status appends are sparse supervisor-actionable events, not routine progress; `bin/fm-classify-lib.sh` owns keyed open and resolved semantics.
+Batch independent small issues onto one ship branch - the validation gate is a fixed ~30-minute cost per invocation, so N briefs on one branch cost one gate run instead of N; split only when the changes are genuinely indivisible, and say which.
 The scaffold is a safety contract, not a suggestion.
 
 ## 12. Self-update

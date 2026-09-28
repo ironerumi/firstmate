@@ -105,6 +105,10 @@
     {
       "source": "docs/trace-context.md",
       "target": "docs/verification/trace-context.md"
+    },
+    {
+      "source": "docs/worktree-guard.md",
+      "target": "docs/verification/worktree-guard.md"
     }
   ],
   "surfaces": [
@@ -265,12 +269,20 @@
       "audience": "maintainer-architecture"
     },
     {
+      "path": ".out-of-scope/nm-respond-enforcement.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "AGENTS.md",
       "audience": "agent-runtime"
     },
     {
       "path": "CLAUDE.md",
       "audience": "agent-runtime"
+    },
+    {
+      "path": "CONTEXT.md",
+      "audience": "maintainer-architecture"
     },
     {
       "path": "CONTRIBUTING.md",
@@ -287,6 +299,10 @@
     {
       "path": "VISION.md",
       "audience": "public-product"
+    },
+    {
+      "path": "docs/adr/0001-fork-divergence-budget.md",
+      "audience": "maintainer-architecture"
     },
     {
       "path": "docs/agent-control.md",
@@ -383,6 +399,10 @@
     {
       "path": "docs/herdr-backend.md",
       "audience": "operator-current"
+    },
+    {
+      "path": "docs/nm-validation-owner-guard.md",
+      "audience": "maintainer-architecture"
     },
     {
       "path": "docs/jev-guards.md",
@@ -525,6 +545,10 @@
       "audience": "maintainer-verification"
     },
     {
+      "path": "docs/verification/worktree-guard.md",
+      "audience": "maintainer-verification"
+    },
+    {
       "path": "docs/voice-relay.md",
       "audience": "operator-current"
     },
@@ -535,6 +559,10 @@
     {
       "path": "docs/wedge-alarm.md",
       "audience": "operator-current"
+    },
+    {
+      "path": "docs/worktree-guard.md",
+      "audience": "maintainer-architecture"
     },
     {
       "path": "docs/zellij-backend.md",

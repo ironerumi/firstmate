@@ -34,6 +34,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-captain-hold.sh`     | Hold tasks for the captain, record the captain's answers, gate investigation completion, and report record divergence between the status log and the backlog |
 | `fm-decision-hold.sh`    | One-release compatibility shim mapping the retired decision commands onto fm-captain-hold.sh |
 | `fm-brief.sh`            | Scaffold ship (explicit `--mode`, plus the project's registered `--forge`), scout, secondmate-charter, and Herdr-lab briefs, with Captain's intent and Firstmate spec subsections on ship/scout |
+| `fm-brief-repo-guard.sh` | Fork-added wrapper around `fm-brief.sh` that appends a control-plane boundary section when a ship or scout brief targets Firstmate's own repo |
 | [`fm-dod-lib.sh`](../bin/fm-dod-lib.sh) | Own ship/scout worker role scope, ship definitions of done, the named-head reachability gate on ship `done:` acceptance, and the no-mistakes `--intent` contract |
 | `fm-brief-heading-lib.sh` | Single owner of reading a brief's sections, shared by the `--intent` contract, spawn and promotion validation, and `fm-dispatch-resolve.sh` |
 | `fm-herdr-lab.sh`        | Provision and guardedly operate an isolated, never-default Herdr lab session         |
@@ -43,12 +44,14 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-install-treehouse.sh`| Install CI's exact-version Treehouse pin for real-Herdr E2E that needs spawn worktrees |
 | `fm-herdr-ci-cleanup.sh` | Snapshot and tear down only job-owned `fm-lab-*` sessions in the Herdr CI lane       |
 | `fm-test-run.sh`         | Behavior-test runner: selection, portable lanes, bounded concurrency, budgets, coverage guard, timing/JSON; refuses to execute in the repository primary checkout when `FM_TASK_ID` marks a task worker |
+| `fm-test-run-fork.sh`    | Fork-owned family classification and serial-weight hints sourced by `fm-test-run.sh` so the tracked runner keeps one hook for the fork's test files |
 | `fm-test-isolation-proof.sh` | Concurrent isolation harness and portable candidate set owner |
 | `fm-ensure-agents-md.sh` | Manually initialize project agent-memory files (see the helper's header and help) |
 | `fm-guard.sh`            | Warn on primary-checkout tangles, main-session pending wakes, and unhealthy supervision |
 | `fm-primary-scope-lib.sh` | Shared marker-or-plain-checkout primary-home predicate for tracked hooks             |
 | `fm-session-lock-lib.sh` | Shared session-lock ownership from harness ancestry or a trusted Claude session id for fm-lock.sh and the Claude Stop auto-arm, plus the read-only lock inspection behind `fm-lock.sh status` and `fm-inbox.sh ready` |
 | `fm-claude-stop-autoarm.sh` | Claude Stop `asyncRewake` hook owning tokenless watcher continuity with single-flight exit-2 rewake (docs/watcher-continuity.md) |
+| `fm-claude-keepwarm-selfwake.sh` | Claude Stop `asyncRewake` hook that keeps any idle Claude session warm, registered for supervisors in tracked settings and injected per task by `fm-spawn.sh` for crews; see [turnend-guard.md](turnend-guard.md#harness-integrations) for its contract |
 | `fm-turnend-guard.sh`    | Shared primary turn-end guard predicate so no turn ends blind (docs/turnend-guard.md) |
 | `fm-turnend-guard-grok.sh` | Grok Stop-hook adapter for the primary turn-end guard                              |
 | `fm-kimi-turnend-hook.sh` | Surgically install or remove Kimi's guarded global crew turn-end hook                |
@@ -100,6 +103,12 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-supervise-daemon.sh` | Presence-gated away-mode sub-supervisor: self-handle routine wakes, guard injection by the detected primary harness, escalate batched digests, alert on failed delivery |
 | `fm-crew-state.sh`       | Print one deterministic current-state line for a crew                                |
 | `fm-nm-run-lib.sh`       | Single owner of shared no-mistakes run-attribution primitives and rules             |
+| `fm-nm-guard-lib.sh`     | Own the validation-owner decision: classify what a worker command would do to a live run and read that run from the worktree (bounded invocation, TOON field, code identity, run state), then refuse only ownership-taking commands (docs/nm-validation-owner-guard.md) |
+| `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
+| `fm-worktree-guard-lib.sh` | Decide whether a worker command would destroy a path outside its own task worktree (docs/worktree-guard.md) |
+| `fm-worktree-guard-shim.sh` | PATH-shim transport for that decision, reached as `bin/shims/rm`, `rmdir`, `unlink`, `mv`, and `treehouse`; `bin/shims/git` carries it through `fm-nm-guard-shim.sh` |
+| `fm-impl-concurrency-guard.sh` | Enforce the per-home one-implementation-task-per-repository cap for fresh ship spawns in any mode, direct Firstmate ship registrations, and scout promotions (full contract in the script header) |
+| `fm-keepwarm-cadence-lib.sh` | Single owner of the keep-warm quiet interval and its fixed 3000-second cap |
 | `fm-tangle-lib.sh`       | Shared default-branch resolution and primary-checkout tangle classification          |
 | `fm-timeout-lib.sh`      | Single owner of hard-bounded command execution and its fallback watchdog |
 | `fm-timing-lib.sh`       | Single owner of the deferred network stage's per-step elapsed-time records, inert unless a run asks for them |
@@ -137,12 +146,15 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-contributions.sh`    | Observe owned publications, retain exact-head judgments, measure required actors, and wake on maintainer signals |
 | `fm-pr-check.sh`         | Record validated task `pr=` and `pr_head=` values, then atomically arm a static merge poll; refuses GitHub drafts and persistent secondmate records (see [architecture.md](architecture.md)) |
 | `fm-pr-merge.sh`         | Record PR metadata, merge a task's canonical full GitHub or GitLab URL, refuse a Gerrit change because firstmate never submits one, then refuse an outcome it cannot prove landed or queued |
+| `fm-pr-merge-admin-lib.sh` | Fork-owned decision classifying the exact `--admin` captain-authorized branch-protection override consumed by `fm-pr-merge.sh` |
 | `fm-pr-state.sh`         | Read-only: print one line per GitHub pull-request blocker it can see, reporting on checks that have reported rather than verdicting merge-readiness |
 | `fm-pr-reviewers.sh`     | Read-only: suggest reviewers from GitHub's own author mapping of recent commits on a pull request's changed files, never requesting one |
 | `fm-merge-outcome-lib.sh` | Publish a confirmed merge's durable, role-routed supervision outcome                 |
 | `fm-merge-authority-lib.sh` | Resolve merge authority at the gate, persist it against the accepted canonical PR, and identity-check its later poll consumption |
 | `fm-parent-channel-lib.sh` | Resolve a secondmate home's parent channel and append a captain-facing outcome line to it at most once |
 | `fm-promote.sh`          | Promote a scout task in place to a protected ship task with an explicit delivery mode, write the ship instructions carrying that mode's definition of done, and supersede the task's brief so a later relaunch cannot revive stale scout delivery text |
+| `fm-task-register.sh`    | Create-only register an ad-hoc primary-session ship's task identity so PR recording, guarded merge, and cleanup have meta |
+| `fm-task-adhoc-lib.sh`   | Metadata-only cleanup contract for a direct primary-session ship (kind=adhoc): shape predicate and the refusal that admits only exactly what fm-task-register.sh writes |
 | `fm-teardown.sh`         | Fail-closed teardown: return landed ship worktrees, require completed scout deliverables, retire secondmate homes |
 | `fm-harness.sh`          | Detect the running harness, resolve crew or secondmate harness, model, and effort, and validate the native-only `ultra` effort |
 | `fm-lock.sh`             | Per-home firstmate session lock                                                      |
