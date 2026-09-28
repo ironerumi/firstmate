@@ -27,7 +27,7 @@ MR_HEAD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 MR_STALE_HEAD=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 
 JQ_BIN=$(command -v jq) || fail "these tests read glab's JSON with the real jq, which was not found"
-REAL_MV=$(command -v mv) || fail "these tests need mv to simulate a failed poll publish"
+REAL_MV=$(fm_real_tool mv) || fail "these tests need mv to simulate a failed poll publish"
 
 # Build a fresh sandbox for one test case: a state dir with task metadata and a
 # directory for its forge-command mocks. Echoes the case directory.
@@ -2166,7 +2166,7 @@ SH
   chmod +x "$case_dir/fakebin/mv"
   export FM_TEST_MARKER_FAILURE="$case_dir/marker-failure"
   export FM_TEST_REAL_MV
-  FM_TEST_REAL_MV=$(command -v mv)
+  FM_TEST_REAL_MV=$(fm_real_tool mv)
 
   FM_TEST_HOME="$case_dir/home" run_pr_merge "$case_dir" task-x1 "$url" \
     >"$case_dir/stdout-1" 2>"$case_dir/stderr-1" \

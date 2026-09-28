@@ -125,6 +125,9 @@
 # explicit captain instruction and never skips the live green check, the
 # away-record read, or a captain hold.
 #
+# Fork delta: the exact --admin token is the fork's captain-authorized
+# branch-protection override, owned by bin/fm-pr-merge-admin-lib.sh.
+#
 # Usage: fm-pr-merge.sh <task-id> <pr-url> [--attended-override] [--allow-red <check-name>] [--allow-missing <check-name>] [-- <extra forge merge args>]
 #
 # On GitLab, this script confirms the MR is actually merged before reporting it;
@@ -150,6 +153,8 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-merge-authority-lib.sh"
 # shellcheck source=bin/fm-afk-contract.sh
 . "$SCRIPT_DIR/fm-afk-contract.sh"
+# shellcheck source=bin/fm-pr-merge-admin-lib.sh
+. "$SCRIPT_DIR/fm-pr-merge-admin-lib.sh"
 
 if [ "$#" -lt 2 ]; then
   echo "error: invalid PR merge request" >&2
@@ -312,11 +317,17 @@ reject_head_overrides() {
 }
 
 reject_protected_forge_args() {
-  local arg
+  local arg admin_rc
   [ "$ATTENDED_OVERRIDE" = true ] && return 0
   for arg in "$@"; do
+    admin_rc=0
+    fm_pr_merge_admin_arg "$arg" || admin_rc=$?
+    case "$admin_rc" in
+      0) continue ;;
+      1) return 1 ;;
+    esac
     case "$arg" in
-      --auto|--auto=*|--admin|--admin=*|--delete-branch|--delete-branch=*|--remove-source-branch|--remove-source-branch=*)
+      --auto|--auto=*|--delete-branch|--delete-branch=*|--remove-source-branch|--remove-source-branch=*)
         echo "error: extra merge arguments must not request auto-merge, a protection bypass, or branch deletion; pass --attended-override only for an explicit captain instruction" >&2
         return 1
         ;;
