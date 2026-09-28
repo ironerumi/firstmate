@@ -3104,7 +3104,12 @@ if [ "$KIND" = ship ]; then
 fi
 
 # Pre-flight guard for the one-implementation-task-per-repository cap; that script owns the rule.
-if [ "$KIND" = ship ] && [ "$RELAUNCH" -eq 0 ]; then "$SCRIPT_DIR/fm-impl-concurrency-guard.sh" "$STATE" "$PROJ_ABS" "$ID"; fi
+# FM_TEST_IMPL_GUARD_OFF=1 is the test-only seam a fixture that deliberately models more
+# than one ship spawn in one home sets; a production caller never sets it, and the
+# batch re-exec's FM_SPAWN_NO_GUARD does not affect this guard.
+if [ "$KIND" = ship ] && [ "$RELAUNCH" -eq 0 ] && [ -z "${FM_TEST_IMPL_GUARD_OFF:-}" ]; then
+  "$SCRIPT_DIR/fm-impl-concurrency-guard.sh" "$STATE" "$PROJ_ABS" "$ID"
+fi
 
 BRIEF_DIR_REAL=$(cd "$(dirname "$BRIEF")" && pwd -P)
 BRIEF_REAL="$BRIEF_DIR_REAL/$(basename "$BRIEF")"

@@ -101,6 +101,7 @@ spawn_ship() {
   signed_in_claude_root "$CASE/ambient-claude"
   : > "$CASE/launch.log"
   FM_FAKE_LAUNCH_LOG="$CASE/launch.log" FM_TEST_CLAUDE_CONFIG_DIR="$CASE/ambient-claude" \
+    FM_TEST_IMPL_GUARD_OFF=1 \
     ANTHROPIC_API_KEY=ambient-invoker-key \
     fm_test_run_spawn "$HOME_DIR" "$WT" "$FAKEBIN" "$id" "$PROJ" --mode no-mistakes --yolo off "$@"
 }
