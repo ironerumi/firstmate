@@ -36,6 +36,10 @@ Always permitted:
   A real worker runs from a linked worktree whose common directory lives in the project clone outside its own root, so the guard refuses that nested removal.
   That refusal is intended because the removal rewrites shared repository administration that every sibling task depends on, and firstmate's authorized teardown path carries `FM_WORKTREE_GUARD_ALLOW=1` for that operation.
   A nested removal is permitted only when the canonical common directory is genuinely inside the worker's own root, such as for a standalone repository created there.
+- This task's own private git administration directory.
+  A linked worktree keeps `COMMIT_EDITMSG`, `MERGE_MSG`, and rebase state under the primary repository's `.git/worktrees/<name>/`, outside its own root, and git hooks rewrite them - the spawn-owned commit-msg hook (`bin/fm-git-strip-ai-trailers.sh`) `mv`s a temp file over `COMMIT_EDITMSG` on every commit, and project hook managers do the same to their own files.
+  The guard reads the directory from the `gitdir:` line of the root's `.git` file and accepts it only when it carries a linked worktree's own `commondir` and `gitdir` markers, so a `.git` file that names the shared common directory allows nothing.
+  The allowance is that one directory: the common directory beside it (objects, refs, hooks), every sibling's administration directory, and the primary checkout stay protected.
 - This task's exact `state/<id>.status` file and paths under its `state/<id>.inbox/` directory - the brief itself tells a worker to `mv` its inbox messages into `handled/`.
   A sibling's records, including a dotted task ID that begins with this task's ID, and the fleet-wide records beside them stay protected.
 - This task's exact `state/.keepwarm-<id>` marker and its task-specific `state/.keepwarm-tmp/<id>/` temp directory - the Claude Stop hook arms by `mktemp` there and `mv`s into the marker, then cleans the temp file up, so both sides of that rename and its removal must resolve inside the allowed set.
@@ -77,6 +81,7 @@ The threat model is a worker's mistake under pressure, the same as firstmate's o
 
 `FM_WORKTREE_GUARD_META` names this task's `state/<id>.meta`, and the guard reads `worktree=` from it on every invocation.
 It reads the durable record rather than an exported copy of the path so that a relaunch, which rewrites that line, is followed instead of judged against a stale root.
+The task's own git administration directory is derived from that root's `.git` file on the same read, so it follows a relaunch too.
 
 The absence of that variable is what makes the guard inert everywhere it must be: the firstmate primary session never receives it, and neither does any process outside a spawned worker's pane.
 A secondmate is excluded a second time, from `kind=secondmate` in the record itself rather than from the call site that launched it: a secondmate runs a fleet of its own, whose teardown and lease returns are precisely the commands this guard refuses.
