@@ -922,11 +922,12 @@ tool_version() {  # <tool>
 # The requirement a tasks-axi OUTDATED line reports: its version floor plus any
 # capability the shared probe (bin/fm-tasks-axi-lib.sh) requires that this build
 # lacks, so a build already at the floor still names the feature it is missing.
+# The capabilities come from the compatibility check's own probe results, so
+# naming them never repeats a probe that check already ran.
 tasks_axi_requirement() {
-  local req=$FM_TASKS_AXI_MIN missing_features=
-  fm_tasks_axi_update_has_archive_body || missing_features='update --archive-body'
-  fm_tasks_axi_mv_has_multi_id || missing_features="${missing_features:+$missing_features and }mv multi-ID"
-  [ -z "$missing_features" ] || req="$req with $missing_features"
+  local req=$FM_TASKS_AXI_MIN missing
+  missing=$(fm_tasks_axi_missing_capabilities)
+  [ -z "$missing" ] || req="$req with $missing"
   printf '%s' "$req"
 }
 
