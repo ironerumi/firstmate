@@ -10,6 +10,7 @@ Host: macOS 15.7.7 (arm64), GNU bash 5.3.9, git 2.52.0.
 
 `tests/fm-worktree-guard.test.sh` is the reusable suite and runs anywhere the rest of the portable tests run.
 It drives the decision matrix through `fm_worktree_guard_decide` (every refusal code and every documented allowance, including a `cwd` already outside the root, `..` reaching the pool, an outside target after `--`, `mv -t`, `git -C`, an unknown `git` option before `worktree remove`, and the operand-versus-option shapes of `rm` and `mv`), then re-drives every refusal through the real `bin/shims` symlinks against real files: the sibling's file is asserted to survive each refusal, a real linked git worktree is asserted to still exist and still be registered after `git worktree remove --force` is refused, and the escape, the authorized-parent path, the five inert cases, the two-shim-directories-on-one-PATH case, and the wrapper-loop backstop are all asserted end to end.
+The current suite additionally drives a plain `git commit` in a real linked worktree through the spawn-owned trailer hook, permits only that worktree's private admin directory, and keeps the shared common directory and sibling admin directory refused.
 
 ```
 $ bash tests/fm-worktree-guard.test.sh
