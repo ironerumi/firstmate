@@ -1309,8 +1309,8 @@ The live rule-match evidence is recorded in [`verification/dispatch-resolve.md`]
 
 ## Toolchain
 
-On session start the first mate detects what its required toolchain is missing or too old and lists each problem with either an exact install command or manual instructions.
-It installs automatically supported tools only after you say go; manual-only tools remain for you to install from the printed instructions.
+On session start the first mate detects what its required toolchain is missing or too old and lists each problem with its exact install or upgrade command, or with manual instructions.
+It installs missing automatically supported tools only after you say go; for an installed but outdated tool, run the printed upgrade command after consent, while manual-only tools remain for you to install from the printed instructions.
 
 Required tools come in two parts: a universal toolchain every home needs regardless of backend, and a per-backend delta that follows the runtime backend actually resolved for this home.
 
@@ -1362,7 +1362,7 @@ A herdr, zellij, or cmux home is therefore never told `tmux` is missing, and the
 **Missing and outdated tool diagnostics**
 
 `tasks-axi` and `quota-axi` are essential bootstrap tools in every profile.
-An absent tool reports `MISSING:` with its install command, while a present tool below its floor or missing a required capability reports `OUTDATED:` with its installed version (or `unparseable`), requirement, and upgrade command; [`bin/fm-bootstrap.sh`](../bin/fm-bootstrap.sh)'s header owns both exact line formats.
+An absent required tool with an automated install path reports `MISSING:` with its install command, while a present required tool below its floor or missing a required capability reports `OUTDATED:` with its installed version (or `unparseable`), requirement, and upgrade command; manual-only and presentation-only dependencies retain their dedicated diagnostics, and [`bin/fm-bootstrap.sh`](../bin/fm-bootstrap.sh)'s header owns these exact line formats.
 
 - An absent `treehouse` reports `MISSING:` with its install command, while an installed build without `treehouse get --lease` support reports `OUTDATED:` with the `treehouse update` upgrade.
 - An absent `no-mistakes` reports `MISSING:` with its install command, while a version below 1.46.0 or an unparseable version reports `OUTDATED:` with the `no-mistakes update` upgrade.
