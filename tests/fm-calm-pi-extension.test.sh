@@ -3879,8 +3879,9 @@ check(
   !survivingStandaloneDisposed &&
     ui.widgets.size === 1 &&
     ui.widgets.get(standaloneSlot) === survivingStandaloneWidget &&
-    ui.widgetOps.length === 0,
-  "turning Firstmate Calm off cleared the standalone working ship",
+    ui.widgetOps.length === 0 &&
+    ui.workingVisible.length === 0,
+  "turning Firstmate Calm off cleared or exposed the standalone working ship",
 );
 ui.setWidget(standaloneSlot, undefined);
 

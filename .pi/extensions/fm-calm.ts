@@ -163,11 +163,12 @@ export default function (pi: ExtensionAPI) {
           };
           return widget;
         });
+        ui.setWorkingVisible(false);
       } else if (!workingShipWidgetDisposed) {
         ui.setWidget(CALM_WORKING_SHIP_WIDGET_KEY, undefined);
+        ui.setWorkingVisible(true);
       }
-      ui.setWorkingVisible(!showShip);
-    } else if (forceStockVisibility && !showShip) {
+    } else if (forceStockVisibility && !showShip && !workingShipWidgetDisposed) {
       ui.setWorkingVisible(true);
     }
   };
