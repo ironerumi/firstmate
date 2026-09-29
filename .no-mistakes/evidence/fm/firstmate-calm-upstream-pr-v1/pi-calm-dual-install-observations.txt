@@ -1,0 +1,9 @@
+Live Pi 0.87.1 observations from isolated disposable projects:
+
+Scenario: dual-install working row
+OBSERVED_BOAT_MATCHES=1
+OBSERVED_STOCK_WORKING_MATCHES=0
+
+Scenario: turn Firstmate Calm off while standalone Calm remains installed
+AFTER_OFF_BOAT_MATCHES=1
+AFTER_OFF_STOCK_WORKING_MATCHES=0
