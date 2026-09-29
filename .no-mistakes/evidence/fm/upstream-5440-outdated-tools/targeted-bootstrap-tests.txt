@@ -1,0 +1,20 @@
+Targeted behavioral test evidence (real product scripts, disposable fixtures)
+--- tests/fm-bootstrap.test.sh ---
+ok - bootstrap: an absent-tool case hides the tool in the fallback base path
+ok - bootstrap separates an absent no-mistakes from one below its version floor
+ok - bootstrap separates an absent gh-axi from one below its version floor
+ok - bootstrap separates an absent tasks-axi from one below its floor or feature probe
+ok - bootstrap separates an absent quota-axi from one below its version floor
+ok - bootstrap: the tasks-axi compatibility verdict and reason travel exactly one process hop
+--- tests/fm-session-start.test.sh (scenario reached before suite timeout) ---
+ok - session start: the tasks-axi compatibility verdict is computed once and reused
+--- tests/fm-tasks-axi.test.sh ---
+ok - bootstrap reports a regular code-root backlog and stays silent for a link into the home or no copy
+ok - bootstrap reports a code-root backlog linked elsewhere and a forked archive
+ok - bootstrap stays silent when the code root is the home
+ok - bare tasks-axi replaced the code-root link and bootstrap reported the fork
+ok - fm-tasks-axi.sh writes, holds, archives, and reads relative body files through to the home from the code root
+ok - fm-tasks-axi.sh pins the home's backlog over an ambient TASKS_AXI_FILE and serves the dashboard
+ok - fm-tasks-axi.sh refuses caller --file, a symlinked home backlog, and an unresolvable home
+ok - fm-tasks-axi.sh refuses add --start while plain add and start <id> pass through
+ok - fm-tasks-axi.sh keeps the single-home layout addressing its own code-root backlog

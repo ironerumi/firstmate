@@ -1,0 +1,10 @@
+Live product evidence: bin/fm-bootstrap.sh against disposable fake toolchains
+--- absent tasks-axi (tool hidden from fallback PATH) ---
+MISSING: tasks-axi (install: npm install -g tasks-axi)
+--- at-floor tasks-axi missing update --archive-body capability ---
+OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body; upgrade: npm install -g tasks-axi)
+--- tasks-axi subprocesses observed ---
+--version
+update --help
+mv --help
+--version
