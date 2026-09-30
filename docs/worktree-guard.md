@@ -141,16 +141,17 @@ In the ordinary case that export changes nothing, because teardown runs from a f
 
 ## Refusals report themselves
 
-Every refusal, from this guard and from the validation-owner guard alike, also appends one keyed line to the task's own status record, `FM_NM_GUARD_STATUS` or the `state/<id>.status` derived from the record:
+Every refusal, from this guard and from the validation-owner guard alike, attempts to append one keyed line to the task's own status record, `FM_NM_GUARD_STATUS` or the `state/<id>.status` derived from the record:
 
 ```
 blocked [at=<epoch>] [key=guard-<code>]: guard refused <tool> [<code>]; check whether the guard or the worker is wrong
 ```
 
-A worker that routes around a refusal, as two workers did with `--no-verify` on 2026-09-28, therefore still tells firstmate.
-The line is idempotent per code: while a `guard-<code>` blocker is open a repeat writes nothing, so a retry loop cannot flood the record, and a `resolved` line carrying that key lets the next refusal report again.
+A worker that routes around a refusal, as two workers did with `--no-verify` on 2026-09-28, can therefore still tell firstmate when the task record is writable.
+Deduplication is best effort per code: while a `guard-<code>` blocker is open a repeated refusal normally writes nothing, so a retry loop cannot flood the record, and a `resolved` line carrying that key lets the next refusal report again.
+A concurrent claim, resolution, or status-file reset can produce at most one duplicate blocked line, but those races do not lose the refusal report while the status record remains writable.
 It names the tool and code only, never the refusal text, because that text can carry a no-mistakes run id and `bin/fm-nm-guard-lib.sh` counts a status line naming the run id as the worker's own failure report.
-`bin/fm-guard-refusal-lib.sh` owns the line, and a missing record or a failed write never changes the refusal.
+`bin/fm-guard-refusal-lib.sh` owns the attempt, and a missing record or a failed write never changes the refusal.
 `tests/lib.sh` unbinds `FM_NM_GUARD_STATUS` and `FM_WORKTREE_GUARD_META` for every suite, so a suite run from a worker pane never reports its deliberate refusals on that pane's real record.
 
 ## Reaching the real tool

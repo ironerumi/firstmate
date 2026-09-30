@@ -4,16 +4,19 @@
 # bin/fm-worktree-guard-lib.sh and bin/fm-nm-guard-shim.sh each render a refusal
 # to the worker's terminal. A refusal the worker quietly routes around (the
 # 2026-09-28 --no-verify commits) never reaches firstmate that way, so every
-# refusal also appends ONE keyed `blocked:` line to the task's status record,
-# which wakes firstmate whatever the worker does next.
+# refusal attempts to append one keyed `blocked:` line to the task's status
+# record, which wakes firstmate whatever the worker does next when the write
+# succeeds. Deduplication is best effort because a concurrent claim, resolution,
+# or status-file reset can produce one duplicate, but those races do not lose
+# the report while the status record remains writable.
 #
 # Public interface:
 #   fm_guard_refusal_report <status-file> <tool> <code>
-#       Appends `blocked [at=<epoch>] [key=guard-<code>]: ...` unless that key is
-#       already open, so a retry loop cannot flood the log. A `resolved` line for
-#       the key closes it, and the next refusal then reports again. An empty
-#       status file argument, or any write failure, is a silent no-op: reporting
-#       must never change the refusal or refuse work.
+#       Attempts to append `blocked [at=<epoch>] [key=guard-<code>]: ...` unless
+#       that key is already open, so a retry loop normally cannot flood the log.
+#       A `resolved` line for the key closes it, and the next refusal then reports
+#       again. An empty status file argument, or any write failure, is a silent
+#       no-op: reporting must never change the refusal or refuse work.
 #
 # The line names the tool and code only, never the refusal text: the reason can
 # carry a no-mistakes run id, and bin/fm-nm-guard-lib.sh treats a status line
