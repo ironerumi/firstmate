@@ -436,6 +436,55 @@ test_dirty_pool_refuses_without_discarding_work() {
   pass "a dirty pooled worktree is refused without discarding its local work"
 }
 
+test_pool_slot_with_retired_home_leftovers_is_refused() {
+  local rec id out status leftover
+  for leftover in marker parent state; do
+    id="pool-home-residue-$leftover-r1"
+    rec=$(make_case "home-residue-$leftover" "$id")
+    read_case_record "$rec"
+    case "$leftover" in
+      marker) printf 'retired\n' > "$POOL_DIR/.fm-secondmate-home" ;;
+      parent) printf 'schema=fm-secondmate-parent.v1\nroute=local\n' > "$POOL_DIR/.fm-secondmate-parent" ;;
+      state)
+        # A firstmate checkout keeps its runtime records in gitignored dirs.
+        mkdir -p "$POOL_DIR/bin" "$POOL_DIR/state"
+        : > "$POOL_DIR/AGENTS.md" && : > "$POOL_DIR/bin/fm-spawn.sh"
+        printf 'state/\n' > "$POOL_DIR/.gitignore"
+        git -C "$POOL_DIR" add -f AGENTS.md bin/fm-spawn.sh .gitignore
+        git -C "$POOL_DIR" -c user.name='Firstmate Tests' -c user.email='tests@example.invalid' commit -qm firstmate-shaped
+        printf 'x\n' > "$POOL_DIR/state/retired.status"
+        ;;
+    esac
+
+    out=$(run_spawn "$id" --mode no-mistakes --yolo off)
+    status=$?
+    [ "$status" -ne 0 ] || fail "spawn succeeded in a pooled worktree carrying a retired home's $leftover"
+    assert_contains "$out" "retired firstmate home's leftovers" "spawn did not name the retired home's leftovers ($leftover)"
+    [ ! -e "$HOME_DIR/state/$id.meta" ] || fail "a refused slot still published a task record ($leftover)"
+    case "$leftover" in
+      marker) assert_grep 'retired' "$POOL_DIR/.fm-secondmate-home" "spawn removed the marker it refused on" ;;
+      parent) [ -f "$POOL_DIR/.fm-secondmate-parent" ] || fail "spawn removed the parent record it refused on" ;;
+      state) assert_grep 'x' "$POOL_DIR/state/retired.status" "spawn removed the state it refused on" ;;
+    esac
+  done
+  pass "a pooled worktree carrying a retired home's markers or state is refused and left untouched"
+}
+
+test_pool_slot_with_ordinary_project_data_dirs_launches() {
+  local rec id out status
+  id='pool-project-data-r1'
+  rec=$(make_case project-data "$id")
+  read_case_record "$rec"
+  mkdir -p "$POOL_DIR/data" "$POOL_DIR/state"
+  printf 'state/\ndata/\n' > "$POOL_DIR/.gitignore"
+  git -C "$POOL_DIR" add .gitignore
+  git -C "$POOL_DIR" -c user.name='Firstmate Tests' -c user.email='tests@example.invalid' commit -qm ignore-project-dirs
+  out=$(run_spawn "$id" --mode no-mistakes --yolo off)
+  status=$?
+  expect_code 0 "$status" "another project's own ignored data/ and state/ dirs are not a retired home's leftovers"$'\n'"$out"
+  pass "a non-firstmate project's ignored data/state dirs do not block a worker launch"
+}
+
 test_unresolved_remote_default_refuses_pool() {
   local rec id out status before
   id='pool-unresolved-default-r5'
@@ -756,6 +805,8 @@ test_remote_seeded_home_spawns_from_treehouse_pool
 test_pool_slot_claim_follows_the_spawn_outcome
 test_linked_spawning_home_rejects_primary_before_refresh
 test_stale_pool_base_refreshes_before_branching
+test_pool_slot_with_retired_home_leftovers_is_refused
+test_pool_slot_with_ordinary_project_data_dirs_launches
 test_non_main_default_branch_refreshes_before_branching
 test_direct_pr_and_scout_refresh_before_launch
 test_dirty_pool_refuses_without_discarding_work

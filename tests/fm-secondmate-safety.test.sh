@@ -1593,6 +1593,85 @@ EOF
   pass "secondmate teardown retires empty homes and releases routing"
 }
 
+test_secondmate_teardown_scrubs_returned_slot() {
+  local home subhome subhome_abs fakebin log fmroot leftover
+  home="$TMP_ROOT/scrub-home"
+  subhome="$TMP_ROOT/scrub-subhome"
+  fmroot="$TMP_ROOT/scrub-fmroot"
+  make_firstmate_git_root "$fmroot"
+  git -C "$fmroot" worktree add --quiet --detach "$subhome" HEAD
+  mkdir -p "$home/state" "$home/data" "$subhome/state/procevent" "$subhome/data/domain" "$subhome/config" "$subhome/projects/alpha"
+  printf 'domain\n' > "$subhome/.fm-secondmate-home"
+  printf 'local\n%s\n' "$home" > "$subhome/.fm-secondmate-parent"
+  printf 'x\n' > "$subhome/state/domain.status"
+  subhome_abs=$(cd "$subhome" && pwd -P)
+  cat > "$home/state/domain.meta" <<EOF
+window=firstmate:fm-domain
+worktree=$subhome
+project=$subhome
+harness=echo
+kind=secondmate
+mode=secondmate
+yolo=off
+home=$subhome
+projects=alpha
+EOF
+  printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
+  fakebin=$(make_fake_tmux "$TMP_ROOT/scrub-fake")
+  log="$TMP_ROOT/scrub-fake/tmux.log"
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/scrub-fake/pane.txt" \
+    FM_FAKE_TREEHOUSE_RETURN_KEEP=1 \
+    "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>/dev/null \
+    || fail "teardown failed for a leased secondmate home whose return keeps the slot"
+  grep -F "treehouse return --force $subhome_abs" "$log" >/dev/null || fail "teardown did not return the leased home"
+  [ -d "$subhome" ] || fail "the returned pool slot itself must remain"
+  [ -f "$subhome/AGENTS.md" ] || fail "scrub touched tracked content of the returned slot"
+  for leftover in state data config projects .fm-secondmate-home .fm-secondmate-parent; do
+    [ ! -e "$subhome/$leftover" ] || fail "returned slot still carries the retired home's $leftover"
+  done
+  pass "secondmate teardown scrubs the retired home's operational dirs and markers from the returned slot"
+}
+
+test_secondmate_teardown_scrub_spares_reseeded_slot() {
+  local home subhome fakebin log fmroot
+  home="$TMP_ROOT/scrub-spare-home"
+  subhome="$TMP_ROOT/scrub-spare-subhome"
+  fmroot="$TMP_ROOT/scrub-spare-fmroot"
+  make_firstmate_git_root "$fmroot"
+  git -C "$fmroot" worktree add --quiet --detach "$subhome" HEAD
+  mkdir -p "$home/state" "$home/data" "$subhome/state"
+  printf 'domain\n' > "$subhome/.fm-secondmate-home"
+  cat > "$home/state/domain.meta" <<EOF
+window=firstmate:fm-domain
+worktree=$subhome
+project=$subhome
+harness=echo
+kind=secondmate
+mode=secondmate
+yolo=off
+home=$subhome
+projects=alpha
+EOF
+  printf '%s\n' '- domain - design domain (home: '"$subhome"'; scope: design domain; projects: alpha; added 2026-06-22)' > "$home/data/secondmates.md"
+  fakebin=$(make_fake_tmux "$TMP_ROOT/scrub-spare-fake")
+  log="$TMP_ROOT/scrub-spare-fake/tmux.log"
+  # The slot is reseeded for another home between the return and the scrub.
+  cat > "$fakebin/treehouse.real" < "$fakebin/treehouse"
+  cat > "$fakebin/treehouse" <<SH
+#!/usr/bin/env bash
+"$fakebin/treehouse.real" "\$@" || exit \$?
+[ "\${1:-}" != return ] || printf 'other\n' > "$subhome/.fm-secondmate-home"
+SH
+  chmod +x "$fakebin/treehouse" "$fakebin/treehouse.real"
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$fmroot" FM_HOME="$home" FM_FAKE_TMUX_LOG="$log" FM_FAKE_TMUX_CAPTURE="$TMP_ROOT/scrub-spare-fake/pane.txt" \
+    FM_FAKE_TREEHOUSE_RETURN_KEEP=1 \
+    "$ROOT/bin/fm-teardown.sh" domain >/dev/null 2>/dev/null \
+    || fail "teardown failed while the slot was reseeded after its return"
+  [ -d "$subhome/state" ] || fail "scrub removed state from a slot now marked for another home"
+  [ "$(cat "$subhome/.fm-secondmate-home")" = other ] || fail "scrub removed another home's marker"
+  pass "secondmate teardown scrub spares a slot that no longer carries the retired home's marker"
+}
+
 # A second mate's status log relays child outcomes, so a merged child PR there
 # must never let the supervision branch retire the mate itself.
 test_branch_actor_cannot_retire_secondmate() {
@@ -3070,6 +3149,8 @@ test_secondmate_spawn_requires_seeded_matching_home
 test_secondmate_spawn_refuses_operational_dirs_outside_subhome
 test_fm_send_refuses_bare_window_without_home_meta
 test_secondmate_teardown_retires_empty_home
+test_secondmate_teardown_scrubs_returned_slot
+test_secondmate_teardown_scrub_spares_reseeded_slot
 test_branch_actor_cannot_retire_secondmate
 test_secondmate_teardown_refuses_ambiguous_and_mismatched_registry_bindings
 test_secondmate_teardown_sweeps_process_events_before_removal

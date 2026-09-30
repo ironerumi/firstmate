@@ -84,6 +84,19 @@ pass() {
   printf 'ok - %s\n' "$1"
 }
 
+# A pool slot can still carry a retired secondmate home's identity or parent
+# marker at the code root. A script under test that defaults FM_HOME to the code
+# root would then resolve that home's live parent and append fixture events to
+# its status (2026-09-28, slots 8 and 9), and the suite cannot tell which scripts
+# default their home. So the suite refuses a marked code root outright, before any
+# fixture runs, rather than running against a home it does not own.
+for fm_test_marker in .fm-secondmate-home .fm-secondmate-parent; do
+  if [ -e "$ROOT/$fm_test_marker" ] || [ -L "$ROOT/$fm_test_marker" ]; then
+    fail "refusing to run the suite: the code root $ROOT carries $fm_test_marker, a retired firstmate home's leftover that would make tests resolve that home's live parent; run from an unmarked checkout"
+  fi
+done
+unset fm_test_marker
+
 # --- self-cleaning temp root ------------------------------------------------
 #
 # fm_test_tmproot <prefix> echoes a fresh temp dir and registers it for removal

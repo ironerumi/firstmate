@@ -293,6 +293,7 @@ Only a named non-default branch checked out in `FM_ROOT` is a worktree tangle.
 If another live session holds the fleet lock, both surfaces keep the alarm but switch to read-only wording with no repair command.
 Ship briefs also tell the crewmate to verify `pwd -P` and `git rev-parse --show-toplevel` before creating its ship branch (`fm/<id>` by default, or the project's registered prefix), then stop with a blocked status if it landed in the primary checkout.
 Placement is proven only at launch, so `bin/fm-spawn.sh` also exports the task id as `FM_TASK_ID` into every ship and scout pane, and `bin/fm-test-run.sh` refuses to execute the behavior suite from the primary checkout while that marker is set; the runner's header owns the predicate and [`tests/fm-test-run.test.sh`](../tests/fm-test-run.test.sh) pins it.
+The same marker keeps every primary-only harness surface (the session-start hook, the Stop auto-arm, the bare keep-warm self-wake, the turn-end guard, and the Pi and OMP extensions) inert in a worker pane, and `bin/fm-spawn.sh` refuses a fresh worker slot that still carries a retired home's markers or gitignored `state/`, `data/`, `config/`, or `projects/` dirs; [`tests/fm-worker-role-inert.test.sh`](../tests/fm-worker-role-inert.test.sh) pins the stand-down.
 
 ## No-mistakes gate authority boundary
 
