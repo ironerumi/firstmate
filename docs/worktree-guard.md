@@ -28,6 +28,7 @@ The discriminator is the resolved target path, never the command's size or appar
 | `git worktree remove` when the canonical common directory or removal target is outside the allowed set, including removal of its own root | `worktree-remove` | Deletes a checkout whose work no one has landed and its repository's shared record, while ending this task's own worktree remains firstmate's cleanup path. |
 | `git worktree prune` when the canonical common directory is outside scratch | `worktree-prune` | Rewrites the repository's shared administration, which every linked sibling task depends on. |
 | `treehouse return`, `treehouse destroy`, `treehouse prune` | `worktree-pool` | Terminates the checkout holding this task's unlanded work and frees its pool lease. Firstmate's teardown owns the pool. |
+| `--no-verify` on `git commit`, `merge`, `cherry-pick`, `rebase`, `revert`, or `am`, and `-n` on `git commit` or `git am` | `git-skip-hooks` | The commit hooks are spawn-owned Firstmate setup, not the worker's. A hook that fails is a defect to report, and skipping it hid the 2026-09-28 guard and hook collision for 31.5 hours. `-n` is refused only where it means `--no-verify`; on `merge` and `rebase` it is `--no-stat`, and on `cherry-pick` and `revert` it is `--no-commit`. |
 
 Always permitted:
 
@@ -50,7 +51,7 @@ Always permitted:
   A failed attempt on a held lock now creates no owner dir at all.
 - This task's own temp root (`tasktmp=` in the record, `/tmp/fm-<id>`) and the OS temp namespace. Unlanded work never lives in temp - firstmate puts each task's scratch there itself - and refusing an ordinary `rm` of a scratch file would make the guard something workers route around, which costs more than the class it catches.
 - `git worktree prune --dry-run`, which changes nothing.
-- `treehouse get`, `treehouse enter`, `treehouse status`, every other `git` subcommand, and every command that is not one of the fronted tools.
+- `treehouse get`, `treehouse enter`, `treehouse status`, every other `git` subcommand or flag, and every command that is not one of the fronted tools.
 
 ## Proven denial boundary
 
@@ -138,6 +139,20 @@ It is an environment prefix rather than a flag or a state file so that an author
 Teardown is firstmate's authorized removal path - it reaches the retired task's checkout, its pool lease, and its state sidecars, all outside any worker's own worktree - and its landed-work test, not this guard, is what makes that safe.
 In the ordinary case that export changes nothing, because teardown runs from a firstmate session where the guard is already inert; it is what keeps the authorized path working if teardown is ever run from a guarded pane.
 
+## Refusals report themselves
+
+Every refusal, from this guard and from the validation-owner guard alike, also appends one keyed line to the task's own status record, `FM_NM_GUARD_STATUS` or the `state/<id>.status` derived from the record:
+
+```
+blocked [at=<epoch>] [key=guard-<code>]: guard refused <tool> [<code>]; check whether the guard or the worker is wrong
+```
+
+A worker that routes around a refusal, as two workers did with `--no-verify` on 2026-09-28, therefore still tells firstmate.
+The line is idempotent per code: while a `guard-<code>` blocker is open a repeat writes nothing, so a retry loop cannot flood the record, and a `resolved` line carrying that key lets the next refusal report again.
+It names the tool and code only, never the refusal text, because that text can carry a no-mistakes run id and `bin/fm-nm-guard-lib.sh` counts a status line naming the run id as the worker's own failure report.
+`bin/fm-guard-refusal-lib.sh` owns the line, and a missing record or a failed write never changes the refusal.
+`tests/lib.sh` unbinds `FM_NM_GUARD_STATUS` and `FM_WORKTREE_GUARD_META` for every suite, so a suite run from a worker pane never reports its deliberate refusals on that pane's real record.
+
 ## Reaching the real tool
 
 The shim has to be able to hand off to the tool it fronts under every arrangement of `PATH`, because a guard that made `rm` unreachable would cost more than the class it catches.
@@ -154,5 +169,6 @@ That is the same tax the validation-owner guard already pays on `git` and `no-mi
 ## Verification
 
 `tests/fm-worktree-guard.test.sh` is the regression suite: the decision matrix, the allowances, the end-to-end refusal through the real shim symlinks with real files on disk, the escape, the inert cases, and the transport-loop case.
+`tests/fm-worker-env-composition.test.sh` builds the worker environment from `bin/fm-worker-env-lib.sh`, the code `bin/fm-spawn.sh` sends, in a linked worktree with the temp-namespace exemption disabled, and runs every commit verb workers use, an escaping command, hook skipping, and the lock paths; it is the check that a new collision between the shims, the record, and the spawn-installed hooks fails CI instead of the fleet.
 `tests/fm-backend-orca.test.sh` proves the wiring line reaches a non-default backend end to end.
 [`verification/worktree-guard.md`](verification/worktree-guard.md) holds the dated evidence, including the live crewmate-pane run.

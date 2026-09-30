@@ -107,6 +107,8 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
 | `fm-worktree-guard-lib.sh` | Decide whether a worker command would destroy a protected path (docs/worktree-guard.md) |
 | `fm-worktree-guard-shim.sh` | PATH-shim transport for that decision, reached as `bin/shims/rm`, `rmdir`, `unlink`, `mv`, and `treehouse`; `bin/shims/git` carries it through `fm-nm-guard-shim.sh` |
+| `fm-guard-refusal-lib.sh` | Append the idempotent keyed `blocked:` status line every guard refusal reports (docs/worktree-guard.md) |
+| `fm-worker-env-lib.sh`   | Single owner of the git-hooks and guard-shim environment `fm-spawn.sh` exports into a worker pane, shared with the composition test |
 | `fm-impl-concurrency-guard.sh` | Enforce the per-home one-implementation-task-per-repository cap for fresh ship spawns in any mode, direct Firstmate ship registrations, and scout promotions (full contract in the script header) |
 | `fm-keepwarm-cadence-lib.sh` | Single owner of the keep-warm quiet interval and its fixed 3000-second cap |
 | `fm-tangle-lib.sh`       | Shared default-branch resolution and primary-checkout tangle classification          |

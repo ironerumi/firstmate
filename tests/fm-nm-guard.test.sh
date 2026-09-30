@@ -402,24 +402,66 @@ out=$(FM_NM_GUARD_REVIEW_UNLOCK=1 fm_nm_guard_decide review-fix parked 01X revie
 [ "$out" = allow ] || fail "the per-run unlock must allow a fourth round, got: $out"
 pass "the review fix-round budget decision matches the documented contract"
 
+# --- 10b. a refusal reports itself -------------------------------------------
+
+# Every refusal appends one keyed blocked line, so firstmate learns of it even
+# when the worker routes around it, and a retry loop cannot flood the record.
+set_run running 01REPORT
+: > "$STATUS_FILE"
+for _ in 1 2 3; do run_in_repo no-mistakes axi run; done
+assert_refused nm-run-active "a repeated duplicate run"
+[ "$(grep -c '^blocked .*\[key=guard-nm-run-active\]' "$STATUS_FILE")" = 1 ] \
+  || fail "three identical refusals must leave exactly one open report: $(cat "$STATUS_FILE")"
+assert_contains "$(cat "$STATUS_FILE")" "guard refused no-mistakes" "the report names the refused tool"
+pass "a refusal appends one keyed blocked line, idempotent per refusal code"
+
+printf 'resolved [at=1] [key=guard-nm-run-active]: firstmate answered\n' >> "$STATUS_FILE"
+run_in_repo no-mistakes axi run
+[ "$(grep -c '^blocked .*\[key=guard-nm-run-active\]' "$STATUS_FILE")" = 2 ] \
+  || fail "a refusal after the report was resolved must report again: $(cat "$STATUS_FILE")"
+pass "a resolved refusal report re-opens on the next refusal"
+
+# The report must never satisfy a guard that reads the record: the failed-run
+# refusal stays in force because the report does not name the run.
+set_run failed 01REPORTFAIL '    push,failed,0,300'
+: > "$STATUS_FILE"
+run_in_repo no-mistakes axi run
+assert_refused nm-unreported-failure "a replacement run after an unreported failure"
+run_in_repo no-mistakes axi run
+assert_refused nm-unreported-failure "a second replacement run after the guard's own report"
+assert_not_contains "$(cat "$STATUS_FILE")" "01REPORTFAIL" "the report must not echo the run id the guard looks for"
+pass "the guard's own report cannot count as the worker's failure report"
+
+# An unset status file is a quiet no-op: the refusal still stands.
+set_run running 01NORECORD
+( unset FM_NM_GUARD_STATUS; cd "$REPO" && no-mistakes axi run ) >/dev/null 2>&1
+expect_code 3 $? "a refusal without a status record must still refuse"
+pass "a refusal without a status record still refuses"
+
 # --- 11. reach: one wiring line, every harness and every backend -------------
 
 SPAWN="$ROOT/bin/fm-spawn.sh"
 # The shims reach a worker through the pane environment rather than a per-harness
-# hook, which is what makes the coverage complete. Two structural facts carry
-# that: the export names the shim directory and this task's status file, and it
-# is sent through the backend-agnostic text path rather than any backend's own
-# send. tests/fm-backend-orca.test.sh proves the line actually reaches a
-# non-default backend end to end.
+# hook, which is what makes the coverage complete. bin/fm-worker-env-lib.sh owns
+# that environment and fm-spawn sends what it prints through the backend-agnostic
+# text path rather than any backend's own send. The export names the shim
+# directory and this task's status file and record.
+# tests/fm-worker-env-composition.test.sh runs the whole worker environment, and
+# tests/fm-backend-orca.test.sh proves the line actually reaches a non-default
+# backend end to end.
 # shellcheck disable=SC2016  # single quotes are deliberate: these are literal source strings
-grep -A1 -F 'spawn_send_text_line "$T"' "$SPAWN" | grep -F 'export FM_NM_GUARD_STATUS=' >/dev/null \
+grep -F 'spawn_send_text_line "$T"' "$SPAWN" | grep -F 'fm_worker_guard_export_line' >/dev/null \
   || fail "fm-spawn must send the shim export through the backend-agnostic text path"
-grep -F 'export FM_NM_GUARD_STATUS=' "$SPAWN" >/dev/null \
-  || fail "fm-spawn must bind the guard to the task status file"
-grep -F 'bin/shims' "$SPAWN" >/dev/null \
-  || fail "fm-spawn must put the shim directory on the pane PATH"
-grep -F 'PATH=' "$SPAWN" | grep -F 'bin/shims' >/dev/null \
-  || fail "fm-spawn must prepend the shim directory rather than replace PATH"
+# shellcheck source=bin/fm-worker-env-lib.sh
+. "$ROOT/bin/fm-worker-env-lib.sh"
+WORKER_LINE=$(fm_worker_guard_export_line "$TMP/state dir" t1 "$ROOT/bin")
+WORKER_ENV=$(env -i PATH=/usr/bin:/bin bash -c "$WORKER_LINE; printf '%s\n' \"\$FM_NM_GUARD_STATUS\" \"\$FM_WORKTREE_GUARD_META\" \"\$PATH\"")
+[ "$(printf '%s\n' "$WORKER_ENV" | sed -n 1p)" = "$TMP/state dir/t1.status" ] \
+  || fail "the export must bind the guard to this task's status file"
+[ "$(printf '%s\n' "$WORKER_ENV" | sed -n 2p)" = "$TMP/state dir/t1.meta" ] \
+  || fail "the export must bind the guard to this task's durable record"
+[ "$(printf '%s\n' "$WORKER_ENV" | sed -n 3p)" = "$ROOT/bin/shims:/usr/bin:/bin" ] \
+  || fail "the export must prepend the shim directory rather than replace PATH"
 pass "fm-spawn wires the shims once, through the backend-agnostic pane environment"
 
 for tool in no-mistakes git; do

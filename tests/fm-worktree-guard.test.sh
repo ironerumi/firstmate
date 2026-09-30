@@ -105,6 +105,30 @@ check_decision worktree-pool "treehouse return frees the lease" treehouse "$OWN"
 check_decision worktree-pool "treehouse destroy" treehouse "$OWN" destroy
 check_decision worktree-pool "treehouse prune" treehouse "$OWN" prune
 
+# Skipping hooks: the hooks are spawn-owned setup, so --no-verify on any verb that
+# runs them is refused, and -n only where it means --no-verify (commit and am).
+check_decision git-skip-hooks "commit --no-verify" git "$OWN" commit --no-verify -m x
+check_decision git-skip-hooks "commit -n" git "$OWN" commit -n -m x
+check_decision git-skip-hooks "commit -n inside a cluster" git "$OWN" commit -an -m x
+check_decision git-skip-hooks "commit -n before an attached message" git "$OWN" commit -nm x
+check_decision git-skip-hooks "am -n" git "$OWN" am -n patch.mbox
+check_decision git-skip-hooks "merge --no-verify" git "$OWN" merge --no-verify topic
+check_decision git-skip-hooks "cherry-pick --no-verify" git "$OWN" cherry-pick --no-verify abc
+check_decision git-skip-hooks "rebase --no-verify" git "$OWN" rebase --no-verify main
+check_decision git-skip-hooks "revert --no-verify" git "$OWN" revert --no-verify HEAD
+check_decision git-skip-hooks "an abbreviated --no-verify" git "$OWN" commit --no-verif -m x
+check_decision git-skip-hooks "--no-verify behind global options" git "$OWN" -C "$OWN" -c user.name=x --no-pager commit --no-verify -m x
+check_decision allow "commit without a skip flag" git "$OWN" commit -m x
+check_decision allow "commit whose message is -n" git "$OWN" commit -m -n
+check_decision allow "commit whose message is --no-verify" git "$OWN" commit -m --no-verify
+check_decision allow "commit -a -s -m" git "$OWN" commit -asm x
+check_decision allow "a flag after the -- separator" git "$OWN" commit -m x -- --no-verify
+check_decision allow "merge -n is --no-stat" git "$OWN" merge -n topic
+check_decision allow "rebase -n is --no-stat" git "$OWN" rebase -n main
+check_decision allow "cherry-pick -n is --no-commit" git "$OWN" cherry-pick -n abc
+check_decision allow "revert -n is --no-commit" git "$OWN" revert -n HEAD
+check_decision allow "a verb that runs no skippable hook" git "$OWN" log --no-verify
+
 # Allow: everything inside the worker's own sandbox, and every non-target shape.
 check_decision allow "rm inside the root" rm "$OWN" -rf src/build
 check_decision allow "rm of the root itself is this task's own copy" rm "$OWN" -rf "$OWN"
