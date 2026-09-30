@@ -1,0 +1,4 @@
+ok - fixture: the worker guard refuses rmdir outside the worktree
+ok - spinning on a held lock under the guard leaves only the holder's owner dir
+ok - a guarded holder can release its own lock outside its worktree
+ok - a dead holder's lock is reaped and cleaned up even under the worker guard

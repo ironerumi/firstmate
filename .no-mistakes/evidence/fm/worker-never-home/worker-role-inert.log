@@ -1,0 +1,9 @@
+ok - fm_primary_scope_matches: FM_TASK_ID overrides a stale .fm-secondmate-home marker
+ok - tests/lib.sh refuses a code root that still carries a retired home's marker
+ok - .pi primary turn-end extension: registers nothing in a worker pane (FM_TASK_ID)
+ok - fm-sessionstart-run: silent and lockless for a worker in a stale home slot
+ok - fm-sessionstart-nudge: silent for a worker in a stale home slot
+ok - fm-turnend-guard: blocks the marked home, silent for a worker in the same slot
+ok - fm-claude-stop-autoarm: inert for a worker in a stale home slot
+ok - fm-claude-keepwarm-selfwake: bare supervisor form stands down for a worker
+ok - fm-session-start, fm-watch-arm, fm-watch: refuse to run in a worker pane
