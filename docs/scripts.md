@@ -105,7 +105,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-nm-run-lib.sh`       | Single owner of shared no-mistakes run-attribution primitives and rules             |
 | `fm-nm-guard-lib.sh`     | Own the validation-owner decision: classify what a worker command would do to a live run and read that run from the worktree (bounded invocation, TOON field, code identity, run state), then refuse only ownership-taking commands (docs/nm-validation-owner-guard.md) |
 | `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
-| `fm-worktree-guard-lib.sh` | Decide whether a worker command would destroy a path outside its own task worktree (docs/worktree-guard.md) |
+| `fm-worktree-guard-lib.sh` | Decide whether a worker command would destroy a protected path (docs/worktree-guard.md) |
 | `fm-worktree-guard-shim.sh` | PATH-shim transport for that decision, reached as `bin/shims/rm`, `rmdir`, `unlink`, `mv`, and `treehouse`; `bin/shims/git` carries it through `fm-nm-guard-shim.sh` |
 | `fm-impl-concurrency-guard.sh` | Enforce the per-home one-implementation-task-per-repository cap for fresh ship spawns in any mode, direct Firstmate ship registrations, and scout promotions (full contract in the script header) |
 | `fm-keepwarm-cadence-lib.sh` | Single owner of the keep-warm quiet interval and its fixed 3000-second cap |

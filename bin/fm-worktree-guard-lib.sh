@@ -64,6 +64,8 @@ FM_WORKTREE_GUARD_STATE_KEEPWARM=
 FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL=
 FM_WORKTREE_GUARD_TASKTMP=
 FM_WORKTREE_GUARD_TASKTMP_LEXICAL=
+FM_WORKTREE_GUARD_GITDIR=
+FM_WORKTREE_GUARD_GITDIR_LEXICAL=
 FM_WORKTREE_GUARD_PATH=
 FM_WORKTREE_GUARD_MOVE_DESTINATION=
 FM_WORKTREE_GUARD_MOVE_NO_TARGET_DIRECTORY=0
@@ -179,13 +181,14 @@ fm_worktree_guard_same_alias() { # <path> <other>
 
 # One resolved target's verdict: 0 when it is allowed, 1 when it escapes the
 # worker's own worktree. The allowed set is closed and small: the worker's own
-# worktree, this task's own state sidecars (the brief itself tells a worker to
-# `mv` its inbox messages into handled/), this task's own keep-warm marker and
-# task-specific temp directory, this task's own temp root, and the OS temp
-# namespace.
-fm_worktree_guard_target_allowed_by() { # <target> <root> <status> <inbox> <tasktmp> <keepwarm>
-  local target=$1 root=$2 status=$3 inbox=$4 tasktmp=$5 keepwarm=$6 entry spec keepwarm_name keepwarm_tmp
+# worktree, this task's own private git administration directory, this task's
+# own state sidecars (the brief itself tells a worker to `mv` its inbox
+# messages into handled/), this task's own keep-warm marker and task-specific
+# temp directory, this task's own temp root, and the OS temp namespace.
+fm_worktree_guard_target_allowed_by() { # <target> <root> <status> <inbox> <tasktmp> <keepwarm> <gitdir>
+  local target=$1 root=$2 status=$3 inbox=$4 tasktmp=$5 keepwarm=$6 gitdir=${7:-} entry spec keepwarm_name keepwarm_tmp
   fm_worktree_guard_within_alias "$target" "$root" && return 0
+  [ -z "$gitdir" ] || ! fm_worktree_guard_within_alias "$target" "$gitdir" || return 0
   [ -z "$status" ] || ! fm_worktree_guard_same_alias "$target" "$status" || return 0
   [ -z "$inbox" ] || ! fm_worktree_guard_within_alias "$target" "$inbox" || return 0
   [ -z "$keepwarm" ] || ! fm_worktree_guard_same_alias "$target" "$keepwarm" || return 0
@@ -227,7 +230,8 @@ fm_worktree_guard_target_allowed() { # <lexically-normalized-target>
     "$FM_WORKTREE_GUARD_STATE_STATUS_LEXICAL" \
     "$FM_WORKTREE_GUARD_STATE_INBOX_LEXICAL" \
     "$FM_WORKTREE_GUARD_TASKTMP_LEXICAL" \
-    "$FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL" || return 1
+    "$FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL" \
+    "$FM_WORKTREE_GUARD_GITDIR_LEXICAL" || return 1
 
   fm_worktree_guard_resolve_parent "$target" || return 0
   physical=$FM_WORKTREE_GUARD_PATH
@@ -236,14 +240,16 @@ fm_worktree_guard_target_allowed() { # <lexically-normalized-target>
     "$FM_WORKTREE_GUARD_STATE_STATUS_LEXICAL"|\
     "$FM_WORKTREE_GUARD_STATE_INBOX_LEXICAL"|\
     "$FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL"|\
-    "$FM_WORKTREE_GUARD_TASKTMP_LEXICAL") return 0 ;;
+    "$FM_WORKTREE_GUARD_TASKTMP_LEXICAL"|\
+    "$FM_WORKTREE_GUARD_GITDIR_LEXICAL") return 0 ;;
   esac
   fm_worktree_guard_target_allowed_by "$physical" \
     "$FM_WORKTREE_GUARD_ROOT" \
     "$FM_WORKTREE_GUARD_STATE_STATUS" \
     "$FM_WORKTREE_GUARD_STATE_INBOX" \
     "$FM_WORKTREE_GUARD_TASKTMP" \
-    "$FM_WORKTREE_GUARD_STATE_KEEPWARM"
+    "$FM_WORKTREE_GUARD_STATE_KEEPWARM" \
+    "$FM_WORKTREE_GUARD_GITDIR"
 }
 
 fm_worktree_guard_deny() { # <code> <target>
@@ -501,6 +507,15 @@ fm_worktree_guard_decide() { # <tool> <root> <cwd> [argv...]
       FM_WORKTREE_GUARD_TASKTMP=$FM_WORKTREE_GUARD_TASKTMP_LEXICAL
     fi
   fi
+  if [ -n "$FM_WORKTREE_GUARD_GITDIR" ]; then
+    fm_worktree_guard_normalize "$FM_WORKTREE_GUARD_GITDIR" /
+    FM_WORKTREE_GUARD_GITDIR_LEXICAL=$FM_WORKTREE_GUARD_PATH
+    if fm_worktree_guard_resolve_directory "$FM_WORKTREE_GUARD_GITDIR_LEXICAL"; then
+      FM_WORKTREE_GUARD_GITDIR=$FM_WORKTREE_GUARD_PATH
+    else
+      FM_WORKTREE_GUARD_GITDIR=$FM_WORKTREE_GUARD_GITDIR_LEXICAL
+    fi
+  fi
   if [ -n "$FM_WORKTREE_GUARD_STATE_STATUS" ]; then
     fm_worktree_guard_normalize "$FM_WORKTREE_GUARD_STATE_STATUS" /
     FM_WORKTREE_GUARD_STATE_STATUS_LEXICAL=$FM_WORKTREE_GUARD_PATH
@@ -588,6 +603,31 @@ fm_worktree_guard_decide() { # <tool> <root> <cwd> [argv...]
   printf 'allow\n'
 }
 
+# This task's own private git administration directory into
+# FM_WORKTREE_GUARD_GITDIR, or empty when the root has none. A linked worktree's
+# `.git` is a FILE reading `gitdir: <admin>`, and <admin> lives under the primary
+# repository's .git/worktrees/, outside the root, holding the per-worktree files
+# git and its hooks rewrite (COMMIT_EDITMSG, MERGE_MSG, rebase state). Only a
+# directory carrying a linked worktree's own commondir and gitdir markers
+# counts, so the shared common directory (objects, refs, every sibling's admin
+# directory) is never widened by a `.git` file that points at it. A `.git`
+# DIRECTORY is inside the root already and needs no allowance.
+fm_worktree_guard_own_gitdir() { # <physical-root>
+  local line dir
+  FM_WORKTREE_GUARD_GITDIR=
+  [ -f "$1/.git" ] || return 0
+  IFS= read -r line < "$1/.git" || [ -n "$line" ] || return 0
+  case "$line" in
+    'gitdir: '?*) dir=${line#gitdir: } ;;
+    *) return 0 ;;
+  esac
+  fm_worktree_guard_normalize "$dir" "$1"
+  fm_worktree_guard_resolve_directory "$FM_WORKTREE_GUARD_PATH" || return 0
+  dir=$FM_WORKTREE_GUARD_PATH
+  [ -f "$dir/commondir" ] && [ -f "$dir/gitdir" ] || return 0
+  FM_WORKTREE_GUARD_GITDIR=$dir
+}
+
 # This task's own worktree root, read from the durable record rather than from
 # an exported copy, so a relaunch that moves the task to another checkout is
 # followed instead of judged against a stale path. Also publishes the derived
@@ -605,6 +645,8 @@ fm_worktree_guard_load() {
   FM_WORKTREE_GUARD_STATE_KEEPWARM_LEXICAL=
   FM_WORKTREE_GUARD_TASKTMP=
   FM_WORKTREE_GUARD_TASKTMP_LEXICAL=
+  FM_WORKTREE_GUARD_GITDIR=
+  FM_WORKTREE_GUARD_GITDIR_LEXICAL=
   [ -n "$meta" ] && [ -f "$meta" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
@@ -625,6 +667,7 @@ fm_worktree_guard_load() {
   done < "$meta"
   [ -n "$root" ] || return 1
   FM_WORKTREE_GUARD_ROOT=$(CDPATH='' cd -- "$root" 2>/dev/null && pwd -P) || return 1
+  fm_worktree_guard_own_gitdir "$FM_WORKTREE_GUARD_ROOT"
   id=${meta##*/}
   id=${id%.meta}
   state_dir=${meta%/*}

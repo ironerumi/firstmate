@@ -1,6 +1,6 @@
 # Worktree-isolation guard verification
 
-Repeatable evidence that the worktree-isolation guard refuses a real worker's destructive command outside its own worktree.
+Repeatable evidence that the worktree-isolation guard refuses a real worker's destructive command outside its own worktree except for documented task-owned allowances.
 Current behavior, scope, and rationale are owned by [`../worktree-guard.md`](../worktree-guard.md); this page records evidence only.
 
 Date: 2026-08-31.
@@ -10,6 +10,7 @@ Host: macOS 15.7.7 (arm64), GNU bash 5.3.9, git 2.52.0.
 
 `tests/fm-worktree-guard.test.sh` is the reusable suite and runs anywhere the rest of the portable tests run.
 It drives the decision matrix through `fm_worktree_guard_decide` (every refusal code and every documented allowance, including a `cwd` already outside the root, `..` reaching the pool, an outside target after `--`, `mv -t`, `git -C`, an unknown `git` option before `worktree remove`, and the operand-versus-option shapes of `rm` and `mv`), then re-drives every refusal through the real `bin/shims` symlinks against real files: the sibling's file is asserted to survive each refusal, a real linked git worktree is asserted to still exist and still be registered after `git worktree remove --force` is refused, and the escape, the authorized-parent path, the five inert cases, the two-shim-directories-on-one-PATH case, and the wrapper-loop backstop are all asserted end to end.
+The current suite additionally drives a plain `git commit` in a real linked worktree through the spawn-owned trailer hook, permits only that worktree's private admin directory, and keeps the shared common directory and sibling admin directory refused.
 
 ```
 $ bash tests/fm-worktree-guard.test.sh
@@ -32,6 +33,9 @@ ok - an in-root canonical common directory permits a standalone nested removal
 ok - worktree pruning is refused while its dry run stays available
 ok - git worktree refusal uses the portable bounded-execution owner
 ok - git worktree commands judge the selected repository
+ok - a plain git commit in a linked worktree passes the guard with the trailer hook installed
+ok - only the task's own admin directory is allowed; the common directory and a sibling's stay protected
+ok - the admin-directory allowance requires a linked worktree's own markers
 ok - FM_WORKTREE_GUARD_ALLOW=1 allows a removal firstmate has authorized
 ok - an authorized firstmate-owned parent process is not refused
 ok - the cleanup path that owns worktree removal is not itself guarded

@@ -526,6 +526,98 @@ git -C "$SCRATCH_REPO" worktree list --porcelain | grep -qF "$SCRATCH_PRUNABLE_R
   && fail "the allowed scratch prune must actually remove the stale registration"
 pass "git worktree commands judge the selected repository"
 
+# --- 2b. the task's own private git administration directory ----------------
+
+# A linked worktree keeps COMMIT_EDITMSG, MERGE_MSG, and rebase state in its own
+# admin directory under the primary repository's .git/worktrees/, OUTSIDE the
+# worktree root. The spawn-owned commit-msg hook rewrites COMMIT_EDITMSG with
+# `mv`, so under this guard every plain `git commit` in a real worker pane was
+# refused as worktree-escape-move. This section drives that exact commit through
+# the real shims and the real hook, and keeps the shared common directory and a
+# sibling's admin directory protected.
+GC_PRIMARY="$TMP/gc-primary"
+GC_OWN="$TMP/gc-own"
+GC_SIBLING="$TMP/gc-sibling"
+GC_TMP="$TMP/gc-tmp"
+GC_HOOKS="$TMP/gc-hooks"
+mkdir -p "$GC_TMP"
+fm_git_worktree "$GC_PRIMARY" "$GC_OWN" fm/guard-own-admin
+"$REAL_GIT" -C "$GC_PRIMARY" worktree add -q -b fm/guard-sibling-admin "$GC_SIBLING"
+GC_OWN_ADMIN=$(cd "$("$REAL_GIT" -C "$GC_OWN" rev-parse --absolute-git-dir)" && pwd -P)
+GC_SIBLING_ADMIN=$(cd "$("$REAL_GIT" -C "$GC_SIBLING" rev-parse --absolute-git-dir)" && pwd -P)
+GC_COMMON=$(cd "$("$REAL_GIT" -C "$GC_OWN" rev-parse --path-format=absolute --git-common-dir)" && pwd -P)
+[ "$GC_OWN_ADMIN" != "$GC_COMMON" ] || fail "the fixture must be a linked worktree with its own admin directory"
+fm_write_meta "$STATE/t3.meta" \
+  "window=firstmate:fm-t3" \
+  "endpoint_task_id=t3" \
+  "worktree=$GC_OWN" \
+  "project=$GC_PRIMARY" \
+  "harness=claude" \
+  "kind=ship"
+"$ROOT/bin/fm-git-strip-ai-trailers.sh" install "$GC_HOOKS" "$GC_OWN" || fail "the trailer hook must install"
+
+# The hook's scratch file comes from mktemp in TMPDIR, so that namespace is the
+# only unprotected root here; the primary repository stays outside it, as it does
+# for a real task.
+gc_guarded() { # <cwd> <cmd> [args...]
+  local cwd=$1
+  shift
+  guarded "FM_WORKTREE_GUARD_META=$STATE/t3.meta" "TMPDIR=$GC_TMP" "FM_WORKTREE_GUARD_TEMP_ROOTS=$GC_TMP" \
+    "GIT_CONFIG_COUNT=1" "GIT_CONFIG_KEY_0=core.hooksPath" "GIT_CONFIG_VALUE_0=$GC_HOOKS" -- "$cwd" "$@"
+}
+
+printf 'change\n' >> "$GC_OWN/README.md"
+"$REAL_GIT" -C "$GC_OWN" add README.md
+out=$(gc_guarded "$GC_OWN" git commit -q -m 'fix: plain commit in a linked worktree' \
+  -m 'Co-authored-by: Claude <noreply@anthropic.com>' 2>&1)
+expect_code 0 $? "a plain git commit with the trailer hook must run under the guard: $out"
+body=$("$REAL_GIT" -C "$GC_OWN" log -1 --format=%B)
+assert_contains "$body" "fix: plain commit in a linked worktree" "the commit must land"
+assert_not_contains "$body" "noreply@anthropic.com" "the hook must have rewritten the message through its mv"
+pass "a plain git commit in a linked worktree passes the guard with the trailer hook installed"
+
+: > "$GC_OWN_ADMIN/MERGE_MSG"
+gc_guarded "$GC_OWN" rm -f "$GC_OWN_ADMIN/MERGE_MSG"
+expect_code 0 $? "the task's own admin directory must accept rm"
+assert_absent "$GC_OWN_ADMIN/MERGE_MSG" "the own admin file must be removed"
+: > "$GC_TMP/scratch-msg"
+gc_guarded "$GC_OWN" mv "$GC_TMP/scratch-msg" "$GC_OWN_ADMIN/COMMIT_EDITMSG"
+expect_code 0 $? "the task's own admin directory must accept mv"
+
+: > "$GC_TMP/scratch-msg"
+out=$(gc_guarded "$GC_OWN" mv "$GC_TMP/scratch-msg" "$GC_SIBLING_ADMIN/COMMIT_EDITMSG" 2>&1)
+expect_code 3 $? "a sibling worktree's admin directory must stay protected"
+assert_contains "$out" "REFUSED BY FIRSTMATE [worktree-escape-move]" "the sibling admin refusal must name its code"
+assert_present "$GC_TMP/scratch-msg" "a refused move into a sibling's admin directory must keep its source"
+assert_absent "$GC_SIBLING_ADMIN/COMMIT_EDITMSG" "a refused move must not write the sibling's admin directory"
+out=$(gc_guarded "$GC_OWN" rm -f "$GC_SIBLING_ADMIN/HEAD" 2>&1)
+expect_code 3 $? "removing from a sibling worktree's admin directory must stay refused"
+assert_present "$GC_SIBLING_ADMIN/HEAD" "a sibling's admin record must survive"
+out=$(gc_guarded "$GC_OWN" mv "$GC_TMP/scratch-msg" "$GC_COMMON/guard-probe" 2>&1)
+expect_code 3 $? "the shared common directory must stay protected"
+assert_absent "$GC_COMMON/guard-probe" "a refused move must not write the shared common directory"
+out=$(gc_guarded "$GC_OWN" rm -f "$GC_COMMON/HEAD" 2>&1)
+expect_code 3 $? "removing from the shared common directory must stay refused"
+assert_present "$GC_COMMON/HEAD" "the shared repository's HEAD must survive"
+pass "only the task's own admin directory is allowed; the common directory and a sibling's stay protected"
+
+# The allowance follows a linked worktree's own markers, never a bare pointer: a
+# `.git` file aimed at the shared common directory, or at a directory that is not
+# a worktree admin directory at all, allows nothing.
+GC_POINTER="$TMP/gc-pointer"
+mkdir -p "$GC_POINTER"
+fm_worktree_guard_own_gitdir "$GC_OWN"
+[ "$FM_WORKTREE_GUARD_GITDIR" = "$GC_OWN_ADMIN" ] || fail "a linked worktree must publish its own admin directory, got: $FM_WORKTREE_GUARD_GITDIR"
+printf 'gitdir: %s\n' "$GC_COMMON" > "$GC_POINTER/.git"
+fm_worktree_guard_own_gitdir "$GC_POINTER"
+[ -z "$FM_WORKTREE_GUARD_GITDIR" ] || fail "a .git file naming the common directory must allow nothing, got: $FM_WORKTREE_GUARD_GITDIR"
+printf 'gitdir: %s\n' "$TMP/no-such-admin" > "$GC_POINTER/.git"
+fm_worktree_guard_own_gitdir "$GC_POINTER"
+[ -z "$FM_WORKTREE_GUARD_GITDIR" ] || fail "a .git file naming a missing directory must allow nothing, got: $FM_WORKTREE_GUARD_GITDIR"
+fm_worktree_guard_own_gitdir "$OWN"
+[ -z "$FM_WORKTREE_GUARD_GITDIR" ] || fail "a root whose .git is a directory needs no extra allowance, got: $FM_WORKTREE_GUARD_GITDIR"
+pass "the admin-directory allowance requires a linked worktree's own markers"
+
 # --- 3. the escape, and firstmate's own authorized removal path -------------
 
 out=$(guarded "FM_WORKTREE_GUARD_ALLOW=1" -- "$OWN" rm -f ../task-sibling/src/unlanded.txt 2>&1)
