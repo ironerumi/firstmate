@@ -58,6 +58,12 @@ export FM_TEST_SEAM=1
 # under the marker. A case that verifies the refusal sets FM_TASK_ID itself.
 unset FM_TASK_ID
 
+# A worker pane carries its own task's guard bindings (bin/fm-spawn.sh exports
+# them). A guard refusal reports itself on that status record, so a suite run
+# from a pane would report its deliberate refusals to firstmate as real ones.
+# Every suite starts unbound; a case that needs the guard sets its own record.
+unset FM_NM_GUARD_STATUS FM_WORKTREE_GUARD_META
+
 # Clear the tasks-axi env overrides. An operator shell exports TASKS_AXI_FILE
 # (and may export TASKS_AXI_BACKEND) at its real home's backlog, and tasks-axi
 # resolves that env AHEAD of the .tasks.toml a fixture copies, so a suite that

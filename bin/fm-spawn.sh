@@ -642,6 +642,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 # shellcheck source=bin/fm-worker-account-lib.sh
 . "$SCRIPT_DIR/fm-worker-account-lib.sh"
+# shellcheck source=bin/fm-worker-env-lib.sh
+. "$SCRIPT_DIR/fm-worker-env-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
 # a direct report (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -5115,7 +5117,7 @@ fi
 # directly. An export statement inside the pane command carries the override
 # across every step of a compound raw launch while firstmate's own git is unchanged.
 if [ "$KEEP_AI_TRAILERS" = 0 ]; then
-  LAUNCH="export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=$(shell_quote "$GIT_HOOKS_DIR"); $LAUNCH"
+  LAUNCH="$(fm_worker_hooks_export_line "$GIT_HOOKS_DIR"); $LAUNCH"
 fi
 # Every agent this fleet launches - crewmate, scout, and secondmate, on a fresh
 # spawn and on a relaunch alike - runs with the compact-adviser kill switch on.
@@ -5311,8 +5313,7 @@ sleep 0.3
 # environment, so ONE line covers every supported harness with no per-harness
 # hook, and it reaches every runtime backend because spawn_send_text_line is the
 # backend-agnostic text path.
-spawn_send_text_line "$T" \
-  "export FM_NM_GUARD_STATUS=$(shell_quote "$STATE_REAL/$ID.status") FM_WORKTREE_GUARD_META=$(shell_quote "$STATE_REAL/$ID.meta") PATH=$(shell_quote "$FM_ROOT/bin/shims"):\$PATH"
+spawn_send_text_line "$T" "$(fm_worker_guard_export_line "$STATE_REAL" "$ID" "$FM_ROOT/bin")"
 sleep 0.3
 SPAWN_LAUNCH_SENT=1
 spawn_send_literal "$T" ". $(shell_quote "$LAUNCH_FILE")"

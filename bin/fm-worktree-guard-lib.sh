@@ -42,6 +42,10 @@ if [ -n "$_FM_WORKTREE_GUARD_LIB_DIR" ] && [ -f "$_FM_WORKTREE_GUARD_LIB_DIR/fm-
   # shellcheck source=bin/fm-timeout-lib.sh
   . "$_FM_WORKTREE_GUARD_LIB_DIR/fm-timeout-lib.sh"
 fi
+if [ -n "$_FM_WORKTREE_GUARD_LIB_DIR" ] && [ -f "$_FM_WORKTREE_GUARD_LIB_DIR/fm-guard-refusal-lib.sh" ]; then
+  # shellcheck source=bin/fm-guard-refusal-lib.sh
+  . "$_FM_WORKTREE_GUARD_LIB_DIR/fm-guard-refusal-lib.sh"
+fi
 
 # Colon-separated temp namespace. Unlanded work never lives here - firstmate
 # puts each task's own scratch under /tmp/fm-<id> - and refusing an ordinary
@@ -90,6 +94,9 @@ fm_worktree_guard_reason() { # <code> <target>
       ;;
     worktree-prune)
       printf 'pruning worktree records in "%s" rewrites the SHARED repository administration every sibling task depends on, so a sibling whose checkout is momentarily unreadable loses its registration. Use --dry-run to inspect; %s.' "$2" "$escape"
+      ;;
+    git-skip-hooks)
+      printf 'skipping git hooks with "%s" is refused in a fleet pane: the Git hooks are Firstmate setup owned by the spawn, not the worker, and a hook that fails is a defect to report rather than route around. Report it with a blocked status line and let firstmate fix it; %s.' "$2" "$escape"
       ;;
     worktree-pool)
       printf 'returning, destroying, or pruning pool worktrees is firstmate%s cleanup path, not a worker%s: it terminates the checkout holding this task%s unlanded work and frees the lease. Report the task done and let firstmate clean up; %s.' "'s" "'s" "'s" "$escape"
@@ -420,9 +427,67 @@ fm_worktree_guard_git_common_dir() { # <cwd>
   FM_WORKTREE_GUARD_GIT_REPOSITORY=$FM_WORKTREE_GUARD_PATH
 }
 
+# Prints the hook-skipping flag when this git command line asks git to skip its
+# hooks, and returns 0; returns 1 otherwise. Covers --no-verify (and its unique
+# abbreviations) on the verbs that run hooks, plus -n where it means --no-verify:
+# commit and am. On merge and rebase -n is --no-stat, on cherry-pick and revert
+# it is --no-commit, and on push it is --dry-run, so none of those are hook skips.
+# Global options are skipped by git's own grammar, and only words that are
+# options - not the values of -m/-F/--message/--file/--author/--exec - are inspected.
+fm_worktree_guard_git_skip_hooks() { # [argv...]
+  local verb='' word endopts=0 cluster ch skip_next=0 short_values
+  while [ "$#" -gt 0 ]; do
+    word=$1
+    shift
+    if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
+    if [ -z "$verb" ]; then
+      case "$word" in
+        -C|-c|--git-dir|--work-tree|--namespace|--super-prefix|--config-env|--attr-source) skip_next=1 ;;
+        -?*) ;;
+        commit|merge|cherry-pick|rebase|revert|am|push) verb=$word ;;
+        *) return 1 ;;
+      esac
+      continue
+    fi
+    [ "$endopts" -eq 0 ] || continue
+    case "$word" in
+      --) endopts=1 ;;
+      -m|-F|--message|--file|--author|--exec|-x) skip_next=1 ;;
+      --no-v|--no-ve|--no-ver|--no-veri|--no-verif|--no-verify)
+        printf '%s' "$word"
+        return 0
+        ;;
+      --*) ;;
+      -?*)
+        case "$verb" in
+          commit) short_values=mFCctSu ;;
+          am) short_values=pCS ;;
+          *) continue ;;
+        esac
+        cluster=${word#-}
+        while [ -n "$cluster" ]; do
+          ch=${cluster:0:1}
+          cluster=${cluster:1}
+          case "$ch" in
+            n) printf '%s' "$word"; return 0 ;;
+          esac
+          case "$short_values" in
+            *"$ch"*) break ;;
+          esac
+        done
+        ;;
+    esac
+  done
+  return 1
+}
+
 fm_worktree_guard_decide_git() { # <cwd> [argv...]
-  local cwd=$1 invocation_cwd=$1 repository repository_target
+  local cwd=$1 invocation_cwd=$1 repository repository_target flag
   shift
+  if flag=$(fm_worktree_guard_git_skip_hooks "$@"); then
+    fm_worktree_guard_deny git-skip-hooks "$flag"
+    return 0
+  fi
   fm_worktree_guard_git_scan "$@"
   local action=$FM_WORKTREE_GUARD_GIT_ACTION target='' dryrun=0 word
   [ -n "$action" ] || { printf 'allow\n'; return 0; }
@@ -719,5 +784,10 @@ fm_worktree_guard_enforce() { # <tool> [argv...]
   reason=${rest#*"$tab"}
   [ -n "$code" ] && [ -n "$reason" ] && [ "$reason" != "$rest" ] || return 0
   fm_worktree_guard_render "$code" "$reason"
+  # Report before exiting so firstmate learns of the refusal whatever the worker
+  # does next. The status record is the task's own, from the spawn export or, in
+  # its absence, the one derived from the durable record.
+  ! declare -F fm_guard_refusal_report >/dev/null 2>&1 || \
+    fm_guard_refusal_report "${FM_NM_GUARD_STATUS:-$FM_WORKTREE_GUARD_STATE_STATUS}" "$tool" "$code"
   exit 3
 }

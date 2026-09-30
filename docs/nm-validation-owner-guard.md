@@ -131,7 +131,7 @@ The threat model is a worker's mistake under pressure, the same as every other f
 
 - Allowed: the shim `exec`s the real tool, so the tool's own exit status, stdout, and stderr are unchanged, and the shim leaves no trace.
   The one exception is the review fix-round budget whose count cannot be read: the shim prints one explanatory note on stderr and still execs the real tool, because reporting the unreadable count is what keeps the gap visible.
-- Refused: exit status 3, one bordered banner on stderr carrying `[<code>] <reason>`, and no side effect at all.
+- Refused: exit status 3 and one bordered banner on stderr carrying `[<code>] <reason>`; best-effort refusal reporting follows the shared contract in [`worktree-guard.md`](worktree-guard.md) under "Refusals report themselves".
 - Tool missing outside the shim directory: exit status 127 with a message naming the tool.
 
 ## Automated validation

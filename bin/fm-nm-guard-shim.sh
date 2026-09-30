@@ -185,4 +185,13 @@ RULE='━━━━━━━━━━━━━━━━━━━━━━━━�
   printf '●  %s\n' "$REASON"
   printf '●%s\n' "$RULE"
 } >&2
+# Report the refusal on the task's status record (bin/fm-guard-refusal-lib.sh),
+# so firstmate learns of it whatever the worker does next. The worktree guard
+# library loads it when present; load it directly otherwise.
+if ! declare -F fm_guard_refusal_report >/dev/null 2>&1 && [ -n "$BIN_DIR" ] && [ -f "$BIN_DIR/fm-guard-refusal-lib.sh" ]; then
+  # shellcheck source=bin/fm-guard-refusal-lib.sh
+  . "$BIN_DIR/fm-guard-refusal-lib.sh"
+fi
+! declare -F fm_guard_refusal_report >/dev/null 2>&1 || \
+  fm_guard_refusal_report "$STATUS_FILE" "$FM_NM_GUARD_TOOL" "$CODE"
 exit 3
