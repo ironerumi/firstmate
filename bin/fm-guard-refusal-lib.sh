@@ -47,7 +47,29 @@ fm_guard_refusal_claim() { # <status-file> <key>
     ''|*[!0-9]*) return 1 ;;
   esac
   sentinel="$status.$key.$generation.claim"
-  ( set -C; : > "$sentinel" ) 2>/dev/null
+  ( set -C; : > "$sentinel" ) 2>/dev/null && return 0
+  # A prior claimant may have left this generation's sentinel behind after the
+  # status file was reset, or before it reached the append. Only take that
+  # sentinel over when the current record has no open blocker; a failed create
+  # for any other reason remains a quiet no-op.
+  [ -e "$sentinel" ] || return 1
+  if [ -f "$status" ]; then
+    local open
+    open=$(awk -v token="[key=$key]" '
+      {
+        colon = index($0, ":")
+        head = colon ? substr($0, 1, colon - 1) : $0
+        if (index(head, token) == 0) next
+        verb = $1
+        sub(/:$/, "", verb)
+        if (verb == "blocked") open = 1
+        else if (verb == "resolved") open = 0
+      }
+      END { print open ? "yes" : "no" }
+    ' "$status" 2>/dev/null) || return 1
+    [ "$open" = no ] || return 1
+  fi
+  : > "$sentinel" 2>/dev/null
 }
 
 fm_guard_refusal_report() { # <status-file> <tool> <code>
