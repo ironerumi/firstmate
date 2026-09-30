@@ -440,18 +440,11 @@ pass "a refusal without a status record still refuses"
 
 # --- 11. reach: one wiring line, every harness and every backend -------------
 
-SPAWN="$ROOT/bin/fm-spawn.sh"
 # The shims reach a worker through the pane environment rather than a per-harness
 # hook, which is what makes the coverage complete. bin/fm-worker-env-lib.sh owns
-# that environment and fm-spawn sends what it prints through the backend-agnostic
-# text path rather than any backend's own send. The export names the shim
-# directory and this task's status file and record.
-# tests/fm-worker-env-composition.test.sh runs the whole worker environment, and
-# tests/fm-backend-orca.test.sh proves the line actually reaches a non-default
-# backend end to end.
-# shellcheck disable=SC2016  # single quotes are deliberate: these are literal source strings
-grep -F 'spawn_send_text_line "$T"' "$SPAWN" | grep -F 'fm_worker_guard_export_line' >/dev/null \
-  || fail "fm-spawn must send the shim export through the backend-agnostic text path"
+# that environment and tests/fm-worker-env-composition.test.sh runs the whole
+# worker environment, while tests/fm-backend-orca.test.sh proves the line reaches
+# a non-default backend end to end.
 # shellcheck source=bin/fm-worker-env-lib.sh
 . "$ROOT/bin/fm-worker-env-lib.sh"
 WORKER_LINE=$(fm_worker_guard_export_line "$TMP/state dir" t1 "$ROOT/bin")
