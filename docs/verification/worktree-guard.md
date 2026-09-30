@@ -1,6 +1,6 @@
 # Worktree-isolation guard verification
 
-Repeatable evidence that the worktree-isolation guard refuses a real worker's destructive command outside its own worktree.
+Repeatable evidence that the worktree-isolation guard refuses a real worker's destructive command outside its own worktree except for documented task-owned allowances.
 Current behavior, scope, and rationale are owned by [`../worktree-guard.md`](../worktree-guard.md); this page records evidence only.
 
 Date: 2026-08-31.
@@ -33,6 +33,9 @@ ok - an in-root canonical common directory permits a standalone nested removal
 ok - worktree pruning is refused while its dry run stays available
 ok - git worktree refusal uses the portable bounded-execution owner
 ok - git worktree commands judge the selected repository
+ok - a plain git commit in a linked worktree passes the guard with the trailer hook installed
+ok - only the task's own admin directory is allowed; the common directory and a sibling's stay protected
+ok - the admin-directory allowance requires a linked worktree's own markers
 ok - FM_WORKTREE_GUARD_ALLOW=1 allows a removal firstmate has authorized
 ok - an authorized firstmate-owned parent process is not refused
 ok - the cleanup path that owns worktree removal is not itself guarded
