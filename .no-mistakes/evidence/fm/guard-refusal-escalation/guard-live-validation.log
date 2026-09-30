@@ -1,0 +1,95 @@
+$ bash tests/fm-nm-guard.test.sh
+ok - a second axi run is refused while a run is live
+ok - rerun is refused while a run is live
+ok - aborting a working run is refused and names the run
+ok - a superseding push is refused while a run is live
+ok - inspection and reconnection stay permitted under a live run
+ok - the axi respond continuation path is permitted and passes arguments through
+ok - help for a refused subcommand stays readable
+ok - unrelated git commands and dry-run pushes are never refused
+ok - abandoning an answerable gate is refused and points at the gate response
+ok - the parked gate can still be answered
+ok - a replacement run after an unreported failure is refused with the evidence path
+ok - recording the failure clears the refusal
+ok - a failed run outside this worktree's history never gates it
+ok - a run cancelled at a gate stays terminal and clears through the reporting path
+ok - a gate row never bypasses the failed-run code-identity test
+ok - an unrecognized run word stays permissive even with a gate row
+ok - a genuinely new run and push after a terminal run are not interfered with
+ok - another branch's run never gates this one
+ok - a task with no branch of its own is never gated
+ok - an unreadable pipeline answer fails open
+ok - an absent no-mistakes binary fails open
+ok - FM_NM_GUARD_ALLOW=1 allows an authorized recovery
+ok - a review fix response before the budget is allowed
+ok - the fourth review fix response is refused with the batch-decision path
+ok - FM_NM_GUARD_REVIEW_UNLOCK=1 permits one authorized further round
+ok - the budget refuses only a review fix response
+ok - an unreadable review round count fails open and is reported
+ok - argv classification is exact for every documented shape
+ok - the decision table matches the documented contract
+ok - the review fix-round budget decision matches the documented contract
+ok - a refusal appends one keyed blocked line, idempotent per refusal code
+ok - a reset status file does not strand a refusal claim
+ok - a resolved refusal report re-opens on the next refusal
+ok - the guard's own report cannot count as the worker's failure report
+ok - a refusal without a status record still refuses
+ok - fm-spawn wires the shims once, through the backend-agnostic pane environment
+ok - both shims are one owner reached under two names
+ok - fm-nm-guard.test.sh
+
+$ bash tests/fm-worktree-guard.test.sh
+ok - the decision matrix matches the documented contract
+ok - the temp namespace is an explicit, configurable allowance rather than a hole
+ok - rm of a sibling worktree is refused end to end and the sibling survives
+ok - mv out of the home's state directory is refused end to end
+ok - a dotted sibling task id cannot collide with this task's allowances
+ok - the keep-warm arm and cleanup run under the guard while siblings stay protected
+ok - intermediate symlinks cannot escape the worker's root
+ok - in-root symlinks preserve the fronted tool's final-component semantics
+ok - remove tools judge trailing-slash symlink targets physically
+ok - move destinations follow directory symlinks without widening source semantics
+ok - ordinary long options preserve move destination classification
+ok - move sources preserve trailing-slash dereference semantics
+ok - mv attached option arguments are classified by their option semantics
+ok - the worker's own worktree, records, and scratch stay fully usable
+ok - git worktree remove of a live sibling worktree is refused end to end
+ok - an external canonical common directory refuses a linked worker's nested removal
+ok - an in-root canonical common directory permits a standalone nested removal
+ok - worktree pruning is refused while its dry run stays available
+ok - git worktree refusal uses the portable bounded-execution owner
+ok - git worktree commands judge the selected repository
+ok - a plain git commit in a linked worktree passes the guard with the trailer hook installed
+ok - only the task's own admin directory is allowed; the common directory and a sibling's stay protected
+ok - the admin-directory allowance requires a linked worktree's own markers
+ok - FM_WORKTREE_GUARD_ALLOW=1 allows a removal firstmate has authorized
+ok - an authorized firstmate-owned parent process is not refused
+ok - the cleanup path that owns worktree removal is not itself guarded
+ok - the guard is inert wherever the worker's own root cannot be established
+ok - every public filesystem and pool shim enforces observable behavior
+ok - a second firstmate home's shims on PATH cannot loop the transport
+ok - a wrapper that resolves back to the shim fails fast instead of hanging
+ok - fm-worktree-guard.test.sh
+
+$ bash tests/fm-worker-env-composition.test.sh
+ok - fixture: shims first on PATH, spawn core.hooksPath installed, linked worktree
+ok - concurrent real-shim refusals exit promptly and report once
+ok - control: an escaping rm is refused, even under the temp namespace, and reported once
+ok - commit -m runs the spawn hook under the guard
+ok - commit --amend under the guard
+ok - commit -F - under the guard
+ok - merge --no-ff under the guard
+ok - cherry-pick under the guard
+ok - cherry-pick conflict then --continue under the guard
+ok - rebase under the guard
+ok - rebase conflict then --continue under the guard
+ok - revert under the guard
+ok - --no-verify and commit -n are refused on every hook-running verb, and reported once
+ok - push modes are not mistaken for hook skipping
+ok - -n stays allowed where it is not --no-verify (merge, cherry-pick, a message)
+ok - a resolved refusal report re-opens on the next refusal
+ok - FM_WORKTREE_GUARD_ALLOW=1 still authorizes an exact command
+ok - a dead holder's lock is reaped and cleaned up under the real worker environment
+ok - watcher arm from a guarded worker pane stands down cleanly
+ok - procevent reconcile runs under the guard with nothing refused
+ok - a suite run from a bound pane leaves that pane's task record untouched
