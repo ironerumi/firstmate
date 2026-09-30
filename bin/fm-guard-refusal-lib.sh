@@ -22,60 +22,55 @@
 #
 # The line grammar is owned by bin/fm-classify-lib.sh; this file only writes it.
 
+fm_guard_refusal_lock_remove() {
+  FM_WORKTREE_GUARD_ALLOW=1 rm -f -- "$1" 2>/dev/null || true
+}
+
 fm_guard_refusal_lock_acquire() { # <status-file>
-  local status=$1 lock owner current existing pid
+  local status=$1 lock current pid deadline
   case "$status" in
     /*) ;;
     *) status="$(pwd -P)/$status" ;;
   esac
   lock="$status.lock"
   current=${BASHPID:-$$}
+  deadline=$((SECONDS + 1))
   while :; do
-    owner="$lock.owner.$current.${RANDOM:-0}"
-    if (
-      umask 077
-      mkdir "$owner" 2>/dev/null &&
-        printf '%s\n' "$current" > "$owner/pid" 2>/dev/null &&
-        ln -s "$owner" "$lock" 2>/dev/null
-    ); then
+    if ( set -C; : > "$lock" ) 2>/dev/null; then
+      if ! printf '%s\n' "$current" > "$lock" 2>/dev/null; then
+        fm_guard_refusal_lock_remove "$lock"
+        return 1
+      fi
       FM_GUARD_REFUSAL_LOCK=$lock
-      FM_GUARD_REFUSAL_OWNER=$owner
       return 0
     fi
-    rmdir "$owner" 2>/dev/null || true
-    [ -L "$lock" ] || return 1
-    existing=$(readlink "$lock" 2>/dev/null || true)
-    case "$existing" in
-      "$lock".owner.*)
-        pid=$(cat "$existing/pid" 2>/dev/null || true)
-        case "$pid" in
-          ''|*[!0-9]*)
-            [ "$(readlink "$lock" 2>/dev/null || true)" = "$existing" ] && rm -f "$lock"
-            rmdir "$existing" 2>/dev/null || true
-            ;;
-          *)
-            if kill -0 "$pid" 2>/dev/null; then
-              sleep 0.01
-            else
-              [ "$(readlink "$lock" 2>/dev/null || true)" = "$existing" ] && rm -f "$lock"
-              rmdir "$existing" 2>/dev/null || true
-            fi
-            ;;
-        esac
+    pid=
+    IFS= read -r pid < "$lock" 2>/dev/null || true
+    case "$pid" in
+      ''|*[!0-9]*) ;;
+      *)
+        if kill -0 "$pid" 2>/dev/null; then
+          [ "$SECONDS" -lt "$deadline" ] || return 1
+          sleep 0.01
+          continue
+        fi
+        fm_guard_refusal_lock_remove "$lock"
+        continue
         ;;
-      *) sleep 0.01 ;;
     esac
+    [ "$SECONDS" -lt "$deadline" ] || {
+      fm_guard_refusal_lock_remove "$lock"
+      return 1
+    }
+    sleep 0.01
   done
 }
 
 fm_guard_refusal_lock_release() {
-  local lock=${FM_GUARD_REFUSAL_LOCK:-} owner=${FM_GUARD_REFUSAL_OWNER:-}
-  [ -n "$lock" ] && [ -n "$owner" ] || return 0
-  if [ "$(readlink "$lock" 2>/dev/null || true)" = "$owner" ]; then
-    rm -f "$lock" 2>/dev/null || true
-    rmdir "$owner" 2>/dev/null || true
-  fi
-  unset FM_GUARD_REFUSAL_LOCK FM_GUARD_REFUSAL_OWNER
+  local lock=${FM_GUARD_REFUSAL_LOCK:-}
+  [ -n "$lock" ] || return 0
+  fm_guard_refusal_lock_remove "$lock"
+  unset FM_GUARD_REFUSAL_LOCK
 }
 
 # 0 when <status-file> already holds an OPEN blocked line for <key>.

@@ -126,6 +126,55 @@ test_guard_is_live_and_temp_exemption_is_off() {
   pass "control: an escaping rm is refused, even under the temp namespace, and reported once"
 }
 
+test_concurrent_refusal_reporting() {
+  local i rc pending deadline done_file
+  local -a pids done_files
+  : > "$STATUS"
+  i=0
+  while [ "$i" -lt 8 ]; do
+    printf 'outside\n' > "$PRIMARY/concurrent-$i.txt"
+    done_file="$TMP_ROOT/refusal-$i.done"
+    done_files[$i]=$done_file
+    (
+      worker "$WT" rm -f "$PRIMARY/concurrent-$i.txt" >"$TMP_ROOT/refusal-$i.out" 2>&1
+      rc=$?
+      printf '%s\n' "$rc" > "$done_file"
+      exit "$rc"
+    ) &
+    pids[$i]=$!
+    i=$((i + 1))
+  done
+
+  deadline=$((SECONDS + 5))
+  while :; do
+    pending=0
+    i=0
+    while [ "$i" -lt 8 ]; do
+      [ -f "${done_files[$i]}" ] || pending=1
+      i=$((i + 1))
+    done
+    [ "$pending" -eq 0 ] && break
+    [ "$SECONDS" -lt "$deadline" ] || {
+      i=0
+      while [ "$i" -lt 8 ]; do kill "${pids[$i]}" 2>/dev/null || true; i=$((i + 1)); done
+      while [ "$i" -gt 0 ]; do i=$((i - 1)); wait "${pids[$i]}" 2>/dev/null || true; done
+      fail "concurrent refusals did not exit within the bound"
+    }
+    sleep 0.05
+  done
+
+  i=0
+  while [ "$i" -lt 8 ]; do
+    IFS= read -r rc < "${done_files[$i]}" || rc=
+    [ "$rc" = 3 ] || fail "concurrent refusal $i exited $rc instead of 3"
+    wait "${pids[$i]}" 2>/dev/null || true
+    i=$((i + 1))
+  done
+  [ "$(blocked_lines guard-worktree-escape-delete)" = 1 ] \
+    || fail "concurrent refusals must leave exactly one open report: $(cat "$STATUS")"
+  pass "concurrent real-shim refusals exit promptly and report once"
+}
+
 test_commit_verbs_succeed_under_the_guard() {
   local body pick_sha
   printf 'one\n' > "$WT/one.txt"
@@ -320,6 +369,7 @@ test_suites_do_not_report_to_the_callers_task_record() {
 
 test_fixture_is_the_real_worker_environment
 test_guard_is_live_and_temp_exemption_is_off
+test_concurrent_refusal_reporting
 test_commit_verbs_succeed_under_the_guard
 test_skipping_hooks_is_refused_and_reported
 test_lock_reap_under_the_guard
