@@ -144,14 +144,14 @@ test_concurrent_refusal_reporting() {
   while [ "$i" -lt 8 ]; do
     printf 'outside\n' > "$PRIMARY/concurrent-$i.txt"
     done_file="$TMP_ROOT/refusal-$i.done"
-    done_files[$i]=$done_file
+    done_files[i]=$done_file
     (
       worker "$WT" rm -f "$PRIMARY/concurrent-$i.txt" >"$TMP_ROOT/refusal-$i.out" 2>&1
       rc=$?
       printf '%s\n' "$rc" > "$done_file"
       exit "$rc"
     ) &
-    pids[$i]=$!
+    pids[i]=$!
     i=$((i + 1))
   done
 
