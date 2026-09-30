@@ -96,7 +96,7 @@ fm_worktree_guard_reason() { # <code> <target>
       printf 'pruning worktree records in "%s" rewrites the SHARED repository administration every sibling task depends on, so a sibling whose checkout is momentarily unreadable loses its registration. Use --dry-run to inspect; %s.' "$2" "$escape"
       ;;
     git-skip-hooks)
-      printf 'skipping git hooks with "%s" is refused in a fleet pane: the commit hooks are Firstmate setup owned by the spawn, not the worker, and a hook that fails is a defect to report rather than route around. Report it with a blocked status line and let firstmate fix it; %s.' "$2" "$escape"
+      printf 'skipping git hooks with "%s" is refused in a fleet pane: the Git hooks are Firstmate setup owned by the spawn, not the worker, and a hook that fails is a defect to report rather than route around. Report it with a blocked status line and let firstmate fix it; %s.' "$2" "$escape"
       ;;
     worktree-pool)
       printf 'returning, destroying, or pruning pool worktrees is firstmate%s cleanup path, not a worker%s: it terminates the checkout holding this task%s unlanded work and frees the lease. Report the task done and let firstmate clean up; %s.' "'s" "'s" "'s" "$escape"
@@ -430,10 +430,10 @@ fm_worktree_guard_git_common_dir() { # <cwd>
 # Prints the hook-skipping flag when this git command line asks git to skip its
 # hooks, and returns 0; returns 1 otherwise. Covers --no-verify (and its unique
 # abbreviations) on the verbs that run hooks, plus -n where it means --no-verify:
-# commit and am. On merge and rebase -n is --no-stat, and on cherry-pick and
-# revert it is --no-commit, so it is not a hook skip there. Global options are
-# skipped by git's own grammar, and only words that are options - not the values
-# of -m/-F/--message/--file/--author/--exec - are inspected.
+# commit and am. On merge and rebase -n is --no-stat, on cherry-pick and revert
+# it is --no-commit, and on push it is --dry-run, so none of those are hook skips.
+# Global options are skipped by git's own grammar, and only words that are
+# options - not the values of -m/-F/--message/--file/--author/--exec - are inspected.
 fm_worktree_guard_git_skip_hooks() { # [argv...]
   local verb='' word endopts=0 cluster ch skip_next=0 short_values
   while [ "$#" -gt 0 ]; do
@@ -444,7 +444,7 @@ fm_worktree_guard_git_skip_hooks() { # [argv...]
       case "$word" in
         -C|-c|--git-dir|--work-tree|--namespace|--super-prefix|--config-env|--attr-source) skip_next=1 ;;
         -?*) ;;
-        commit|merge|cherry-pick|rebase|revert|am) verb=$word ;;
+        commit|merge|cherry-pick|rebase|revert|am|push) verb=$word ;;
         *) return 1 ;;
       esac
       continue

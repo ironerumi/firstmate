@@ -101,6 +101,16 @@ must_refuse() { # <label> <expected-code> <command...>
   esac
 }
 
+must_not_refuse() { # <label> <command...>
+  local label=$1 out status=0
+  shift
+  out=$("$@" 2>&1) || status=$?
+  [ "$status" -ne 3 ] || fail "$label: unexpectedly hit a guard refusal: $out"
+  case "$out" in
+    *"REFUSED BY FIRSTMATE"*) fail "$label: unexpectedly rendered a refusal: $out" ;;
+  esac
+}
+
 blocked_lines() { # <key>
   grep -c "^blocked .*\[key=$1\]" "$STATUS" 2>/dev/null || true
 }
@@ -258,7 +268,7 @@ test_commit_verbs_succeed_under_the_guard() {
 
 test_skipping_hooks_is_refused_and_reported() {
   local verb pick_sha
-  for verb in commit merge cherry-pick rebase revert am; do
+  for verb in commit merge cherry-pick rebase revert am push; do
     must_refuse "$verb --no-verify" git-skip-hooks wgit "$verb" --no-verify
   done
   must_refuse "commit -n" git-skip-hooks wgit commit -n -m nope
@@ -266,8 +276,12 @@ test_skipping_hooks_is_refused_and_reported() {
   must_refuse "commit -nm" git-skip-hooks wgit commit -nm nope
   must_refuse "-C <dir> commit --no-verify" git-skip-hooks wgit -C "$WT" commit --no-verify -m nope
   [ "$(blocked_lines guard-git-skip-hooks)" = 1 ] \
-    || fail "ten refusals must leave exactly one open report, got: $(grep guard-git-skip-hooks "$STATUS")"
+    || fail "repeated refusals must leave exactly one open report, got: $(grep guard-git-skip-hooks "$STATUS")"
   pass "--no-verify and commit -n are refused on every hook-running verb, and reported once"
+
+  must_not_refuse "push --dry-run" wgit push -n origin HEAD
+  must_not_refuse "plain push" wgit push origin HEAD
+  pass "push modes are not mistaken for hook skipping"
 
   # Where -n is not a hook skip, it must keep working.
   must "merge -n" wgit merge -n side

@@ -116,6 +116,8 @@ check_decision git-skip-hooks "merge --no-verify" git "$OWN" merge --no-verify t
 check_decision git-skip-hooks "cherry-pick --no-verify" git "$OWN" cherry-pick --no-verify abc
 check_decision git-skip-hooks "rebase --no-verify" git "$OWN" rebase --no-verify main
 check_decision git-skip-hooks "revert --no-verify" git "$OWN" revert --no-verify HEAD
+check_decision git-skip-hooks "push --no-verify" git "$OWN" push --no-verify origin HEAD
+check_decision git-skip-hooks "push abbreviated --no-verify" git "$OWN" push --no-verif origin HEAD
 check_decision git-skip-hooks "an abbreviated --no-verify" git "$OWN" commit --no-verif -m x
 check_decision git-skip-hooks "--no-verify behind global options" git "$OWN" -C "$OWN" -c user.name=x --no-pager commit --no-verify -m x
 check_decision allow "commit without a skip flag" git "$OWN" commit -m x
@@ -127,6 +129,8 @@ check_decision allow "merge -n is --no-stat" git "$OWN" merge -n topic
 check_decision allow "rebase -n is --no-stat" git "$OWN" rebase -n main
 check_decision allow "cherry-pick -n is --no-commit" git "$OWN" cherry-pick -n abc
 check_decision allow "revert -n is --no-commit" git "$OWN" revert -n HEAD
+check_decision allow "push -n is --dry-run" git "$OWN" push -n origin HEAD
+check_decision allow "plain push" git "$OWN" push origin HEAD
 check_decision allow "a verb that runs no skippable hook" git "$OWN" log --no-verify
 
 # Allow: everything inside the worker's own sandbox, and every non-target shape.
@@ -150,7 +154,7 @@ check_decision allow "mv -S consumes a suffix, not a path" mv "$OWN" -S ../backu
 check_decision allow "git worktree prune --dry-run changes nothing" git "$OWN" worktree prune --dry-run
 check_decision allow "git worktree add" git "$OWN" worktree add ../elsewhere
 check_decision allow "an ordinary git command" git "$OWN" status --porcelain
-check_decision allow "a git push is the other guard's business" git "$OWN" push origin HEAD
+check_decision allow "a git push is allowed without a hook skip" git "$OWN" push origin HEAD
 check_decision allow "treehouse get" treehouse "$OWN" get
 check_decision allow "an unfronted tool" cp "$OWN" ../task-sibling/x .
 pass "the decision matrix matches the documented contract"

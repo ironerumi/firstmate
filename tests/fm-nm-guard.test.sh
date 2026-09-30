@@ -415,6 +415,13 @@ assert_refused nm-run-active "a repeated duplicate run"
 assert_contains "$(cat "$STATUS_FILE")" "guard refused no-mistakes" "the report names the refused tool"
 pass "a refusal appends one keyed blocked line, idempotent per refusal code"
 
+rm -f "$STATUS_FILE"
+: > "$STATUS_FILE"
+run_in_repo no-mistakes axi run
+[ "$(grep -c '^blocked .*\[key=guard-nm-run-active\]' "$STATUS_FILE")" = 1 ] \
+  || fail "a reset status file must accept a fresh report: $(cat "$STATUS_FILE")"
+pass "a reset status file does not strand a refusal claim"
+
 printf 'resolved [at=1] [key=guard-nm-run-active]: firstmate answered\n' >> "$STATUS_FILE"
 run_in_repo no-mistakes axi run
 [ "$(grep -c '^blocked .*\[key=guard-nm-run-active\]' "$STATUS_FILE")" = 2 ] \
