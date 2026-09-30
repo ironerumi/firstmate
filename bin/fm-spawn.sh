@@ -267,6 +267,12 @@
 #   containment test reads local refs only and never fetches, so this gate stays
 #   usable offline; a stale remote-tracking ref can therefore make an unpushed
 #   commit look contained, which is exactly why no remedy command is printed.
+#   A fresh ship or scout spawn also refuses a slot that still carries a retired
+#   firstmate home's leftovers: an .fm-secondmate-home or .fm-secondmate-parent marker,
+#   or, in a firstmate checkout, gitignored state/, data/, config/, or projects/ dirs.
+#   Those would make the worker's hooks and scripts resolve a home that no longer
+#   exists, so the refusal names them and leaves the slot untouched
+#   (spawn_worktree_home_residue).
 # Batch dispatch: pass one or more `id=repo` pairs instead of a single <id> <project>, e.g.
 #     fm-spawn.sh fix-a-k3=projects/foo add-b-q7=projects/bar [--scout]
 #   Each pair re-execs this script in single-task mode, so the single path stays the only
@@ -3274,6 +3280,40 @@ spawn_worktree_has_origin_config() { # <worktree>
   return 1
 }
 
+# A pool slot can outlive a retired secondmate home: `treehouse return` leaves
+# gitignored files, so the home's identity and parent markers and (in a firstmate
+# checkout) its state/, data/, config/, and projects/ can still sit in a slot
+# handed to a worker. The worker's hooks and scripts would resolve those as a live
+# home, so a fresh spawn refuses such a slot, naming the residue and leaving it
+# untouched: its contents are a retired home's records, never the spawn's to delete.
+# The slot is a firstmate checkout only when it carries this repository's own
+# entrypoint; another project's tracked or ignored data/config dirs are not residue.
+spawn_worktree_home_residue() { # <worktree>
+  local worktree=$1 name found=
+  for name in .fm-secondmate-home .fm-secondmate-parent; do
+    if [ -e "$worktree/$name" ] || [ -L "$worktree/$name" ]; then
+      found="$found $name"
+    fi
+  done
+  if [ -f "$worktree/AGENTS.md" ] && [ -f "$worktree/bin/fm-spawn.sh" ]; then
+    for name in state data config projects; do
+      if { [ -e "$worktree/$name" ] || [ -L "$worktree/$name" ]; } \
+        && git -C "$worktree" check-ignore -q -- "$name/" 2>/dev/null; then
+        found="$found $name/"
+      fi
+    done
+  fi
+  [ -n "$found" ] || return 1
+  printf '%s\n' "${found# }"
+}
+
+refuse_spawn_worktree_home_residue() { # <worktree>
+  local worktree=$1 residue
+  residue=$(spawn_worktree_home_residue "$worktree") || return 0
+  echo "error: pooled worktree '$worktree' still carries a retired firstmate home's leftovers ($residue); refusing to launch a worker there and leaving it untouched; retire that home through its teardown or remove the leftovers once they are confirmed stale" >&2
+  return 1
+}
+
 freshen_spawn_worktree_base() { # <worktree>
   local worktree=$1 default target expected actual status
   status=$(git -C "$worktree" -c core.quotePath=false status --porcelain) || {
@@ -4230,6 +4270,7 @@ elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
   fi
 fi
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
+  refuse_spawn_worktree_home_residue "$WT" || exit 1
   freshen_spawn_worktree_base "$WT" || exit 1
 fi
 

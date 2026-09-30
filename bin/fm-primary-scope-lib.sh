@@ -17,11 +17,22 @@ fm_root_is_secondmate_home() {
   return 0
 }
 
+# Return 0 when this process runs in a ship or scout worker pane.
+# bin/fm-spawn.sh exports FM_TASK_ID into every such pane and into no
+# secondmate or primary session, so the environment, not anything the worktree
+# holds, decides the role.
+fm_is_worker_session() {
+  [ -n "${FM_TASK_ID:-}" ]
+}
+
 # Return 0 when $1 is a genuine primary root whose effective state dir is $2.
-# A valid secondmate marker force-includes a linked secondmate home.
-# Otherwise only a plain checkout is primary, never a linked task worktree.
+# A worker pane is never primary: a pool slot can still carry a retired
+# secondmate home's marker and state/, and those must not make it act as a home.
+# Otherwise a valid secondmate marker force-includes a linked secondmate home,
+# and only a plain checkout is primary, never a linked task worktree.
 fm_primary_scope_matches() {
   local root=$1 state=$2 git_dir git_common_dir
+  ! fm_is_worker_session || return 1
   if ! fm_root_is_secondmate_home "$root"; then
     git_dir=$(git -C "$root" rev-parse --git-dir 2>/dev/null) || return 1
     git_common_dir=$(git -C "$root" rev-parse --git-common-dir 2>/dev/null) || return 1

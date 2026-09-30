@@ -202,6 +202,23 @@ PROBE
 # Nothing re-checks it, so a worker that later changes directory into the
 # repository's primary checkout would run this branch-switching suite in the one
 # checkout every linked worktree resolves against. The runner refuses that.
+# A caller that finds its hint and stops reading (portable_serial_weight_for
+# returns at the first match) closes the pipe while the fork's hint line is still
+# unwritten. Where SIGPIPE is ignored, as under some CI parents, the builtin
+# printf then reports "write error: Broken pipe" on stderr for every such lookup.
+test_fork_weight_hints_stay_quiet_when_the_reader_stops_early() {
+  local tmp err
+  tmp=$(fm_test_tmproot fm-test-run-fork-hints)
+  err="$tmp/hints.err"
+  ( trap '' PIPE
+    # shellcheck source=bin/fm-test-run-fork.sh
+    . "$ROOT/bin/fm-test-run-fork.sh"
+    fm_fork_serial_weight_hints
+  ) 2>"$err" | { exec <&-; sleep 0.3; }
+  [ ! -s "$err" ] || fail "the fork's weight hints wrote to stderr when their reader stopped early: $(cat "$err")"
+  pass "fm_fork_serial_weight_hints stays silent when its reader stops early"
+}
+
 test_task_marker_refuses_the_primary_checkout() {
   local tmp repo linked out rc
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-primary.XXXXXX")
@@ -1807,6 +1824,7 @@ test_preserves_guard_shims_on_path
 test_family_selection
 test_single_script_selection
 test_changed_file_selection_is_conservative
+test_fork_weight_hints_stay_quiet_when_the_reader_stops_early
 test_task_marker_refuses_the_primary_checkout
 test_changed_runner_surfaces_select_their_family
 test_shell_line_ending_policy_selects_runner_contract

@@ -74,6 +74,35 @@ export const Type = {
 JS
 }
 
+test_pi_extension_is_inert_for_worker() {
+  local repo home out status
+  repo="$TMP_ROOT/pi-worker-root"
+  home="$TMP_ROOT/pi-worker-home"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_pi_watch_extension_fixture "$repo"
+  out=$(PLUGIN="$repo/.pi/extensions/fm-primary-pi-watch.ts" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_TASK_ID=some-task node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const calls = [];
+const record = (name) => () => { calls.push(name); };
+const pi = {
+  on: record("on"),
+  registerCommand: record("registerCommand"),
+  registerTool: record("registerTool"),
+  sendUserMessage: record("sendUserMessage"),
+  events: { on: record("events.on") },
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+if (calls.length !== 0) throw new Error(`worker pane registered Pi watch surfaces: ${calls.join(",")}`);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi watch extension must load without registering anything for a worker"
+  [ -z "$out" ] || fail "Pi watch worker stand-down printed output: $out"
+  pass ".pi primary watch extension: registers nothing in a worker pane (FM_TASK_ID)"
+}
+
 test_pi_extension_reports_external_healthy_watcher() {
   local repo home plugin out status
   repo="$TMP_ROOT/pi-external-healthy-root"
@@ -4393,6 +4422,7 @@ EOF
   pass "OpenCode healthy arm output does not suppress the turn-end guard"
 }
 
+test_pi_extension_is_inert_for_worker
 test_pi_extension_reports_external_healthy_watcher
 test_pi_tool_returns_agent_tool_result
 test_pi_redundant_tool_call_is_owned_noop

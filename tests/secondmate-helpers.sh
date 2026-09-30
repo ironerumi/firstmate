@@ -14,7 +14,8 @@
 # FM_FAKE_TMUX_WINDOW, capture-pane echoes FM_FAKE_TMUX_CAPTURE) plus a fake
 # treehouse (durable lease of FM_FAKE_TREEHOUSE_HOME, recording the lease holder
 # to FM_FAKE_TREEHOUSE_LEASE_FILE; `return` removes the target and lease unless
-# FM_FAKE_TREEHOUSE_RETURN_FAIL is set). Echoes the fakebin dir.
+# FM_FAKE_TREEHOUSE_RETURN_FAIL is set; FM_FAKE_TREEHOUSE_RETURN_KEEP keeps the slot
+# and its untracked files like a real pool return). Echoes the fakebin dir.
 make_fake_tmux() {
   local dir=$1 fakebin capture
   fakebin=$(fm_fakebin "$dir")
@@ -123,6 +124,12 @@ case "${1:-}" in
     done
     [ -z "${FM_FAKE_TREEHOUSE_RETURN_FAIL:-}" ] || exit 17
     [ -n "${FM_FAKE_TREEHOUSE_LEASE_FILE:-}" ] && rm -f "$FM_FAKE_TREEHOUSE_LEASE_FILE"
+    # FM_FAKE_TREEHOUSE_RETURN_KEEP models a real pool return: tracked content is
+    # reset but the slot and its untracked and gitignored files stay behind.
+    if [ -n "${FM_FAKE_TREEHOUSE_RETURN_KEEP:-}" ]; then
+      [ -z "$target" ] || { git -C "$target" reset --hard -q; }
+      exit 0
+    fi
     [ -n "$target" ] && rm -rf -- "$target"
     exit 0
     ;;

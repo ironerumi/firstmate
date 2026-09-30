@@ -44,6 +44,10 @@ Always permitted:
   A sibling's records, including a dotted task ID that begins with this task's ID, and the fleet-wide records beside them stay protected.
 - This task's exact `state/.keepwarm-<id>` marker and its task-specific `state/.keepwarm-tmp/<id>/` temp directory - the Claude Stop hook arms by `mktemp` there and `mv`s into the marker, then cleans the temp file up, so both sides of that rename and its removal must resolve inside the allowed set.
   The allowance is the exact marker and that task directory, not the `state/` directory: another task's marker or temp directory and the supervisor's `state/.keepwarm-selfwake` stay protected. `selfwake` is reserved and cannot be a task ID.
+- The lock library's own bookkeeping (`bin/fm-wake-lib.sh`: owner dirs, lock links, steal mutexes, tombstones) and the process-event claim files under `bin/fm-procevent-lib.sh`'s claim root.
+  Those are firstmate-owned records wherever they live, for example under a home's `state/` or `~/.local/state/firstmate/procevent-claims`, so the lock functions run their `rm`, `rmdir`, and `mv` with `FM_WORKTREE_GUARD_ALLOW=1` and nothing a worker types gains that allowance.
+  Without it a guarded process could neither release nor reap a lock outside its worktree, and every failed acquisition attempt leaked an owner dir (about 207k in the 2026-09-30 incident).
+  A failed attempt on a held lock now creates no owner dir at all.
 - This task's own temp root (`tasktmp=` in the record, `/tmp/fm-<id>`) and the OS temp namespace. Unlanded work never lives in temp - firstmate puts each task's scratch there itself - and refusing an ordinary `rm` of a scratch file would make the guard something workers route around, which costs more than the class it catches.
 - `git worktree prune --dry-run`, which changes nothing.
 - `treehouse get`, `treehouse enter`, `treehouse status`, every other `git` subcommand, and every command that is not one of the fronted tools.

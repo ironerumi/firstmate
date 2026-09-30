@@ -293,6 +293,7 @@ Only a named non-default branch checked out in `FM_ROOT` is a worktree tangle.
 If another live session holds the fleet lock, both surfaces keep the alarm but switch to read-only wording with no repair command.
 Ship briefs also tell the crewmate to verify `pwd -P` and `git rev-parse --show-toplevel` before creating its ship branch (`fm/<id>` by default, or the project's registered prefix), then stop with a blocked status if it landed in the primary checkout.
 Placement is proven only at launch, so `bin/fm-spawn.sh` also exports the task id as `FM_TASK_ID` into every ship and scout pane, and `bin/fm-test-run.sh` refuses to execute the behavior suite from the primary checkout while that marker is set; the runner's header owns the predicate and [`tests/fm-test-run.test.sh`](../tests/fm-test-run.test.sh) pins it.
+The same marker keeps every primary-only harness surface (the session-start hook, the Stop auto-arm, the bare keep-warm self-wake, the turn-end guard, and the Pi and OMP extensions) inert in a worker pane, and `bin/fm-spawn.sh` refuses a fresh worker slot that still carries a retired home's markers or gitignored `state/`, `data/`, `config/`, or `projects/` dirs; [`tests/fm-worker-role-inert.test.sh`](../tests/fm-worker-role-inert.test.sh) pins the stand-down.
 
 ## No-mistakes gate authority boundary
 
@@ -329,7 +330,7 @@ For a domain whose subject is the firstmate repo itself, a deliberate `--no-proj
 The signal cannot be mixed with project names or omitted accidentally, and a populated home cannot be converted in place; the full seed contract is in [configuration.md](configuration.md#secondmate-routes-datasecondmatesmd).
 Herdr secondmate and child placement follows the launcher-binding contract in [Watching and task containers](herdr-backend.md#watching-and-task-containers).
 When seeded with `-`, the home is a durable treehouse lease under the secondmate id, so it survives with no live process and is not recycled by later `treehouse get` or pruning.
-Retirement or seed rollback returns the leased home; normal restart/recovery keeps it leased.
+Retirement or seed rollback follows the [secondmate provisioning retirement contract](../.agents/skills/secondmate-provisioning/SKILL.md#retirement-and-teardown); normal restart/recovery keeps it leased.
 If returning the lease fails during teardown, firstmate leaves the route and home intact instead of hiding a still-held lease.
 Seeding is transactional: if validation, cloning, initialization, or registry update fails, generated briefs, new homes, new project clones, and registry edits are rolled back.
 `local-only` projects stay with the main first mate because they merge into the main local checkout instead of a remote-backed PR path.

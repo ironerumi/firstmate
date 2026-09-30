@@ -232,6 +232,12 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# A ship or scout worker pane (spawn-owned FM_TASK_ID) never acts as a home, so it must
+# not take a home lock or run a home's startup sweep, even by hand.
+if [ -n "${FM_TASK_ID:-}" ]; then
+  echo "session-start: refusing to run in a worker pane (FM_TASK_ID=$FM_TASK_ID); a ship or scout never acts as a firstmate home" >&2
+  exit 3
+fi
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"

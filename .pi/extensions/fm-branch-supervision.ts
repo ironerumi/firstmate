@@ -571,6 +571,9 @@ function collectMainDialog(sessionManager: ReadonlyEntries, collection: MirrorCo
 }
 
 export default function (pi: ExtensionAPI) {
+  // A ship or scout worker pane carries the spawn-owned FM_TASK_ID and never acts as a home,
+  // even in a slot that still holds a retired home's marker and state/ (bin/fm-primary-scope-lib.sh).
+  if (process.env.FM_TASK_ID) return;
   type BranchSession = {
     session: AgentSession;
     sessionManager: SessionManager;

@@ -60,6 +60,8 @@ The mid-turn pull warning in `bin/fm-guard.sh` judges watcher health differently
 ### Primary scope
 
 The guard first calls the shared primary scope.
+A ship or scout worker pane is never in scope: `bin/fm-spawn.sh` exports `FM_TASK_ID` into every such pane and into no primary or secondmate session, and a set `FM_TASK_ID` overrides everything below, including a stale `.fm-secondmate-home` marker that a retired home left in a reused pool slot.
+The same marker makes the Pi and OMP extensions register nothing, and makes `bin/fm-session-start.sh`, `bin/fm-watch-arm.sh`, and `bin/fm-watch.sh` refuse to run, so a worker never takes a home lock or starts a supervision chain even by hand.
 A secondmate home runs its own primary Firstmate session, so a genuine `.fm-secondmate-home` marker includes it whether the home is a linked worktree or plain clone.
 The marker must meet both of these conditions:
 
