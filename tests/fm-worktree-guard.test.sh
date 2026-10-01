@@ -34,6 +34,7 @@ mkdir -p "$OWN/src" "$SIBLING/src" "$STATE/t1.inbox/handled" "$STATE/.keepwarm-t
 REAL_GIT=$(fm_real_tool git)
 fm_git_identity
 "$REAL_GIT" init -q "$OWN"
+"$REAL_GIT" init -q "$SIBLING"
 
 fm_write_meta "$META" \
   "window=firstmate:fm-t1" \
@@ -153,12 +154,22 @@ check_decision worktree-escape-move "mv of a sibling task's keep-warm temp file 
 # The no-mistakes gate push carries --no-verify by design; only that exact push
 # is allowed, and --no-verify anywhere else stays refused.
 OWN_BRANCH=$("$REAL_GIT" -C "$OWN" symbolic-ref --short HEAD)
-"$REAL_GIT" -C "$OWN" remote add no-mistakes "$TMP/gate/.no-mistakes/repos/abc123.git"
+GATE_REPO="$TMP/gate/.no-mistakes/repos/abc123.git"
+mkdir -p "${GATE_REPO%/*}"
+"$REAL_GIT" init -q --bare "$GATE_REPO"
+"$REAL_GIT" init -q --bare "$TMP/gate/other.git"
+ln -s "$TMP/gate/other.git" "$TMP/gate/.no-mistakes/repos/link.git"
+"$REAL_GIT" -C "$SIBLING" symbolic-ref HEAD "refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote add no-mistakes "$GATE_REPO"
 "$REAL_GIT" -C "$OWN" remote add origin "$TMP/gate/origin.git"
-"$REAL_GIT" -C "$OWN" remote add gatealias "$TMP/gate/.no-mistakes/repos/abc123.git"
+"$REAL_GIT" -C "$OWN" remote add gatealias "$GATE_REPO"
+"$REAL_GIT" -C "$SIBLING" remote add no-mistakes "$GATE_REPO"
 check_decision allow "the gate push" git "$OWN" push --no-verify -o no-mistakes.intent=abc no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push from a sibling cwd" git "$SIBLING" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
 "$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/.no-mistakes/repos/../other.git"
 check_decision git-skip-hooks "a gate-shaped traversal URL" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/.no-mistakes/repos/link.git"
+check_decision git-skip-hooks "a symlinked gate URL" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
 "$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/./.no-mistakes/repos/abc123.git"
 check_decision git-skip-hooks "a gate-shaped dot URL" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
 "$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/.no-mistakes/repos/nested/other.git"

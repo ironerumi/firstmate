@@ -547,9 +547,11 @@ fm_worktree_guard_git_skip_hooks() { # [argv...]
 # refspec whose destination is this worktree's own current branch. Anything
 # else, including --no-verify to any other remote, still refuses. Returns 0 only
 # when the entire command is that push; any uncertainty returns 1.
-fm_worktree_guard_gate_push_allowed() { # <cwd> [argv...]
-  local cwd=$1 word remote='' refspec='' count=0 branch url parent repo skip_value=0 seen_no_verify=0
-  shift
+fm_worktree_guard_gate_push_allowed() { # <cwd> <root> [argv...]
+  local cwd=$1 root=$2 word remote='' refspec='' count=0 branch url parent repo physical_url physical_parent physical_repo physical_cwd skip_value=0 seen_no_verify=0
+  shift 2
+  physical_cwd=$(CDPATH='' cd -P -- "$cwd" 2>/dev/null && pwd -P) || return 1
+  fm_worktree_guard_within_alias "$physical_cwd" "$root" || return 1
   [ "${1:-}" = push ] || return 1
   shift
   for word in "$@"; do
@@ -572,10 +574,10 @@ fm_worktree_guard_gate_push_allowed() { # <cwd> [argv...]
   esac
   [ -n "${FM_WORKTREE_GUARD_REAL_GIT:-}" ] && [ -x "$FM_WORKTREE_GUARD_REAL_GIT" ] || return 1
   declare -F fm_run_timed >/dev/null 2>&1 || return 1
-  branch=$(CDPATH='' cd -P -- "$cwd" 2>/dev/null && \
+  branch=$(CDPATH='' cd -P -- "$physical_cwd" 2>/dev/null && \
     fm_run_timed 2 "$FM_WORKTREE_GUARD_REAL_GIT" symbolic-ref --short -q HEAD 2>/dev/null) || return 1
   [ -n "$branch" ] && [ "${refspec#*:}" = "refs/heads/$branch" ] || return 1
-  url=$(CDPATH='' cd -P -- "$cwd" 2>/dev/null && \
+  url=$(CDPATH='' cd -P -- "$physical_cwd" 2>/dev/null && \
     fm_run_timed 2 "$FM_WORKTREE_GUARD_REAL_GIT" remote get-url --push no-mistakes 2>/dev/null) || return 1
   case "$url" in
     /*) ;;
@@ -591,6 +593,17 @@ fm_worktree_guard_gate_push_allowed() { # <cwd> [argv...]
     *) return 1 ;;
   esac
   case "$parent" in
+    /*/.no-mistakes/repos) ;;
+    *) return 1 ;;
+  esac
+  physical_url=$(CDPATH='' cd -P -- "$url" 2>/dev/null && pwd -P) || return 1
+  physical_repo=${physical_url##*/}
+  physical_parent=${physical_url%/*}
+  case "$physical_repo" in
+    ?*.git) ;;
+    *) return 1 ;;
+  esac
+  case "$physical_parent" in
     /*/.no-mistakes/repos) return 0 ;;
   esac
   return 1
@@ -600,7 +613,7 @@ fm_worktree_guard_decide_git() { # <cwd> [argv...]
   local cwd=$1 invocation_cwd=$1 repository repository_target flag
   shift
   if flag=$(fm_worktree_guard_git_skip_hooks "$@"); then
-    if fm_worktree_guard_gate_push_allowed "$cwd" "$@"; then
+    if fm_worktree_guard_gate_push_allowed "$cwd" "$FM_WORKTREE_GUARD_ROOT" "$@"; then
       printf 'allow\n'
       return 0
     fi
