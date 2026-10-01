@@ -1473,11 +1473,6 @@ remove_pr_poll_artifacts() {
     "$state_dir/$id.merge-authority" "$state_dir/$id.check-trust" || return 1
 }
 
-# Bounded one-time sweep of this task's leftover keep-warm temp files.
-# The temp namespace is task-specific, and the sweep stops after
-# FM_TEARDOWN_KEEPWARM_TEMP_LIMIT removals so a pathological directory cannot
-# make teardown unbounded. The marker itself is removed separately by the
-# caller. A swept failure is not fatal: the leftover temp is inert.
 FM_TEARDOWN_KEEPWARM_TEMP_LIMIT=${FM_TEARDOWN_KEEPWARM_TEMP_LIMIT:-2000}
 remove_keepwarm_temp_siblings() { # <state-dir> <id>
   local state_dir=$1 id=$2

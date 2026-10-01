@@ -243,13 +243,6 @@
 #   behavior suite from the repository primary checkout while that marker is
 #   set (its header owns the refusal). A secondmate runs in its own home and is
 #   not marked.
-#   That same ship or scout pane also receives `export FM_NM_KEEPWARM_SECS=...`
-#   when this home has a readable config/keepwarm-secs, so the crew's injected
-#   Claude keep-warm hook sleeps toward the spawning home's cadence straight
-#   from the crew's own environment instead of resolving that home's config dir
-#   from a project worktree (bin/fm-keepwarm-cadence-lib.sh owns the resolution
-#   and the precedence). Each launch first clears an unchanged value that an
-#   earlier launch injected, so removing the file restores the default.
 #   Only after this isolation check, every fresh ship or scout requires a clean
 #   task worktree. When an origin configuration is detected, spawn fetches it,
 #   resolves the current remote default branch, and resets to its tip. When none
@@ -4439,17 +4432,7 @@ if [ "$KIND" != secondmate ]; then
     j_stop=$(json_escape "touch $(shell_quote "$TURNEND"); $busy_cmd_prefix idle $busy_suffix --event stop 2>/dev/null || true")
     j_stopfail=$(json_escape "$busy_cmd_prefix idle $busy_suffix --event stop-failure 2>/dev/null || true")
     j_sessionend=$(json_escape "$busy_cmd_prefix idle $busy_suffix --event session-end 2>/dev/null || true")
-    # Keep-warm self-wake (bin/fm-claude-keepwarm-selfwake.sh): the same
-    # asyncRewake Stop hook the tracked primary settings register, injected
-    # here per task so an idle Claude crew or scout inside any project repo
-    # warms its own prompt cache without that repo loading firstmate's
-    # settings. FM_STATE_OVERRIDE pins the marker to this home's state dir,
-    # --task keys it to this crew, and teardown removes it with the task.
     j_keepwarm=$(json_escape "FM_STATE_OVERRIDE=$(shell_quote "$STATE_REAL") exec $(shell_quote "$FM_ROOT/bin/fm-claude-keepwarm-selfwake.sh") --task $(shell_quote "$ID")")
-    # autoCompactEnabled/autoCompactWindow: a crew in a project worktree would
-    # otherwise fall to the captain's own user-scope autoCompactEnabled:false
-    # and idle instead of compacting when it fills its context; 500000 matches
-    # the main home's own worktree window (its untracked .claude/settings.local.json).
     cat >"$WT/.claude/settings.local.json" <<EOF
 {"autoCompactEnabled":true,"autoCompactWindow":500000,"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"},{"type":"command","command":"$j_keepwarm","asyncRewake":true,"timeout":3600}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
 EOF
@@ -5183,10 +5166,6 @@ fi
 # syntax of its own.
 if [ "$KIND" = ship ] || [ "$KIND" = scout ]; then
   spawn_send_text_line "$T" "export FM_TASK_ID=$ID"
-  # Hand the crew the spawning home's keep-warm cadence through its own
-  # environment, so the injected Claude keep-warm hook never has to resolve
-  # this home's config dir from a project worktree. Remove only an unchanged
-  # value marked by an earlier launch before resolving this launch's setting.
   # shellcheck disable=SC2016  # Pane variables deliberately expand in the crewmate shell.
   spawn_send_text_line "$T" 'if [ "${FM_FIRSTMATE_KEEPWARM_SECS_INJECTED+x}" = x ] && [ "${FM_NM_KEEPWARM_SECS-}" = "$FM_FIRSTMATE_KEEPWARM_SECS_INJECTED" ]; then unset FM_NM_KEEPWARM_SECS; fi; unset FM_FIRSTMATE_KEEPWARM_SECS_INJECTED'
   if fm_keepwarm_config_present; then
@@ -5292,17 +5271,7 @@ if ! (umask 077 && printf '%s\n' "$LAUNCH" >"$LAUNCH_STAGE" &&
   exit 1
 fi
 sleep 0.3
-# Put firstmate's tool shims ahead of the real tools in the pane's PATH, and bind
-# them to this task's status file. The shims refuse only the commands that would
-# take validation ownership away from a live no-mistakes run - a second run, a
-# superseding push, an abandoned gate (bin/fm-nm-guard-shim.sh;
-# docs/nm-validation-owner-guard.md) - and exec the real tool for everything else.
-#
-# Sent here, before the launch command, for the same reason GOTMPDIR is: the
-# harness starts inside this shell and every tool call it makes inherits the
-# environment, so ONE line covers every supported harness with no per-harness
-# hook, and it reaches every runtime backend because spawn_send_text_line is the
-# backend-agnostic text path.
+# Worker guards: bind the shims to this task (docs/nm-validation-owner-guard.md).
 spawn_send_text_line "$T" "$(fm_worker_guard_export_line "$STATE_REAL" "$ID" "$FM_ROOT/bin")"
 sleep 0.3
 SPAWN_LAUNCH_SENT=1
