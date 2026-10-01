@@ -1,0 +1,11 @@
+SCENARIO worker-owned Lavish board arm/re-arm
+worker PATH rm=/bin/rm mv=/bin/mv
+outside rm/mv completed through the worker environment
+polls=2
+inbox-round-1=schema=fm-task-inbox.v1
+inbox-round-2=schema=fm-task-inbox.v1
+staging-files=none
+PASS worker-owned board re-armed and staging directory clean
+SCENARIO disposable sibling worktree cleanup
+git worktree remove --force completed through the worker pane environment
+PASS sibling worktree cleanup is not intercepted
