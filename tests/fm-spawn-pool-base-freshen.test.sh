@@ -470,6 +470,24 @@ test_pool_slot_with_retired_home_leftovers_is_refused() {
   pass "a pooled worktree carrying a retired home's markers or state is refused and left untouched"
 }
 
+test_pool_slot_with_empty_home_dirs_launches() {
+  local rec id out status name
+  for name in state data config projects; do
+    id="pool-empty-$name-r1"
+    rec=$(make_case "empty-$name" "$id")
+    read_case_record "$rec"
+    mkdir -p "$POOL_DIR/bin" "$POOL_DIR/$name"
+    : > "$POOL_DIR/AGENTS.md" && : > "$POOL_DIR/bin/fm-spawn.sh"
+    printf '%s/\n' "$name" > "$POOL_DIR/.gitignore"
+    git -C "$POOL_DIR" add -f AGENTS.md bin/fm-spawn.sh .gitignore
+    git -C "$POOL_DIR" -c user.name='Firstmate Tests' -c user.email='tests@example.invalid' commit -qm firstmate-shaped
+    out=$(run_spawn "$id" --mode no-mistakes --yolo off)
+    status=$?
+    expect_code 0 "$status" "an empty $name/ dir is not a retired home's leftover"$'\n'"$out"
+  done
+  pass "an empty state/data/config/projects dir does not block a worker launch"
+}
+
 test_pool_slot_with_ordinary_project_data_dirs_launches() {
   local rec id out status
   id='pool-project-data-r1'
@@ -806,6 +824,7 @@ test_pool_slot_claim_follows_the_spawn_outcome
 test_linked_spawning_home_rejects_primary_before_refresh
 test_stale_pool_base_refreshes_before_branching
 test_pool_slot_with_retired_home_leftovers_is_refused
+test_pool_slot_with_empty_home_dirs_launches
 test_pool_slot_with_ordinary_project_data_dirs_launches
 test_non_main_default_branch_refreshes_before_branching
 test_direct_pr_and_scout_refresh_before_launch
