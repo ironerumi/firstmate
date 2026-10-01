@@ -300,7 +300,6 @@ This replaces the no-mistakes skill's advice to enrich \`--intent\` with decisio
 Do not hand-edit, commit, or fix findings yourself while a run is active - the pipeline applies every fix.
 
 One drive call blocks until the next gate or outcome, which routinely outlives what your harness lets a single command run: Claude Code kills a command at ten minutes maximum, while one fix round is capped around thirty minutes and up to three rounds chain.
-The review loop is budgeted at three fix rounds: once a run has advanced three, the worker-side guard refuses another review fix response, and the leftovers need one batched decision - a real fix, a dismissal with a one-line reason, or attachment to the existing ticket - escalated to firstmate as a single \`needs-decision:\` line and never decided by the worker.
 So background the drive call instead of sitting in one blocking hold your harness will kill, and read its return when it finishes.
 Declare that wait using the brief's status-reporting rule before waiting on the backgrounded drive call.
 Where a harness's own command limit is not established, assume it bounds commands and use that same backgrounded shape.

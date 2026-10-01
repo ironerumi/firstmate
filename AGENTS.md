@@ -60,8 +60,6 @@ Each secondmate has a persistent isolated `FM_HOME`, including its own state, ba
 Tracked files hold shared instructions and tooling; `data/` holds durable private fleet records; `state/` holds runtime records and append-only status events; `config/` holds local operating choices; and `projects/` contains clones that are read-only to firstmate except under hard rule 1's concrete captain-approved project operation exception.
 
 Load `operational-home-layout` when locating, interpreting, or changing Firstmate home, config, data, state, project, or generated runtime paths.
-This fork additionally owns `config/keepwarm-secs`, the optional home-local Claude keep-warm cadence (LOCAL, gitignored; see `docs/configuration.md` "Claude keep-warm cadence"), and the `state/.keepwarm-selfwake`, `state/.keepwarm-<id>`, and `state/.keepwarm-tmp/` records written only by `bin/fm-claude-keepwarm-selfwake.sh` and removed by teardown.
-
 
 A `state/<id>.status` line is a wake event, not current-state truth; `bin/fm-crew-state.sh` owns current-state reconciliation.
 Treat `data/captain.md` as the domain-local record of captain preferences, optional `data/captain-shared.md` as the main-authoritative shared captain-preference file for secondmate inheritance, and `data/learnings.md` as curated home-local knowledge, regardless of harness memory.
@@ -248,7 +246,6 @@ After an autonomous merge, give the captain a one-line full-URL or local-main ou
 ### Validate
 
 Load `validation-supervision` when a ship starts or already has an active no-mistakes validation run, including a mid-run requirement change or finding.
-A worker's own session refuses the commands that would duplicate pipeline ownership deterministically (`docs/nm-validation-owner-guard.md`), so a reported refusal is a signal to steer back to the gate response flow, and `FM_NM_GUARD_ALLOW=1` is the only exception, handed over only when firstmate has authorized that recovery.
 
 ### PR ready, landing, and teardown
 
