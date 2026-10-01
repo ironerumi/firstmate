@@ -381,6 +381,67 @@ test_suites_do_not_report_to_the_callers_task_record() {
   pass "a suite run from a bound pane leaves that pane's task record untouched"
 }
 
+# The Claude settings.local.json bin/fm-spawn.sh writes registers busy-state
+# hooks that run `fm-busy-event.sh apply` inside the worker's pane. Each apply
+# publishes the record with `mv -f` and drops its lock with `rmdir`, both in the
+# supervising home's state/. Arm and retire run in firstmate's own session, so
+# only the hook events run under the worker environment here. Each hook command
+# is composed as fm-spawn.sh composes it (same prefix, suffix, and `|| true`),
+# and the real script runs under the real shims.
+test_busy_hook_sequence_under_the_guard() {
+  local gen prefix suffix cmd state_word rec="$STATE/$ID.busy-state" lock="$STATE/$ID.busy-state.lock"
+  : > "$STATUS"
+  gen=$("$ROOT/bin/fm-busy-event.sh" arm "$STATE" "$ID") || fail "arm failed outside the guard"
+  prefix="$ROOT/bin/fm-busy-event.sh apply $STATE $ID"
+  suffix="--gen $gen --source claude-hook"
+  for cmd in "busy $suffix --event user-prompt-submit" "idle $suffix --event stop" "busy $suffix --event user-prompt-submit" "idle $suffix --event session-end"; do
+    worker "$WT" bash -c "$prefix $cmd" || fail "busy hook event refused or failed: $cmd"
+    [ ! -e "$lock" ] && [ ! -L "$lock" ] || fail "the busy lock was left behind after: $cmd"
+    state_word=${cmd%% *}
+    grep -q "state=$state_word " "$rec" || fail "the busy record did not publish state $state_word: $(cat "$rec")"
+    [ -z "$(find "$STATE" -maxdepth 1 -name "$ID.busy-state.tmp.*")" ] || fail "a busy temp record was left behind after: $cmd"
+  done
+  [ "$(blocked_lines guard-worktree-escape-move)" = 0 ] && [ "$(blocked_lines guard-worktree-escape-delete)" = 0 ] \
+    || fail "the busy hook reported guard refusals: $(cat "$STATUS")"
+  "$ROOT/bin/fm-busy-event.sh" retire "$STATE" "$ID" --gen "$gen" || fail "retire failed outside the guard"
+  [ ! -e "$rec" ] || fail "retire left the busy record"
+  pass "arm, apply busy, idle, retire: the busy hook's mv and rmdir run under the real worker environment with no refusal"
+
+  mkdir "$lock"
+  : > "$lock/held"
+  must_refuse "recursive removal of a held busy lock" worktree-escape-delete worker "$WT" rm -rf "$lock"
+  must_refuse "rmdir of a non-empty busy lock" worktree-escape-delete worker "$WT" rmdir "$lock"
+  [ -e "$lock/held" ] || fail "a refused removal damaged the busy lock"
+  rm -rf "$lock"
+  : > "$STATE/$ID.busy-state.tmp.1"
+  must_refuse "rm of a busy temp record" worktree-escape-delete worker "$WT" rm -f "$STATE/$ID.busy-state.tmp.1"
+  rm -f "$STATE/$ID.busy-state.tmp.1"
+  pass "the stale-lock recursive fallback and other busy-state removals stay refused"
+}
+
+# The no-mistakes pipeline's gate push carries --no-verify. Under the real
+# worker environment, in a linked worktree, that exact push must reach git and
+# nothing wider may: the same flag to another remote, or on a commit, stays
+# refused and reported.
+test_gate_push_under_the_guard() {
+  local gate="$TMP_ROOT/gate/.no-mistakes/repos/abc123.git" branch sha out
+  "$REAL_GIT" init -q --bare "$gate"
+  "$REAL_GIT" -C "$gate" config receive.advertisePushOptions true
+  "$REAL_GIT" init -q --bare "$TMP_ROOT/gate/origin.git"
+  "$REAL_GIT" -C "$WT" remote add no-mistakes "$gate"
+  "$REAL_GIT" -C "$WT" remote add origin "$TMP_ROOT/gate/origin.git"
+  branch=$("$REAL_GIT" -C "$WT" symbolic-ref --short HEAD)
+  sha=$("$REAL_GIT" -C "$WT" rev-parse HEAD)
+  : > "$STATUS"
+  must "gate push" worker "$WT" git push --no-verify -o no-mistakes.intent=abc no-mistakes "$sha:refs/heads/$branch"
+  [ "$("$REAL_GIT" -C "$gate" rev-parse "refs/heads/$branch")" = "$sha" ] || fail "the gate push did not reach the gate repository"
+  must_refuse "--no-verify push to origin" git-skip-hooks worker "$WT" git push --no-verify origin "$sha:refs/heads/$branch"
+  must_refuse "--no-verify gate push to another branch" git-skip-hooks worker "$WT" git push --no-verify no-mistakes "$sha:refs/heads/elsewhere"
+  must_refuse "commit --no-verify" git-skip-hooks worker "$WT" git commit --no-verify --allow-empty -m nope
+  [ ! -e "$TMP_ROOT/gate/origin.git/refs/heads/$branch" ] || fail "a refused push reached origin"
+  pass "the no-mistakes gate push runs under the real worker environment; other --no-verify uses stay refused"
+}
+
 test_fixture_is_the_real_worker_environment
 test_concurrent_refusal_reporting
 test_guard_is_live_and_temp_exemption_is_off
@@ -389,3 +450,5 @@ test_skipping_hooks_is_refused_and_reported
 test_lock_reap_under_the_guard
 test_watcher_arm_and_reconcile_under_the_guard
 test_suites_do_not_report_to_the_callers_task_record
+test_busy_hook_sequence_under_the_guard
+test_gate_push_under_the_guard

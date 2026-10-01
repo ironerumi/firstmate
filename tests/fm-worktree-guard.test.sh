@@ -34,6 +34,7 @@ mkdir -p "$OWN/src" "$SIBLING/src" "$STATE/t1.inbox/handled" "$STATE/.keepwarm-t
 REAL_GIT=$(fm_real_tool git)
 fm_git_identity
 "$REAL_GIT" init -q "$OWN"
+"$REAL_GIT" init -q "$SIBLING"
 
 fm_write_meta "$META" \
   "window=firstmate:fm-t1" \
@@ -149,6 +150,69 @@ check_decision worktree-escape-delete "rm of a sibling task's keep-warm marker" 
 check_decision worktree-escape-delete "rm of a dotted sibling's keep-warm marker" rm "$OWN" -f "$STATE/.keepwarm-t1.foo"
 check_decision worktree-escape-delete "rm of the supervisor's keep-warm marker" rm "$OWN" -f "$STATE/.keepwarm-selfwake"
 check_decision worktree-escape-move "mv of a sibling task's keep-warm temp file into this marker" mv "$OWN" "$STATE/.keepwarm-tmp/t2/9aBcDe" "$STATE/.keepwarm-t1"
+
+# The no-mistakes gate push carries --no-verify by design; only that exact push
+# is allowed, and --no-verify anywhere else stays refused.
+OWN_BRANCH=$("$REAL_GIT" -C "$OWN" symbolic-ref --short HEAD)
+GATE_REPO="$TMP/gate/.no-mistakes/repos/abc123.git"
+mkdir -p "${GATE_REPO%/*}"
+"$REAL_GIT" init -q --bare "$GATE_REPO"
+"$REAL_GIT" init -q --bare "$TMP/gate/other.git"
+ln -s "$TMP/gate/other.git" "$TMP/gate/.no-mistakes/repos/link.git"
+"$REAL_GIT" -C "$SIBLING" symbolic-ref HEAD "refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote add no-mistakes "$GATE_REPO"
+"$REAL_GIT" -C "$OWN" remote add origin "$TMP/gate/origin.git"
+"$REAL_GIT" -C "$OWN" remote add gatealias "$GATE_REPO"
+"$REAL_GIT" -C "$SIBLING" remote add no-mistakes "$GATE_REPO"
+check_decision allow "the gate push" git "$OWN" push --no-verify -o no-mistakes.intent=abc no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push from a sibling cwd" git "$SIBLING" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/.no-mistakes/repos/../other.git"
+check_decision git-skip-hooks "a gate-shaped traversal URL" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/.no-mistakes/repos/link.git"
+check_decision git-skip-hooks "a symlinked gate URL" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/./.no-mistakes/repos/abc123.git"
+check_decision git-skip-hooks "a gate-shaped dot URL" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/.no-mistakes/repos/nested/other.git"
+check_decision git-skip-hooks "a gate-shaped nested URL" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/.no-mistakes/repos/abc123.git"
+check_decision git-skip-hooks "gate push --no-verify to origin" git "$OWN" push --no-verify origin "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push --no-verify to a differently named gate remote" git "$OWN" push --no-verify gatealias "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push to a different branch" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/other-branch"
+check_decision git-skip-hooks "gate push forced" git "$OWN" push --no-verify --force no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push with a plus refspec" git "$OWN" push --no-verify no-mistakes "+0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push with two refspecs" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH" "0123abc:refs/heads/other"
+check_decision git-skip-hooks "gate push with a global option" git "$OWN" -C "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "commit --no-verify" git "$OWN" commit --no-verify -m x
+check_decision allow "plain push to origin" git "$OWN" push origin "0123abc:refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/not-a-gate.git"
+check_decision git-skip-hooks "a remote named no-mistakes that is not the gate repository" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/.no-mistakes/repos/abc123.git"
+
+# The spawn-installed busy hook (bin/fm-busy-event.sh) publishes its record and
+# drops its lock in the home's state/. Exactly those two operations are allowed.
+mkdir -p "$STATE/t1.busy-state.lock" "$STATE/t1.busy-state.dir" "$STATE/t2.busy-state.lock" "$STATE/t1.busy-state.lock.full"
+check_decision allow "busy record publication" mv "$OWN" -f "$STATE/t1.busy-state.tmp.4242" "$STATE/t1.busy-state"
+check_decision allow "busy record publication without -f" mv "$OWN" "$STATE/t1.busy-state.tmp.4242" "$STATE/t1.busy-state"
+check_decision allow "busy record publication over a stale record" mv "$OWN" -f "$STATE/t1.busy-state.tmp.7" "$STATE/t1.busy-state"
+check_decision allow "release of this task's empty busy lock" rmdir "$OWN" "$STATE/t1.busy-state.lock"
+check_decision worktree-escape-move "busy publication for a sibling id sharing the prefix" mv "$OWN" -f "$STATE/t12.busy-state.tmp.4242" "$STATE/t12.busy-state"
+check_decision worktree-escape-move "busy publication for a dotted sibling id" mv "$OWN" -f "$STATE/t1.x.busy-state.tmp.4242" "$STATE/t1.x.busy-state"
+check_decision worktree-escape-move "busy publication of a dotted-suffix source" mv "$OWN" -f "$STATE/t1.busy-state.tmp.4242.bak" "$STATE/t1.busy-state"
+check_decision worktree-escape-move "busy publication of a non-numeric source" mv "$OWN" -f "$STATE/t1.busy-state.tmp.abc" "$STATE/t1.busy-state"
+check_decision worktree-escape-move "busy publication into a directory destination" mv "$OWN" -f "$STATE/t1.busy-state.tmp.4242" "$STATE/t1.busy-state.dir"
+check_decision worktree-escape-move "busy publication over the gen sidecar" mv "$OWN" -f "$STATE/t1.busy-state.tmp.4242" "$STATE/t1.busy-gen"
+check_decision worktree-escape-move "busy publication with a third operand" mv "$OWN" -f "$STATE/t1.busy-state.tmp.4242" "$STATE/t1.busy-state" "$STATE/t2.status"
+check_decision worktree-escape-move "busy publication with -t" mv "$OWN" -f -t "$STATE" "$STATE/t1.busy-state.tmp.4242"
+check_decision worktree-escape-delete "release of a sibling's busy lock" rmdir "$OWN" "$STATE/t2.busy-state.lock"
+check_decision worktree-escape-delete "rm of this task's busy tmp record" rm "$OWN" -f "$STATE/t1.busy-state.tmp.4242"
+check_decision worktree-escape-delete "recursive removal of this task's busy lock" rm "$OWN" -rf "$STATE/t1.busy-state.lock"
+check_decision worktree-escape-delete "rmdir of another path beside the busy lock" rmdir "$OWN" "$STATE/t1.busy-state.lock.full"
+touch "$STATE/t1.busy-state.lock/held"
+check_decision worktree-escape-delete "release of a non-empty busy lock" rmdir "$OWN" "$STATE/t1.busy-state.lock"
+rm -f "$STATE/t1.busy-state.lock/held"
+ln -s "$STATE/t1.busy-state.dir" "$STATE/t1.busy-state"
+check_decision worktree-escape-move "busy publication onto a symlink to a directory" mv "$OWN" -f "$STATE/t1.busy-state.tmp.4242" "$STATE/t1.busy-state"
+rm -f "$STATE/t1.busy-state"
 check_decision allow "rm inside this task's own temp root" rm "$OWN" -rf "$TASKTMP/scratch"
 check_decision allow "mv -S consumes a suffix, not a path" mv "$OWN" -S ../backup src/a src/b
 check_decision allow "git worktree prune --dry-run changes nothing" git "$OWN" worktree prune --dry-run

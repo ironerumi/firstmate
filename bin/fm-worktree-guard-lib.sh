@@ -259,6 +259,64 @@ fm_worktree_guard_target_allowed() { # <lexically-normalized-target>
     "$FM_WORKTREE_GUARD_GITDIR"
 }
 
+# The spawn-installed busy-tracking hook (bin/fm-busy-event.sh) publishes this
+# task's busy record with `mv -f <state>/<id>.busy-state.tmp.<pid>
+# <state>/<id>.busy-state` and releases its lock with `rmdir
+# <state>/<id>.busy-state.lock`, both in the supervising home's state/. This is
+# the whole allowance for them, deliberately not a pattern: only those two exact
+# shapes for this task's own id, with <state> taken physically from the record's
+# directory. Returns 0 only when the entire command is one of them.
+fm_worktree_guard_busy_allowed() { # <tool> <cwd> [argv...]
+  local tool=$1 cwd=$2 state id src dst base rest path f
+  shift 2
+  [ -n "$FM_WORKTREE_GUARD_STATE_STATUS" ] || return 1
+  state=${FM_WORKTREE_GUARD_STATE_STATUS%/*}
+  id=${FM_WORKTREE_GUARD_STATE_STATUS##*/}
+  id=${id%.status}
+  [ -n "$id" ] && [ -n "$state" ] || return 1
+  case "$tool" in
+    mv)
+      [ "${1:-}" != -f ] || shift
+      [ "$#" -eq 2 ] || return 1
+      src=$1 dst=$2
+      case "$src" in */) return 1 ;; esac
+      case "$dst" in */) return 1 ;; esac
+      case "$src" in -*) return 1 ;; esac
+      fm_worktree_guard_normalize "$src" "$cwd"
+      fm_worktree_guard_resolve_parent "$FM_WORKTREE_GUARD_PATH" || return 1
+      src=$FM_WORKTREE_GUARD_PATH
+      fm_worktree_guard_normalize "$dst" "$cwd"
+      fm_worktree_guard_resolve_parent "$FM_WORKTREE_GUARD_PATH" || return 1
+      dst=$FM_WORKTREE_GUARD_PATH
+      fm_worktree_guard_same_alias "${src%/*}" "$state" || return 1
+      fm_worktree_guard_same_alias "$dst" "$state/$id.busy-state" || return 1
+      base=${src##*/}
+      case "$base" in
+        "$id.busy-state.tmp."?*) rest=${base#"$id.busy-state.tmp."} ;;
+        *) return 1 ;;
+      esac
+      case "$rest" in *[!0-9]*) return 1 ;; esac
+      [ ! -d "$dst" ] || return 1
+      return 0
+      ;;
+    rmdir)
+      [ "$#" -eq 1 ] || return 1
+      path=$1
+      case "$path" in */|-*) return 1 ;; esac
+      fm_worktree_guard_normalize "$path" "$cwd"
+      fm_worktree_guard_resolve_parent "$FM_WORKTREE_GUARD_PATH" || return 1
+      path=$FM_WORKTREE_GUARD_PATH
+      fm_worktree_guard_same_alias "$path" "$state/$id.busy-state.lock" || return 1
+      [ -d "$path" ] && [ ! -L "$path" ] || return 1
+      for f in "$path"/* "$path"/.[!.]* "$path"/..?*; do
+        if [ -e "$f" ] || [ -L "$f" ]; then return 1; fi
+      done
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 fm_worktree_guard_deny() { # <code> <target>
   printf 'deny\t%s\t%s\n' "$1" "$(fm_worktree_guard_reason "$1" "$2")"
 }
@@ -481,10 +539,84 @@ fm_worktree_guard_git_skip_hooks() { # [argv...]
   return 1
 }
 
+# The no-mistakes pipeline's own gate push is `git push --no-verify -o <option>
+# no-mistakes <sha>:refs/heads/<branch>`, run from the task's worktree. It is
+# tooling the worker cannot reword, so this is its whole allowance and nothing
+# wider: no global options, only --no-verify and push options, the remote named
+# exactly no-mistakes whose push URL is a no-mistakes gate repository, and one
+# refspec whose destination is this worktree's own current branch. Anything
+# else, including --no-verify to any other remote, still refuses. Returns 0 only
+# when the entire command is that push; any uncertainty returns 1.
+fm_worktree_guard_gate_push_allowed() { # <cwd> <root> [argv...]
+  local cwd=$1 root=$2 word remote='' refspec='' count=0 branch url parent repo physical_url physical_parent physical_repo physical_cwd skip_value=0 seen_no_verify=0
+  shift 2
+  physical_cwd=$(CDPATH='' cd -P -- "$cwd" 2>/dev/null && pwd -P) || return 1
+  fm_worktree_guard_within_alias "$physical_cwd" "$root" || return 1
+  [ "${1:-}" = push ] || return 1
+  shift
+  for word in "$@"; do
+    if [ "$skip_value" -eq 1 ]; then skip_value=0; continue; fi
+    case "$word" in
+      --no-verify) seen_no_verify=1 ;;
+      -o|--push-option) skip_value=1 ;;
+      --push-option=*) ;;
+      -?*) return 1 ;;
+      *)
+        if [ -z "$remote" ]; then remote=$word; else refspec=$word; count=$((count + 1)); fi
+        ;;
+    esac
+  done
+  [ "$skip_value" -eq 0 ] && [ "$seen_no_verify" -eq 1 ] && [ "$remote" = no-mistakes ] && [ "$count" -eq 1 ] || return 1
+  case "$refspec" in
+    +*|:*|*:) return 1 ;;
+    *:refs/heads/?*) ;;
+    *) return 1 ;;
+  esac
+  [ -n "${FM_WORKTREE_GUARD_REAL_GIT:-}" ] && [ -x "$FM_WORKTREE_GUARD_REAL_GIT" ] || return 1
+  declare -F fm_run_timed >/dev/null 2>&1 || return 1
+  branch=$(CDPATH='' cd -P -- "$physical_cwd" 2>/dev/null && \
+    fm_run_timed 2 "$FM_WORKTREE_GUARD_REAL_GIT" symbolic-ref --short -q HEAD 2>/dev/null) || return 1
+  [ -n "$branch" ] && [ "${refspec#*:}" = "refs/heads/$branch" ] || return 1
+  url=$(CDPATH='' cd -P -- "$physical_cwd" 2>/dev/null && \
+    fm_run_timed 2 "$FM_WORKTREE_GUARD_REAL_GIT" remote get-url --push no-mistakes 2>/dev/null) || return 1
+  case "$url" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  case "$url" in
+    */./*|*/../*|*/.|*/..) return 1 ;;
+  esac
+  repo=${url##*/}
+  parent=${url%/*}
+  case "$repo" in
+    ?*.git) ;;
+    *) return 1 ;;
+  esac
+  case "$parent" in
+    /*/.no-mistakes/repos) ;;
+    *) return 1 ;;
+  esac
+  physical_url=$(CDPATH='' cd -P -- "$url" 2>/dev/null && pwd -P) || return 1
+  physical_repo=${physical_url##*/}
+  physical_parent=${physical_url%/*}
+  case "$physical_repo" in
+    ?*.git) ;;
+    *) return 1 ;;
+  esac
+  case "$physical_parent" in
+    /*/.no-mistakes/repos) return 0 ;;
+  esac
+  return 1
+}
+
 fm_worktree_guard_decide_git() { # <cwd> [argv...]
   local cwd=$1 invocation_cwd=$1 repository repository_target flag
   shift
   if flag=$(fm_worktree_guard_git_skip_hooks "$@"); then
+    if fm_worktree_guard_gate_push_allowed "$cwd" "$FM_WORKTREE_GUARD_ROOT" "$@"; then
+      printf 'allow\n'
+      return 0
+    fi
     fm_worktree_guard_deny git-skip-hooks "$flag"
     return 0
   fi
@@ -626,6 +758,15 @@ fm_worktree_guard_decide() { # <tool> <root> <cwd> [argv...]
       return 0
       ;;
     *) printf 'allow\n'; return 0 ;;
+  esac
+
+  case "$tool" in
+    mv|rmdir)
+      if fm_worktree_guard_busy_allowed "$tool" "$cwd" "$@"; then
+        printf 'allow\n'
+        return 0
+      fi
+      ;;
   esac
 
   if [ "$code" = worktree-escape-move ]; then
