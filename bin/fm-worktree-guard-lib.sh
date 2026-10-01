@@ -548,7 +548,7 @@ fm_worktree_guard_git_skip_hooks() { # [argv...]
 # else, including --no-verify to any other remote, still refuses. Returns 0 only
 # when the entire command is that push; any uncertainty returns 1.
 fm_worktree_guard_gate_push_allowed() { # <cwd> [argv...]
-  local cwd=$1 word remote='' refspec='' count=0 branch url skip_value=0 seen_no_verify=0
+  local cwd=$1 word remote='' refspec='' count=0 branch url parent repo skip_value=0 seen_no_verify=0
   shift
   [ "${1:-}" = push ] || return 1
   shift
@@ -578,7 +578,20 @@ fm_worktree_guard_gate_push_allowed() { # <cwd> [argv...]
   url=$(CDPATH='' cd -P -- "$cwd" 2>/dev/null && \
     fm_run_timed 2 "$FM_WORKTREE_GUARD_REAL_GIT" remote get-url --push no-mistakes 2>/dev/null) || return 1
   case "$url" in
-    /*/.no-mistakes/repos/?*.git) return 0 ;;
+    /*) ;;
+    *) return 1 ;;
+  esac
+  case "$url" in
+    */./*|*/../*|*/.|*/..) return 1 ;;
+  esac
+  repo=${url##*/}
+  parent=${url%/*}
+  case "$repo" in
+    ?*.git) ;;
+    *) return 1 ;;
+  esac
+  case "$parent" in
+    /*/.no-mistakes/repos) return 0 ;;
   esac
   return 1
 }
