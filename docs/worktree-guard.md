@@ -45,6 +45,9 @@ Always permitted:
   A sibling's records, including a dotted task ID that begins with this task's ID, and the fleet-wide records beside them stay protected.
 - This task's exact `state/.keepwarm-<id>` marker and its task-specific `state/.keepwarm-tmp/<id>/` temp directory - the Claude Stop hook arms by `mktemp` there and `mv`s into the marker, then cleans the temp file up, so both sides of that rename and its removal must resolve inside the allowed set.
   The allowance is the exact marker and that task directory, not the `state/` directory: another task's marker or temp directory and the supervisor's `state/.keepwarm-selfwake` stay protected. `selfwake` is reserved and cannot be a task ID.
+- The no-mistakes pipeline's own gate push, which carries `--no-verify` by design: `git push --no-verify [-o <option>] no-mistakes <ref>:refs/heads/<branch>`.
+  It is allowed only when the remote is named exactly `no-mistakes`, its push URL is a no-mistakes gate repository, there is one refspec without `+`, and the destination is the current branch of the worktree the push runs in.
+  `--no-verify` to any other remote, to another branch, with any other push option, or on any other verb stays refused as `git-skip-hooks`.
 - This task's busy-tracking publication and lock release, the two operations the spawn-installed hook `bin/fm-busy-event.sh` runs in the supervising home's `state/` on every turn.
   The allowance is exactly `mv [-f] <state>/<id>.busy-state.tmp.<digits> <state>/<id>.busy-state`, where the destination is not a directory or a symlink to one, and `rmdir <state>/<id>.busy-state.lock` when that lock is an empty directory.
   `<state>` is the physical directory of the record, and no glob, `busy-gen`, sibling or dotted id, or `rm -rf` of the lock is covered, so the stale-lock recursive fallback stays refused and reported.

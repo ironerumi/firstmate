@@ -539,10 +539,58 @@ fm_worktree_guard_git_skip_hooks() { # [argv...]
   return 1
 }
 
+# The no-mistakes pipeline's own gate push is `git push --no-verify -o <option>
+# no-mistakes <sha>:refs/heads/<branch>`, run from the task's worktree. It is
+# tooling the worker cannot reword, so this is its whole allowance and nothing
+# wider: no global options, only --no-verify and push options, the remote named
+# exactly no-mistakes whose push URL is a no-mistakes gate repository, and one
+# refspec whose destination is this worktree's own current branch. Anything
+# else, including --no-verify to any other remote, still refuses. Returns 0 only
+# when the entire command is that push; any uncertainty returns 1.
+fm_worktree_guard_gate_push_allowed() { # <cwd> [argv...]
+  local cwd=$1 word remote='' refspec='' count=0 branch url skip_value=0 seen_no_verify=0
+  shift
+  [ "${1:-}" = push ] || return 1
+  shift
+  for word in "$@"; do
+    if [ "$skip_value" -eq 1 ]; then skip_value=0; continue; fi
+    case "$word" in
+      --no-verify) seen_no_verify=1 ;;
+      -o|--push-option) skip_value=1 ;;
+      --push-option=*) ;;
+      -?*) return 1 ;;
+      *)
+        if [ -z "$remote" ]; then remote=$word; else refspec=$word; count=$((count + 1)); fi
+        ;;
+    esac
+  done
+  [ "$skip_value" -eq 0 ] && [ "$seen_no_verify" -eq 1 ] && [ "$remote" = no-mistakes ] && [ "$count" -eq 1 ] || return 1
+  case "$refspec" in
+    +*|:*|*:) return 1 ;;
+    *:refs/heads/?*) ;;
+    *) return 1 ;;
+  esac
+  [ -n "${FM_WORKTREE_GUARD_REAL_GIT:-}" ] && [ -x "$FM_WORKTREE_GUARD_REAL_GIT" ] || return 1
+  declare -F fm_run_timed >/dev/null 2>&1 || return 1
+  branch=$(CDPATH='' cd -P -- "$cwd" 2>/dev/null && \
+    fm_run_timed 2 "$FM_WORKTREE_GUARD_REAL_GIT" symbolic-ref --short -q HEAD 2>/dev/null) || return 1
+  [ -n "$branch" ] && [ "${refspec#*:}" = "refs/heads/$branch" ] || return 1
+  url=$(CDPATH='' cd -P -- "$cwd" 2>/dev/null && \
+    fm_run_timed 2 "$FM_WORKTREE_GUARD_REAL_GIT" remote get-url --push no-mistakes 2>/dev/null) || return 1
+  case "$url" in
+    /*/.no-mistakes/repos/?*.git) return 0 ;;
+  esac
+  return 1
+}
+
 fm_worktree_guard_decide_git() { # <cwd> [argv...]
   local cwd=$1 invocation_cwd=$1 repository repository_target flag
   shift
   if flag=$(fm_worktree_guard_git_skip_hooks "$@"); then
+    if fm_worktree_guard_gate_push_allowed "$cwd" "$@"; then
+      printf 'allow\n'
+      return 0
+    fi
     fm_worktree_guard_deny git-skip-hooks "$flag"
     return 0
   fi

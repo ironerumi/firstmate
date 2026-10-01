@@ -419,6 +419,29 @@ test_busy_hook_sequence_under_the_guard() {
   pass "the stale-lock recursive fallback and other busy-state removals stay refused"
 }
 
+# The no-mistakes pipeline's gate push carries --no-verify. Under the real
+# worker environment, in a linked worktree, that exact push must reach git and
+# nothing wider may: the same flag to another remote, or on a commit, stays
+# refused and reported.
+test_gate_push_under_the_guard() {
+  local gate="$TMP_ROOT/gate/.no-mistakes/repos/abc123.git" branch sha out
+  "$REAL_GIT" init -q --bare "$gate"
+  "$REAL_GIT" -C "$gate" config receive.advertisePushOptions true
+  "$REAL_GIT" init -q --bare "$TMP_ROOT/gate/origin.git"
+  "$REAL_GIT" -C "$WT" remote add no-mistakes "$gate"
+  "$REAL_GIT" -C "$WT" remote add origin "$TMP_ROOT/gate/origin.git"
+  branch=$("$REAL_GIT" -C "$WT" symbolic-ref --short HEAD)
+  sha=$("$REAL_GIT" -C "$WT" rev-parse HEAD)
+  : > "$STATUS"
+  must "gate push" worker "$WT" git push --no-verify -o no-mistakes.intent=abc no-mistakes "$sha:refs/heads/$branch"
+  [ "$("$REAL_GIT" -C "$gate" rev-parse "refs/heads/$branch")" = "$sha" ] || fail "the gate push did not reach the gate repository"
+  must_refuse "--no-verify push to origin" git-skip-hooks worker "$WT" git push --no-verify origin "$sha:refs/heads/$branch"
+  must_refuse "--no-verify gate push to another branch" git-skip-hooks worker "$WT" git push --no-verify no-mistakes "$sha:refs/heads/elsewhere"
+  must_refuse "commit --no-verify" git-skip-hooks worker "$WT" git commit --no-verify --allow-empty -m nope
+  [ ! -e "$TMP_ROOT/gate/origin.git/refs/heads/$branch" ] || fail "a refused push reached origin"
+  pass "the no-mistakes gate push runs under the real worker environment; other --no-verify uses stay refused"
+}
+
 test_fixture_is_the_real_worker_environment
 test_concurrent_refusal_reporting
 test_guard_is_live_and_temp_exemption_is_off
@@ -428,3 +451,4 @@ test_lock_reap_under_the_guard
 test_watcher_arm_and_reconcile_under_the_guard
 test_suites_do_not_report_to_the_callers_task_record
 test_busy_hook_sequence_under_the_guard
+test_gate_push_under_the_guard

@@ -150,6 +150,26 @@ check_decision worktree-escape-delete "rm of a dotted sibling's keep-warm marker
 check_decision worktree-escape-delete "rm of the supervisor's keep-warm marker" rm "$OWN" -f "$STATE/.keepwarm-selfwake"
 check_decision worktree-escape-move "mv of a sibling task's keep-warm temp file into this marker" mv "$OWN" "$STATE/.keepwarm-tmp/t2/9aBcDe" "$STATE/.keepwarm-t1"
 
+# The no-mistakes gate push carries --no-verify by design; only that exact push
+# is allowed, and --no-verify anywhere else stays refused.
+OWN_BRANCH=$("$REAL_GIT" -C "$OWN" symbolic-ref --short HEAD)
+"$REAL_GIT" -C "$OWN" remote add no-mistakes "$TMP/gate/.no-mistakes/repos/abc123.git"
+"$REAL_GIT" -C "$OWN" remote add origin "$TMP/gate/origin.git"
+"$REAL_GIT" -C "$OWN" remote add gatealias "$TMP/gate/.no-mistakes/repos/abc123.git"
+check_decision allow "the gate push" git "$OWN" push --no-verify -o no-mistakes.intent=abc no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push --no-verify to origin" git "$OWN" push --no-verify origin "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push --no-verify to a differently named gate remote" git "$OWN" push --no-verify gatealias "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push to a different branch" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/other-branch"
+check_decision git-skip-hooks "gate push forced" git "$OWN" push --no-verify --force no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push with a plus refspec" git "$OWN" push --no-verify no-mistakes "+0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "gate push with two refspecs" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH" "0123abc:refs/heads/other"
+check_decision git-skip-hooks "gate push with a global option" git "$OWN" -C "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+check_decision git-skip-hooks "commit --no-verify" git "$OWN" commit --no-verify -m x
+check_decision allow "plain push to origin" git "$OWN" push origin "0123abc:refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/not-a-gate.git"
+check_decision git-skip-hooks "a remote named no-mistakes that is not the gate repository" git "$OWN" push --no-verify no-mistakes "0123abc:refs/heads/$OWN_BRANCH"
+"$REAL_GIT" -C "$OWN" remote set-url no-mistakes "$TMP/gate/.no-mistakes/repos/abc123.git"
+
 # The spawn-installed busy hook (bin/fm-busy-event.sh) publishes its record and
 # drops its lock in the home's state/. Exactly those two operations are allowed.
 mkdir -p "$STATE/t1.busy-state.lock" "$STATE/t1.busy-state.dir" "$STATE/t2.busy-state.lock" "$STATE/t1.busy-state.lock.full"
