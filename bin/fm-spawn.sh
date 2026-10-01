@@ -3292,6 +3292,11 @@ spawn_worktree_home_residue() { # <worktree>
   done
   if [ -f "$worktree/AGENTS.md" ] && [ -f "$worktree/bin/fm-spawn.sh" ]; then
     for name in state data config projects; do
+      # An empty directory holds no records, so it is not a retired home.
+      if [ -d "$worktree/$name" ] && [ ! -L "$worktree/$name" ] \
+        && [ -z "$(ls -A "$worktree/$name" 2>/dev/null)" ]; then
+        continue
+      fi
       if { [ -e "$worktree/$name" ] || [ -L "$worktree/$name" ]; } \
         && git -C "$worktree" check-ignore -q -- "$name/" 2>/dev/null; then
         found="$found $name/"

@@ -107,10 +107,14 @@ nm_called_with() {  # <exact arg string>
 set_run running 01LIVE
 : > "$NM_FAKE_LOG"
 
-run_in_repo no-mistakes axi run
+run_in_repo no-mistakes axi run --intent second
 assert_refused nm-run-active "a second axi run under a live run"
-nm_called_with "axi run" && fail "the refused run must never reach the real binary"
+nm_called_with "axi run --intent second" && fail "the refused run must never reach the real binary"
 pass "a second axi run is refused while a run is live"
+
+run_in_repo no-mistakes axi run
+assert_allowed "a flagless axi run reattach under its own live run"
+pass "a flagless axi run reattaches to the live run"
 
 run_in_repo no-mistakes rerun
 assert_refused nm-run-active "rerun under a live run"
@@ -188,7 +192,7 @@ pass "recording the failure clears the refusal"
 # A failed run on another line of history does not gate this worktree.
 set_run failed 01ELSEWHERE '    push,failed,0,300' 0000000000000000000000000000000000000000
 : > "$STATUS_FILE"
-run_in_repo no-mistakes axi run
+run_in_repo no-mistakes axi run --intent x
 assert_allowed "a failed run whose head is not this worktree's history"
 pass "a failed run outside this worktree's history never gates it"
 
@@ -210,7 +214,7 @@ pass "a run cancelled at a gate stays terminal and clears through the reporting 
 
 set_run failed 01GATEELSEWHERE '    review,fix_review,2,400' 0000000000000000000000000000000000000000
 : > "$STATUS_FILE"
-run_in_repo no-mistakes axi run
+run_in_repo no-mistakes axi run --intent x
 assert_allowed "a failed run at a gate outside this worktree's history"
 pass "a gate row never bypasses the failed-run code-identity test"
 
@@ -341,7 +345,8 @@ check_action() {  # <expected> <tool> <args...>
   [ "$got" = "$expected" ] || fail "action for '$*': expected $expected, got $got"
 }
 
-check_action run no-mistakes axi run
+check_action reattach no-mistakes axi run
+check_action run no-mistakes axi run --intent x
 check_action run no-mistakes --skip lint axi run
 check_action run no-mistakes rerun
 check_action abort no-mistakes axi abort
@@ -376,6 +381,9 @@ check_decision() {  # <expected-prefix> <action> <state> <label>
 check_decision allow none active "no action is always allowed"
 check_decision deny run active "a run under an active run denies"
 check_decision deny run parked "a run under a parked run denies"
+check_decision allow reattach active "a reattach under the run owner own active run allows"
+check_decision allow reattach parked "a reattach under the run owner own parked run allows"
+check_decision allow reattach none "a reattach with no attributed run allows"
 check_decision allow run terminal "a run after a terminal run allows"
 check_decision allow run unknown "a run under an unreadable state allows"
 check_decision allow run none "a run with no attributed run allows"
@@ -408,7 +416,7 @@ pass "the review fix-round budget decision matches the documented contract"
 # when the worker routes around it, and a retry loop cannot flood the record.
 set_run running 01REPORT
 : > "$STATUS_FILE"
-for _ in 1 2 3; do run_in_repo no-mistakes axi run; done
+for _ in 1 2 3; do run_in_repo no-mistakes axi run --intent x; done
 assert_refused nm-run-active "a repeated duplicate run"
 [ "$(grep -c '^blocked .*\[key=guard-nm-run-active\]' "$STATUS_FILE")" = 1 ] \
   || fail "three identical refusals must leave exactly one open report: $(cat "$STATUS_FILE")"
@@ -417,13 +425,13 @@ pass "a refusal appends one keyed blocked line, idempotent per refusal code"
 
 rm -f "$STATUS_FILE"
 : > "$STATUS_FILE"
-run_in_repo no-mistakes axi run
+run_in_repo no-mistakes axi run --intent x
 [ "$(grep -c '^blocked .*\[key=guard-nm-run-active\]' "$STATUS_FILE")" = 1 ] \
   || fail "a reset status file must accept a fresh report: $(cat "$STATUS_FILE")"
 pass "a reset status file does not strand a refusal claim"
 
 printf 'resolved [at=1] [key=guard-nm-run-active]: firstmate answered\n' >> "$STATUS_FILE"
-run_in_repo no-mistakes axi run
+run_in_repo no-mistakes axi run --intent x
 [ "$(grep -c '^blocked .*\[key=guard-nm-run-active\]' "$STATUS_FILE")" = 2 ] \
   || fail "a refusal after the report was resolved must report again: $(cat "$STATUS_FILE")"
 pass "a resolved refusal report re-opens on the next refusal"
@@ -432,7 +440,7 @@ pass "a resolved refusal report re-opens on the next refusal"
 # refusal stays in force because the report does not name the run.
 set_run failed 01REPORTFAIL '    push,failed,0,300'
 : > "$STATUS_FILE"
-run_in_repo no-mistakes axi run
+run_in_repo no-mistakes axi run --intent x
 assert_refused nm-unreported-failure "a replacement run after an unreported failure"
 run_in_repo no-mistakes axi run
 assert_refused nm-unreported-failure "a second replacement run after the guard's own report"
@@ -441,7 +449,7 @@ pass "the guard's own report cannot count as the worker's failure report"
 
 # An unset status file is a quiet no-op: the refusal still stands.
 set_run running 01NORECORD
-( unset FM_NM_GUARD_STATUS; cd "$REPO" && no-mistakes axi run ) >/dev/null 2>&1
+( unset FM_NM_GUARD_STATUS; cd "$REPO" && no-mistakes axi run --intent x ) >/dev/null 2>&1
 expect_code 3 $? "a refusal without a status record must still refuse"
 pass "a refusal without a status record still refuses"
 

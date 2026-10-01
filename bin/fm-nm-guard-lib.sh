@@ -241,7 +241,7 @@ fm_nm_respond_action() { # [args...]
 # What a command would do to a live run: run, abort, push, review-fix, or none.
 # `none` covers every inspection and continuation path on purpose - axi status,
 # axi logs, axi respond, attach, runs, status, doctor, and any git command that
-# is not a push.
+# is not a push. A flagless axi run is `reattach`.
 fm_nm_guard_action() {  # <tool> [args...]
   local tool=$1 arg sub='' axi=0 expect_value=0
   shift
@@ -265,7 +265,15 @@ fm_nm_guard_action() {  # <tool> [args...]
         esac
       done
       case "$axi:$sub" in
-        1:run|0:rerun) printf 'run'; return 0 ;;
+        1:run)
+          # `axi run` with nothing after it reattaches to the branch's own run
+          # (its --help: "Omit flags to reattach"); any flag or argument can
+          # start or replace a run. The decision treats it as a run except
+          # under a live run, where the run is the caller's own.
+          if [ "$*" = "axi run" ]; then printf 'reattach'; else printf 'run'; fi
+          return 0
+          ;;
+        0:rerun) printf 'run'; return 0 ;;
         1:abort) printf 'abort'; return 0 ;;
         1:respond)
           case "$(fm_nm_respond_action "$@")" in
@@ -338,6 +346,15 @@ fm_nm_guard_decide() {  # <action> <state> <run-id> <step> <status-file> [<revie
   local action=$1 state=$2 run_id=$3 step=$4 status_file=${5:-} rounds=${6:-} where tab
   tab=$(printf '\t')
   [ "$action" != none ] || { printf 'allow'; return 0; }
+  # A flagless `axi run` under a live run reattaches to this branch's own run
+  # (the run is read from this worktree's branch), so the run owner may do it;
+  # in every other state it keeps the replacement-run decision.
+  if [ "$action" = reattach ]; then
+    case "$state" in
+      active|parked) printf 'allow'; return 0 ;;
+    esac
+    action=run
+  fi
   # The review fix-round budget is a property of the whole run, not of the live
   # state machine, so it is decided before that switch and only for the review
   # step. Every other gate's fix response is untouched.
