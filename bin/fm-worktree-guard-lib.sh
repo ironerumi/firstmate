@@ -259,6 +259,64 @@ fm_worktree_guard_target_allowed() { # <lexically-normalized-target>
     "$FM_WORKTREE_GUARD_GITDIR"
 }
 
+# The spawn-installed busy-tracking hook (bin/fm-busy-event.sh) publishes this
+# task's busy record with `mv -f <state>/<id>.busy-state.tmp.<pid>
+# <state>/<id>.busy-state` and releases its lock with `rmdir
+# <state>/<id>.busy-state.lock`, both in the supervising home's state/. This is
+# the whole allowance for them, deliberately not a pattern: only those two exact
+# shapes for this task's own id, with <state> taken physically from the record's
+# directory. Returns 0 only when the entire command is one of them.
+fm_worktree_guard_busy_allowed() { # <tool> <cwd> [argv...]
+  local tool=$1 cwd=$2 state id src dst base rest path f
+  shift 2
+  [ -n "$FM_WORKTREE_GUARD_STATE_STATUS" ] || return 1
+  state=${FM_WORKTREE_GUARD_STATE_STATUS%/*}
+  id=${FM_WORKTREE_GUARD_STATE_STATUS##*/}
+  id=${id%.status}
+  [ -n "$id" ] && [ -n "$state" ] || return 1
+  case "$tool" in
+    mv)
+      [ "${1:-}" != -f ] || shift
+      [ "$#" -eq 2 ] || return 1
+      src=$1 dst=$2
+      case "$src" in */) return 1 ;; esac
+      case "$dst" in */) return 1 ;; esac
+      case "$src" in -*) return 1 ;; esac
+      fm_worktree_guard_normalize "$src" "$cwd"
+      fm_worktree_guard_resolve_parent "$FM_WORKTREE_GUARD_PATH" || return 1
+      src=$FM_WORKTREE_GUARD_PATH
+      fm_worktree_guard_normalize "$dst" "$cwd"
+      fm_worktree_guard_resolve_parent "$FM_WORKTREE_GUARD_PATH" || return 1
+      dst=$FM_WORKTREE_GUARD_PATH
+      fm_worktree_guard_same_alias "${src%/*}" "$state" || return 1
+      fm_worktree_guard_same_alias "$dst" "$state/$id.busy-state" || return 1
+      base=${src##*/}
+      case "$base" in
+        "$id.busy-state.tmp."?*) rest=${base#"$id.busy-state.tmp."} ;;
+        *) return 1 ;;
+      esac
+      case "$rest" in *[!0-9]*) return 1 ;; esac
+      [ ! -d "$dst" ] || return 1
+      return 0
+      ;;
+    rmdir)
+      [ "$#" -eq 1 ] || return 1
+      path=$1
+      case "$path" in */|-*) return 1 ;; esac
+      fm_worktree_guard_normalize "$path" "$cwd"
+      fm_worktree_guard_resolve_parent "$FM_WORKTREE_GUARD_PATH" || return 1
+      path=$FM_WORKTREE_GUARD_PATH
+      fm_worktree_guard_same_alias "$path" "$state/$id.busy-state.lock" || return 1
+      [ -d "$path" ] && [ ! -L "$path" ] || return 1
+      for f in "$path"/* "$path"/.[!.]* "$path"/..?*; do
+        if [ -e "$f" ] || [ -L "$f" ]; then return 1; fi
+      done
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 fm_worktree_guard_deny() { # <code> <target>
   printf 'deny\t%s\t%s\n' "$1" "$(fm_worktree_guard_reason "$1" "$2")"
 }
@@ -626,6 +684,15 @@ fm_worktree_guard_decide() { # <tool> <root> <cwd> [argv...]
       return 0
       ;;
     *) printf 'allow\n'; return 0 ;;
+  esac
+
+  case "$tool" in
+    mv|rmdir)
+      if fm_worktree_guard_busy_allowed "$tool" "$cwd" "$@"; then
+        printf 'allow\n'
+        return 0
+      fi
+      ;;
   esac
 
   if [ "$code" = worktree-escape-move ]; then
