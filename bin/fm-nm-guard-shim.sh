@@ -12,11 +12,7 @@
 #
 # The classification and the run read both live in bin/fm-nm-guard-lib.sh. This
 # file only resolves the real tool, asks that owner, renders one refusal, and
-# otherwise execs the real tool with the arguments it was given, unchanged. It
-# also asks the worktree-isolation guard
-# (bin/fm-worktree-guard-lib.sh, docs/worktree-guard.md) first, because `git` is
-# a tool both guards front; that guard renders its own refusal and never changes
-# this one's classification.
+# otherwise execs the real tool with the arguments it was given, unchanged.
 #
 # It is a guard, not a sandbox. Its threat model is a worker's mistake under
 # pressure - the same threat model as the other firstmate seatbelts - so an
@@ -80,7 +76,7 @@ fm_nm_is_guard_shim() { # <path>
     links=$((links + 1))
   done
   case "$p" in
-    *fm-nm-guard-shim.sh|*fm-worktree-guard-shim.sh) return 0 ;;
+    *fm-nm-guard-shim.sh) return 0 ;;
   esac
   return 1
 }
@@ -121,19 +117,6 @@ fm_nm_path_bin_fallback() { # <name>
   done
   return 1
 }
-
-# The worktree-isolation guard rides the same transport for `git`, which this
-# shim already fronts, so `git worktree remove` of a sibling task's checkout is
-# refused before it runs (bin/fm-worktree-guard-lib.sh owns that decision;
-# docs/worktree-guard.md owns its contract). Two independent guards, two
-# owners, one shim: this call renders its own refusal and exits 3, or returns
-# so the validation-owner classification below proceeds unchanged.
-if [ -n "$BIN_DIR" ] && [ -f "$BIN_DIR/fm-worktree-guard-lib.sh" ]; then
-  FM_WORKTREE_GUARD_REAL_GIT=$(fm_nm_path_bin_fallback git 2>/dev/null) || FM_WORKTREE_GUARD_REAL_GIT=
-  # shellcheck source=bin/fm-worktree-guard-lib.sh
-  . "$BIN_DIR/fm-worktree-guard-lib.sh"
-  fm_worktree_guard_enforce "$FM_NM_GUARD_TOOL" "$@"
-fi
 
 [ -n "$BIN_DIR" ] && [ -f "$BIN_DIR/fm-nm-guard-lib.sh" ] || exec_real "$@"
 # shellcheck source=bin/fm-nm-guard-lib.sh
@@ -186,9 +169,8 @@ RULE='━━━━━━━━━━━━━━━━━━━━━━━━�
   printf '●%s\n' "$RULE"
 } >&2
 # Report the refusal on the task's status record (bin/fm-guard-refusal-lib.sh),
-# so firstmate learns of it whatever the worker does next. The worktree guard
-# library loads it when present; load it directly otherwise.
-if ! declare -F fm_guard_refusal_report >/dev/null 2>&1 && [ -n "$BIN_DIR" ] && [ -f "$BIN_DIR/fm-guard-refusal-lib.sh" ]; then
+# so firstmate learns of it whatever the worker does next.
+if [ -n "$BIN_DIR" ] && [ -f "$BIN_DIR/fm-guard-refusal-lib.sh" ]; then
   # shellcheck source=bin/fm-guard-refusal-lib.sh
   . "$BIN_DIR/fm-guard-refusal-lib.sh"
 fi

@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # fm-guard-refusal-lib.sh - makes a worker-pane guard refusal report itself.
 #
-# bin/fm-worktree-guard-lib.sh and bin/fm-nm-guard-shim.sh each render a refusal
-# to the worker's terminal. A refusal the worker quietly routes around (the
-# 2026-09-28 --no-verify commits) never reaches firstmate that way, so every
+# bin/fm-nm-guard-shim.sh renders a refusal to the worker's terminal. A refusal
+# the worker quietly routes around never reaches firstmate that way, so every
 # refusal attempts to append one keyed `blocked:` line to the task's status
 # record, which wakes firstmate whatever the worker does next when the write
 # succeeds. Deduplication is best effort because a concurrent claim, resolution,

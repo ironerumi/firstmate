@@ -177,36 +177,6 @@ test_crew_task_form_fires_outside_a_primary_home() {
   pass "self-wake: the crew form fires from a project worktree into the spawning home"
 }
 
-# The crew pane carries firstmate's guard shims on PATH, so the Stop hook's
-# mktemp + mv into state/.keepwarm-<id> runs through the worktree-isolation
-# guard. Before the guard allowed this task's own keep-warm record, the rename
-# was refused and every Stop stranded one temp file beside the marker.
-test_crew_form_arms_under_the_worktree_guard() {
-  local base dir meta rc leftover
-  base=$(make_primary_dir "$TMP_ROOT/guard-base")
-  dir=$(make_crewmate_worktree_dir "$base" "$TMP_ROOT/guard-wt")
-  meta="$dir/state/crew-guard.meta"
-  mkdir -p "$TMP_ROOT/guard-tasktmp"
-  printf '%s\n' \
-    "worktree=$dir" \
-    "kind=ship" \
-    "tasktmp=$TMP_ROOT/guard-tasktmp" > "$meta"
-  # The suite's own fixtures live under $TMPDIR, which is unprotected scratch by
-  # contract, so pin the temp namespace away from them to exercise the guard.
-  PATH="$ROOT/bin/shims:$PATH" FM_WORKTREE_GUARD_META="$meta" \
-    FM_WORKTREE_GUARD_TEMP_ROOTS="$TMP_ROOT/never-a-temp-root" \
-    FM_NM_KEEPWARM_SECS=1 FM_STATE_OVERRIDE="$dir/state" \
-    start_hook "$dir" "$TMP_ROOT/guard-rec" --task crew-guard
-  rc=$(wait_rc "$TMP_ROOT/guard-rec" 15) || fail "the guarded crew hook did not finish"
-  expect_code 2 "$rc" "the guarded crew form must still arm and fire"
-  assert_present "$dir/state/.keepwarm-crew-guard" "the guarded arm must create its marker"
-  for leftover in "$dir/state/.keepwarm-tmp/crew-guard"/*; do
-    [ -e "$leftover" ] || [ -L "$leftover" ] || continue
-    fail "the guarded arm must leave no temp file behind: $leftover"
-  done
-  pass "self-wake: the --task arm and cleanup run under the worktree guard"
-}
-
 test_crew_and_supervisor_do_not_cancel_each_other() {
   local dir rc_s rc_c
   dir=$(make_primary_dir "$TMP_ROOT/coexist")
@@ -468,7 +438,6 @@ test_fires_at_deadline
 test_secondmate_home_fires
 test_crew_task_form_fires_with_its_own_marker
 test_crew_task_form_fires_outside_a_primary_home
-test_crew_form_arms_under_the_worktree_guard
 test_crew_and_supervisor_do_not_cancel_each_other
 test_bad_task_id_is_noop
 test_deadline_bounded_to_cap

@@ -438,21 +438,9 @@ fm_watcher_supervision_verdict() {
   return 0
 }
 
-# A lock is a firstmate-owned record, wherever it lives, never a file a worker
-# typed a command against. A guarded worker pane puts bin/shims ahead of rm,
-# rmdir, and mv and refuses them outside its worktree (docs/worktree-guard.md), and
-# a lock under a home's state/ or ~/.local/state/firstmate is outside it. Routing
-# the lock's own create, reap, and release bookkeeping through that guard left a
-# dead holder's lock unreapable and every failed attempt's owner dir behind. Only
-# the lock functions below use this: it grants the guard's explicit escape to that
-# bookkeeping and nothing a worker types.
-_fm_lock_fs() {
-  FM_WORKTREE_GUARD_ALLOW=1 "$@"
-}
-
 fm_lock_clean_known_files() {
   local lockdir=$1
-  _fm_lock_fs rm -f \
+  rm -f \
     "$lockdir/pid" \
     "$lockdir/fm-home" \
     "$lockdir/pid-identity" \
@@ -521,14 +509,14 @@ fm_lock_discard_owner() {
   local ownerdir=$1
   [ -n "$ownerdir" ] || return 0
   fm_lock_clean_known_files "$ownerdir"
-  _fm_lock_fs rmdir "$ownerdir" 2>/dev/null || true
+  rmdir "$ownerdir" 2>/dev/null || true
 }
 
 fm_lock_remove_stray_owner_link() {
   local lockdir=$1 ownerdir=$2 stray
   stray="$lockdir/$(basename "$ownerdir")"
   if [ -L "$stray" ] && [ "$(readlink "$stray" 2>/dev/null || true)" = "$ownerdir" ]; then
-    _fm_lock_fs rm -f "$stray" 2>/dev/null || true
+    rm -f "$stray" 2>/dev/null || true
   fi
 }
 
@@ -560,7 +548,7 @@ fm_lock_claim() {
   fi
   if fm_lock_claim_blocked_by_steal "$lockdir" "$allowed_steal_owner"; then
     if fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
-      _fm_lock_fs rm -f "$lockdir" 2>/dev/null || true
+      rm -f "$lockdir" 2>/dev/null || true
     fi
     fm_lock_discard_owner "$ownerdir"
     return 1
@@ -571,11 +559,6 @@ fm_lock_claim() {
 fm_lock_try_create() {
   local lockdir=$1 allowed_steal_owner=${2:-} ownerdir
   FM_LOCK_OWNER_DIR=
-  # A held lock is the common case for a caller that spins, so it is refused
-  # before an owner dir exists: nothing is created per failed attempt to clean up.
-  if [ -e "$lockdir" ] || [ -L "$lockdir" ]; then
-    return 1
-  fi
   ownerdir=$(fm_lock_owner_dir "$lockdir") || return 1
   if [ -e "$lockdir" ] || [ -L "$lockdir" ]; then
     fm_lock_discard_owner "$ownerdir"
@@ -591,7 +574,7 @@ fm_lock_try_create() {
       return 0
     fi
     if fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
-      _fm_lock_fs rm -f "$lockdir" 2>/dev/null || true
+      rm -f "$lockdir" 2>/dev/null || true
     fi
   else
     fm_lock_remove_stray_owner_link "$lockdir" "$ownerdir"
@@ -604,12 +587,12 @@ fm_lock_remove_path() {
   local lockdir=$1 ownerdir
   if [ -L "$lockdir" ]; then
     ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
-    _fm_lock_fs rm -f "$lockdir" 2>/dev/null || return 1
+    rm -f "$lockdir" 2>/dev/null || return 1
     [ -n "$ownerdir" ] && fm_lock_discard_owner "$ownerdir"
     return 0
   fi
   fm_lock_clean_known_files "$lockdir"
-  _fm_lock_fs rmdir "$lockdir" 2>/dev/null
+  rmdir "$lockdir" 2>/dev/null
 }
 
 fm_lock_mid_acquire_is_fresh() {
@@ -1000,10 +983,10 @@ fm_lock_reap_dead_link() {
   fi
   tomb="$owner.reaped.$current"
   if [ "$token" != "$tomb" ]; then
-    _fm_lock_fs mv -- "$token" "$tomb" 2>/dev/null || return 1
+    mv -- "$token" "$tomb" 2>/dev/null || return 1
   fi
   if fm_lock_points_to_owner "$lockdir" "$owner"; then
-    _fm_lock_fs rm -f "$lockdir" 2>/dev/null || true
+    rm -f "$lockdir" 2>/dev/null || true
   fi
   fm_lock_discard_owner "$tomb"
 }
@@ -1245,14 +1228,14 @@ fm_lock_release() {
     pid=$(cat "$ownerdir/pid" 2>/dev/null || true)
     [ "$pid" = "$current" ] || return 0
     fm_lock_points_to_owner "$lockdir" "$ownerdir" || return 0
-    _fm_lock_fs rm -f "$lockdir" 2>/dev/null || return 0
+    rm -f "$lockdir" 2>/dev/null || return 0
     fm_lock_discard_owner "$ownerdir"
     return 0
   fi
   pid=$(cat "$lockdir/pid" 2>/dev/null || true)
   [ "$pid" = "$current" ] || return 0
   fm_lock_clean_known_files "$lockdir"
-  _fm_lock_fs rmdir "$lockdir" 2>/dev/null || true
+  rmdir "$lockdir" 2>/dev/null || true
 }
 
 fm_meta_lock_path() {
