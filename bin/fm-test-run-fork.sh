@@ -11,7 +11,7 @@
 
 fm_fork_family_for_basename() {  # <basename>
   case "$1" in
-    fm-brief-repo-guard.test.sh|fm-nm-guard.test.sh|fm-worktree-guard.test.sh|fm-classify-decision-key-extra.test.sh)
+    fm-brief-repo-guard.test.sh|fm-nm-guard.test.sh|fm-classify-decision-key-extra.test.sh)
       printf '%s\n' pure-contract-unit
       ;;
     fm-spawn-claude-attribution.test.sh)
@@ -33,5 +33,5 @@ fm_fork_serial_weight_hints() {
   # A caller that has found its hint stops reading, and with SIGPIPE ignored the
   # builtin reports the closed pipe on every such lookup. The reader already has
   # what it wanted, so the write error carries no information.
-  printf '%s\n' 'tests/fm-claude-keepwarm-selfwake.test.sh 18000' 'tests/fm-worker-env-composition.test.sh 23000' 2>/dev/null || true
+  printf '%s\n' 'tests/fm-claude-keepwarm-selfwake.test.sh 18000' 2>/dev/null || true
 }

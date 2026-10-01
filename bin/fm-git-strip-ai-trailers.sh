@@ -38,15 +38,12 @@
 # Human Co-Authored-By trailers are left untouched. Author identity is not
 # rewritten.
 #
-# SKIPPING THE HOOKS IS REFUSED. git commit --no-verify skips every hook, so the
-# guard's git shim (bin/fm-worktree-guard-lib.sh, code git-skip-hooks) refuses
-# --no-verify, and -n where it means --no-verify, in a fleet pane and reports the
-# refusal on the task's status record; these hooks are spawn-owned setup, not the
-# worker's to skip. The one path left open is a runtime that writes the commit
-# object without running git, ruled an accepted residual on 2026-09-17 rather
-# than adding a push-side rewrite or check. A trailer found on a fleet commit
-# therefore points at that path, or at a refusal firstmate escaped on purpose,
-# not at an unnoticed hole in the matcher.
+# SKIPPING THE HOOKS IS NOT BLOCKED. git commit --no-verify skips every hook, so a
+# worker that passes it commits without this strip; these hooks are spawn-owned
+# setup, not the worker's to skip, but no guard refuses the flag. A trailer found on
+# a fleet commit therefore points at --no-verify or at a runtime that writes the
+# commit object without running git (an accepted residual ruled 2026-09-17), not
+# at an unnoticed hole in the matcher.
 #
 # ACCEPTED RESIDUAL, ruled 2026-09-17. Inside a fleet pane git reports this
 # directory as the repository's hooks directory, so a hook manager run there

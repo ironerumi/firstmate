@@ -5,7 +5,6 @@ This document is the authoritative human-readable contract for the validation-ow
 `bin/fm-nm-guard-shim.sh` is the transport, reached through the `bin/shims/` names it is symlinked as.
 
 It is a worker-side sibling of the primary-session seatbelts, which share the same shape but not the same mechanism: the watcher-arm seatbelt (`docs/arm-pretool-check.md`), the cd-guard (`docs/cd-guard.md`), the delegation guard (`docs/subagent-guard.md`), and the turn-end supervision guard (`docs/turnend-guard.md`).
-The worktree-isolation guard (`docs/worktree-guard.md`) is the other worker-side guard, and rides this same shim transport for `git`.
 
 ## Purpose and boundary
 
@@ -109,7 +108,7 @@ The shims sit at the tool boundary rather than at any harness's hook surface, wh
 `bin/fm-spawn.sh` sends one line into the crewmate's pane before the harness launches, through `spawn_send_text_line`:
 
 ```sh
-export FM_NM_GUARD_STATUS='<state>/<id>.status' FM_WORKTREE_GUARD_META='<state>/<id>.meta' PATH='<fm-root>/bin/shims':$PATH
+export FM_NM_GUARD_STATUS='<state>/<id>.status' PATH='<fm-root>/bin/shims':$PATH
 ```
 
 - **Worker runtimes.** Every supported harness - `claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, `cursor`, `muse` - is launched as a command in that pane shell, so each inherits the environment, and each passes it to the shells its own tool calls run in. There is no per-harness hook to write, no trust dialog to clear, and no harness-specific payload shape to parse. A harness added later is covered on the day it is launched this way.
@@ -131,8 +130,31 @@ The threat model is a worker's mistake under pressure, the same as every other f
 
 - Allowed: the shim `exec`s the real tool, so the tool's own exit status, stdout, and stderr are unchanged, and the shim leaves no trace.
   The one exception is the review fix-round budget whose count cannot be read: the shim prints one explanatory note on stderr and still execs the real tool, because reporting the unreadable count is what keeps the gap visible.
-- Refused: exit status 3 and one bordered banner on stderr carrying `[<code>] <reason>`; best-effort refusal reporting follows the shared contract in [`worktree-guard.md`](worktree-guard.md) under "Refusals report themselves".
+- Refused: exit status 3 and one bordered banner on stderr carrying `[<code>] <reason>`; best-effort refusal reporting follows "Refusals report themselves" below.
 - Tool missing outside the shim directory: exit status 127 with a message naming the tool.
+
+## Refusals report themselves
+
+Every refusal attempts to append one keyed line to the task's own status record, `FM_NM_GUARD_STATUS`:
+
+```
+blocked [at=<epoch>] [key=guard-<code>]: guard refused <tool> [<code>]; check whether the guard or the worker is wrong
+```
+
+A worker that routes around a refusal can therefore still tell firstmate when the task record is writable.
+Deduplication is best effort per code: while a `guard-<code>` blocker is open a repeated refusal normally writes nothing, so a retry loop cannot flood the record, and a `resolved` line carrying that key lets the next refusal report again.
+A concurrent claim, resolution, or status-file reset can produce at most one duplicate blocked line, but those races do not lose the refusal report while the status record remains writable.
+It names the tool and code only, never the refusal text, because that text can carry a no-mistakes run id and `bin/fm-nm-guard-lib.sh` counts a status line naming the run id as the worker's own failure report.
+`bin/fm-guard-refusal-lib.sh` owns the attempt, and a missing record or a failed write never changes the refusal.
+`tests/lib.sh` unbinds `FM_NM_GUARD_STATUS` for every suite, so a suite run from a worker pane never reports its deliberate refusals on that pane's real record.
+
+## Reaching the real tool
+
+The shim has to be able to hand off to the tool it fronts under every arrangement of `PATH`.
+Its walk skips its own directory, skips any OTHER firstmate home's shim of the same name - a worker pane already carries one shim directory, so a task working on a second firstmate checkout would otherwise have two shims exec each other - and falls back to the standard system locations when `PATH` yields no usable candidate at all.
+The canonical test runner preserves inherited `bin/shims` entries so every test child retains the guard's command interception.
+`fm_real_tool` in `tests/lib.sh` is how a fixture reaches an underlying tool without capturing the shim; it also avoids the one arrangement resolution cannot repair, where a wrapper that execs a captured shim as its "real tool" would trade places with the shim inside a single process forever.
+For any wrapper that still does that, each shim carries a pid-marked backstop that stops with a diagnosable error instead of hanging.
 
 ## Automated validation
 

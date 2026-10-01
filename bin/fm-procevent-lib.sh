@@ -783,7 +783,7 @@ fm_procevent_claim_acquire_locked() {
             status=1
           else
             stage="$old_reg_dir/.$id.$old_token.output"
-            if { [ -e "$stage" ] || [ -L "$stage" ]; } && ! _fm_lock_fs rm -f -- "$stage"; then
+            if { [ -e "$stage" ] || [ -L "$stage" ]; } && ! rm -f -- "$stage"; then
               status=1
             fi
           fi
@@ -810,7 +810,7 @@ fm_procevent_claim_acquire_locked() {
           fi
           # Two owners is the one outcome worse than none: never proceed on a
           # claim record that is still there.
-          [ "$status" -ne 0 ] || _fm_lock_fs rm -f -- "$claim" || status=1
+          [ "$status" -ne 0 ] || rm -f -- "$claim" || status=1
         else
           status=1
         fi
@@ -834,7 +834,7 @@ fm_procevent_claim_acquire_locked() {
       "$home" "$pid" "$token" "$identity" "$reg_dir" "$reg_identity" \
       "$state_root" "$state_device" "$state_inode" "$state_owner" "$state_mode" > "$tmp" || status=1
     [ "$status" -ne 0 ] || chmod 0600 "$tmp" || status=1
-    [ "$status" -ne 0 ] || _fm_lock_fs mv -f -- "$tmp" "$claim" || status=1
+    [ "$status" -ne 0 ] || mv -f -- "$tmp" "$claim" || status=1
     if [ "$status" -eq 0 ]; then
       FM_PROCEVENT_CLAIM_TOKEN=$token
       FM_PROCEVENT_CLAIM_REG_IDENTITY=$reg_identity
@@ -845,7 +845,7 @@ fm_procevent_claim_acquire_locked() {
       FM_PROCEVENT_CLAIM_STATE_MODE=$state_mode
     fi
   fi
-  [ "$status" -eq 0 ] || { [ -z "${tmp:-}" ] || _fm_lock_fs rm -f -- "$tmp"; }
+  [ "$status" -eq 0 ] || { [ -z "${tmp:-}" ] || rm -f -- "$tmp"; }
   return "$status"
 }
 
@@ -867,10 +867,10 @@ fm_procevent_claim_mark_terminal_locked() {
       "$FM_PROCEVENT_CLAIM_STATE_DEVICE" "$FM_PROCEVENT_CLAIM_STATE_INODE" \
       "$FM_PROCEVENT_CLAIM_STATE_OWNER" "$FM_PROCEVENT_CLAIM_STATE_MODE" > "$tmp" \
       && chmod 0600 "$tmp" \
-      && _fm_lock_fs mv -f -- "$tmp" "$claim"; then
+      && mv -f -- "$tmp" "$claim"; then
       return 0
     else
-      _fm_lock_fs rm -f -- "$tmp"
+      rm -f -- "$tmp"
       return 1
     fi
   fi
@@ -879,10 +879,10 @@ fm_procevent_claim_mark_terminal_locked() {
     "$FM_PROCEVENT_CLAIM_IDENTITY" "$FM_PROCEVENT_CLAIM_REG_DIR" \
     "$FM_PROCEVENT_CLAIM_REG_IDENTITY" > "$tmp" \
     && chmod 0600 "$tmp" \
-    && _fm_lock_fs mv -f -- "$tmp" "$claim"; then
+    && mv -f -- "$tmp" "$claim"; then
     return 0
   else
-    _fm_lock_fs rm -f -- "$tmp"
+    rm -f -- "$tmp"
     return 1
   fi
 }
@@ -929,7 +929,7 @@ fm_procevent_claim_release_mode_locked() {
         ;;
       *) return 1 ;;
     esac
-    _fm_lock_fs rm -f -- "$claim"
+    rm -f -- "$claim"
     return $?
   fi
   return 1

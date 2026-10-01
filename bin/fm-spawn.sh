@@ -5293,20 +5293,10 @@ if ! (umask 077 && printf '%s\n' "$LAUNCH" >"$LAUNCH_STAGE" &&
 fi
 sleep 0.3
 # Put firstmate's tool shims ahead of the real tools in the pane's PATH, and bind
-# them to this task's status file and durable record. The shims refuse only two
-# narrow classes and exec the real tool for everything else: the commands that
-# would take validation ownership away from a live no-mistakes run - a second
-# run, a superseding push, an abandoned gate (bin/fm-nm-guard-shim.sh;
-# docs/nm-validation-owner-guard.md) - and the destructive commands that would
-# reach OUTSIDE this task's own worktree, which is how a sibling task lost its
-# unlanded work (bin/fm-worktree-guard-shim.sh; docs/worktree-guard.md).
-#
-# FM_WORKTREE_GUARD_META names the durable record rather than the worktree path
-# itself, so the guard reads the same `worktree=` a relaunch rewrites instead of
-# an exported copy that a relaunch would leave stale. A secondmate is
-# deliberately not guarded - it runs a fleet of its own, whose teardown and
-# lease returns are exactly the commands this guard refuses - and the library
-# enforces that from kind= in the record rather than trusting this call site.
+# them to this task's status file. The shims refuse only the commands that would
+# take validation ownership away from a live no-mistakes run - a second run, a
+# superseding push, an abandoned gate (bin/fm-nm-guard-shim.sh;
+# docs/nm-validation-owner-guard.md) - and exec the real tool for everything else.
 #
 # Sent here, before the launch command, for the same reason GOTMPDIR is: the
 # harness starts inside this shell and every tool call it makes inherits the

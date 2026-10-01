@@ -62,7 +62,7 @@ unset FM_TASK_ID
 # them). A guard refusal reports itself on that status record, so a suite run
 # from a pane would report its deliberate refusals to firstmate as real ones.
 # Every suite starts unbound; a case that needs the guard sets its own record.
-unset FM_NM_GUARD_STATUS FM_WORKTREE_GUARD_META
+unset FM_NM_GUARD_STATUS
 
 # Clear the tasks-axi env overrides. An operator shell exports TASKS_AXI_FILE
 # (and may export TASKS_AXI_BACKEND) at its real home's backlog, and tasks-axi
@@ -538,7 +538,7 @@ fm_real_tool() {
       hops=$((hops + 1))
     done
     case "$link" in
-      *fm-nm-guard-shim.sh|*fm-worktree-guard-shim.sh) continue ;;
+      *fm-nm-guard-shim.sh) continue ;;
     esac
     printf '%s\n' "$candidate"
     return 0

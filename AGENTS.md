@@ -395,7 +395,6 @@ When a ship or scout brief targets the Firstmate repo itself, scaffold it throug
 Keep additions task-specific rather than repeating lifecycle instructions, and alter generated sections only when the task genuinely differs from the standard shape.
 
 Every ship brief must retain the worktree-isolation assertion and stop if launched in the primary checkout.
-A worker's own session then refuses destructive commands reaching paths outside its own worktree except for the guard's documented task-owned allowances (`docs/worktree-guard.md`), so a reported refusal is a signal to check what the worker was reaching for; `FM_WORKTREE_GUARD_ALLOW=1` is the explicit firstmate authorization for removals.
 If a ship task touches firstmate's shared tracked material, explicitly require `firstmate-coding-guidelines` before editing.
 If a task will drive Herdr lifecycle behavior, scaffold with `--herdr-lab`; if that need appears after an unguarded scaffold, stop and regenerate rather than adding commands by hand.
 The generated Herdr contract must use a named non-`default` isolated lab and its guarded helper for every lifecycle action.

@@ -449,18 +449,15 @@ pass "a refusal without a status record still refuses"
 
 # The shims reach a worker through the pane environment rather than a per-harness
 # hook, which is what makes the coverage complete. bin/fm-worker-env-lib.sh owns
-# that environment and tests/fm-worker-env-composition.test.sh runs the whole
-# worker environment, while tests/fm-backend-orca.test.sh proves the line reaches
+# that environment, while tests/fm-backend-orca.test.sh proves the line reaches
 # a non-default backend end to end.
 # shellcheck source=bin/fm-worker-env-lib.sh
 . "$ROOT/bin/fm-worker-env-lib.sh"
 WORKER_LINE=$(fm_worker_guard_export_line "$TMP/state dir" t1 "$ROOT/bin")
-WORKER_ENV=$(env -i PATH=/usr/bin:/bin bash -c "$WORKER_LINE; printf '%s\n' \"\$FM_NM_GUARD_STATUS\" \"\$FM_WORKTREE_GUARD_META\" \"\$PATH\"")
+WORKER_ENV=$(env -i PATH=/usr/bin:/bin bash -c "$WORKER_LINE; printf '%s\n' \"\$FM_NM_GUARD_STATUS\" \"\$PATH\"")
 [ "$(printf '%s\n' "$WORKER_ENV" | sed -n 1p)" = "$TMP/state dir/t1.status" ] \
   || fail "the export must bind the guard to this task's status file"
-[ "$(printf '%s\n' "$WORKER_ENV" | sed -n 2p)" = "$TMP/state dir/t1.meta" ] \
-  || fail "the export must bind the guard to this task's durable record"
-[ "$(printf '%s\n' "$WORKER_ENV" | sed -n 3p)" = "$ROOT/bin/shims:/usr/bin:/bin" ] \
+[ "$(printf '%s\n' "$WORKER_ENV" | sed -n 2p)" = "$ROOT/bin/shims:/usr/bin:/bin" ] \
   || fail "the export must prepend the shim directory rather than replace PATH"
 pass "fm-spawn wires the shims once, through the backend-agnostic pane environment"
 
