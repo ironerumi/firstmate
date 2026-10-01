@@ -27,10 +27,12 @@ Refused, and only while a run attributed to this branch is active or parked:
 
 | Attempt | Code | Why |
 | --- | --- | --- |
-| `no-mistakes axi run`, `no-mistakes rerun` | `nm-run-active` | Cancels the live run and restarts every completed step. |
+| `no-mistakes axi run` with any flag, `no-mistakes rerun` | `nm-run-active` | Cancels the live run and restarts every completed step. |
 | `git push` of any shape | `nm-push-supersedes` | Cancels the live run as superseded; the pipeline pushes the branch itself at its push step. |
 | `no-mistakes axi abort` at a gate | `nm-abandon-gate` | Discards completed work at a stage the worker could answer. |
 | `no-mistakes axi abort` mid-step | `nm-abandon-run` | Same loss, decided unilaterally; whether to abandon a run is firstmate's call. |
+
+A flagless `no-mistakes axi run` is never refused under a live run: it reattaches to the branch's own run, and only a flag or argument can start or replace one.
 
 Refused after a terminally failed run, until the failure is reported:
 
