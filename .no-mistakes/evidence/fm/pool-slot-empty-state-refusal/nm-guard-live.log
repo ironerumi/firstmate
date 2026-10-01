@@ -1,0 +1,39 @@
+ok - a second axi run is refused while a run is live
+ok - a flagless axi run reattaches to the live run
+ok - rerun is refused while a run is live
+ok - aborting a working run is refused and names the run
+ok - a superseding push is refused while a run is live
+ok - inspection and reconnection stay permitted under a live run
+ok - the axi respond continuation path is permitted and passes arguments through
+ok - help for a refused subcommand stays readable
+ok - unrelated git commands and dry-run pushes are never refused
+ok - abandoning an answerable gate is refused and points at the gate response
+ok - the parked gate can still be answered
+ok - a replacement run after an unreported failure is refused with the evidence path
+ok - recording the failure clears the refusal
+ok - a failed run outside this worktree's history never gates it
+ok - a run cancelled at a gate stays terminal and clears through the reporting path
+ok - a gate row never bypasses the failed-run code-identity test
+ok - an unrecognized run word stays permissive even with a gate row
+ok - a genuinely new run and push after a terminal run are not interfered with
+ok - another branch's run never gates this one
+ok - a task with no branch of its own is never gated
+ok - an unreadable pipeline answer fails open
+ok - an absent no-mistakes binary fails open
+ok - FM_NM_GUARD_ALLOW=1 allows an authorized recovery
+ok - a review fix response before the budget is allowed
+ok - the fourth review fix response is refused with the batch-decision path
+ok - FM_NM_GUARD_REVIEW_UNLOCK=1 permits one authorized further round
+ok - the budget refuses only a review fix response
+ok - an unreadable review round count fails open and is reported
+ok - argv classification is exact for every documented shape
+ok - the decision table matches the documented contract
+ok - the review fix-round budget decision matches the documented contract
+ok - a refusal appends one keyed blocked line, idempotent per refusal code
+ok - a reset status file does not strand a refusal claim
+ok - a resolved refusal report re-opens on the next refusal
+ok - the guard's own report cannot count as the worker's failure report
+ok - a refusal without a status record still refuses
+ok - fm-spawn wires the shims once, through the backend-agnostic pane environment
+ok - both shims are one owner reached under two names
+ok - fm-nm-guard.test.sh
