@@ -398,6 +398,7 @@ OUT=
 ACTIONABLE=0
 AUTOACK_COUNT=0
 AUTOACK_MAX=${FM_WAKE_AUTOACK_MAX:-25}
+AUTOACK_CAP_REACHED=0
 case "$AUTOACK_MAX" in ''|*[!0-9]*) AUTOACK_MAX=25 ;; esac
 AUTOACK_CARRY=
 HEALTHY=0
@@ -445,7 +446,10 @@ while [ "$attempt" -lt "$AUTOARM_ATTEMPTS" ]; do
     # Fork seam (bin/fm-wake-autoack.sh owns the contract): wakes that no longer
     # need a turn are acknowledged here and the arm runs again, so they never
     # ring the model. Exit 3 hands back a presentation the drain already consumed.
-    if [ "$AUTOACK_COUNT" -lt "$AUTOACK_MAX" ] \
+    if [ "$AUTOACK_COUNT" -ge "$AUTOACK_MAX" ] \
+      && ! { [ -n "$OUT" ] && grep -q '^supervision-host:' "$OUT" 2>/dev/null; }; then
+      AUTOACK_CAP_REACHED=1
+    elif [ "$AUTOACK_COUNT" -lt "$AUTOACK_MAX" ] \
       && ! { [ -n "$OUT" ] && grep -q '^supervision-host:' "$OUT" 2>/dev/null; }; then
       # A superseded owner must not drain or acknowledge anything.
       if ! fm_autoarm_still_owner "$STATE" "$MY_GEN"; then
@@ -549,6 +553,9 @@ if [ "$ACTIONABLE" -eq 1 ]; then
     start_handling_successor "$CLOSED_ARM_PID" || true
   fi
   {
+    if [ "$AUTOACK_CAP_REACHED" -eq 1 ]; then
+      printf 'auto-ack cap reached after %s acknowledged wake(s) this cycle; repeating wake sources:\n' "$AUTOACK_COUNT"
+    fi
     printf 'firstmate watcher wake - one supervision event needs a handling turn now.\n'
     if [ "$HOST_MODE" -eq 1 ]; then
       [ -n "$OUT" ] && awk '/^supervision-host:/ { print; next } /^(signal:|stale:|check:|heartbeat)/ && shown++ < 8' "$OUT" 2>/dev/null

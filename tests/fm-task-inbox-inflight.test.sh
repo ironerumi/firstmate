@@ -88,7 +88,6 @@ test_new_message_rings_at_once() {
   set_inflight "$state" 5
   mv "$rec" "$state/t1.inbox/handled/"
   rec2=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "second steer") || fail "second write failed"
-  touch -t 202001010000 "$rec2"
   [ "$(due "$state")" = "ring $rec2" ] \
     || fail "a new oldest message must ring at once despite a fresh sighting, got: $(due "$state")"
   [ ! -e "$state/t1.inbox/.inflight" ] || fail "a new oldest message must drop the previous message's sighting"

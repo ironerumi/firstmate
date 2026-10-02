@@ -421,7 +421,7 @@ fm_task_inbox_clear_retry() {  # <state-dir> <task-id> <record-path>
 # An empty inbox also resets the ladder bookkeeping so the next message starts
 # a fresh ladder.
 fm_task_inbox_due_action() {  # <state-dir> <task-id>
-  local dir oldest base now grace max ladder rec_base count last seen
+  local dir oldest base now grace max ladder rec_base count last seen transition
   dir=$(fm_task_inbox_dir "$1" "$2")
   if ! oldest=$(fm_task_inbox_oldest_unhandled "$1" "$2"); then
     rm -f "$dir/.ring-state" "$dir/.escalated" "$dir/.inflight" 2>/dev/null || true
@@ -441,12 +441,9 @@ fm_task_inbox_due_action() {  # <state-dir> <task-id>
   fi
   base=${oldest##*/}
   grace=$(fm_task_inbox_grace_secs)
-  if [ "$(fm_path_age "$oldest")" -lt "$grace" ]; then
-    printf 'quiet'
-    return 0
-  fi
   count=0
   last=0
+  transition=0
   ladder=$(cat "$dir/.ring-state" 2>/dev/null || true)
   IFS=$(printf '\t') read -r rec_base count last <<EOF
 $ladder
@@ -458,6 +455,7 @@ EOF
     # a marker naming some other message).
     count=0
     last=0
+    transition=1
     rm -f "$dir/.escalated" "$dir/.inflight" 2>/dev/null || true
   fi
   case "$count" in ''|*[!0-9]*) count=0 ;; esac
@@ -467,6 +465,10 @@ EOF
     return 0
   fi
   now=$(date +%s)
+  if [ "$transition" -eq 0 ] && [ "$(fm_path_age "$oldest")" -lt "$grace" ]; then
+    printf 'quiet'
+    return 0
+  fi
   if [ "$count" -ge 1 ]; then
     seen=$(cat "$dir/.inflight" 2>/dev/null || true)
     case "$seen" in ''|*[!0-9]*) seen=0 ;; esac

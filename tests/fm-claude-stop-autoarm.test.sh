@@ -1788,8 +1788,9 @@ test_autoack_consecutive_acknowledgements_are_bounded() {
   out=$(FM_WAKE_AUTOACK_MAX=2 run_autoarm "$dir" 2>/dev/null); status=$?
   expect_code 2 "$status" "after the bound the wake must ring"
   [ "$(count_lines "$dir/state/autoack-ran")" = 2 ] || fail "the seam must not be asked past its bound, got: $(cat "$dir/state/autoack-ran")"
-  assert_contains "$out" "2 earlier wake(s) were acknowledged" "the banner must count what was acknowledged"
-  pass "auto-arm: consecutive acknowledgements are bounded and the next wake rings"
+  assert_contains "$out" "auto-ack cap reached after 2 acknowledged wake(s) this cycle; repeating wake sources:" "the banner must identify the cap and acknowledged count"
+  assert_contains "$out" "stale: fixture-win actionable" "the cap banner must retain the repeating wake source"
+  pass "auto-arm: the acknowledgement cap backstops loops and names repeating wakes"
 }
 
 test_autoack_host_line_is_never_acknowledged() {
