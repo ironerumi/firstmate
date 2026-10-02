@@ -241,6 +241,15 @@ case "${1:-} ${2:-}" in
     exit 0
     ;;
   api\ *)
+    case "${2:-}" in
+      repos/*/*/*) ;;
+      repos/*/*)
+        if [ -f "${FM_TEST_GH_REPO_SETTINGS:-}" ]; then
+          cat "$FM_TEST_GH_REPO_SETTINGS"
+          exit 0
+        fi
+        ;;
+    esac
     # The required-check reads: the branch itself, and its rules read without
     # the merge-queue filter the queue reader below applies.
     case " $* " in
@@ -471,6 +480,7 @@ run_pr_merge() {
   FM_TEST_GH_RULES_FAIL_BODY="$case_dir/github-rules-fail-body" \
   FM_TEST_GH_BRANCH="$case_dir/github-branch.json" \
   FM_TEST_GH_BRANCH_FAIL="$case_dir/github-branch-fail" \
+  FM_TEST_GH_REPO_SETTINGS="$case_dir/github-repo-settings" \
   FM_TEST_GH_REQUIRED_RULES="$case_dir/github-required-rules.json" \
   FM_TEST_GH_REQUIRED_RULES_FAIL="$case_dir/github-required-rules-fail" \
   FM_TEST_META_AT_MERGE="$case_dir/meta-at-merge" \
@@ -1714,6 +1724,52 @@ test_method_equals_merge_method_not_overridden() {
   pass "fm-pr-merge respects --method=<value> as an explicit merge method"
 }
 
+# A repository that allows exactly one merge method is asked for that method, so
+# a repo with squash disabled is not sent the squash default; any other
+# configuration keeps --squash.
+test_sole_allowed_repo_merge_method_is_used() {
+  local case_dir setting method want
+  for setting in "merge=true squash=false rebase=false:--merge" \
+    "merge=false squash=true rebase=false:--squash" \
+    "merge=false squash=false rebase=true:--rebase"; do
+    method=${setting%%:*}
+    want=${setting##*:}
+    case_dir=$(make_case "sole-method-${want#--}")
+    mkdir -p "$case_dir/wt"
+    add_gh_mocks "$case_dir" 8888888888888888888888888888888888888888
+    : > "$case_dir/gh-axi.log"
+    printf '%s\n' "$method" > "$case_dir/github-repo-settings"
+
+    run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/24 \
+      > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "sole-method $want: fm-pr-merge failed"
+
+    assert_logged_gh_merge "$case_dir" 24 example/repo "$want"
+  done
+  pass "fm-pr-merge uses the repository's only allowed merge method when the caller names none"
+}
+
+test_several_allowed_repo_merge_methods_keep_squash() {
+  local case_dir setting n=0
+  for setting in "merge=true squash=true rebase=false" \
+    "merge=true squash=true rebase=true" \
+    "merge=false squash=false rebase=false" \
+    "merge=null squash=null rebase=null" \
+    "unreadable"; do
+    n=$((n + 1))
+    case_dir=$(make_case "several-methods-$n")
+    mkdir -p "$case_dir/wt"
+    add_gh_mocks "$case_dir" 9999999999999999999999999999999999999999
+    : > "$case_dir/gh-axi.log"
+    printf '%s\n' "$setting" > "$case_dir/github-repo-settings"
+
+    run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/25 \
+      > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "several-methods $setting: fm-pr-merge failed"
+
+    assert_logged_gh_merge "$case_dir" 25 example/repo --squash
+  done
+  pass "fm-pr-merge keeps the --squash default when several, none, or unreadable merge methods are allowed"
+}
+
 test_parses_pr_url_for_gh_axi() {
   local case_dir
   case_dir=$(make_case url-parsing)
@@ -2399,6 +2455,8 @@ test_repo_override_args_refuse_before_recording
 test_bundled_repo_override_args_refuse_before_recording
 test_explicit_merge_method_not_overridden
 test_method_equals_merge_method_not_overridden
+test_sole_allowed_repo_merge_method_is_used
+test_several_allowed_repo_merge_methods_keep_squash
 test_parses_pr_url_for_gh_axi
 test_github_still_forwards_sha_arg
 test_gitlab_url_resolves_and_merges

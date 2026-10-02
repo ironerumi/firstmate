@@ -8,8 +8,11 @@
 # is refused outright: that adapter is read-only, and the refusal at the parse
 # below owns why.
 #
-# Merge method on GitHub defaults to --squash when the caller passes none of
-# --squash, --merge, --rebase, or --method after the optional -- separator.
+# Merge method on GitHub, when the caller passes none of --squash, --merge,
+# --rebase, or --method after the optional -- separator, is the repository's
+# only allowed method when exactly one of allow_merge_commit, allow_squash_merge,
+# and allow_rebase_merge is enabled, and --squash otherwise (several allowed, or
+# the setting could not be read).
 # A GitHub merge is refused unless every pre-merge condition holds, each read
 # live at merge time rather than taken from recorded metadata: the pull request
 # is open, not a draft, mergeable, free of conflicts, every unwaived check
@@ -272,6 +275,27 @@ caller_merge_method() {
       --method=*) method=${arg#--method=} ;;
     esac
   done
+  printf '%s' "$method"
+}
+
+# The merge method flag the repository allows when exactly one method is enabled,
+# read from its own settings; any other count, or an unreadable setting, prints
+# nothing and returns 1 so the caller keeps its default.
+github_sole_allowed_merge_method() {
+  local settings pair method='' count=0
+  settings=$(gh api "repos/$PR_OWNER/$PR_REPO" --jq '"merge=\(.allow_merge_commit) squash=\(.allow_squash_merge) rebase=\(.allow_rebase_merge)"' 2>/dev/null) || return 1
+  case "$settings" in
+    "merge="*" squash="*" rebase="*) ;;
+    *) return 1 ;;
+  esac
+  for pair in $settings; do
+    case "$pair" in
+      merge=true) method=--merge; count=$((count + 1)) ;;
+      squash=true) method=--squash; count=$((count + 1)) ;;
+      rebase=true) method=--rebase; count=$((count + 1)) ;;
+    esac
+  done
+  [ "$count" -eq 1 ] || return 1
   printf '%s' "$method"
 }
 
@@ -1357,6 +1381,9 @@ case "$PROVIDER" in
     merge_args=()
     if ! caller_has_merge_method "$@"; then
       merge_args=(--squash)
+      if sole_method=$(github_sole_allowed_merge_method); then
+        merge_args=("$sole_method")
+      fi
     fi
     FM_PR_GITHUB_CALLER_METHOD=$(caller_merge_method "$@")
     # mergeable reads UNKNOWN for a short while after a push or base-branch
