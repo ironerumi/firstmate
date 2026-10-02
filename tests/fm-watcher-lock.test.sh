@@ -591,11 +591,11 @@ test_lock_stale_steal_single_winner_under_concurrency() {
       while [ ! -e "$5" ]; do sleep 0.01; done
       if fm_lock_try_acquire "$2"; then
         printf "%s\n" "${BASHPID:-$$}" >> "$6"
-        printf 'winner\n' > "$8/$4.result"
+        printf "%s\n" winner > "$8/$4.result"
         printf "%s\n" "${BASHPID:-$$}" > "$7"
         exec sleep 30
       fi
-      printf 'lost\n' > "$8/$4.result"
+      printf "%s\n" lost > "$8/$4.result"
     ' _ "$LIB" "$lockdir" "$ready_dir" "$i" "$release" "$marker" "$gate" "$result_dir" &
     pids="$pids $!"
     i=$((i + 1))
