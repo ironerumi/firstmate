@@ -27,18 +27,16 @@
 # hold nothing but the queued rows and the acknowledgement line; any other
 # content (status lines, open decisions, guard warnings, a row that arrived
 # meanwhile) is printed to stdout, exit 3, and the caller carries it into the
-# rewake banner. Every acknowledged row is recorded verbatim in
-# state/.wake-autoack.log (bounded) and the caller's banner names that file.
+# rewake banner.
 #
 # Exit codes:
-#   0  every queued row was ack-class; presented and acknowledged, logged
+#   0  every queued row was ack-class; presented and acknowledged
 #   1  nothing done (empty queue or any row not ack-class); no drain ran
 #   3  the drain ran but acknowledgement was not safe or failed; the captured
 #      presentation is on stdout and the rows stay queued
 #
 # Environment (test seams, like FM_CREW_STATE_BIN):
 #   FM_WAKE_AUTOACK_DRAIN      drain script to run (default bin/fm-wake-drain.sh)
-#   FM_WAKE_AUTOACK_LOG_LINES  log lines kept (default 200)
 set -u
 
 usage() {
@@ -63,7 +61,6 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 DRAIN="${FM_WAKE_AUTOACK_DRAIN:-$SCRIPT_DIR/fm-wake-drain.sh}"
-LOG="$STATE/.wake-autoack.log"
 
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
@@ -131,14 +128,4 @@ awk -F '\t' -v max="$max_seq" 'NF < 5 || $2 !~ /^[0-9]+$/ || $2 + 0 > max { bad 
 
 "$DRAIN" --ack-through "$ack_through" --recovery-generation "$ack_generation" >"$out" 2>"$err" || hand_back
 
-{
-  stamp=$(date '+%Y-%m-%dT%H:%M:%S%z')
-  printf '%s acknowledged through %s without a model turn (crew provably working at ring time):\n' "$stamp" "$ack_through"
-  printf '%s\n' "$rows"
-} >> "$LOG" 2>/dev/null || true
-keep=${FM_WAKE_AUTOACK_LOG_LINES:-200}
-case "$keep" in ''|*[!0-9]*) keep=200 ;; esac
-if [ "$(wc -l < "$LOG" 2>/dev/null || echo 0)" -gt "$keep" ]; then
-  tail -n "$keep" "$LOG" > "$LOG.tmp.$$" 2>/dev/null && mv -f "$LOG.tmp.$$" "$LOG" 2>/dev/null || rm -f "$LOG.tmp.$$"
-fi
 exit 0

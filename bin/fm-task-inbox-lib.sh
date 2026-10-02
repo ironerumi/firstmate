@@ -507,7 +507,7 @@ fm_task_inbox_note_inflight() {  # <state-dir> <task-id>
   local dir
   dir=$(fm_task_inbox_dir "$1" "$2")
   [ -f "$dir/.ring-state" ] || return 0
-  { date +%s > "$dir/.inflight"; } 2>/dev/null || true
+  { date +%s > "$dir/.inflight"; } 2>/dev/null
 }
 
 # Advance the ladder after a delivery attempt. A failed ring or a composer-

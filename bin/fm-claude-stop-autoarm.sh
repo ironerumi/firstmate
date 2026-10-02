@@ -567,7 +567,7 @@ if [ "$ACTIONABLE" -eq 1 ]; then
       printf 'This wake comes from automatic supervision under the away-posture record, not from the captain: it is not a return, so handle it under the away posture.\n'
     fi
     [ -z "$SUCCESSOR_FAILURE" ] || printf '%s\n' "$SUCCESSOR_FAILURE"
-    [ "$AUTOACK_COUNT" -eq 0 ] || printf '%s earlier wake(s) were acknowledged without a model turn because their crews were provably working again; they are recorded verbatim in state/.wake-autoack.log.\n' "$AUTOACK_COUNT"
+    [ "$AUTOACK_COUNT" -eq 0 ] || printf '%s earlier wake(s) were acknowledged without a model turn because their crews were provably working again.\n' "$AUTOACK_COUNT"
     if [ -n "$AUTOACK_CARRY" ]; then
       printf 'The Stop hook already ran the wake drain once and could not acknowledge it; its presentation, verbatim (the drain will not print the unread status lines again):\n'
       printf '%s\n' "$AUTOACK_CARRY" | head -c 4000

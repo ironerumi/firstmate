@@ -612,7 +612,6 @@ The acknowledgement is the same two drain calls the away daemon makes, ending in
 
 Nothing is dropped silently.
 If the drain's presentation holds anything beyond the queued rows, such as an unread status line or a watcher-down banner, the script acknowledges nothing and the hook carries that presentation verbatim into the rewake banner.
-Every acknowledged row is recorded in `state/.wake-autoack.log`, bounded to `FM_WAKE_AUTOACK_LOG_LINES` lines (default 200), and the next rewake banner names the file and how many wakes were acknowledged.
 `FM_WAKE_AUTOACK_MAX` (default 25) is a runaway-loop backstop for consecutive acknowledgements in one hook run. When it is reached, the Stop banner leads with the count acknowledged this cycle and the repeating wake sources before the wake rings.
 
 The keep-warm self-wake is not a queued wake and is unaffected, so its one benign turn per interval stays.

@@ -1733,7 +1733,6 @@ test_autoack_acknowledged_wake_rearms_instead_of_ringing() {
   [ "$(count_lines "$dir/state/arm-ran")" = 2 ] || fail "an acknowledged wake must run the arm again, got: $(cat "$dir/state/arm-ran")"
   [ "$(count_lines "$dir/state/autoack-ran")" = 2 ] || fail "each actionable close must ask the seam once"
   assert_contains "$out" "1 earlier wake(s) were acknowledged without a model turn" "the banner must say what was acknowledged"
-  assert_contains "$out" ".wake-autoack.log" "the banner must name the log"
   [ "$(count_lines "$dir/state/successor-ran")" = 1 ] \
     || fail "only the ringing close may start a handling successor, got: $(cat "$dir/state/successor-ran" 2>/dev/null)"
   pass "auto-arm: an acknowledged wake re-arms in the same hook and the next real wake rings with a note"

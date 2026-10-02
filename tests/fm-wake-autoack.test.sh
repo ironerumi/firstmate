@@ -8,7 +8,7 @@
 # meanwhile" and a failing acknowledgement are produced by a wrapper drain
 # (FM_WAKE_AUTOACK_DRAIN), never by timing. The suite pins both directions:
 #   - a wake whose crew is provably working again is acknowledged with no turn,
-#     with the drain's own generation-bound acknowledgement and a verbatim log;
+#     with the drain's own generation-bound acknowledgement;
 #   - every wake that still needs action leaves the queue and the drain
 #     untouched, so it rings exactly as before.
 set -u
@@ -72,10 +72,8 @@ test_working_turn_end_is_acknowledged_without_a_turn() {
   run_autoack "$state" || rc=$?
   assert_rc 0 "$rc" "a turn-end for a provably working crew must be acknowledged"
   [ "$(queued "$state")" = 0 ] || fail "the acknowledgement must consume the row: $(cat "$state/.wake-queue")"
-  grep -qF "t1.turn-ended" "$state/.wake-autoack.log" \
-    || fail "the acknowledged row must be recorded verbatim in the log"
   [ ! -s "${state%/state}/autoack.out" ] || fail "an acknowledged wake must print nothing for the model"
-  pass "autoack: a turn-end for a crew that is working again is acknowledged and logged"
+  pass "autoack: a turn-end for a crew that is working again is acknowledged without a model turn"
 }
 
 test_acknowledgement_uses_the_drain_generation() {
@@ -131,7 +129,6 @@ test_mixed_queue_acknowledges_nothing() {
   run_autoack "$state" || rc=$?
   assert_rc 1 "$rc" "one actionable row must keep the whole queue ringing"
   [ "$(queued "$state")" = 2 ] || fail "no row of a mixed queue may be consumed"
-  [ ! -e "$state/.wake-autoack.log" ] || fail "nothing acknowledged, nothing logged"
   pass "autoack: one actionable row keeps the entire queue for the model"
 }
 
@@ -244,23 +241,7 @@ test_failed_acknowledgement_leaves_the_rows() {
   FM_WAKE_AUTOACK_DRAIN="$wrapper" run_autoack "$state" || rc=$?
   assert_rc 3 "$rc" "a hook acknowledgement that fails must hand back to the model"
   [ "$(queued "$state")" = 1 ] || fail "a failed acknowledgement must leave the row queued"
-  [ ! -e "$state/.wake-autoack.log" ] || fail "an unacknowledged row must not be logged as acknowledged"
   pass "autoack: a failed acknowledgement re-rings as today"
-}
-
-test_log_is_bounded() {
-  local state rc=0 i
-  state=$(new_case bounded)
-  crew "$state" t1 working
-  for i in 1 2 3 4; do
-    append_wake "$state" signal t1.turn-ended "signal: $state/t1.turn-ended $i"
-    rc=0
-    FM_WAKE_AUTOACK_LOG_LINES=3 run_autoack "$state" || rc=$?
-    assert_rc 0 "$rc" "acknowledgement $i"
-  done
-  [ "$(wc -l < "$state/.wake-autoack.log" | tr -d ' ')" -le 3 ] \
-    || fail "the log must keep only the configured number of lines"
-  pass "autoack: the log is bounded"
 }
 
 test_working_turn_end_is_acknowledged_without_a_turn
@@ -274,4 +255,3 @@ test_without_flag_and_empty_queue
 test_unread_presentation_is_handed_back
 test_row_arriving_meanwhile_is_not_acknowledged
 test_failed_acknowledgement_leaves_the_rows
-test_log_is_bounded

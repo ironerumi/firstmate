@@ -522,6 +522,15 @@ inbox_steer_escalate_unavailable() {  # <window> <task> <record>
   wake "$reason"
 }
 
+inbox_steer_inflight_unwritable() {  # <window> <task>
+  local w=$1 task=$2 rec reason
+  rec=$(fm_task_inbox_oldest_unhandled "$STATE" "$task") || return 0
+  [ -n "$rec" ] || return 0
+  reason="stale: $w (steering-inbox ladder bookkeeping unwritable: ${rec%/*}/.inflight cannot be written while $rec stays unhandled; the in-flight handling timing cannot be preserved - inspect the inbox directory)"
+  fm_wake_append stale "$w" "$reason" || exit 1
+  wake "$reason"
+}
+
 # Steering-inbox loss detection, one cheap check per recorded window per poll.
 # Quiet when healthy: an absent, empty, or handled inbox costs one directory
 # glob and produces nothing. When the ladder (fm_task_inbox_due_action, the
@@ -549,7 +558,10 @@ inbox_steer_check() {  # <window> <task>
     # Within grace after a ring, a busy pane is the handling turn in flight.
     if fm_task_inbox_inflight_probe_due "$STATE" "$task"; then
       tail40=$(fm_backend_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")" 2>/dev/null) || tail40=
-      ! window_is_busy "$w" "$tail40" || fm_task_inbox_note_inflight "$STATE" "$task"
+      if window_is_busy "$w" "$tail40"; then
+        fm_task_inbox_note_inflight "$STATE" "$task" \
+          || inbox_steer_inflight_unwritable "$w" "$task"
+      fi
     fi
     return 0
   fi
@@ -579,7 +591,8 @@ inbox_steer_check() {  # <window> <task>
   tail40=$(fm_backend_capture "$backend" "$w" 40 "$(window_label "$w")" 2>/dev/null) || tail40=
   if window_is_busy "$w" "$tail40"; then
     # A handling turn in flight: the ladder paces its next ring from here.
-    fm_task_inbox_note_inflight "$STATE" "$task"
+    fm_task_inbox_note_inflight "$STATE" "$task" \
+      || inbox_steer_inflight_unwritable "$w" "$task"
     return 0
   fi
   case "$verb" in

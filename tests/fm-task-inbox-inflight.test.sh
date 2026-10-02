@@ -158,9 +158,38 @@ test_watcher_sees_busy_during_quiet_window() {
   pass "watcher: busy sightings are recorded inside the grace window too"
 }
 
+test_watcher_surfaces_inflight_marker_failure() {
+  local state rec out
+  read -r state rec < <(make_ladder watcher-inflight-failure-due 1 200)
+  mkdir "$state/t1.inbox/.inflight"
+  out=$(watcher_check "$state" 1) || fail "the watcher must handle an in-flight marker failure"
+  case "$out" in
+    *"steering-inbox ladder bookkeeping unwritable"*) : ;;
+    *) fail "a failed in-flight marker must use the stale bookkeeping path: $out" ;;
+  esac
+  [ "$(awk 'END { print NR }' "$state/.wake-queue")" = 1 ] \
+    || fail "a failed in-flight marker must queue one stale wake"
+  grep -qF "steering-inbox ladder bookkeeping unwritable" "$state/.wake-queue" \
+    || fail "the stale wake must explain that the in-flight marker is unwritable"
+
+  read -r state rec < <(make_ladder watcher-inflight-failure-quiet 1 10)
+  mkdir "$state/t1.inbox/.inflight"
+  out=$(watcher_check "$state" 1) || fail "the quiet watcher must handle an in-flight marker failure"
+  case "$out" in
+    *"steering-inbox ladder bookkeeping unwritable"*) : ;;
+    *) fail "a quiet marker failure must use the stale bookkeeping path: $out" ;;
+  esac
+  [ "$(awk 'END { print NR }' "$state/.wake-queue")" = 1 ] \
+    || fail "a quiet marker failure must queue one stale wake"
+  grep -qF "steering-inbox ladder bookkeeping unwritable" "$state/.wake-queue" \
+    || fail "the quiet stale wake must explain the unwritable marker"
+  pass "watcher: an unwritable in-flight marker becomes a stale bookkeeping wake"
+}
+
 test_inflight_sighting_rearms_the_ring
 test_lost_handling_still_rings_and_escalates
 test_new_message_rings_at_once
 test_sighting_needs_an_outstanding_ring
 test_watcher_records_the_sighting_and_waits
 test_watcher_sees_busy_during_quiet_window
+test_watcher_surfaces_inflight_marker_failure
