@@ -568,7 +568,7 @@ SH
 }
 
 test_lock_stale_steal_single_winner_under_concurrency() {
-  local dir state lockdir dead marker gate release ready_dir ready_count ready i pids pid winner wins
+  local dir state lockdir dead marker gate release ready_dir result_dir ready_count result_count ready result i pids pid winner wins
   dir=$(make_case lock-stale-concurrency)
   state="$dir/state"
   lockdir="$state/.contend.lock"
@@ -576,8 +576,9 @@ test_lock_stale_steal_single_winner_under_concurrency() {
   gate="$dir/first-winner"
   release="$dir/release"
   ready_dir="$dir/ready"
+  result_dir="$dir/results"
   dead=$(dead_pid)
-  mkdir "$lockdir" "$ready_dir"
+  mkdir "$lockdir" "$ready_dir" "$result_dir"
   printf '%s\n' "$dead" > "$lockdir/pid"
   : > "$marker"
   mkfifo "$gate"
@@ -590,10 +591,12 @@ test_lock_stale_steal_single_winner_under_concurrency() {
       while [ ! -e "$5" ]; do sleep 0.01; done
       if fm_lock_try_acquire "$2"; then
         printf "%s\n" "${BASHPID:-$$}" >> "$6"
+        printf 'winner\n' > "$8/$4.result"
         printf "%s\n" "${BASHPID:-$$}" > "$7"
         exec sleep 30
       fi
-    ' _ "$LIB" "$lockdir" "$ready_dir" "$i" "$release" "$marker" "$gate" &
+      printf 'lost\n' > "$8/$4.result"
+    ' _ "$LIB" "$lockdir" "$ready_dir" "$i" "$release" "$marker" "$gate" "$result_dir" &
     pids="$pids $!"
     i=$((i + 1))
   done
@@ -617,6 +620,21 @@ test_lock_stale_steal_single_winner_under_concurrency() {
     for pid in $pids; do kill "$pid" 2>/dev/null || true; done
     for pid in $pids; do wait "$pid" 2>/dev/null || true; done
     fail "one-shot stale-lock candidates produced no winner"
+  fi
+  result_count=0
+  i=0
+  while [ "$i" -lt 1000 ] && [ "$result_count" -lt 40 ]; do
+    result_count=0
+    for result in "$result_dir"/*.result; do
+      [ -e "$result" ] && result_count=$((result_count + 1))
+    done
+    [ "$result_count" -eq 40 ] || sleep 0.01
+    i=$((i + 1))
+  done
+  if [ "$result_count" -ne 40 ]; then
+    for pid in $pids; do kill "$pid" 2>/dev/null || true; done
+    for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+    fail "stale-lock candidates did not complete their attempts"
   fi
   for pid in $pids; do kill "$pid" 2>/dev/null || true; done
   for pid in $pids; do wait "$pid" 2>/dev/null || true; done
