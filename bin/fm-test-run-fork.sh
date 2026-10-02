@@ -20,6 +20,9 @@ fm_fork_family_for_basename() {  # <basename>
     fm-merge-local.test.sh|fm-pr-merge-admin.test.sh|fm-task-register.test.sh)
       printf '%s\n' pr-forge
       ;;
+    fm-wake-autoack.test.sh|fm-task-inbox-inflight.test.sh)
+      printf '%s\n' watcher-wake-lock
+      ;;
     fm-claude-keepwarm-selfwake.test.sh)
       printf '%s\n' standalone
       ;;

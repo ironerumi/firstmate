@@ -28,6 +28,8 @@
 #   <task>.inbox/.seq.lock     serializes sequence allocation across writers
 #                              (the session and the away daemon)
 #   <task>.inbox/.ring-state   watcher re-ring ladder: "<msg>\t<count>\t<epoch>"
+#   <task>.inbox/.inflight     epoch the watcher last saw the worker busy while a
+#                              ring was outstanding (fm_task_inbox_note_inflight)
 #   <task>.inbox/.escalated    oldest-message name already surfaced as stale,
 #                              so later polls suppress another escalation
 #   <task>.inbox/.retry-ring   name of a fire-and-forget record still owed its
@@ -55,6 +57,13 @@
 # caller owns the busy and recovery-grade endpoint checks: a busy pane waits,
 # while a positively dead or missing endpoint skips delivery and the ladder and
 # escalates directly. This library owns only the schedule and escalation marker.
+# A busy pane after a ring is a handling turn in flight, so the caller records
+# each such sighting (fm_task_inbox_note_inflight) and the ladder re-arms its
+# grace from the latest sighting instead of the ring: the next ring or the
+# escalation comes one full grace after handling was last seen, never at the
+# first poll after the turn ends. A turn that died leaves no further sightings,
+# so lost handling still rings, and a new oldest message always restarts the
+# ladder.
 # If attempt bookkeeping cannot be persisted while the record remains unhandled,
 # the caller surfaces that failure instead of retrying silently; a concurrently
 # removed inbox is a quiet no-op. Escalation deliberately queues the wake before
@@ -412,10 +421,10 @@ fm_task_inbox_clear_retry() {  # <state-dir> <task-id> <record-path>
 # An empty inbox also resets the ladder bookkeeping so the next message starts
 # a fresh ladder.
 fm_task_inbox_due_action() {  # <state-dir> <task-id>
-  local dir oldest base now grace max ladder rec_base count last
+  local dir oldest base now grace max ladder rec_base count last seen
   dir=$(fm_task_inbox_dir "$1" "$2")
   if ! oldest=$(fm_task_inbox_oldest_unhandled "$1" "$2"); then
-    rm -f "$dir/.ring-state" "$dir/.escalated" 2>/dev/null || true
+    rm -f "$dir/.ring-state" "$dir/.escalated" "$dir/.inflight" 2>/dev/null || true
     # The one retry ring exists only while config/wait-no-turns is present.
     # Absent, a mark is left untouched and the inbox stays quiet, as before.
     if [ -e "${FM_CONFIG_OVERRIDE:-${FM_HOME:-}/config}/wait-no-turns" ]; then
@@ -449,7 +458,7 @@ EOF
     # a marker naming some other message).
     count=0
     last=0
-    rm -f "$dir/.escalated" 2>/dev/null || true
+    rm -f "$dir/.escalated" "$dir/.inflight" 2>/dev/null || true
   fi
   case "$count" in ''|*[!0-9]*) count=0 ;; esac
   case "$last" in ''|*[!0-9]*) last=0 ;; esac
@@ -457,17 +466,46 @@ EOF
     printf 'quiet'
     return 0
   fi
+  now=$(date +%s)
+  if [ "$count" -ge 1 ]; then
+    seen=$(cat "$dir/.inflight" 2>/dev/null || true)
+    case "$seen" in ''|*[!0-9]*) seen=0 ;; esac
+    [ "$seen" -le "$last" ] || last=$seen
+    if [ "$seen" -gt 0 ] && [ "$((now - seen))" -lt "$grace" ]; then
+      printf 'quiet'
+      return 0
+    fi
+  fi
   max=$(fm_task_inbox_ring_max)
   if [ "$count" -ge "$max" ]; then
     printf 'escalate %s %s' "$oldest" "$count"
     return 0
   fi
-  now=$(date +%s)
   if [ "$((now - last))" -lt "$grace" ]; then
     printf 'quiet'
     return 0
   fi
   printf 'ring %s' "$oldest"
+}
+
+# 0 while a ring is outstanding and the ladder has not escalated: the only time
+# a busy sighting changes the schedule, so the watcher captures the pane for it
+# only then and an idle or healthy inbox stays one glob.
+fm_task_inbox_inflight_probe_due() {  # <state-dir> <task-id>
+  local dir
+  dir=$(fm_task_inbox_dir "$1" "$2")
+  [ -f "$dir/.ring-state" ] && [ ! -e "$dir/.escalated" ]
+}
+
+# Record that the worker was busy while a ring is outstanding, so the ladder
+# paces from this sighting (see the header). Only a ladder that has already
+# rung is touched: a busy worker before the first ring changes nothing, and a
+# removed inbox is a quiet no-op.
+fm_task_inbox_note_inflight() {  # <state-dir> <task-id>
+  local dir
+  dir=$(fm_task_inbox_dir "$1" "$2")
+  [ -f "$dir/.ring-state" ] || return 0
+  { date +%s > "$dir/.inflight"; } 2>/dev/null || true
 }
 
 # Advance the ladder after a delivery attempt. A failed ring or a composer-

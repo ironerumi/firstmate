@@ -545,7 +545,14 @@ inbox_steer_check() {  # <window> <task>
   local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state
   action=$(fm_task_inbox_due_action "$STATE" "$task") || return 0
   verb=${action%% *}
-  [ "$verb" != quiet ] || return 0
+  if [ "$verb" = quiet ]; then
+    # Within grace after a ring, a busy pane is the handling turn in flight.
+    if fm_task_inbox_inflight_probe_due "$STATE" "$task"; then
+      tail40=$(fm_backend_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")" 2>/dev/null) || tail40=
+      ! window_is_busy "$w" "$tail40" || fm_task_inbox_note_inflight "$STATE" "$task"
+    fi
+    return 0
+  fi
   if [ "$verb" = retry ] && [ -n "$(status_own_open_decisions "$STATE/$task.status")" ]; then
     return 0
   fi
@@ -571,6 +578,8 @@ inbox_steer_check() {  # <window> <task>
   esac
   tail40=$(fm_backend_capture "$backend" "$w" 40 "$(window_label "$w")" 2>/dev/null) || tail40=
   if window_is_busy "$w" "$tail40"; then
+    # A handling turn in flight: the ladder paces its next ring from here.
+    fm_task_inbox_note_inflight "$STATE" "$task"
     return 0
   fi
   case "$verb" in

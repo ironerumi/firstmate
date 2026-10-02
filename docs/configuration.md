@@ -599,6 +599,26 @@ The bound is required rather than cosmetic because churn and pane staleness read
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes, which run their own crew mix.
 [`architecture.md`](architecture.md) owns the triage contract and `bin/fm-watch.sh`'s `signal_turnend_panes_churned` owns the exact evidence and fail-closed boundaries.
 
+## Wake auto-acknowledge (config/wake-autoack)
+
+The optional local, gitignored `config/wake-autoack` presence flag opts this home into acknowledging wakes that no longer need a model turn, before the Claude Stop hook rings the model.
+It is default-off and, like `config/turnend-churn-absorb`, a home-local supervision-noise preference that secondmate homes do not inherit.
+
+The watcher classifies each row when it surfaces it, and a handling turn can last minutes, so the state a queued row described may have cleared by the time the next ring is delivered.
+With the flag present, [`bin/fm-claude-stop-autoarm.sh`](../bin/fm-claude-stop-autoarm.sh) asks [`bin/fm-wake-autoack.sh`](../bin/fm-wake-autoack.sh) once an arm closes with an actionable wake.
+The script re-asks `crew_is_provably_working` at ring time and acknowledges only when every queued row is one of two narrow shapes: a turn-end for a crew that is working again, or a plain first-sight stale wake for a crew that is working again.
+Status signals, needs-decision wakes, check wakes, heartbeats, and every enriched stale form always ring.
+The acknowledgement is the same two drain calls the away daemon makes, ending in the drain's generation-bound `--ack-through`, after which the hook arms again instead of ringing.
+
+Nothing is dropped silently.
+If the drain's presentation holds anything beyond the queued rows, such as an unread status line or a watcher-down banner, the script acknowledges nothing and the hook carries that presentation verbatim into the rewake banner.
+Every acknowledged row is recorded in `state/.wake-autoack.log`, bounded to `FM_WAKE_AUTOACK_LOG_LINES` lines (default 200), and the next rewake banner names the file and how many wakes were acknowledged.
+`FM_WAKE_AUTOACK_MAX` (default 25) bounds consecutive acknowledgements in one hook run, after which the wake rings.
+The keep-warm self-wake is not a queued wake and is unaffected, so its one benign turn per interval stays.
+
+Only the Claude Stop hook has this seam; the Pi, omp, and OpenCode adapters and the away daemon are unchanged.
+
+
 ## Claude keep-warm cadence (config/keepwarm-secs / FM_NM_KEEPWARM_SECS)
 
 `config/keepwarm-secs` is the optional local, gitignored cadence for the one keep-warm mechanism: the Claude Stop hook [`bin/fm-claude-keepwarm-selfwake.sh`](../bin/fm-claude-keepwarm-selfwake.sh) that gives an idle Claude session one benign self-wake turn before its prompt cache goes cold.
@@ -2310,7 +2330,7 @@ FM_HEARTBEAT_MAX=7200   # heartbeat backoff cap
 FM_INACTIVE_RECONCILE_SECS=900  # 60..1800-second watcher cadence and inactivity threshold; locked session start also requests an immediate scan in the deferred worker
 FM_INACTIVE_RECONCILE_BUDGET_SECS=10  # 1..30-second scan deadline; wedged-scan kill backstop follows one second later
 FM_CHECK_INTERVAL=300   # seconds between slow checks (authenticated merge polls, custom checks, or Relay dispatch)
-FM_TASK_INBOX_GRACE_SECS=90   # seconds an unhandled steering-inbox message may sit before the watcher attempts doorbell delivery on an idle pane; also the minimum spacing between attempts
+FM_TASK_INBOX_GRACE_SECS=90   # seconds an unhandled steering-inbox message may sit before the watcher attempts doorbell delivery on an idle pane; also the minimum spacing between attempts; a busy pane seen after a ring re-arms this spacing from the sighting (`bin/fm-task-inbox-lib.sh` header)
 FM_TASK_INBOX_RING_MAX=3      # watcher delivery attempts without an acknowledgement before the task surfaces as a stale wake for recovery
 FM_CHECK_TIMEOUT=30     # seconds allowed per slow check script
 FM_MAIL_CHECK_BUDGET=15   # seconds allowed for one standing mail poll; valid 5..25, cut to fit FM_CHECK_TIMEOUT
