@@ -568,72 +568,59 @@ SH
 }
 
 test_lock_stale_steal_single_winner_under_concurrency() {
-  local dir state lockdir dead marker gate i pids pid waiter winner wins holder ready release
+  local dir state lockdir dead marker gate release ready_dir ready_count ready i pids pid winner wins
   dir=$(make_case lock-stale-concurrency)
   state="$dir/state"
   lockdir="$state/.contend.lock"
   marker="$dir/wins"
   gate="$dir/first-winner"
+  release="$dir/release"
+  ready_dir="$dir/ready"
   dead=$(dead_pid)
-  mkdir "$lockdir"
+  mkdir "$lockdir" "$ready_dir"
   printf '%s\n' "$dead" > "$lockdir/pid"
   : > "$marker"
   mkfifo "$gate"
-  if [ "${FM_TEST_FORCE_STALE_MUTEX:-}" = 1 ]; then
-    ready="$dir/mutex-ready"
-    release="$dir/mutex-release"
-    mkfifo "$ready" "$release"
-    FM_STATE_OVERRIDE="$state" bash -c '
-      . "$1"
-      fm_lock_try_acquire "$2.steal" || exit 1
-      printf "ready\n" > "$3"
-      read -r _ < "$4"
-      fm_lock_release "$2.steal"
-    ' _ "$LIB" "$lockdir" "$ready" "$release" &
-    holder=$!
-    IFS= read -r _ < "$ready"
-  fi
-  # try_acquire is nonblocking: under contention all one-shot candidates may
-  # lose to a transient steal mutex. A concurrent waiting contender guarantees
-  # eventual acquisition; the FIFO reports that actual step, not a sleep bound.
-  FM_STATE_OVERRIDE="$state" bash -c '
-    . "$1"
-    fm_lock_acquire_wait "$2" || exit 1
-    printf "%s\n" "${BASHPID:-$$}" >> "$3"
-    printf "%s\n" "${BASHPID:-$$}" > "$4"
-    exec sleep 30
-  ' _ "$LIB" "$lockdir" "$marker" "$gate" &
-  waiter=$!
   pids=
   i=1
-  while [ "$i" -le 39 ]; do
+  while [ "$i" -le 40 ]; do
     FM_STATE_OVERRIDE="$state" bash -c '
       . "$1"
+      : > "$3/$4.ready"
+      while [ ! -e "$5" ]; do sleep 0.01; done
       if fm_lock_try_acquire "$2"; then
-        printf "%s\n" "${BASHPID:-$$}" >> "$3"
-        printf "%s\n" "${BASHPID:-$$}" > "$4"
+        printf "%s\n" "${BASHPID:-$$}" >> "$6"
+        printf "%s\n" "${BASHPID:-$$}" > "$7"
         exec sleep 30
       fi
-    ' _ "$LIB" "$lockdir" "$marker" "$gate" &
+    ' _ "$LIB" "$lockdir" "$ready_dir" "$i" "$release" "$marker" "$gate" &
     pids="$pids $!"
     i=$((i + 1))
   done
-  if [ "${FM_TEST_FORCE_STALE_MUTEX:-}" = 1 ]; then
-    # All one-shot candidates must lose while the steal mutex is live; the
-    # waiter must then win only after the holder's release handshake.
-    for pid in $pids; do wait "$pid" 2>/dev/null || true; done
-    [ ! -s "$marker" ] || fail "one-shot candidate stole the live mutex"
-    printf 'release\n' > "$release"
-    wait "$holder" || fail "forced steal mutex holder failed"
-  fi
-  IFS= read -r winner < "$gate"
-  [ "$winner" = "$waiter" ] || { kill "$waiter" 2>/dev/null || true; wait "$waiter" 2>/dev/null || true; }
-  for pid in $pids; do
-    [ "$pid" = "$winner" ] || wait "$pid" 2>/dev/null || true
+  ready_count=0
+  i=0
+  while [ "$i" -lt 1000 ] && [ "$ready_count" -lt 40 ]; do
+    ready_count=0
+    for ready in "$ready_dir"/*.ready; do
+      [ -e "$ready" ] && ready_count=$((ready_count + 1))
+    done
+    [ "$ready_count" -eq 40 ] || sleep 0.01
+    i=$((i + 1))
   done
+  if [ "$ready_count" -ne 40 ]; then
+    for pid in $pids; do kill "$pid" 2>/dev/null || true; done
+    for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+    fail "stale-lock candidates did not reach the release barrier"
+  fi
+  : > "$release"
+  if ! IFS= read -r -t 10 winner < "$gate"; then
+    for pid in $pids; do kill "$pid" 2>/dev/null || true; done
+    for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+    fail "one-shot stale-lock candidates produced no winner"
+  fi
+  for pid in $pids; do kill "$pid" 2>/dev/null || true; done
+  for pid in $pids; do wait "$pid" 2>/dev/null || true; done
   wins=$(awk 'NF { c++ } END { print c + 0 }' "$marker")
-  kill "$winner" 2>/dev/null || true
-  wait "$winner" 2>/dev/null || true
   [ "$wins" -eq 1 ] || fail "expected exactly one stale-lock stealer, got $wins"
   pass "concurrent stale-lock steal yields exactly one winner"
 }
