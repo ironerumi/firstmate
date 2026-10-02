@@ -1579,13 +1579,6 @@ test_msys_pid_identity_uses_proc() {
   pass "MSYS process identity uses compatible /proc fields"
 }
 
-# Run the two stale-steal race cases alone when repeating them under load.
-if [ "${FM_TEST_FOCUS:-}" = stale-steal ]; then
-  test_lock_stale_steal_single_winner_under_concurrency
-  test_lock_steal_reap_cannot_remove_successor
-  exit 0
-fi
-
 test_wait_deadline_reaps_a_stopped_child
 test_singleton_start
 test_pid_identity_is_locale_invariant

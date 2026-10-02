@@ -2729,12 +2729,6 @@ SH
   pass "B25 spawn quarantines stale rereads without blocking relaunch"
 }
 
-# Isolate the process-name fixture for repeated ancestry checks under load.
-if [ "${FM_TEST_FOCUS:-}" = dash-leading ]; then
-  test_dash_leading_process_names_are_basename_operands
-  exit 0
-fi
-
 test_harness_resolution
 test_cursor_marker_detection
 test_secondmate_model_effort_tokens

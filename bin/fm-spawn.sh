@@ -132,10 +132,11 @@
 #   metadata are unchanged.
 #   A clean projected create makes one bounded attempt to hold the one
 #   session-scoped presentation-order lock (keyed by named session plus
-#   canonical socket, outside any home's state/) through launch handoff. Lock
-#   contention on clean create warns and falls back to the ordinary flat layout
-#   before any projection mutation. Exact resume waits for the current lock
-#   holder to finish because it cannot safely fall back to a fresh layout. The exact response-derived new workspace is inserted
+#   canonical socket, outside any home's state/) through the projected layout
+#   mutation. Lock contention on clean create warns and falls back to the
+#   ordinary flat layout before any projection mutation. Exact resume waits for
+#   the current lock holder to finish because it cannot safely fall back to a
+#   fresh layout. The exact response-derived new workspace is inserted
 #   immediately after its owning parent (firstmate or 2ndmate-<id>) contiguous
 #   child block. Ordering never authorizes lifecycle cleanup, and any
 #   unavailable, ambiguous, or failed move warns while the spawn continues.
@@ -1406,7 +1407,7 @@ spawn_herdr_presentation_order_lock_acquire() {
   HERDR_PRESENTATION_ORDER_LOCK="$lock_path"
   if [ "$mode" = wait ]; then
     # An existing projection cannot fall back flat. Wait for the operation
-    # holding this session lock to actually finish, regardless of launch time.
+    # holding this session lock to finish its projected layout mutation.
     fm_lock_acquire_wait "$HERDR_PRESENTATION_ORDER_LOCK" || return 1
     HERDR_PRESENTATION_ORDER_LOCK_HELD=1
     return 0
@@ -3695,7 +3696,7 @@ else
           exit 1
         }
         # Recovery cannot fall back flat; it must wait for a concurrent spawn
-        # to finish worktree acquisition and agent launch under the same lock.
+        # to finish its projected layout mutation under the same lock.
         spawn_herdr_presentation_order_lock_acquire "$HERDR_SES" wait || {
           echo "error: herdr presentation recovery could not acquire its session lock; refusing a concurrent resume" >&2
           exit 1
