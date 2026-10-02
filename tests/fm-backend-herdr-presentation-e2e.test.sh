@@ -200,8 +200,8 @@ fi
 exit "$status"
 SH
 
-# A forced recovery fixture can announce the first actual lock-wait sleep
-# through a FIFO. The parent releases the holder only after that handshake.
+# A recovery fixture can announce the first actual lock-wait sleep through a
+# FIFO. The parent releases the holder only after that handshake.
 cat > "$FAKEBIN/sleep" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = 0.1 ] && [ -n "${FM_TEST_RECOVERY_WAIT_FIFO:-}" ] \
@@ -1340,35 +1340,29 @@ PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" stop "$HERDR_LAB_SESSION" >/dev/
 PATH="$HERDR_ORIGINAL_PATH" "$HERDR_LAB_HELPER" provision "$HERDR_LAB_SESSION" \
   || fail "could not reprovision the isolated session for concurrent recovery"
 CONCURRENT_RECOVERY_FOCUS=$(focus_snapshot)
-if [ "${FM_TEST_FORCE_RECOVERY_LOCK_DELAY:-}" = 1 ]; then
-  RECOVERY_LOCK_PATH=$(session_presentation_lock_path) || fail "could not resolve recovery session lock"
-  RECOVERY_HOLDER_READY="$TMP_ROOT/recovery-holder-ready"
-  RECOVERY_HOLDER_RELEASE="$TMP_ROOT/recovery-holder-release"
-  RECOVERY_WAIT_FIFO="$TMP_ROOT/recovery-wait-fifo"
-  mkfifo "$RECOVERY_HOLDER_READY" "$RECOVERY_HOLDER_RELEASE" "$RECOVERY_WAIT_FIFO"
-  FM_STATE_OVERRIDE="$HOME_DIR/state" bash -c '
-    . "$1"
-    fm_lock_acquire_wait "$2" || exit 1
-    printf "ready\n" > "$3"
-    read -r _ < "$4"
-    fm_lock_release "$2"
-  ' _ "$ROOT/bin/fm-wake-lib.sh" "$RECOVERY_LOCK_PATH" "$RECOVERY_HOLDER_READY" "$RECOVERY_HOLDER_RELEASE" &
-  RECOVERY_HOLDER_PID=$!
-  IFS= read -r _ < "$RECOVERY_HOLDER_READY"
-  FM_TEST_RECOVERY_WAIT_FIFO="$RECOVERY_WAIT_FIFO" \
-    spawn_task "$PRIMARY_WAVE_ID" "$HOME_DIR" "$RECOVERY_PROJECT_DIR" > "$TMP_ROOT/primary-wave-resume.out" 2> "$TMP_ROOT/primary-wave-resume.err" &
-else
+RECOVERY_LOCK_PATH=$(session_presentation_lock_path) || fail "could not resolve recovery session lock"
+RECOVERY_HOLDER_READY="$TMP_ROOT/recovery-holder-ready"
+RECOVERY_HOLDER_RELEASE="$TMP_ROOT/recovery-holder-release"
+RECOVERY_WAIT_FIFO="$TMP_ROOT/recovery-wait-fifo"
+mkfifo "$RECOVERY_HOLDER_READY" "$RECOVERY_HOLDER_RELEASE" "$RECOVERY_WAIT_FIFO"
+FM_STATE_OVERRIDE="$HOME_DIR/state" bash -c '
+  . "$1"
+  fm_lock_acquire_wait "$2" || exit 1
+  printf "ready\n" > "$3"
+  read -r _ < "$4"
+  fm_lock_release "$2"
+' _ "$ROOT/bin/fm-wake-lib.sh" "$RECOVERY_LOCK_PATH" "$RECOVERY_HOLDER_READY" "$RECOVERY_HOLDER_RELEASE" &
+RECOVERY_HOLDER_PID=$!
+IFS= read -r _ < "$RECOVERY_HOLDER_READY"
+FM_TEST_RECOVERY_WAIT_FIFO="$RECOVERY_WAIT_FIFO" \
   spawn_task "$PRIMARY_WAVE_ID" "$HOME_DIR" "$RECOVERY_PROJECT_DIR" > "$TMP_ROOT/primary-wave-resume.out" 2> "$TMP_ROOT/primary-wave-resume.err" &
-fi
 PRIMARY_WAVE_PID=$!
 spawn_task "$BRAVO_WAVE_ID" "$SECOND_HOME_B" "$RECOVERY_PROJECT_DIR" > "$TMP_ROOT/bravo-wave-resume.out" 2> "$TMP_ROOT/bravo-wave-resume.err" &
 BRAVO_WAVE_PID=$!
-if [ "${FM_TEST_FORCE_RECOVERY_LOCK_DELAY:-}" = 1 ]; then
-  IFS= read -r _ < "$RECOVERY_WAIT_FIFO"
-  sleep 6
-  printf 'release\n' > "$RECOVERY_HOLDER_RELEASE"
-  wait "$RECOVERY_HOLDER_PID" || fail "forced recovery lock holder failed"
-fi
+IFS= read -r _ < "$RECOVERY_WAIT_FIFO"
+sleep 6
+printf 'release\n' > "$RECOVERY_HOLDER_RELEASE"
+wait "$RECOVERY_HOLDER_PID" || fail "recovery lock holder failed"
 wait "$PRIMARY_WAVE_PID" || fail "concurrent primary recovery failed: $(cat "$TMP_ROOT/primary-wave-resume.err")"
 wait "$BRAVO_WAVE_PID" || fail "concurrent secondmate recovery failed: $(cat "$TMP_ROOT/bravo-wave-resume.err")"
 PRIMARY_WAVE_NEW_WT=$(remember_meta_worktree "$PRIMARY_WAVE_META")
