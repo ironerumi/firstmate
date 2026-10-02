@@ -1,0 +1,26 @@
+$ git show -s --format=... HEAD
+commit=b82a1cf0a580971007e1075103b9eeee11a3c71c
+parent1=f5309a9bea0c81948a918e230f2cf594fc90545a 349e189f310fe477ed88a592592187c1585def55
+subject=Merge upstream kunchenguid/firstmate 349e189f into fork main
+body=Sync #1: true merge of upstream/main 349e189f310fe477ed88a592592187c1585def55,
+the newest commit whose own CI run was green
+(https://github.com/kunchenguid/firstmate/actions/runs/36925444014).
+
+Conflicts resolved by intent:
+- bin/fm-bootstrap.sh, tests/fm-bootstrap.test.sh, bootstrap-diagnostics and
+  agent-skill-trigger-index skill text, docs/configuration.md diagnostics:
+  take upstream (drops the fork's OUTDATED copy).
+- bin/fm-primary-scope-lib.sh: worker-session check re-applied inside
+  upstream's fm_primary_root_matches.
+- bin/fm-watch.sh, bin/fm-watch-arm.sh: worker-pane refusal kept beside
+  upstream's changes.
+- bin/fm-config-inherit-lib.sh: keepwarm-secs kept alongside
+  supervision-host-off.
+- tests/lib.sh, tests/fm-turnend-guard.test.sh: both sides kept.
+- docs/adr/0001-fork-divergence-budget.md: sync recipe describes the
+  true-merge flow instead of rebuild and force-push.
+
+$ git merge-base --is-ancestor 349e189f HEAD
+result=upstream SHA is an ancestor
+$ git rev-parse HEAD^2
+349e189f310fe477ed88a592592187c1585def55

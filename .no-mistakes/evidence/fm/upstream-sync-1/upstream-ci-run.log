@@ -1,0 +1,27 @@
+run:
+  id: 36925444014
+  title: "test: preserve Pi calm transcript captures with Pi 1.0 (#6338)"
+  status: completed
+  conclusion: success
+  workflow: CI
+  branch: main
+  created: 4h ago
+jobs[18]{id,name,status,conclusion}:
+  110581511043,Behavior tests (Herdr),completed,success
+  110581511299,Test coverage guard,completed,success
+  110581511314,Behavior portable parallel 2,completed,success
+  110581511370,Behavior portable serial 4,completed,success
+  110581511398,Lint 2,completed,success
+  110581511434,Behavior portable parallel 1,completed,success
+  110581511471,Stock macOS Bash snapshot compatibility,completed,success
+  110581511515,Behavior portable serial 5,completed,success
+  110581511520,Repo invariants,completed,success
+  110581511534,Lint 1,completed,success
+  110581511639,Behavior portable serial 3,completed,success
+  110581511724,Behavior portable serial 2,completed,success
+  110581511756,Behavior portable serial 8,completed,success
+  110581511764,Behavior portable serial 6,completed,success
+  110581511767,Behavior portable serial 9,completed,success
+  110581511832,Behavior portable serial 7,completed,success
+  110581511919,Behavior portable serial 1,completed,success
+  110589127477,Behavior timing aggregate,completed,success
