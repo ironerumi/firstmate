@@ -363,6 +363,8 @@ Once the exact pane is confirmed gone, teardown retires the task's own journal w
 Recovery is deliberately conservative and presentation-only.
 An existing journal suppresses another projected create.
 Before any recovery mutation, Firstmate holds both the task spawn lock and the named-session presentation lock.
+An exact resume waits for a concurrent presentation mutation to finish rather than falling back to the ordinary flat layout.
+The presentation lock covers the projected layout mutation only and is released before the remaining spawn setup and agent launch.
 
 A same-identity version 2 binding may replace one exact agent-free restart husk in place.
 A husk is a restored same-labeled tab with a missing pane or no registered agent, as [Restart and liveness behavior](#restart-and-liveness-behavior) describes.
@@ -457,8 +459,8 @@ Any of these preserves the candidate and lets session startup continue with at m
 - A failed journal publication or projected workspace create stops that spawn instead of falling back flat.
   So a Herdr create failure surfaces as a spawn failure in every Herdr home, rather than only in homes that opted in.
   Every earlier degradation on the fresh projected-create path (no session server, contended presentation lock, absent or ambiguous parent) still warns and continues flat.
-- Recovery of an existing presentation journal deliberately refuses the spawn when the shared presentation lock is contended, rather than falling back flat.
-  Default-on makes that refusal reachable in any Herdr home.
+- Recovery of an existing presentation journal waits for the shared presentation lock holder to finish, rather than falling back flat or timing out.
+  Default-on makes this waiting path reachable in any Herdr home.
 - Existing layouts are not force-renamed or rearranged.
 - Missing or ambiguous restart bindings fall back to the ordinary home workspace while the old projection remains untouched.
 - Crashes, lost responses, failed exact-pane cleanup, or human renames can leave quarantined spaces.
