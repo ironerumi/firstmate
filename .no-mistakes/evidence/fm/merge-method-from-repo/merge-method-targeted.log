@@ -1,0 +1,4 @@
+ok - fm-pr-merge does not add default --squash when the caller passes an explicit merge method
+ok - fm-pr-merge respects --method=<value> as an explicit merge method
+ok - fm-pr-merge uses the repository's only allowed merge method when the caller names none
+ok - fm-pr-merge keeps the --squash default when several, none, or unreadable merge methods are allowed
