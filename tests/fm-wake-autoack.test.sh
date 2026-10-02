@@ -22,10 +22,8 @@ TMP_ROOT=$(fm_test_tmproot fm-wake-autoack-tests)
 
 # A home that does not run the supervision host keeps BRANCH OUTCOMES out of the
 # drain (bin/fm-supervision-engine-lib.sh owns the gate), as the drain suites do.
-mkdir -p "$TMP_ROOT/config"
+mkdir -p "$TMP_ROOT/config" "$TMP_ROOT/config-off"
 : > "$TMP_ROOT/config/supervision-host-off"
-: > "$TMP_ROOT/config/wake-autoack"
-mkdir -p "$TMP_ROOT/config-off"
 : > "$TMP_ROOT/config-off/supervision-host-off"
 
 # fm-crew-state stand-in: <id> reads $CREW_DIR/<id> ("working" or anything else).
@@ -53,7 +51,7 @@ run_autoack() {  # <state> [config-dir] -> rc; stdout in <state>/../autoack.out
   local state=$1 config=${2:-$TMP_ROOT/config} rc=0
   LAST_RUN="${state%/state}/autoack"
   CREW_DIR="${state%/state}/crew" FM_CREW_STATE_BIN="$TMP_ROOT/crew-state.sh" \
-    FM_STATE_OVERRIDE="$state" FM_CONFIG_OVERRIDE="$config" \
+    FM_SUPERVISION_MODEL=autoarm FM_STATE_OVERRIDE="$state" FM_CONFIG_OVERRIDE="$config" \
     "$AUTOACK" > "${state%/state}/autoack.out" 2> "${state%/state}/autoack.err" || rc=$?
   return "$rc"
 }
@@ -170,19 +168,19 @@ test_check_and_heartbeat_always_ring() {
   pass "autoack: check and heartbeat wakes always ring"
 }
 
-test_gate_off_and_empty_queue_do_nothing() {
+test_without_flag_and_empty_queue() {
   local state rc=0
-  state=$(new_case gate)
+  state=$(new_case no-flag)
   crew "$state" t1 working
   append_wake "$state" signal t1.turn-ended "signal: $state/t1.turn-ended"
   run_autoack "$state" "$TMP_ROOT/config-off" || rc=$?
-  assert_rc 1 "$rc" "without config/wake-autoack nothing may be acknowledged"
-  [ "$(queued "$state")" = 1 ] || fail "the gate-off run must leave the row queued"
+  assert_rc 0 "$rc" "auto-ack must remain enabled without a configuration flag"
+  [ "$(queued "$state")" = 0 ] || fail "a qualifying row must be acknowledged without the flag"
   rm -f "$state/.wake-queue"
   rc=0
   run_autoack "$state" || rc=$?
   assert_rc 1 "$rc" "an empty queue has nothing to acknowledge"
-  pass "autoack: the flag gates it and an empty queue is a no-op"
+  pass "autoack: no configuration flag is required and an empty queue is a no-op"
 }
 
 test_unread_presentation_is_handed_back() {
@@ -272,7 +270,7 @@ test_status_signal_always_rings
 test_mixed_queue_acknowledges_nothing
 test_stale_forms
 test_check_and_heartbeat_always_ring
-test_gate_off_and_empty_queue_do_nothing
+test_without_flag_and_empty_queue
 test_unread_presentation_is_handed_back
 test_row_arriving_meanwhile_is_not_acknowledged
 test_failed_acknowledgement_leaves_the_rows

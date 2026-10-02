@@ -30,11 +30,9 @@
 # rewake banner. Every acknowledged row is recorded verbatim in
 # state/.wake-autoack.log (bounded) and the caller's banner names that file.
 #
-# Gate: config/wake-autoack must exist. Absent, the script exits 1 untouched.
-#
 # Exit codes:
 #   0  every queued row was ack-class; presented and acknowledged, logged
-#   1  nothing done (gate off, empty queue, or any row not ack-class); no drain ran
+#   1  nothing done (empty queue or any row not ack-class); no drain ran
 #   3  the drain ran but acknowledgement was not safe or failed; the captured
 #      presentation is on stdout and the rows stay queued
 #
@@ -49,7 +47,7 @@ Usage: fm-wake-autoack.sh
 
 Run by the Claude Stop hook before it rings the model. Exit 0: every queued
 wake row no longer needs a turn and was acknowledged; 1: nothing done; 3: the
-presentation needs the model (printed on stdout). Requires config/wake-autoack.
+presentation needs the model (printed on stdout).
 EOF
 }
 
@@ -64,11 +62,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
-CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 DRAIN="${FM_WAKE_AUTOACK_DRAIN:-$SCRIPT_DIR/fm-wake-drain.sh}"
 LOG="$STATE/.wake-autoack.log"
-
-[ -e "$CONFIG/wake-autoack" ] || exit 1
 
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
