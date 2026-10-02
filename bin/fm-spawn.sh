@@ -4362,6 +4362,12 @@ elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
     SPAWN_SLOT_CLAIMED=1
   fi
 fi
+# The presentation-order lock protects only the projected layout mutation. The
+# remaining spawn setup, including fork-side residue and pane setup, must not
+# extend that session-wide critical section.
+if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
+  spawn_herdr_presentation_order_lock_release
+fi
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
   refuse_spawn_worktree_home_residue "$WT" || exit 1
   freshen_spawn_worktree_base "$WT" || exit 1
@@ -5409,7 +5415,6 @@ spawn_send_literal "$T" ". $(shell_quote "$LAUNCH_FILE")"
 sleep 0.3
 if [ "${HERDR_PROJECTED:-0}" -eq 1 ]; then
   HERDR_PROJECTION_ABORT_CLEANUP=0
-  spawn_herdr_presentation_order_lock_release
 fi
 spawn_send_key "$T" Enter
 if [ "$HARNESS" = kimi ]; then

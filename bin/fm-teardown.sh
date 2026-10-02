@@ -358,7 +358,8 @@ do
   teardown_require_source "$SCRIPT_DIR/$_teardown_source"
 done
 unset _teardown_source
-# shellcheck source=bin/fm-tasks-axi-lib.sh
+# Analysis boundary: fm-tasks-axi-lib.sh is analyzed separately as a canonical lint root.
+# shellcheck source=/dev/null
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 # shellcheck source=bin/fm-backlog-transition-lib.sh
 . "$SCRIPT_DIR/fm-backlog-transition-lib.sh"
@@ -2714,7 +2715,7 @@ scrub_returned_home_slot() {
   marker_id=$(cat "$slot/$SUB_HOME_MARKER" 2>/dev/null || true)
   [ "$marker_id" = "$expected_id" ] || return 0
   for name in state data config projects; do
-    find "$slot/$name" -type d -exec chmod u+w {} \; 2>/dev/null || true
+    find "$slot/$name" -type d -exec chmod u+w {} + 2>/dev/null || true
     rm -rf -- "${slot:?}/$name" || {
       echo "error: returned $label $slot still holds $name; the slot keeps its home marker so teardown can be retried" >&2
       return 1
