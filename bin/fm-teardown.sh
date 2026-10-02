@@ -2714,7 +2714,7 @@ scrub_returned_home_slot() {
   marker_id=$(cat "$slot/$SUB_HOME_MARKER" 2>/dev/null || true)
   [ "$marker_id" = "$expected_id" ] || return 0
   for name in state data config projects; do
-    find "$slot/$name" -type d -exec chmod u+w {} + 2>/dev/null || true
+    find "$slot/$name" -type d -exec chmod u+w {} \; 2>/dev/null || true
     rm -rf -- "${slot:?}/$name" || {
       echo "error: returned $label $slot still holds $name; the slot keeps its home marker so teardown can be retried" >&2
       return 1
