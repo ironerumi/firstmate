@@ -568,7 +568,7 @@ SH
 }
 
 test_lock_stale_steal_single_winner_under_concurrency() {
-  local dir state lockdir dead marker gate release ready_dir result_dir ready_count result_count ready result i pids pid winner wins
+  local dir state lockdir dead marker gate release ready_dir result_dir ready_count result_count ready result i pids pid wins
   dir=$(make_case lock-stale-concurrency)
   state="$dir/state"
   lockdir="$state/.contend.lock"
@@ -616,7 +616,7 @@ test_lock_stale_steal_single_winner_under_concurrency() {
     fail "stale-lock candidates did not reach the release barrier"
   fi
   : > "$release"
-  if ! IFS= read -r -t 10 winner < "$gate"; then
+  if ! IFS= read -r -t 10 < "$gate"; then
     for pid in $pids; do kill "$pid" 2>/dev/null || true; done
     for pid in $pids; do wait "$pid" 2>/dev/null || true; done
     fail "one-shot stale-lock candidates produced no winner"
