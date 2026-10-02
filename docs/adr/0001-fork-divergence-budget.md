@@ -12,12 +12,14 @@ Three corollaries:
 
 **Considered and rejected**: patching hot upstream files directly (recurring conflicts on every merge); carrying crew-facing contracts in `data/captain.md`/`learnings.md` (zero divergence but recall-based and home-local — right surface for captain preferences and per-home deviations, wrong for gate contracts and shared SOPs, which the repo's own architecture assigns to tracked files).
 
-## Sync recipe (recorded 2026-09-28, fork sync #51)
+## Sync recipe (amended 2026-10-02, fork sync merge #1)
 
-The 2026-09-28 absorb merged `upstream/main` `8c5493a0` into fork main `18953d4` (66 ahead / 226 behind, 23 conflicting files), then rebuilt history from `upstream/main` with per-theme squashed commits. The next absorb follows the same five steps.
+The 2026-09-28 absorb merged `upstream/main` `8c5493a0` into fork main `18953d4`, then rebuilt history from `upstream/main` with per-theme squashed commits and force-pushed it. A rewritten `main` is not a fast-forward of what every home already holds, so secondmate homes could not converge and one sat 11 days behind. The recipe is now a true merge through a PR; fork `main` is never rewritten or force-pushed.
 
 1. Enable `rerere.enabled=true` before the first merge, so every conflict resolution is recorded once and replayed on later absorbs.
-2. Resolve each conflict by intent, not habit: heavily churned upstream files (`bin/fm-teardown.sh`, `bin/fm-spawn.sh`) take upstream as the base with only the fork's hunks re-applied; fork behavior hunks keep the fork side; comment-only divergences revert to upstream; append-only docs take both sides.
-3. Verify the merged tree with the full behavior suite and `bin/fm-lint.sh`, then rebuild from `upstream/main` with one squashed commit per fork theme.
-4. Gate the rebuild on `git diff <rebuilt> <merged>` being empty, upstream ancestry intact, and a commit count near the theme count.
-5. Treat the rebuilt branch as the new fork main only after the captain signs off on the force-push; seed branches based on `upstream/main` (`fm/upstream-5440-outdated-tools`, `fm/upstream-1242-bsd-sed-fixture`) are unaffected by the rebuild.
+2. Pick the target by CI, not by tip: the newest `upstream/main` commit whose own push run in `kunchenguid/firstmate` concluded success. Name the SHA and the run URL in the PR body.
+3. On a branch from fork `main`, run `git merge --no-ff <green-sha>`. Never rebase, squash, cherry-pick, or force-push. Resolve each conflict by intent, not habit: heavily churned upstream files (`bin/fm-teardown.sh`, `bin/fm-spawn.sh`) take upstream as the base with only the fork's hunks re-applied; fork behavior hunks keep the fork side; comment-only divergences revert to upstream; append-only docs take both sides; a seeded upstream PR that has landed deletes its fork copy.
+4. Verify the merged tree with the full behavior suite and `bin/fm-lint.sh` run from a worker-shaped environment, not a stripped `PATH`, then ship the branch as a PR through no-mistakes and every required check. The captain merges it with "Create a merge commit"; sync PRs are never `yolo`.
+5. List every conflict and its resolution in the PR body, plus the previous `main` SHA as the rollback point. After the merge, canary one real worker commit in a scratch home, then the main home, then secondmate homes one at a time; nothing moves during an announced Oisix release window.
+
+Seed branches based on `upstream/main` (`fm/upstream-5440-outdated-tools`, `fm/upstream-1242-bsd-sed-fixture`) are unaffected by a sync.

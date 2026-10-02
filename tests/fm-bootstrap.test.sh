@@ -3,15 +3,14 @@
 #
 # Bootstrap prints one block or line per actionable problem, optional verbose
 # BOOTSTRAP_INFO fact, or completed bootstrap no-action fact and is silent when
-# all is well. firstmate consumes the exact 'MISSING: <tool> (install: ...)',
-# 'OUTDATED: <tool> (installed: ...; requires ...; upgrade: ...)',
-# 'PRESENTATION_UNAVAILABLE: lavish-axi ...', and 'BOOTSTRAP_INFO: ...' lines, so
-# those contracts are pinned verbatim. An absent tool reports MISSING while a
-# present-but-below-floor tool reports OUTDATED instead. The cases
+# all is well. firstmate consumes the exact 'MISSING: treehouse (install: ...)',
+# 'MISSING: tasks-axi (install: ...)', 'MISSING: quota-axi (install: ...)',
+# 'MISSING: gh-axi (install: ...)', 'PRESENTATION_UNAVAILABLE: lavish-axi ...', and
+# 'BOOTSTRAP_INFO: ...' lines, so those contracts are pinned verbatim. The cases
 # are table-driven over the inputs that vary: whether `treehouse get --help`
-# advertises --lease or treehouse is absent, which (if any) tasks-axi version is
-# on PATH, whether tasks-axi update advertises --archive-body, whether its mv help advertises
-# multi-ID moves, whether quota-axi is on PATH or which version it reports,
+# advertises --lease, which (if any) tasks-axi version is on PATH, whether
+# tasks-axi update advertises --archive-body, whether its mv help advertises
+# multi-ID moves, whether quota-axi is on PATH,
 # whether the local backend config opts out of tasks-axi backlog mutations,
 # which no-mistakes version is on PATH, which gh-axi version is on PATH, and
 # which lavish-axi version is on PATH.
@@ -46,7 +45,7 @@ make_fake_toolchain() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
   fm_fake_exit0 "$fakebin" tmux node chrome-devtools-axi
-  fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.77
+  fm_fake_version_tool "$fakebin" lavish-axi FM_FAKE_LAVISH_AXI_VERSION 0.1.80
   cat > "$fakebin/gh-axi" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = --version ]; then
@@ -66,10 +65,6 @@ SH
   chmod +x "$fakebin/gh"
   cat > "$fakebin/treehouse" <<'SH'
 #!/usr/bin/env bash
-if [ "${1:-}" = --version ]; then
-  printf '%s\n' "${FM_FAKE_TREEHOUSE_VERSION:-treehouse version v0.4.2 (fake)}"
-  exit 0
-fi
 if [ "${1:-}" = get ] && [ "${2:-}" = --help ]; then
   if [ "${FM_FAKE_TREEHOUSE_LEASE_HELP:-}" = 1 ]; then
     printf '%s\n' 'Usage: treehouse get [--lease] [--lease-holder <holder>]'
@@ -257,7 +252,7 @@ assert_timeout_report() {
 #   mode=exact -> output must equal <expect>
 #   mode=grep  -> output must contain <expect> (fixed string); <notcontains> must not appear
 test_bootstrap_reporting() {
-  local label lease tasks quota backend mode expect notcontains case_dir fakebin out n archive_body multi_id quota_version
+  local label lease tasks quota backend mode expect notcontains case_dir fakebin out n archive_body multi_id
   n=0
   while IFS='^' read -r label lease tasks quota backend mode expect notcontains; do
     [ -n "$label" ] || continue
@@ -269,9 +264,6 @@ test_bootstrap_reporting() {
       printf '%s\n' "$backend" > "$case_dir/home/config/backlog-backend"
     fi
     fakebin=$(make_fake_toolchain "$case_dir")
-    if [ "$lease" = absent ]; then
-      rm -f "$fakebin/treehouse"
-    fi
     if [ "$tasks" = "-" ]; then
       rm -f "$fakebin/tasks-axi"
     else
@@ -291,17 +283,14 @@ test_bootstrap_reporting() {
       esac
       add_tasks_axi "$fakebin" "$tasks" "$archive_body" "$multi_id"
     fi
-    quota_version=0.1.51
     if [ "$quota" = "0" ]; then
       rm -f "$fakebin/quota-axi"
-    elif [ "$quota" != "1" ]; then
-      quota_version=$quota
     fi
     # FM_ROOT_OVERRIDE points the worktree-tangle check at the non-git home dir so
     # it stays inert: this suite pins tool detection, not the tangle guard, and the
     # ambient checkout (CI runs on a feature branch) must not leak a TANGLE line in.
     out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
-      FM_FAKE_TREEHOUSE_LEASE_HELP="$lease" FM_FAKE_QUOTA_AXI_VERSION="$quota_version" "$ROOT/bin/fm-bootstrap.sh")
+      FM_FAKE_TREEHOUSE_LEASE_HELP="$lease" "$ROOT/bin/fm-bootstrap.sh")
     case "$mode" in
       empty)
         [ -z "$out" ] || fail "$label: expected silence, got: $out" ;;
@@ -316,15 +305,13 @@ test_bootstrap_reporting() {
     esac
   done <<'ROWS'
 treehouse --lease support is accepted silently^1^0.2.6^1^manual^empty^^
-absent treehouse reports a missing tool^absent^0.2.6^1^-^grep^MISSING: treehouse (install: curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh)^NEEDS_GH_AUTH
-treehouse without --lease reports an upgrade, gh auth is fine^0^0.2.6^1^-^grep^OUTDATED: treehouse (installed: 0.4.2; requires --lease support; upgrade: treehouse update)^NEEDS_GH_AUTH
+treehouse without --lease reports an upgrade, gh auth is fine^0^0.2.6^1^-^grep^MISSING: treehouse (install: curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh)^NEEDS_GH_AUTH
 compatible tasks-axi is silent by default^1^0.2.6^1^-^empty^^
 missing tasks-axi is required by default^1^-^1^-^exact^MISSING: tasks-axi (install: npm install -g tasks-axi)^
-incompatible tasks-axi reports an upgrade by default^1^0.1.0^1^-^exact^OUTDATED: tasks-axi (installed: 0.1.0; requires 0.2.6; upgrade: npm install -g tasks-axi)^
-tasks-axi without archive-body reports an upgrade by default^1^0.2.6:noarchive^1^-^exact^OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body; upgrade: npm install -g tasks-axi)^
-tasks-axi without multi-id mv reports an upgrade by default^1^0.2.6:nomulti^1^-^exact^OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with mv multi-ID; upgrade: npm install -g tasks-axi)^
+incompatible tasks-axi is required by default^1^0.1.0^1^-^exact^MISSING: tasks-axi (install: npm install -g tasks-axi)^
+tasks-axi without archive-body is required by default^1^0.2.6:noarchive^1^-^exact^MISSING: tasks-axi (install: npm install -g tasks-axi)^
+tasks-axi without multi-id mv is required by default^1^0.2.6:nomulti^1^-^exact^MISSING: tasks-axi (install: npm install -g tasks-axi)^
 missing quota-axi is required by default^1^0.2.6^0^manual^exact^MISSING: quota-axi (install: npm install -g quota-axi)^
-outdated quota-axi reports an upgrade by default^1^0.2.6^0.1.50^manual^exact^OUTDATED: quota-axi (installed: 0.1.50; requires 0.1.51; upgrade: quota-axi update)^
 manual backlog backend still requires missing tasks-axi^1^-^1^manual^exact^MISSING: tasks-axi (install: npm install -g tasks-axi)^
 manual backlog backend suppresses tasks-axi availability^1^0.2.6^1^manual^empty^^
 ROWS
@@ -332,10 +319,10 @@ ROWS
 }
 
 test_no_mistakes_min_version() {
-  local label version mode installed expect case_dir fakebin out missing n
+  local label version mode case_dir fakebin out missing n
   missing='MISSING: no-mistakes (install: curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh)'
   n=0
-  while IFS='^' read -r label version mode installed; do
+  while IFS='^' read -r label version mode; do
     [ -n "$label" ] || continue
     n=$((n + 1))
     case_dir="$TMP_ROOT/no-mistakes-$n"
@@ -343,7 +330,6 @@ test_no_mistakes_min_version() {
     mkdir -p "$case_dir/home/config"
     printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
     fakebin=$(make_fake_toolchain "$case_dir")
-    [ "$version" != absent ] || rm -f "$fakebin/no-mistakes"
     out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
       FM_FAKE_TREEHOUSE_LEASE_HELP=1 FM_FAKE_NO_MISTAKES_VERSION="$version" "$ROOT/bin/fm-bootstrap.sh")
     case "$mode" in
@@ -351,33 +337,28 @@ test_no_mistakes_min_version() {
         [ -z "$out" ] || fail "$label: expected silence, got: $out" ;;
       missing)
         [ "$out" = "$missing" ] || fail "$label: expected '$missing', got: $out" ;;
-      outdated)
-        expect="OUTDATED: no-mistakes (installed: $installed; requires 1.46.0; upgrade: no-mistakes update)"
-        [ "$out" = "$expect" ] || fail "$label: expected '$expect', got: $out" ;;
     esac
   done <<'ROWS'
-minimum no-mistakes version is accepted^no-mistakes version v1.46.0 (fake)^empty^
-newer no-mistakes minor is accepted^no-mistakes version v1.47.0 (fake)^empty^
-newer no-mistakes major is accepted^no-mistakes version v2.0.0 (fake)^empty^
-absent no-mistakes reports a missing tool^absent^missing^
-older no-mistakes patch reports an upgrade^no-mistakes version v1.45.4 (fake)^outdated^1.45.4
-unparseable no-mistakes version reports an upgrade^no-mistakes development build^outdated^unparseable
+minimum no-mistakes version is accepted^no-mistakes version v1.46.0 (fake)^empty
+newer no-mistakes minor is accepted^no-mistakes version v1.47.0 (fake)^empty
+newer no-mistakes major is accepted^no-mistakes version v2.0.0 (fake)^empty
+older no-mistakes patch reports an upgrade^no-mistakes version v1.45.4 (fake)^missing
+unparseable no-mistakes version reports an upgrade^no-mistakes development build^missing
 ROWS
-  pass "bootstrap separates an absent no-mistakes from one below its version floor"
+  pass "bootstrap enforces no-mistakes minimum version"
 }
 
 test_gh_axi_min_version() {
-  local label version mode installed expect case_dir fakebin out missing n
+  local label version mode case_dir fakebin out missing n
   missing='MISSING: gh-axi (install: npm install -g gh-axi && gh-axi setup hooks)'
   n=0
-  while IFS='^' read -r label version mode installed; do
+  while IFS='^' read -r label version mode; do
     [ -n "$label" ] || continue
     n=$((n + 1))
     case_dir="$TMP_ROOT/gh-axi-$n"
     mkdir -p "$case_dir/home/config"
     printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
     fakebin=$(make_fake_toolchain "$case_dir")
-    [ "$version" != absent ] || rm -f "$fakebin/gh-axi"
     out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
       FM_FAKE_TREEHOUSE_LEASE_HELP=1 FM_FAKE_GH_AXI_VERSION="$version" "$ROOT/bin/fm-bootstrap.sh")
     case "$mode" in
@@ -385,26 +366,23 @@ test_gh_axi_min_version() {
         [ -z "$out" ] || fail "$label: expected silence, got: $out" ;;
       missing)
         [ "$out" = "$missing" ] || fail "$label: expected '$missing', got: $out" ;;
-      outdated)
-        expect="OUTDATED: gh-axi (installed: $installed; requires 0.1.29; upgrade: gh-axi update)"
-        [ "$out" = "$expect" ] || fail "$label: expected '$expect', got: $out" ;;
     esac
   done <<'ROWS'
-minimum gh-axi version is accepted^0.1.29^empty^
-newer gh-axi patch is accepted^0.1.30^empty^
-newer gh-axi minor is accepted^0.2.0^empty^
-newer gh-axi major is accepted^1.0.0^empty^
-absent gh-axi reports a missing tool^absent^missing^
-older gh-axi patch reports an upgrade^0.1.19^outdated^0.1.19
-much older gh-axi minor reports an upgrade^0.0.9^outdated^0.0.9
-unparseable gh-axi version reports an upgrade^gh-axi development build^outdated^unparseable
+minimum gh-axi version is accepted^0.1.29^empty
+newer gh-axi patch is accepted^0.1.30^empty
+newer gh-axi minor is accepted^0.2.0^empty
+newer gh-axi major is accepted^1.0.0^empty
+older gh-axi patch reports an upgrade^0.1.19^missing
+much older gh-axi minor reports an upgrade^0.0.9^missing
+unparseable gh-axi version reports an upgrade^gh-axi development build^missing
 ROWS
-  pass "bootstrap separates an absent gh-axi from one below its version floor"
+  pass "bootstrap enforces gh-axi minimum version"
 }
 
 test_lavish_axi_min_version() {
-  local label version mode case_dir fakebin out unavailable n
+  local label version mode case_dir fakebin out unavailable upgrade n
   unavailable='PRESENTATION_UNAVAILABLE: lavish-axi (requires >=0.1.77; install: npm install -g lavish-axi && lavish-axi setup hooks) - nonvisual work may proceed with plain-text decisions and reports; install or upgrade before using Lavish'
+  upgrade='BOOTSTRAP_INFO: lavish-axi >=0.1.80 enables confirmed board replies; this older compatible version retains the legacy reply path, but upgrade to prevent handing back a board before its reply is accepted'
   n=0
   while IFS='^' read -r label version mode; do
     [ -n "$label" ] || continue
@@ -421,52 +399,52 @@ test_lavish_axi_min_version() {
     case "$mode" in
       empty)
         [ -z "$out" ] || fail "$label: expected silence, got: $out" ;;
+      upgrade)
+        [ "$out" = "$upgrade" ] || fail "$label: expected '$upgrade', got: $out" ;;
       unavailable)
         [ "$out" = "$unavailable" ] || fail "$label: expected '$unavailable', got: $out" ;;
     esac
   done <<'ROWS'
 absent lavish-axi permits text fallback^absent^unavailable
-minimum lavish-axi version is accepted^0.1.77^empty
-newer lavish-axi patch is accepted^0.1.78^empty
+lavish-axi reply feature floor is accepted^0.1.80^empty
+older compatible lavish-axi retains boards and recommends upgrade^0.1.79^upgrade
+minimum legacy board version is accepted with upgrade advice^0.1.77^upgrade
+newer lavish-axi patch is accepted^0.1.81^empty
 newer lavish-axi minor is accepted^0.2.0^empty
 newer lavish-axi major is accepted^1.0.0^empty
-the patch just below the floor permits text fallback^0.1.76^unavailable
+the patch just below the board compatibility floor permits text fallback^0.1.76^unavailable
 much older lavish-axi minor permits text fallback^0.0.9^unavailable
 unparseable lavish-axi version permits text fallback^lavish-axi development build^unavailable
 ROWS
-  pass "bootstrap permits nonvisual work without compatible lavish-axi and retains its presentation floor"
+  pass "bootstrap preserves legacy Lavish boards while recommending synchronous reply support"
 }
 
 test_tasks_axi_min_version() {
-  local label version mode requirement case_dir fakebin out missing n archive_body multi_id installed requires expect
+  local label version mode case_dir fakebin out missing n archive_body multi_id
   missing='MISSING: tasks-axi (install: npm install -g tasks-axi)'
   n=0
-  while IFS='^' read -r label version mode requirement; do
+  while IFS='^' read -r label version mode; do
     [ -n "$label" ] || continue
     n=$((n + 1))
     case_dir="$TMP_ROOT/tasks-axi-$n"
     mkdir -p "$case_dir/home/config"
     printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
     fakebin=$(make_fake_toolchain "$case_dir")
-    if [ "$version" = absent ]; then
-      rm -f "$fakebin/tasks-axi"
-    else
-      archive_body=yes
-      multi_id=yes
-      case "$version" in
-        *:noarchive)
-          archive_body=no
-          version=${version%:noarchive}
-          ;;
-      esac
-      case "$version" in
-        *:nomulti)
-          multi_id=no
-          version=${version%:nomulti}
-          ;;
-      esac
-      add_tasks_axi "$fakebin" "$version" "$archive_body" "$multi_id"
-    fi
+    archive_body=yes
+    multi_id=yes
+    case "$version" in
+      *:noarchive)
+        archive_body=no
+        version=${version%:noarchive}
+        ;;
+    esac
+    case "$version" in
+      *:nomulti)
+        multi_id=no
+        version=${version%:nomulti}
+        ;;
+    esac
+    add_tasks_axi "$fakebin" "$version" "$archive_body" "$multi_id"
     out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
       FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
     case "$mode" in
@@ -474,42 +452,34 @@ test_tasks_axi_min_version() {
         [ -z "$out" ] || fail "$label: expected silence, got: $out" ;;
       missing)
         [ "$out" = "$missing" ] || fail "$label: expected '$missing', got: $out" ;;
-      outdated)
-        installed=${requirement%%|*}
-        requires=${requirement#*|}
-        expect="OUTDATED: tasks-axi (installed: $installed; requires $requires; upgrade: npm install -g tasks-axi)"
-        [ "$out" = "$expect" ] || fail "$label: expected '$expect', got: $out" ;;
     esac
   done <<'ROWS'
-minimum tasks-axi version is accepted^0.2.6^empty^
-newer tasks-axi patch is accepted^0.2.7^empty^
-newer tasks-axi minor is accepted^0.3.0^empty^
-newer tasks-axi major is accepted^1.0.0^empty^
-absent tasks-axi reports a missing tool^absent^missing^
-older tasks-axi with features reports an upgrade^0.1.1^outdated^0.1.1|0.2.6
-the patch just below the floor reports an upgrade^0.2.5^outdated^0.2.5|0.2.6
-unparseable tasks-axi version reports an upgrade^tasks-axi development build^outdated^unparseable|0.2.6
-tasks-axi at floor without archive-body reports an upgrade^0.2.6:noarchive^outdated^0.2.6|0.2.6 with update --archive-body
-tasks-axi at floor without multi-id reports an upgrade^0.2.6:nomulti^outdated^0.2.6|0.2.6 with mv multi-ID
+minimum tasks-axi version is accepted^0.2.6^empty
+newer tasks-axi patch is accepted^0.2.7^empty
+newer tasks-axi minor is accepted^0.3.0^empty
+newer tasks-axi major is accepted^1.0.0^empty
+older tasks-axi with features reports an upgrade^0.1.1^missing
+the patch just below the floor reports an upgrade^0.2.5^missing
+unparseable tasks-axi version reports an upgrade^tasks-axi development build^missing
+tasks-axi at floor without archive-body reports an upgrade^0.2.6:noarchive^missing
+tasks-axi at floor without multi-id reports an upgrade^0.2.6:nomulti^missing
 ROWS
-  pass "bootstrap separates an absent tasks-axi from one below its floor or feature probe"
+  pass "bootstrap enforces tasks-axi minimum version"
 }
 
 # These rows exercise the real bootstrap check with a fake quota-axi answering
-# --version: absent produces MISSING, below the floor produces OUTDATED, while at
-# or above is silent.
+# --version: below the floor produces MISSING, while at or above is silent.
 test_quota_axi_min_version() {
-  local label version mode installed expect case_dir fakebin out missing n
+  local label version mode case_dir fakebin out missing n
   missing='MISSING: quota-axi (install: npm install -g quota-axi)'
   n=0
-  while IFS='^' read -r label version mode installed; do
+  while IFS='^' read -r label version mode; do
     [ -n "$label" ] || continue
     n=$((n + 1))
     case_dir="$TMP_ROOT/quota-axi-$n"
     mkdir -p "$case_dir/home/config"
     printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
     fakebin=$(make_fake_toolchain "$case_dir")
-    [ "$version" != absent ] || rm -f "$fakebin/quota-axi"
     out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
       FM_FAKE_TREEHOUSE_LEASE_HELP=1 FM_FAKE_QUOTA_AXI_VERSION="$version" "$ROOT/bin/fm-bootstrap.sh")
     case "$mode" in
@@ -517,21 +487,17 @@ test_quota_axi_min_version() {
         [ -z "$out" ] || fail "$label: expected silence, got: $out" ;;
       missing)
         [ "$out" = "$missing" ] || fail "$label: expected '$missing', got: $out" ;;
-      outdated)
-        expect="OUTDATED: quota-axi (installed: $installed; requires 0.1.51; upgrade: quota-axi update)"
-        [ "$out" = "$expect" ] || fail "$label: expected '$expect', got: $out" ;;
     esac
   done <<'ROWS'
-minimum quota-axi version is accepted^0.1.51^empty^
-newer quota-axi patch is accepted^0.1.52^empty^
-newer quota-axi minor is accepted^0.2.0^empty^
-newer quota-axi major is accepted^1.0.0^empty^
-absent quota-axi reports a missing tool^absent^missing^
-the patch just below the floor reports an upgrade^0.1.50^outdated^0.1.50
-much older quota-axi minor reports an upgrade^0.0.9^outdated^0.0.9
-unparseable quota-axi version reports an upgrade^quota-axi development build^outdated^unparseable
+minimum quota-axi version is accepted^0.1.51^empty
+newer quota-axi patch is accepted^0.1.52^empty
+newer quota-axi minor is accepted^0.2.0^empty
+newer quota-axi major is accepted^1.0.0^empty
+the patch just below the floor reports an upgrade^0.1.50^missing
+much older quota-axi minor reports an upgrade^0.0.9^missing
+unparseable quota-axi version reports an upgrade^quota-axi development build^missing
 ROWS
-  pass "bootstrap separates an absent quota-axi from one below its version floor"
+  pass "bootstrap enforces quota-axi minimum version"
 }
 
 test_git_is_required_with_supported_install_instruction() {
@@ -737,7 +703,7 @@ test_treehouse_lease_check_follows_resolved_backend() {
   local case_dir fakebin out
   # A treehouse that lacks durable --lease support is only a problem for a backend
   # that actually uses treehouse. Orca owns its own worktrees, so an old treehouse
-  # must NOT trip the treehouse report under backend=orca...
+  # must NOT trip MISSING: treehouse under backend=orca...
   case_dir="$TMP_ROOT/orca-old-treehouse"
   mkdir -p "$case_dir/home/config"
   printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
@@ -759,7 +725,7 @@ test_treehouse_lease_check_follows_resolved_backend() {
   fakebin=$(make_fake_toolchain_no_tmux "$case_dir" herdr)
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
     "$ROOT/bin/fm-bootstrap.sh")
-  assert_contains "$out" "OUTDATED: treehouse" "backend=herdr must still require treehouse with durable lease support"
+  assert_contains "$out" "MISSING: treehouse" "backend=herdr must still require treehouse with durable lease support"
   assert_not_contains "$out" "MISSING: tmux" "backend=herdr must not demand tmux even when treehouse is too old"
   pass "bootstrap: the treehouse lease check follows the resolved backend's worktree provider"
 }
@@ -1096,7 +1062,7 @@ SH
   : > "$log"
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
     FM_FAKE_TASKS_AXI_LOG="$log" FM_FAKE_TREEHOUSE_LEASE_HELP=1 "$ROOT/bin/fm-bootstrap.sh")
-  assert_contains "$out" "OUTDATED: tasks-axi (installed:" "the unaided run did not probe tasks-axi"
+  assert_contains "$out" "MISSING: tasks-axi (install:" "the unaided run did not probe tasks-axi"
   assert_grep '--version' "$log" "the unaided run never ran the probe"
 
   # With it, the probe is skipped entirely and the handed-in verdict is used.
@@ -1104,7 +1070,7 @@ SH
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
     FM_FAKE_TASKS_AXI_LOG="$log" FM_FAKE_TREEHOUSE_LEASE_HELP=1 \
     FM_TASKS_AXI_COMPATIBLE=1 "$ROOT/bin/fm-bootstrap.sh")
-  assert_not_contains "$out" "OUTDATED: tasks-axi" "the handed-in verdict was ignored"
+  assert_not_contains "$out" "MISSING: tasks-axi" "the handed-in verdict was ignored"
   [ ! -s "$log" ] || fail "the handed-in verdict did not save the probe: $(cat "$log")"
 
   # A malformed value is not a verdict.
@@ -1112,7 +1078,7 @@ SH
   out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
     FM_FAKE_TASKS_AXI_LOG="$log" FM_FAKE_TREEHOUSE_LEASE_HELP=1 \
     FM_TASKS_AXI_COMPATIBLE=yes "$ROOT/bin/fm-bootstrap.sh")
-  assert_contains "$out" "OUTDATED: tasks-axi (installed:" "a malformed handoff value was trusted"
+  assert_contains "$out" "MISSING: tasks-axi (install:" "a malformed handoff value was trusted"
 
   # And the handoff never reaches a grandchild: bootstrap spawns agents, and a
   # verdict cached into an agent's environment would outlive the tool it describes.
