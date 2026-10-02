@@ -130,11 +130,12 @@
 #   authority, and every ambiguous recovery stays on the flat fallback after
 #   duplicate-agent risk is independently absent. Treehouse allocation and task
 #   metadata are unchanged.
-#   A clean projected create or exact resume makes one bounded attempt to hold
-#   the one session-scoped presentation-order lock (keyed by named session plus
+#   A clean projected create makes one bounded attempt to hold the one
+#   session-scoped presentation-order lock (keyed by named session plus
 #   canonical socket, outside any home's state/) through launch handoff. Lock
-#   contention warns and falls back to the ordinary flat layout before any
-#   projection mutation. The exact response-derived new workspace is inserted
+#   contention on clean create warns and falls back to the ordinary flat layout
+#   before any projection mutation. Exact resume waits for the current lock
+#   holder to finish because it cannot safely fall back to a fresh layout. The exact response-derived new workspace is inserted
 #   immediately after its owning parent (firstmate or 2ndmate-<id>) contiguous
 #   child block. Ordering never authorizes lifecycle cleanup, and any
 #   unavailable, ambiguous, or failed move warns while the spawn continues.
@@ -1399,10 +1400,17 @@ trap spawn_abort_cleanup EXIT
 # <session> is required so secondmate and primary spawns serialize against the
 # same session without writing any other home's state directory.
 spawn_herdr_presentation_order_lock_acquire() {
-  local session=${1:-} attempt lock_path
+  local session=${1:-} mode=${2:-bounded} attempt lock_path
   [ -n "$session" ] || session=$(fm_backend_herdr_session)
   lock_path=$(fm_backend_herdr_presentation_session_lock_path "$session") || return 1
   HERDR_PRESENTATION_ORDER_LOCK="$lock_path"
+  if [ "$mode" = wait ]; then
+    # An existing projection cannot fall back flat. Wait for the operation
+    # holding this session lock to actually finish, regardless of launch time.
+    fm_lock_acquire_wait "$HERDR_PRESENTATION_ORDER_LOCK" || return 1
+    HERDR_PRESENTATION_ORDER_LOCK_HELD=1
+    return 0
+  fi
   attempt=0
   while [ "$attempt" -lt 50 ]; do
     if fm_lock_try_acquire "$HERDR_PRESENTATION_ORDER_LOCK"; then
@@ -3686,7 +3694,9 @@ else
           echo "error: herdr presentation recovery could not ensure its exact named session" >&2
           exit 1
         }
-        spawn_herdr_presentation_order_lock_acquire "$HERDR_SES" || {
+        # Recovery cannot fall back flat; it must wait for a concurrent spawn
+        # to finish worktree acquisition and agent launch under the same lock.
+        spawn_herdr_presentation_order_lock_acquire "$HERDR_SES" wait || {
           echo "error: herdr presentation recovery could not acquire its session lock; refusing a concurrent resume" >&2
           exit 1
         }

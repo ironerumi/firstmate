@@ -263,12 +263,12 @@ case "$pid:$field" in
   4242:comm=) printf '%s\n' '/opt/test/bin/codex' ;;
   4242:args=) printf '%s\n' 'codex' ;;
   4242:ppid=) printf '%s\n' 1 ;;
-  5252:comm=) printf '%s\n' '-codex' ;;
-  5252:args=) printf '%s\n' '-codex' ;;
-  5252:ppid=) printf '%s\n' 1 ;;
+  5252:comm=) if [ "${FM_TEST_EXPLICIT_PID:-}" = 5252 ]; then printf '%s\n' '-codex'; else printf '%s\n' '-zsh'; fi ;;
+  5252:args=) if [ "${FM_TEST_EXPLICIT_PID:-}" = 5252 ]; then printf '%s\n' '-codex'; else printf '%s\n' '-zsh'; fi ;;
+  5252:ppid=) if [ "${FM_TEST_EXPLICIT_PID:-}" = 5252 ]; then printf '%s\n' 1; else printf '%s\n' 4242; fi ;;
   *:comm=) printf '%s\n' '-zsh' ;;
   *:args=) printf '%s\n' '-zsh' ;;
-  *:ppid=) printf '%s\n' 4242 ;;
+  *:ppid=) if [ "${FM_TEST_FORCE_5252:-}" = 1 ]; then printf '%s\n' 5252; else printf '%s\n' 4242; fi ;;
 esac
 SH
   chmod +x "$fakebin/ps"
@@ -284,9 +284,14 @@ SH
     '. "$0/bin/fm-session-lock-lib.sh"; fm_harness_ancestry_pid' "$ROOT" 2>"$err")
   [ "$got" = 4242 ] || fail "session-lock dash-leading ancestry selected '$got', expected pid 4242"
   [ ! -s "$err" ] || fail "session-lock ancestry wrote basename option noise for literal -zsh: $(cat "$err")"
+  # Force the scheduler collision: a shell ancestor has PID 5252, which the
+  # separate liveness fixture labels -codex only for its explicit probe.
+  got=$(FM_TEST_FORCE_5252=1 PATH="$fakebin:$BASE_PATH" bash -c \
+    '. "$0/bin/fm-session-lock-lib.sh"; fm_harness_ancestry_pid' "$ROOT")
+  [ "$got" = 4242 ] || fail "session-lock forced 5252 ancestry selected '$got', expected pid 4242"
 
   err="$dir/fm-session-lock-alive.err"
-  PATH="$fakebin:$BASE_PATH" bash -c \
+  FM_TEST_EXPLICIT_PID=5252 PATH="$fakebin:$BASE_PATH" bash -c \
     '. "$0/bin/fm-session-lock-lib.sh"; kill() { return 0; }; fm_harness_pid_alive 5252' \
     "$ROOT" 2>"$err"; status=$?
   expect_code 0 "$status" "session-lock liveness should accept literal -codex as a harness process name"
@@ -2723,6 +2728,12 @@ SH
     "spawn cleanup failure left a stale reread pointer eligible for delivery"
   pass "B25 spawn quarantines stale rereads without blocking relaunch"
 }
+
+# Isolate the process-name fixture for repeated ancestry checks under load.
+if [ "${FM_TEST_FOCUS:-}" = dash-leading ]; then
+  test_dash_leading_process_names_are_basename_operands
+  exit 0
+fi
 
 test_harness_resolution
 test_cursor_marker_detection

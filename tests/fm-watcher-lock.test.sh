@@ -518,6 +518,9 @@ test_lock_steal_reap_cannot_remove_successor() {
   fakebin="$dir/fakebin"
   out="$dir/competitor"
   leave_dead_link_locks "$state" "$steal"
+  # The killed fixture owner may have its PID reused during a loaded serial
+  # shard. Pin a verified-dead PID so the race exercises reaping, not liveness.
+  printf '%s\n' "$(dead_pid)" > "$steal/pid"
   cat > "$fakebin/rm" <<'SH'
 #!/usr/bin/env bash
 last=
@@ -546,6 +549,7 @@ SH
     FM_TEST_RACE_ONCE="$dir/race-once" FM_TEST_RACE_OUT="$out" \
     FM_STATE_OVERRIDE="$state" bash -c '
       . "$1"
+      fm_lock_reap_dead_link "$2" || exit 1
       fm_lock_try_acquire_steal_mutex "$2" || exit 1
       [ "$(cat "$2/pid" 2>/dev/null)" = "${BASHPID:-$$}" ] || exit 2
     ' _ "$LIB" "$steal" || rc=$?
@@ -564,32 +568,72 @@ SH
 }
 
 test_lock_stale_steal_single_winner_under_concurrency() {
-  local dir state lockdir dead marker i pids pid wins
+  local dir state lockdir dead marker gate i pids pid waiter winner wins holder ready release
   dir=$(make_case lock-stale-concurrency)
   state="$dir/state"
   lockdir="$state/.contend.lock"
   marker="$dir/wins"
+  gate="$dir/first-winner"
   dead=$(dead_pid)
   mkdir "$lockdir"
   printf '%s\n' "$dead" > "$lockdir/pid"
   : > "$marker"
+  mkfifo "$gate"
+  if [ "${FM_TEST_FORCE_STALE_MUTEX:-}" = 1 ]; then
+    ready="$dir/mutex-ready"
+    release="$dir/mutex-release"
+    mkfifo "$ready" "$release"
+    FM_STATE_OVERRIDE="$state" bash -c '
+      . "$1"
+      fm_lock_try_acquire "$2.steal" || exit 1
+      printf "ready\n" > "$3"
+      read -r _ < "$4"
+      fm_lock_release "$2.steal"
+    ' _ "$LIB" "$lockdir" "$ready" "$release" &
+    holder=$!
+    IFS= read -r _ < "$ready"
+  fi
+  # try_acquire is nonblocking: under contention all one-shot candidates may
+  # lose to a transient steal mutex. A concurrent waiting contender guarantees
+  # eventual acquisition; the FIFO reports that actual step, not a sleep bound.
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_lock_acquire_wait "$2" || exit 1
+    printf "%s\n" "${BASHPID:-$$}" >> "$3"
+    printf "%s\n" "${BASHPID:-$$}" > "$4"
+    exec sleep 30
+  ' _ "$LIB" "$lockdir" "$marker" "$gate" &
+  waiter=$!
   pids=
   i=1
-  while [ "$i" -le 40 ]; do
+  while [ "$i" -le 39 ]; do
     FM_STATE_OVERRIDE="$state" bash -c '
       . "$1"
       if fm_lock_try_acquire "$2"; then
         printf "%s\n" "${BASHPID:-$$}" >> "$3"
-        sleep 1
+        printf "%s\n" "${BASHPID:-$$}" > "$4"
+        exec sleep 30
       fi
-    ' _ "$LIB" "$lockdir" "$marker" &
+    ' _ "$LIB" "$lockdir" "$marker" "$gate" &
     pids="$pids $!"
     i=$((i + 1))
   done
+  if [ "${FM_TEST_FORCE_STALE_MUTEX:-}" = 1 ]; then
+    # All one-shot candidates must lose while the steal mutex is live; the
+    # waiter must then win only after the holder's release handshake.
+    for pid in $pids; do wait "$pid" 2>/dev/null || true; done
+    [ ! -s "$marker" ] || fail "one-shot candidate stole the live mutex"
+    printf 'release\n' > "$release"
+    wait "$holder" || fail "forced steal mutex holder failed"
+  fi
+  IFS= read -r winner < "$gate"
+  [ "$winner" = "$waiter" ] || { kill "$waiter" 2>/dev/null || true; wait "$waiter" 2>/dev/null || true; }
   for pid in $pids; do
-    wait "$pid" 2>/dev/null || true
+    [ "$pid" = "$winner" ] || wait "$pid" 2>/dev/null || true
   done
   wins=$(awk 'NF { c++ } END { print c + 0 }' "$marker")
+  kill "$winner" 2>/dev/null || true
+  wait "$winner" 2>/dev/null || true
   [ "$wins" -eq 1 ] || fail "expected exactly one stale-lock stealer, got $wins"
   pass "concurrent stale-lock steal yields exactly one winner"
 }
@@ -1547,6 +1591,13 @@ test_msys_pid_identity_uses_proc() {
   esac
   pass "MSYS process identity uses compatible /proc fields"
 }
+
+# Run the two stale-steal race cases alone when repeating them under load.
+if [ "${FM_TEST_FOCUS:-}" = stale-steal ]; then
+  test_lock_stale_steal_single_winner_under_concurrency
+  test_lock_steal_reap_cannot_remove_successor
+  exit 0
+fi
 
 test_wait_deadline_reaps_a_stopped_child
 test_singleton_start
