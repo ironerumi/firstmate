@@ -1,0 +1,8 @@
+LIVE_RESULT=FAIL first_send send_rc=0 log= err=fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-lab.BwMPtJ
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the requested message WILL still be sent.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/gu_yifu/.no-mistakes/worktrees/dd6dd5949f4a/01M3ZZ7WN6TAFS459PNG3W3SYB/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/gu_yifu/.no-mistakes/worktrees/dd6dd5949f4a/01M3ZZ7WN6TAFS459PNG3W3SYB/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

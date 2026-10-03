@@ -1,0 +1,11 @@
+LIVE_RESULT=FAIL
+send_rc=0
+handling_pid=83735
+kill_rc=0
+first_ring_state=
+busy_seen_at=0
+incoming_doorbells=2
+final_ring_state=
+doorbell_log=DOORBELL:: Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 't1.inbox' steering inbox, read and act on each in numeric order, then mv each into its handled/. DOORBELL:: Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 't1.inbox' steering inbox, read and act on each in numeric order, then mv each into its handled/. 
+watcher_capture=        
+watcher_tail=
