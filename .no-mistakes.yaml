@@ -37,6 +37,10 @@ commands:
 # The evidence is not committed to the feature or default branch.
 test:
   instructions: |
+    Budget is 30 minutes; finish with a verdict well before that.
+    Run only the suites covering the files this branch changed: list them with `bin/fm-test-run.sh --list --changed`, narrow to the scripts that exercise the changed files, and run those by path.
+    Never run a family, lane, --all, or any tree walk; the no-mistakes test configuration section of .agents/skills/firstmate-coding-guidelines/SKILL.md owns why, and CI owns broad regression coverage.
+    Keep live validation to scenarios you can drive within the budget, and report the rest as covered-by-test with the test names.
     Run live Herdr scenarios only through bin/fm-herdr-lab.sh with a named non-default fm-lab-* session, following that helper's prepare, provision, run, and teardown contract exactly.
     Never touch the live default Herdr session or fleet panes.
     Prefer a throwaway lab for spawn, long-launch, and Claude-path proofs, and tear it down in the same evidence turn.
