@@ -75,6 +75,8 @@ SH
 #!/usr/bin/env bash
 # The control plane stand-in: records the verb and whether the endpoint was still
 # standing when the exit was asked for, then answers per the case.
+[ "$(cat "$FM_FAKE_DIR/state/.control-t1.lock/pid" 2>/dev/null || true)" = "${FM_CONTROL_LOCK_OWNER:-}" ] \
+  || { echo "wrong lifecycle lock owner" >&2; exit 1; }
 printf '%s %s pane-alive=%s\n' "$2" "$1" "$([ -e "$FM_FAKE_DIR/pane-alive" ] && echo 1 || echo 0)" >> "$FM_FAKE_DIR/control-log"
 if [ -e "$FM_FAKE_DIR/control-refuses" ]; then
   echo "error: the composer visibly holds pending text" >&2
@@ -99,9 +101,15 @@ set -u
 case " $* " in
   *' #{pane_id} '*|*' #{pane_current_command} '*)
     [ -e "$FM_FAKE_DIR/pane-alive" ] || exit 1
+    [ ! -e "$FM_FAKE_DIR/tmux-probe-fails" ] || exit 1
+    printf '%s\n' '%7'
+    ;;
+  *' list-windows '*)
+    [ ! -e "$FM_FAKE_DIR/tmux-probe-fails" ] || { echo 'tmux unavailable' >&2; exit 1; }
     printf '%s\n' '%7'
     ;;
   *' kill-window '*)
+    [ ! -e "$FM_FAKE_DIR/tmux-probe-fails" ] || exit 1
     rm -f "$FM_FAKE_DIR/pane-alive"
     ;;
 esac
@@ -171,6 +179,19 @@ test_tmux_retirement_closes_and_confirms_the_recorded_window() {
   pass "tmux retirement exits, closes, and confirms the worker window"
 }
 
+test_tmux_close_probe_failure_leaves_the_endpoint_unretired() {
+  local dir
+  dir=$(make_case retire-tmux-probe-failure tmux)
+  : > "$dir/tmux-probe-fails"
+  run_pr_check "$dir" || fail "a tmux close-probe failure failed the arming: $(cat "$dir/err")"
+  grep -q '^actionable: failed: endpoint fmlab:%7 is not confirmed gone' "$dir/err" \
+    || fail "a tmux close-probe failure was not reported as actionable: $(cat "$dir/err")"
+  grep -q '^armed: ' "$dir/out" || fail "a tmux close-probe failure prevented the armed report"
+  [ -e "$dir/pane-alive" ] || fail "a tmux close-probe failure hid the live endpoint"
+  ! meta_has "$dir" endpoint_retired || fail "a tmux close-probe failure wrote a retired marker"
+  pass "a tmux close-probe failure leaves the endpoint unretired"
+}
+
 test_retired_task_reads_as_waiting_on_merge() {
   local dir state
   dir=$(make_case retire-state)
@@ -229,6 +250,7 @@ test_merge_time_rerecord_retires_nothing() {
 
 test_arming_retires_the_finished_workers_endpoint
 test_tmux_retirement_closes_and_confirms_the_recorded_window
+test_tmux_close_probe_failure_leaves_the_endpoint_unretired
 test_retired_task_reads_as_waiting_on_merge
 test_declined_retirements_leave_the_endpoint_alone
 test_unconfirmed_close_is_reported_and_unrecorded

@@ -379,6 +379,23 @@ fm_backend_cmux_parse_target() {  # <target>
   [ -n "$FM_BACKEND_CMUX_WORKSPACE" ] && [ -n "$FM_BACKEND_CMUX_SURFACE" ] && [ "$FM_BACKEND_CMUX_SURFACE" != "$target" ]
 }
 
+fm_backend_cmux_endpoint_confirmed_gone() {  # <target>
+  local windows wid workspaces
+  fm_backend_cmux_parse_target "$1" || return 1
+  windows=$(fm_backend_cmux_cli list-windows --json --id-format uuids 2>/dev/null) || return 1
+  printf '%s' "$windows" | jq -e 'type == "array"' >/dev/null 2>&1 || return 1
+  while IFS= read -r wid; do
+    [ -n "$wid" ] || continue
+    workspaces=$(fm_backend_cmux_cli workspace list --json --id-format uuids --window "$wid" 2>/dev/null) || return 1
+    printf '%s' "$workspaces" | jq -e '.workspaces | type == "array"' >/dev/null 2>&1 || return 1
+    if printf '%s' "$workspaces" | jq -e --arg id "$FM_BACKEND_CMUX_WORKSPACE" \
+      'any(.workspaces[]?; .id == $id)' >/dev/null 2>&1; then
+      return 1
+    fi
+  done < <(printf '%s' "$windows" | jq -r '.[]? | .id' 2>/dev/null)
+  return 0
+}
+
 # fm_backend_cmux_surface_exists: does <surface_id> currently appear as one of
 # <workspace_id>'s surfaces, per list-panes? Structural existence check, never
 # a content read.

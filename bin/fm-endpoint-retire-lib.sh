@@ -33,20 +33,23 @@
 
 fm_endpoint_retire() {  # <home> <state-dir> <id>
   local home=$1 state=$2 id=$3 meta kind backend target last control out lock tmp line
-  local control_lock control_lock_held=0 meta_lock_held=0 tab_id expected_label
+  local control_lock control_lock_owner tab_id expected_label
   meta="$state/$id.meta"
   [ -f "$meta" ] || { echo "skipped: no task record"; return 0; }
   lock=$(fm_meta_lock_path "$meta") || { echo "failed: task record lock unavailable"; return 1; }
   control_lock="$state/.control-$id.lock"
   fm_lock_acquire_wait "$control_lock" || { echo "failed: lifecycle lock unavailable"; return 1; }
-  control_lock_held=1
+  control_lock_owner=$(cat "$control_lock/pid" 2>/dev/null || true)
+  if [ -z "$control_lock_owner" ]; then
+    fm_lock_release "$control_lock"
+    echo "failed: lifecycle lock owner unavailable"
+    return 1
+  fi
   fm_lock_acquire_wait "$lock" || {
     fm_lock_release "$control_lock"
     echo "failed: task record lock unavailable"
     return 1
   }
-  meta_lock_held=1
-
   kind=$(fm_meta_get "$meta" kind)
   if [ -n "$kind" ] && [ "$kind" != ship ]; then
     fm_lock_release "$lock"
@@ -84,7 +87,7 @@ fm_endpoint_retire() {  # <home> <state-dir> <id>
 
   control=${FM_ENDPOINT_RETIRE_CONTROL_BIN:-$SCRIPT_DIR/fm-control.sh}
   out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$state" \
-    FM_CONTROL_LOCK_HELD=1 FM_CONTROL_LOCK_OWNER="${BASHPID:-$$}" \
+    FM_CONTROL_LOCK_HELD=1 FM_CONTROL_LOCK_OWNER="$control_lock_owner" \
     "$control" "$id" exit 2>&1) || {
       fm_lock_release "$lock"
       fm_lock_release "$control_lock"
@@ -94,20 +97,39 @@ fm_endpoint_retire() {  # <home> <state-dir> <id>
 
   tab_id=$(fm_meta_get "$meta" zellij_tab_id)
   expected_label="fm-$id"
-  fm_backend_kill "$backend" "$target" "$tab_id" "$expected_label" >/dev/null 2>&1 || true
-  if [ "$backend" = herdr ]; then
-    if ! fm_backend_herdr_endpoint_confirmed_gone "$target"; then
-      fm_lock_release "$lock"
-      fm_lock_release "$control_lock"
-      echo "failed: endpoint $target is not confirmed gone after its close"
-      return 1
-    fi
-  elif fm_backend_target_exists "$backend" "$target" "$expected_label" >/dev/null 2>&1; then
+  fm_backend_kill "$backend" "$target" "$tab_id" "$expected_label" >/dev/null 2>&1 || {
     fm_lock_release "$lock"
     fm_lock_release "$control_lock"
     echo "failed: endpoint $target is not confirmed gone after its close"
     return 1
-  fi
+  }
+  case "$backend" in
+    tmux) ;;
+    herdr) fm_backend_herdr_endpoint_confirmed_gone "$target" || {
+      fm_lock_release "$lock"
+      fm_lock_release "$control_lock"
+      echo "failed: endpoint $target is not confirmed gone after its close"
+      return 1
+    } ;;
+    zellij) fm_backend_zellij_endpoint_confirmed_gone "$target" || {
+      fm_lock_release "$lock"
+      fm_lock_release "$control_lock"
+      echo "failed: endpoint $target is not confirmed gone after its close"
+      return 1
+    } ;;
+    orca) fm_backend_orca_endpoint_confirmed_gone "$target" || {
+      fm_lock_release "$lock"
+      fm_lock_release "$control_lock"
+      echo "failed: endpoint $target is not confirmed gone after its close"
+      return 1
+    } ;;
+    cmux) fm_backend_cmux_endpoint_confirmed_gone "$target" || {
+      fm_lock_release "$lock"
+      fm_lock_release "$control_lock"
+      echo "failed: endpoint $target is not confirmed gone after its close"
+      return 1
+    } ;;
+  esac
 
   tmp=$(mktemp "$state/.fm-retire-meta.XXXXXX") || {
     fm_lock_release "$lock"

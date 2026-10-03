@@ -296,3 +296,17 @@ fm_backend_orca_kill() {  # <terminal-id>
   fm_backend_orca_tool_check || return 1
   orca terminal close --terminal "$1" --json >/dev/null 2>&1 || true
 }
+
+fm_backend_orca_endpoint_confirmed_gone() {  # <terminal-id>
+  local out
+  fm_backend_orca_tool_check || return 1
+  out=$(orca terminal read --terminal "$1" --limit 1 --json 2>&1) || true
+  printf '%s' "$out" | node -e '
+const fs = require("fs");
+let data;
+try { data = JSON.parse(fs.readFileSync(0, "utf8")); } catch (_) { process.exit(1); }
+if (data.ok !== false) process.exit(1);
+const code = data.error && data.error.code;
+process.exit(code === "terminal_not_found" || code === "terminal_closed" ? 0 : 1);
+'
+}
