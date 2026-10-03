@@ -522,18 +522,44 @@ inbox_steer_escalate_unavailable() {  # <window> <task> <record>
   wake "$reason"
 }
 
+# The one report for an unwritable ladder record while its message stays
+# unhandled: the doorbell cannot advance toward escalation, so it surfaces as a
+# single stale wake (which ends this watcher cycle) rather than a silent retry
+# on every poll. Acknowledgement or teardown makes the race quiet.
+inbox_steer_state_unwritable() {  # <window> <task> <record>
+  local w=$1 task=$2 rec=$3 reason
+  if [ ! -f "$rec" ]; then
+    fm_task_inbox_due_action "$STATE" "$task" >/dev/null || true
+    return 0
+  fi
+  [ -d "${rec%/*}" ] || return 0
+  reason="stale: $w (steering-inbox ladder bookkeeping unwritable: ${rec%/*}/.ring-state cannot be written while $rec stays unhandled; the doorbell cannot advance toward escalation - inspect the inbox directory)"
+  fm_wake_append stale "$w" "$reason" || exit 1
+  wake "$reason"
+}
+
+# Record a busy sighting for the oldest unhandled message, surfacing an
+# unwritable record through the same single report.
+inbox_steer_note_inflight() {  # <window> <task>
+  local rec
+  fm_task_inbox_note_inflight "$STATE" "$2" && return 0
+  rec=$(fm_task_inbox_oldest_unhandled "$STATE" "$2") || return 0
+  inbox_steer_state_unwritable "$1" "$2" "$rec"
+}
+
 # Steering-inbox loss detection, one cheap check per recorded window per poll.
 # Quiet when healthy: an absent, empty, or handled inbox costs one directory
 # glob and produces nothing. When the ladder (fm_task_inbox_due_action, the
 # policy owner) reports a due action, a busy pane just waits - the record is
 # durable and the worker will reach a turn boundary - an idle pane gets one
-# delivery attempt, and a spent attempt budget surfaces as an ordinary stale
-# wake for stuck-crewmate-recovery, and a pane whose agent is positively dead
-# or missing skips the ladder altogether: it is never typed into and surfaces
-# as that same stale wake exactly once. If the attempt's ladder write fails while
-# its record remains unhandled, that unwritable state surfaces through the same
-# stale path instead of silently re-ringing forever; acknowledgement or teardown
-# still makes the race quiet. The attempt is data-plane typing or a
+# delivery attempt (a busy pane after a ring is recorded as handling in flight,
+# which re-arms the next ring from that sighting), and a spent attempt budget
+# surfaces as an ordinary stale wake for stuck-crewmate-recovery, and a pane
+# whose agent is positively dead or missing skips the ladder altogether: it is
+# never typed into and surfaces as that same stale wake exactly once.
+# If the attempt's ladder write fails while its record remains unhandled, that
+# unwritable state surfaces through the same stale path instead of silently
+# re-ringing forever; acknowledgement or teardown still makes the race quiet. The attempt is data-plane typing or a
 # composer-protected skip, never a wake, so normal retries keep the watcher
 # blocking. A fire-and-forget record's one retry ring follows the same busy
 # wait, also waits while the worker has an open decision or blocker of its own
@@ -545,7 +571,17 @@ inbox_steer_check() {  # <window> <task>
   local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state
   action=$(fm_task_inbox_due_action "$STATE" "$task") || return 0
   verb=${action%% *}
-  [ "$verb" != quiet ] || return 0
+  if [ "$verb" = quiet ]; then
+    # A ringing message with a busy pane is a handling turn in flight: record
+    # the sighting so the next ring waits a full grace from it.
+    if fm_task_inbox_inflight_probe_due "$STATE" "$task"; then
+      tail40=$(fm_backend_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")" 2>/dev/null) || tail40=
+      if window_is_busy "$w" "$tail40"; then
+        inbox_steer_note_inflight "$w" "$task"
+      fi
+    fi
+    return 0
+  fi
   if [ "$verb" = retry ] && [ -n "$(status_own_open_decisions "$STATE/$task.status")" ]; then
     return 0
   fi
@@ -571,6 +607,7 @@ inbox_steer_check() {  # <window> <task>
   esac
   tail40=$(fm_backend_capture "$backend" "$w" 40 "$(window_label "$w")" 2>/dev/null) || tail40=
   if window_is_busy "$w" "$tail40"; then
+    [ "$verb" != ring ] && [ "$verb" != escalate ] || inbox_steer_note_inflight "$w" "$task"
     return 0
   fi
   case "$verb" in
@@ -582,15 +619,7 @@ inbox_steer_check() {  # <window> <task>
         return 0
       fi
       if ! fm_task_inbox_record_ring "$STATE" "$task" "$rec"; then
-        if [ ! -f "$rec" ]; then
-          fm_task_inbox_due_action "$STATE" "$task" >/dev/null || true
-          return 0
-        fi
-        if [ -d "${rec%/*}" ]; then
-          reason="stale: $w (steering-inbox ladder bookkeeping unwritable: ${rec%/*}/.ring-state cannot be written while $rec stays unhandled; the doorbell cannot advance toward escalation - inspect the inbox directory)"
-          fm_wake_append stale "$w" "$reason" || exit 1
-          wake "$reason"
-        fi
+        inbox_steer_state_unwritable "$w" "$task" "$rec"
       fi
       triage_log "steer-inbox delivery attempt: $task ${rec##*/} result=$ring_rc"
       ;;
