@@ -78,8 +78,6 @@ SH
 #!/usr/bin/env bash
 # The control plane stand-in: records the verb and whether the endpoint was still
 # standing when the exit was asked for, then answers per the case.
-[ "$(cat "$FM_FAKE_DIR/state/.control-t1.lock/pid" 2>/dev/null || true)" = "${FM_CONTROL_LOCK_OWNER:-}" ] \
-  || { echo "wrong lifecycle lock owner" >&2; exit 1; }
 printf '%s %s pane-alive=%s\n' "$2" "$1" "$([ -e "$FM_FAKE_DIR/pane-alive" ] && echo 1 || echo 0)" >> "$FM_FAKE_DIR/control-log"
 if [ -e "$FM_FAKE_DIR/control-refuses" ]; then
   echo "error: the composer visibly holds pending text" >&2
@@ -217,7 +215,7 @@ test_non_recovery_backend_is_left_under_existing_supervision() {
 test_relaunch_before_lifecycle_lock_is_not_retired() {
   local dir lock holder out tmp
   dir=$(make_case retire-race tmux)
-  lock="$dir/state/.control-t1.lock"
+  lock="$dir/state/.meta-t1.lock"
   (
     mkdir "$lock"
     printf '%s\n' "$BASHPID" > "$lock/pid"

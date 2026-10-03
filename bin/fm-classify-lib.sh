@@ -2718,7 +2718,7 @@ EOF
   return 0
 }
 signal_crew_provably_working() {  # <file> ...
-  local f base dir task seen=""
+  local f base dir task seen="" retired_turn_end=0
   for f in "$@"; do
     base=${f##*/}
     dir=${f%/*}
@@ -2729,6 +2729,11 @@ signal_crew_provably_working() {  # <file> ...
       *)            continue ;;
     esac
     [ -n "$task" ] || continue
+    if [ "$base" = "${task}.turn-ended" ] \
+      && [ -n "$(grep '^endpoint_retired=' "$dir/$task.meta" 2>/dev/null | tail -1 | cut -d= -f2-)" ]; then
+      retired_turn_end=1
+      continue
+    fi
     case "$base" in
       *.status)
         if [ "$(grep '^kind=' "$dir/$task.meta" 2>/dev/null | tail -1 | cut -d= -f2-)" = secondmate ]; then
@@ -2740,8 +2745,8 @@ signal_crew_provably_working() {  # <file> ...
     seen="$seen $task"
     crew_is_provably_working "$task" || return 1
   done
-  [ -n "$seen" ] || return 1
-  return 0
+  [ -n "$seen" ] && return 0
+  [ "$retired_turn_end" -eq 1 ]
 }
 
 # 0 (terminal/actionable) if a stale window's latest recognized status event is

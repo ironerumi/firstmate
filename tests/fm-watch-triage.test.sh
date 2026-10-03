@@ -808,6 +808,12 @@ test_signal_crew_provably_working_classifier() {
     || fail "a non-signal file resolved to a benign verdict"
   ! signal_crew_provably_working \
     || fail "an empty signal file list was treated as benign"
+  printf 'window=test:fm-retired\nkind=ship\nendpoint_retired=1790000000\n' > "$state/retired.meta"
+  signal_crew_provably_working "$state/retired.turn-ended" \
+    || fail "a late turn-end from a retired endpoint was not consumed"
+  printf 'working: merge poll still pending\n' > "$state/retired.status"
+  ! signal_crew_provably_working "$state/retired.status" \
+    || fail "a retired task's status append was incorrectly consumed"
   unset FM_FAKE_CREW_STATE_a FM_FAKE_CREW_STATE_b
   pass "signal_crew_provably_working: benign only when every referenced crew is provably working"
 }
@@ -903,6 +909,24 @@ test_turn_ended_provably_working_absorbed() {
 # This is the swallowed-finish fix: a crew that finished (or stopped and waits)
 # reports its final turn-end with no captain-relevant status and no running
 # pipeline, so the wake must surface instead of being absorbed.
+
+test_retired_turn_ended_is_absorbed() {
+  local dir state fakebin out pid
+  dir=$(make_case retired-turn-ended); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"
+  printf 'window=test:fm-retired\nkind=ship\nendpoint_retired=1790000000\n' > "$state/task.meta"
+  : > "$state/task.turn-ended"
+  export FM_FAKE_CREW_STATE='state: unknown · source: none · retired endpoint'
+  watch_bg "$state" "$fakebin" "$out"
+  pid=$!
+  if ! wait_poll_cycle "$state" "$pid"; then
+    reap "$pid"; fail "watcher exited for a retired endpoint's late turn-end: $(cat "$out")"
+  fi
+  [ ! -s "$out" ] || fail "a retired endpoint's late turn-end printed a wake reason: $(cat "$out")"
+  [ ! -s "$state/.wake-queue" ] || fail "a retired endpoint's late turn-end enqueued a wake"
+  reap "$pid"
+  pass "a retired endpoint's late turn-end is consumed without a wake"
+}
 
 test_turn_ended_not_working_surfaced() {
   local dir state fakebin out drain_out pid
@@ -6732,6 +6756,7 @@ test_signal_crew_provably_working_classifier
 test_secondmate_status_routine_absorbed_routed_surfaced_classifier
 test_provably_working_signal_absorbed
 test_turn_ended_provably_working_absorbed
+test_retired_turn_ended_is_absorbed
 test_turn_ended_not_working_surfaced
 test_turn_ended_churning_pane_absorbed
 test_turn_ended_churn_resets_prior_stale_classification

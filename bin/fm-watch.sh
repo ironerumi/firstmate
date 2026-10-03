@@ -721,6 +721,7 @@ signal_turnend_panes_churned() {  # <file> ...
       *)            return 1 ;;
     esac
     [ -n "$task" ] || return 1
+    [ -n "$(fm_meta_get "$STATE/$task.meta" endpoint_retired)" ] && continue
     task_index=-1
     for ((i = 0; i < ${#signal_tasks[@]}; i++)); do
       [ "${signal_tasks[$i]}" = "$task" ] && { task_index=$i; break; }
@@ -736,6 +737,7 @@ signal_turnend_panes_churned() {  # <file> ...
     [ -e "$meta" ] || continue
     rec_task=${meta##*/}
     rec_task=${rec_task%.meta}
+    [ -z "$(fm_meta_get "$meta" endpoint_retired)" ] || continue
     kind=$(fm_meta_get "$meta" kind)
     backend=$(fm_backend_of_meta "$meta")
     if [ "$backend" = orca ]; then
