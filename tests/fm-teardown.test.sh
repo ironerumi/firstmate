@@ -68,6 +68,8 @@ REAL_PS_FOR_TEST=$(command -v ps)
 export REAL_PS_FOR_TEST
 REAL_LSOF_FOR_TEST=$(command -v lsof)
 export REAL_LSOF_FOR_TEST
+REAL_RM_FOR_TEST=$(command -v rm)
+export REAL_RM_FOR_TEST
 
 # Build a fresh sandbox for one test case. Sets up:
 #   $CASE/state/        - firstmate state dir (with a fresh watcher beacon)
@@ -624,7 +626,7 @@ run_teardown() {
   # FM_DATA_OVERRIDE is pinned to the case dir because teardown closes this
   # home's backlog item itself; without it $DATA would resolve to the real
   # repo's own home and a test could mutate live records.
-  FM_ROOT_OVERRIDE="$ROOT" \
+  FM_ROOT_OVERRIDE="${FM_TEST_ROOT_OVERRIDE:-$ROOT}" \
   FM_STATE_OVERRIDE="$case_dir/state" \
   FM_DATA_OVERRIDE="$case_dir/data" \
   FM_CONFIG_OVERRIDE="$case_dir/config" \
@@ -1230,11 +1232,30 @@ make_firstmate_shaped_slot() {  # <case-dir>
   git -C "$case_dir/wt" merge -q --ff-only origin/main
 }
 
+make_firstmate_pool_slot() {  # <case-dir>
+  local case_dir=$1 root="$1/firstmate-root" slot="$1/pool/1/project"
+  git -C "$case_dir/project" worktree remove -f "$case_dir/wt" >/dev/null 2>&1 || rm -rf "$case_dir/wt"
+  git clone -q "$case_dir/origin.git" "$root"
+  mkdir -p "$root/bin" "$root/state"
+  : > "$root/AGENTS.md"
+  : > "$root/bin/fm-spawn.sh"
+  printf 'state/\n.fm-secondmate-home\n.fm-secondmate-parent\n' > "$root/.gitignore"
+  git -C "$root" add -f AGENTS.md bin/fm-spawn.sh .gitignore
+  git -C "$root" -c user.email=t@t -c user.name=t commit -q -m "firstmate-shaped"
+  git -C "$root" push -q origin HEAD:main
+  mkdir -p "${slot%/*}"
+  git -C "$root" worktree add -q --detach "$slot" main
+  printf '{"worktrees":[{"name":"1","path":"%s"}]}\n' "$slot" > "$case_dir/pool/treehouse-state.json"
+  ln -s "pool/1/project" "$case_dir/wt"
+  sed -i.bak "s|^project=.*|project=$root|" "$case_dir/state/task-x1.meta"
+  rm -f "$case_dir/state/task-x1.meta.bak"
+}
+
 test_teardown_clears_worker_state_from_a_firstmate_slot() {
   local case_dir rc
   case_dir=$(make_case worker-state-scrub)
   write_meta "$case_dir" no-mistakes ship
-  make_firstmate_shaped_slot "$case_dir"
+  make_firstmate_pool_slot "$case_dir"
   # What a finished worker leaves in its own checkout's state/: the Pi extension
   # loaded-markers plus its own scratch, including a nested directory.
   mkdir -p "$case_dir/wt/state/nm-run"
@@ -1244,7 +1265,7 @@ test_teardown_clears_worker_state_from_a_firstmate_slot() {
   printf 'out\n' > "$case_dir/wt/state/nm-run/output.txt"
 
   set +e
-  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  FM_TEST_ROOT_OVERRIDE="$case_dir/firstmate-root" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
   rc=$?
   set -e
 
@@ -1258,19 +1279,65 @@ test_teardown_keeps_state_of_a_retired_home_slot() {
   local case_dir rc
   case_dir=$(make_case retired-home-state-kept)
   write_meta "$case_dir" no-mistakes ship
-  make_firstmate_shaped_slot "$case_dir"
-  printf 'retired\n' > "$case_dir/wt/.fm-secondmate-home"
+  make_firstmate_pool_slot "$case_dir"
+  printf 'retired\n' > "$case_dir/wt/.fm-secondmate-parent"
   mkdir -p "$case_dir/wt/state"
   printf 'x\n' > "$case_dir/wt/state/retired.status"
 
   set +e
-  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  FM_TEST_ROOT_OVERRIDE="$case_dir/firstmate-root" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
   rc=$?
   set -e
 
   expect_code 0 "$rc" "retired-home-state-kept: teardown should succeed"
   [ -f "$case_dir/wt/state/retired.status" ] || fail "retired-home-state-kept: a slot carrying a retired home's marker lost its state/"
   pass "teardown leaves a retired home's state/ for the spawn-time refusal"
+}
+
+test_teardown_does_not_scrub_an_unrelated_firstmate_shaped_slot() {
+  local case_dir rc
+  case_dir=$(make_case unrelated-shaped-slot)
+  write_meta "$case_dir" no-mistakes ship
+  make_firstmate_shaped_slot "$case_dir"
+  mkdir -p "$case_dir/wt/state"
+  printf 'user state\n' > "$case_dir/wt/state/keep.txt"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "unrelated-shaped-slot: teardown should succeed"
+  [ -f "$case_dir/wt/state/keep.txt" ] || fail "unrelated-shaped-slot: unrelated project state was scrubbed"
+  pass "teardown leaves state in an unrelated firstmate-shaped checkout"
+}
+
+test_teardown_retains_records_when_worker_state_scrub_fails() {
+  local case_dir rc
+  case_dir=$(make_case worker-state-scrub-failure)
+  write_meta "$case_dir" no-mistakes ship
+  make_firstmate_pool_slot "$case_dir"
+  mkdir -p "$case_dir/wt/state"
+  printf 'scratch\n' > "$case_dir/wt/state/scratch.txt"
+  cat > "$case_dir/fakebin/rm" <<'SH'
+#!/usr/bin/env bash
+last=
+for last do :; done
+[ "${FM_FAKE_RM_FAIL_PATH:-}" = "$last" ] && exit 1
+exec "$REAL_RM_FOR_TEST" "$@"
+SH
+  chmod +x "$case_dir/fakebin/rm"
+
+  set +e
+  FM_TEST_ROOT_OVERRIDE="$case_dir/firstmate-root" FM_FAKE_RM_FAIL_PATH="$case_dir/wt/state" \
+    run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  [ "$rc" -ne 0 ] || fail "worker-state-scrub-failure: teardown reported success"
+  [ -e "$case_dir/state/task-x1.meta" ] || fail "worker-state-scrub-failure: task metadata was removed"
+  [ -f "$case_dir/wt/state/scratch.txt" ] || fail "worker-state-scrub-failure: failed scrub removed the state unexpectedly"
+  pass "teardown retains task records when returned worker state cannot be scrubbed"
 }
 
 test_gh_error_and_content_absent_refuses() {
@@ -2599,6 +2666,51 @@ configure_secondmate_with_tmux_children() {  # <case-dir>
       "mode=local-only"
     : > "$home/state/$child.status"
   done
+}
+
+configure_secondmate_with_firstmate_pool_child() {  # <case-dir>
+  local case_dir=$1 home="$1/secondmate-home" root="$1/firstmate-root" slot="$1/pool/1/project"
+  mkdir -p "$home/state" "$home/data" "$home/config" "$home/projects"
+  printf '%s\n' task-x1 > "$home/.fm-secondmate-home"
+  printf '%s\n' "home=$home" >> "$case_dir/state/task-x1.meta"
+  git clone -q "$case_dir/origin.git" "$root"
+  mkdir -p "$root/bin" "$root/state"
+  : > "$root/AGENTS.md"
+  : > "$root/bin/fm-spawn.sh"
+  printf 'state/\n.fm-secondmate-home\n.fm-secondmate-parent\n' > "$root/.gitignore"
+  git -C "$root" add -f AGENTS.md bin/fm-spawn.sh .gitignore
+  git -C "$root" -c user.email=t@t -c user.name=t commit -q -m "firstmate-shaped"
+  mkdir -p "${slot%/*}"
+  git -C "$root" worktree add -q --detach "$slot" HEAD
+  printf '{"worktrees":[{"name":"1","path":"%s"}]}\n' "$slot" > "$case_dir/pool/treehouse-state.json"
+  fm_write_meta "$home/state/child-pool.meta" \
+    "window=firstmate:fm-child-pool" \
+    "endpoint_task_id=child-pool" \
+    "worktree=$slot" \
+    "project=$root" \
+    "kind=ship" \
+    "mode=local-only"
+  mkdir -p "$slot/state"
+  : > "$slot/state/scratch.txt"
+  : > "$home/state/child-pool.status"
+}
+
+test_forced_secondmate_teardown_scrubs_a_firstmate_pool_child() {
+  local case_dir home rc
+  case_dir=$(make_case child-worker-state-scrub)
+  write_meta "$case_dir" local-only secondmate
+  configure_secondmate_with_firstmate_pool_child "$case_dir"
+  home="$case_dir/secondmate-home"
+
+  set +e
+  FM_TEST_ROOT_OVERRIDE="$case_dir/firstmate-root" run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "child-worker-state-scrub: teardown should succeed"
+  [ ! -e "$case_dir/pool/1/project/state" ] || fail "child-worker-state-scrub: returned child slot still carries state/"
+  [ ! -d "$home" ] || fail "child-worker-state-scrub: secondmate home was not retired"
+  pass "forced secondmate teardown scrubs a returned firstmate child slot"
 }
 
 test_forced_secondmate_teardown_holds_descendant_lifecycle_locks() {
@@ -4364,7 +4476,9 @@ test_teardown_manual_backend_leaves_the_backlog_to_the_operator
 test_local_only_truly_unpushed_refuses
 test_local_only_merged_to_local_main_allows
 test_teardown_clears_worker_state_from_a_firstmate_slot
+test_teardown_does_not_scrub_an_unrelated_firstmate_shaped_slot
 test_teardown_keeps_state_of_a_retired_home_slot
+test_teardown_retains_records_when_worker_state_scrub_fails
 test_no_mistakes_origin_remote_allows
 test_no_mistakes_truly_unpushed_refuses
 test_local_only_force_overrides_unpushed
@@ -4376,6 +4490,7 @@ test_herdr_flat_teardown_refuses_orphaning_records_then_retry_completes
 test_herdr_flat_teardown_refuses_records_on_unparseable_presence
 test_herdr_flat_teardown_preflight_refuses_before_changes
 test_forced_secondmate_herdr_child_preflight_refuses_before_changes
+test_forced_secondmate_teardown_scrubs_a_firstmate_pool_child
 test_forced_secondmate_teardown_holds_descendant_lifecycle_locks
 test_forced_secondmate_herdr_child_retains_records_when_close_unconfirmed
 test_forced_teardown_retains_nested_secondmate_home_when_grandchild_close_unconfirmed

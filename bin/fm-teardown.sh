@@ -2734,17 +2734,20 @@ scrub_returned_home_slot() {
 # retired home, not a worker's, and keeps the spawn-time refusal; so does any slot
 # that is this home's own checkout or state.
 scrub_returned_worker_slot() {
-  local slot=$1 slot_real
+  local slot=$1 label=$2 slot_real
   [ -d "$slot" ] && [ -d "$slot/state" ] && [ ! -L "$slot/state" ] || return 0
   [ -f "$slot/AGENTS.md" ] && [ -f "$slot/bin/fm-spawn.sh" ] || return 0
   [ ! -e "$slot/$SUB_HOME_MARKER" ] && [ ! -L "$slot/$SUB_HOME_MARKER" ] || return 0
+  [ ! -e "$slot/$SUB_HOME_PARENT_MARKER" ] && [ ! -L "$slot/$SUB_HOME_PARENT_MARKER" ] || return 0
+  fm_treehouse_pool_slot "$FM_ROOT" "$slot" || return 0
   slot_real=$(cd "$slot" && pwd -P) || return 0
   [ "$slot_real" != "$(cd "$FM_ROOT" && pwd -P)" ] && [ "$slot_real" != "$(cd "$FM_HOME" && pwd -P)" ] || return 0
   [ "$slot_real/state" != "$(cd "$STATE" 2>/dev/null && pwd -P)" ] || return 0
   git -C "$slot" check-ignore -q -- state/ 2>/dev/null || return 0
   find "$slot/state" -type d -exec chmod u+w {} + 2>/dev/null || true
   rm -rf -- "${slot:?}/state" || {
-    echo "warning: returned worktree $slot still holds worker-written state/; the next spawn into it will refuse until it is removed" >&2
+    echo "error: returned $label $slot still holds worker-written state/; the slot remains for teardown retry" >&2
+    return 1
   }
 }
 
@@ -3380,6 +3383,7 @@ cleanup_firstmate_home_children() {
         if [ -n "$child_proj" ] && [ -d "$child_proj" ] && command -v treehouse >/dev/null 2>&1; then
           if teardown_treehouse_return "$child_wt" "$child_proj" "child worktree"; then
             fm_treehouse_slot_owner_release "$child_wt" "$child_id"
+            scrub_returned_worker_slot "$child_wt" "child worktree" || return 1
           else
             child_return_rc=$?
             if [ "$child_return_rc" -eq "$TEARDOWN_TREEHOUSE_LOCK_REFUSED" ]; then
@@ -3721,7 +3725,7 @@ elif [ -d "$WT" ] && [ "$KIND" != secondmate ]; then
   # unclaimed until its next holder claims it, and leaves the claim in place
   # whenever the return did not actually happen.
   fm_treehouse_slot_owner_release "$WT" "$ID"
-  scrub_returned_worker_slot "$WT"
+  scrub_returned_worker_slot "$WT" "worktree" || exit 1
 fi
 
 HERDR_PRESENTATION_JOURNAL="$STATE/$ID.herdr-presentation"
