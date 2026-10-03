@@ -1427,6 +1427,32 @@ EOF
   pass "herdr endpoint liveness is reported per task: alive, dead for exit 1, dead for any other probe status"
 }
 
+test_endpoint_liveness_retired_endpoint_waits_on_merge() {
+  local rec root home fakebin out
+  rec=$(new_world liveness-retired)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  make_fake_herdr "$fakebin" "p-live"
+
+  # Both panes are gone from herdr; only the one whose record says it was retired
+  # on purpose (bin/fm-endpoint-retire-lib.sh) stops reading as a dead worker.
+  printf 'window=sess:p-retired\nkind=ship\nbackend=herdr\nendpoint_retired=1790000000\n' > "$home/state/task-retired.meta"
+  printf 'window=sess:p-dead\nkind=ship\nbackend=herdr\n' > "$home/state/task-dead.meta"
+
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "endpoint: retired, waiting on merge (backend=herdr window=sess:p-retired)" \
+    "a retired endpoint was not reported as waiting on merge"
+  assert_not_contains "$out" "endpoint: dead (backend=herdr window=sess:p-retired)" \
+    "a retired endpoint was reported as a dead worker"
+  assert_contains "$out" "endpoint: dead (backend=herdr window=sess:p-dead)" \
+    "an unretired gone endpoint stopped being reported dead"
+
+  pass "a retired endpoint is reported as waiting on merge while an unretired gone one stays dead"
+}
+
 test_endpoint_read_death_is_isolated_and_reported() {
   local rec root home fakebin out status=0
   [ -r /proc/self/stat ] || { echo "skip: /proc not readable (the read-death shape needs process ancestry)"; return 0; }
@@ -3041,6 +3067,7 @@ test_status_tail_line_cap
 test_orphan_status_logs_are_printed
 test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
+test_endpoint_liveness_retired_endpoint_waits_on_merge
 test_endpoint_read_death_is_isolated_and_reported
 test_endpoint_read_hang_is_bounded_and_reported
 test_endpoint_bound_rejects_padded_zero

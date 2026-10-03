@@ -2229,6 +2229,30 @@ test_herdr_rebind_stays_in_the_recorded_session() {
   pass "reclaim: a herdr rebind is created in the session the record names, never the ambient one"
 }
 
+test_herdr_rebind_drops_the_retired_endpoint_marker() {
+  local dir out rc=0
+  # A task whose finished worker's endpoint was retired while its PR waits on a
+  # merge (bin/fm-endpoint-retire-lib.sh) is reclaimed through the ordinary rebind
+  # when the PR needs more work. The new endpoint is live, so the marker that said
+  # "absent by design" must not survive it - and the armed PR record must.
+  herdr_case_or_skip retired-herdr-rebind rl76 fmlab '%none' || {
+    echo "skip - herdr rebind needs jq (the herdr adapter parses JSON with it)"
+    return 0
+  }
+  dir=$HERDR_CASE_DIR
+  printf 'pr=https://github.com/example/repo/pull/76\nendpoint_retired=1790000000\n' >> "$dir/home/state/rl76.meta"
+
+  out=$(run_spawn "$dir" rl76 --relaunch --harness claude) || rc=$?
+  expect_code 0 "$rc" "a retired task's endpoint should be rebindable"$'\n'"$out"
+  [ "$(meta_field "$dir" rl76 window)" = 'fmlab:%9' ] \
+    || fail "the retired task was not rebound to the pane the reclaim minted, got $(meta_field "$dir" rl76 window)"
+  [ -z "$(meta_field "$dir" rl76 endpoint_retired)" ] \
+    || fail "the rebound record still claims its endpoint is retired: $(meta_field "$dir" rl76 endpoint_retired)"
+  [ "$(meta_field "$dir" rl76 pr)" = 'https://github.com/example/repo/pull/76' ] \
+    || fail "the rebind lost the armed PR record, got '$(meta_field "$dir" rl76 pr)'"
+  pass "reclaim: a rebind drops the retired-endpoint marker and keeps the armed PR"
+}
+
 test_herdr_reclaim_refuses_an_agent_that_came_back() {
   local dir out rc log
   herdr_case_or_skip gone-herdr-alive rl74 || {
@@ -2452,6 +2476,7 @@ test_herdr_relaunch_resumes_only_the_registered_pi_session
 test_herdr_reclaim_adopts_a_pane_that_outlived_its_server
 test_herdr_exit_reports_already_stopped_when_the_pane_outlived_its_server
 test_herdr_rebind_stays_in_the_recorded_session
+test_herdr_rebind_drops_the_retired_endpoint_marker
 test_herdr_reclaim_refuses_an_agent_that_came_back
 test_herdr_reclaim_keeps_the_task_whole
 test_herdr_reclaim_of_a_secondmate_names_its_own_owner

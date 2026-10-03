@@ -1234,6 +1234,13 @@ fi
 # verdict reports unknown rather than trusting a possibly-stale status log as
 # the current state.
 [ -n "$BACKEND_TARGET" ] || emit unknown none "no backend target recorded"
+# A retired endpoint (bin/fm-endpoint-retire-lib.sh) is absent by design: the worker
+# finished and only the armed merge poll waits, so its absence is not death. Only a
+# latest status of `done` reads this way; anything newer falls through to the
+# ordinary reads below.
+if [ -n "$(meta_value endpoint_retired)" ] && [ "$LOG_VERB" = "done" ]; then
+  emit_ship_status_done "endpoint retired, waiting on merge"
+fi
 if ! pane_readable "$BACKEND_TARGET"; then
   # A failed probe is not itself evidence the pane is gone: the herdr CLI can
   # error or stall under load, and tmux can fail to be executed at all (a

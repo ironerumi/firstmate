@@ -3488,6 +3488,109 @@ working: still parked at that gate'
   pass "with config/wedge-defer-parked-gate absent a parked gate keeps the unchanged ladder, wording and reads"
 }
 
+# --- a provably running pipeline is not a wedge -------------------------------
+# 2026-10-03: a worker whose no-mistakes run sat at its ci step for ~20 minutes,
+# polling the forge behind a pane that rendered nothing, was wedge-escalated three
+# times although fm-crew-state.sh reported `working` from the run step the whole
+# time. Each escalation cost a supervising turn only to learn nothing was wrong.
+# The evidence is the run step itself - never the pane source, which the wedge
+# timer deliberately keeps bounding - and it rides the same opt-in flag as the
+# parked-gate record, because both are derived from pipeline state rather than
+# declared by the worker.
+test_wedge_threshold_running_pipeline_is_a_bounded_wait() {
+  local dir state fakebin out capture window key n verdict case_n=0
+  local running='state: working · source: run-step · validating (running)'
+  local ci='state: working · source: run-step · ci running'
+  local busy_pane='state: working · source: pane · harness busy (busy)'
+  window="test:fm-wedge"; key=$(printf '%s' "$window" | tr ':/.' '___')
+
+  # Both run-step spellings the pipeline reports while a run is live defer once
+  # armed: one recheck at the first threshold, then silence inside the cadence.
+  for verdict in "$running" "$ci"; do
+    case_n=$((case_n + 1))
+    dir=$(wedge_threshold_fixture "running-pipeline-$case_n" 'working: validation under way' 0)
+    arm_parked_gate "$dir"
+    state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"; capture="$dir/pane.txt"
+    wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$verdict" exit \
+      || fail "a running pipeline was never rechecked at the threshold ($verdict): $(cat "$out")"
+    grep -F 'verified wait on a running pipeline' "$out" >/dev/null \
+      || fail "the running-pipeline recheck did not name its evidence ($verdict): $(cat "$out")"
+    grep -F 'confirm the run is still progressing' "$out" >/dev/null \
+      || fail "the running-pipeline recheck lost its action ($verdict): $(cat "$out")"
+    grep -F 'possible wedge' "$out" >/dev/null \
+      && fail "a running pipeline was reported as a possible wedge ($verdict): $(cat "$out")"
+    grep -E ', waiting [0-9]+s' "$out" >/dev/null \
+      && fail "the running-pipeline recheck published a wait age it has no record for: $(cat "$out")"
+    ack_stopped_cycle "$state" || fail "could not acknowledge the running-pipeline recheck"
+    n=1
+    while [ "$n" -le 3 ]; do
+      wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$verdict" absorb \
+        || fail "a running pipeline wedge-escalated at threshold $n inside the recheck cadence ($verdict): $(tail -3 "$out")"
+      n=$((n + 1))
+    done
+    [ "$(wedge_stale_wakes "$state" "$window")" -eq 0 ] \
+      || fail "a running pipeline queued a further wake inside its recheck cadence ($verdict): $(cat "$state/.wake-queue")"
+    [ ! -e "$state/.wedge-escalations-$key" ] \
+      || fail "a running pipeline counted $(cat "$state/.wedge-escalations-$key") wedge escalation(s) ($verdict)"
+  done
+
+  # The recheck is bounded, not silenced: once the cadence has elapsed the same
+  # lane is surfaced again.
+  FM_TEST_PAUSE_RESURFACE=0 wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$running" exit \
+    || fail "a running pipeline was never re-surfaced once the recheck cadence elapsed: $(tail -3 "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the elapsed-cadence recheck"
+
+  # Unarmed home: the identical lane keeps the unchanged ladder and spends no
+  # current-state read on it.
+  dir=$(wedge_threshold_fixture running-pipeline-unarmed 'working: validation under way' 0)
+  state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"; capture="$dir/pane.txt"
+  wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$running" exit \
+    || fail "an unarmed home stopped escalating a running pipeline: $(cat "$out")"
+  grep -F "possible wedge, escalation 1" "$out" >/dev/null \
+    || fail "an unarmed home did not keep the unchanged wedge wording for a running pipeline: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the unarmed running-pipeline escalation"
+
+  # Armed, but the working verdict comes from the busy pane rather than the run
+  # step: no pipeline is provably running, so the ladder is untouched.
+  dir=$(wedge_threshold_fixture running-pipeline-pane-source 'working: validation under way' 0)
+  arm_parked_gate "$dir"
+  state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"; capture="$dir/pane.txt"
+  wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$busy_pane" exit \
+    || fail "an armed home stopped escalating a pane-sourced working verdict: $(cat "$out")"
+  grep -F "possible wedge, escalation 1" "$out" >/dev/null \
+    || fail "a pane-sourced working verdict was exempted as a running pipeline: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the pane-sourced escalation"
+  pass "a run-step working verdict defers the wedge ladder to a bounded recheck once armed, and nothing else does"
+}
+
+# --- a retired endpoint is waiting on its merge poll, not on a pane ----------
+# bin/fm-endpoint-retire-lib.sh closes a finished ship's endpoint once its merge
+# poll is armed and records endpoint_retired=. The same lane without the record is
+# the control: it is wedge-escalated on the unchanged schedule, so the silence
+# below is the record's doing and not a lane that could never escalate.
+test_retired_endpoint_is_not_supervised_as_a_pane() {
+  local dir state fakebin out capture window
+  local working='state: working · source: run-step · ci running'
+  window="test:fm-wedge"
+
+  dir=$(wedge_threshold_fixture retired-endpoint-control 'working: validation under way' 0)
+  state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"; capture="$dir/pane.txt"
+  wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$working" exit \
+    || fail "the control lane without a retired record stopped escalating: $(cat "$out")"
+  grep -F 'possible wedge, escalation 1' "$out" >/dev/null \
+    || fail "the control lane did not keep the unchanged wedge wording: $(cat "$out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the control escalation"
+
+  dir=$(wedge_threshold_fixture retired-endpoint 'working: validation under way' 0)
+  printf 'endpoint_retired=1790000000\n' >> "$dir/state/wedge.meta"
+  state="$dir/state"; fakebin="$dir/fakebin"; out="$dir/watch.out"; capture="$dir/pane.txt"
+  wedge_threshold_round "$state" "$fakebin" "$out" "$capture" "$window" "$working" absorb \
+    || fail "a retired endpoint was supervised as a pane and woke the watcher: $(cat "$out")"
+  [ "$(wedge_stale_wakes "$state" "$window")" -eq 0 ] \
+    || fail "a retired endpoint queued a stale wake: $(cat "$state/.wake-queue")"
+  pass "a retired endpoint is left to its merge poll, while the same lane without the record still escalates"
+}
+
 # --- a parked human-owed gate also needs the human to still owe an answer ----
 # The gate's findings table says who the answer is owed BY. It does not say the
 # human was ever asked, and it does not stop saying `ask-user` once they answer:
@@ -6709,6 +6812,8 @@ test_wedge_threshold_recheck_names_the_captain_for_a_held_lane
 test_wedge_threshold_defers_to_a_parked_gate_awaiting_a_human
 test_wedge_threshold_parked_gate_needs_an_unanswered_decision
 test_wedge_threshold_parked_gate_is_off_until_armed
+test_wedge_threshold_running_pipeline_is_a_bounded_wait
+test_retired_endpoint_is_not_supervised_as_a_pane
 test_wedge_defer_refuses_a_half_filled_wait_record
 test_open_captain_call_bounds_stale_churn
 test_stale_churn_without_a_captain_call_still_alarms

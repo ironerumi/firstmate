@@ -639,6 +639,7 @@ The optional local, gitignored `config/wedge-defer-parked-gate` presence flag op
 ### When a waiting gate defers an alarm
 
 With it present, a provably-working pane about to escalate is also deferred to the `FM_PAUSE_RESURFACE_SECS` recheck cadence when its crew's own current state is a validation gate whose answer is owed to the supervisor and whose decision for that run is still open, and the recheck names the supervisor and the action that clears the lane instead of reporting a suspected wedge.
+With it present, a provably-working pane about to escalate is likewise deferred to that same recheck when its crew's own current state is its own no-mistakes run actively working a step, read from the run step rather than the pane, such as a CI step polling the forge for many minutes behind a pane that renders nothing; the recheck names the pipeline run and asks the supervisor to confirm it is still progressing.
 It stays opt-in because the other evidence is the worker's own declaration about its own silence, while this is derived from a pipeline's gate state, so which lanes give up the escalation ladder for it is a home's choice.
 
 With the flag absent the wedge timer spends no fold or current-state read for it, writes no record, and keeps the unchanged escalation schedule, reasons, and `demand-deep-inspection` wording.

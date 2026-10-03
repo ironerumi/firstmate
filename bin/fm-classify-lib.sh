@@ -2564,6 +2564,25 @@ crew_gate_awaits_human_decision() {  # <id> -> <run-id> on stdout
   printf '%s\n' "$run"
 }
 
+# 0 if crew <id>'s authoritative current state is its OWN no-mistakes run
+# actively working a step (`working` from the run-step source). The pane source is
+# deliberately excluded: a busy-looking pane is exactly the liveness input the
+# wedge timer already bounds with BUSY_TURN_MAX_SECS, while a run the pipeline
+# itself reports as running or fixing - including a ci step polling the forge for
+# many minutes behind a pane that renders nothing - is the one thing a quiet pane
+# cannot show. Same cost and caveat as crew_absorb_class: one fm-crew-state.sh
+# read, which may make a bounded no-mistakes call.
+crew_run_step_active() {  # <id>
+  local id=$1 line state src
+  [ -n "$id" ] || return 1
+  line=$("$FM_CREW_STATE_BIN" "$id" 2>/dev/null) || true
+  case "$line" in state:*) ;; *) return 1 ;; esac
+  state=${line#state: }; state=${state%% *}
+  [ "$state" = working ] || return 1
+  src=${line#*source: }; src=${src%% *}
+  [ "$src" = run-step ]
+}
+
 # Directories excluded from the worktree write probe below, and the depth it walks.
 # The excluded set is everything a supervisor read or a package manager can write
 # without the crew doing any work - .git first, so firstmate's own read-only git

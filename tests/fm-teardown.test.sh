@@ -2341,6 +2341,41 @@ SH
   pass "herdr teardown removes pane-owned escalation dedupe state"
 }
 
+# A task whose endpoint was retired after its worker finished (bin/fm-endpoint-
+# retire-lib.sh) reaches teardown with its pane already gone: the close is a no-op
+# and the confirmed-absent pane satisfies the record gate, so cleanup completes
+# exactly as it does for any other gone pane.
+test_herdr_teardown_completes_for_a_retired_endpoint() {
+  local case_dir
+  case_dir=$(make_case herdr-retired-endpoint)
+  write_meta "$case_dir" local-only ship
+  sed -i.bak 's/^window=.*/window=default:wG:pQ/' "$case_dir/state/task-x1.meta"
+  rm -f "$case_dir/state/task-x1.meta.bak"
+  printf '%s\n' \
+    'backend=herdr' \
+    'herdr_session=default' \
+    'herdr_workspace_id=wG' \
+    'herdr_tab_id=wG:tQ' \
+    'herdr_pane_id=wG:pQ' \
+    'endpoint_retired=1790000000' >> "$case_dir/state/task-x1.meta"
+  cat > "$case_dir/fakebin/herdr" <<SH
+#!/usr/bin/env bash
+case "\${1:-} \${2:-}" in
+  "session list") printf '%s\n' '{"sessions":[{"name":"default","running":true,"socket_path":"$case_dir/herdr.sock"}]}' ;;
+  "status --json") printf '%s\n' '{"server":{"running":true}}' ;;
+  "pane get") printf '%s\n' '{"error":{"code":"pane_not_found"}}'; exit 1 ;;
+  *) exit 0 ;;
+esac
+SH
+  chmod +x "$case_dir/fakebin/herdr"
+
+  run_teardown "$case_dir" --force > "$case_dir/stdout" 2> "$case_dir/stderr" \
+    || fail "herdr-retired-endpoint: teardown of a retired endpoint failed: $(cat "$case_dir/stderr")"
+  assert_absent "$case_dir/state/task-x1.meta" \
+    "herdr-retired-endpoint: teardown left the task record of a retired endpoint"
+  pass "teardown completes for a task whose endpoint was already retired"
+}
+
 # Flat (non-projected) Herdr endpoint whose fake pane exists until a locked
 # close removes it. The socket path is case-local so the derived presentation
 # lock never collides with another test or a real fleet session.
@@ -4486,6 +4521,7 @@ test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_home_teardown_delivers_final_line_or_refuses
 test_teardown_missing_busy_sidecar_completes
 test_herdr_teardown_clears_escalation_marker
+test_herdr_teardown_completes_for_a_retired_endpoint
 test_herdr_flat_teardown_refuses_orphaning_records_then_retry_completes
 test_herdr_flat_teardown_refuses_records_on_unparseable_presence
 test_herdr_flat_teardown_preflight_refuses_before_changes
