@@ -310,9 +310,16 @@ ID=$RAW_ID
 fm_lease_guard "$ID" "lifecycle control (fm-control)"
 CONTROL_LOCK="$STATE/.control-$ID.lock"
 trap control_cleanup EXIT
-fm_lock_try_acquire "$CONTROL_LOCK" \
-  || die "another lifecycle action is already running for task $ID"
-CONTROL_LOCK_HELD=1
+if [ "${FM_CONTROL_LOCK_HELD:-0}" = 1 ]; then
+  CONTROL_LOCK_OWNER=${FM_CONTROL_LOCK_OWNER:-}
+  case "$CONTROL_LOCK_OWNER" in ''|*[!0-9]*) die "invalid control-lock owner for task $ID" ;; esac
+  [ "$(cat "$CONTROL_LOCK/pid" 2>/dev/null || true)" = "$CONTROL_LOCK_OWNER" ] \
+    || die "the lifecycle lock for task $ID is not held by its caller"
+else
+  fm_lock_try_acquire "$CONTROL_LOCK" \
+    || die "another lifecycle action is already running for task $ID"
+  CONTROL_LOCK_HELD=1
+fi
 META="$STATE/$ID.meta"
 if [ ! -f "$META" ]; then
   case "$RAW_ID" in

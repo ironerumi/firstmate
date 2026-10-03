@@ -2,7 +2,7 @@
 # Tests for bin/fm-endpoint-retire-lib.sh, driven through bin/fm-pr-check.sh: once a
 # finished ship's merge poll is armed, its worker endpoint is retired so only the
 # poll waits, and nothing but the endpoint is touched.
-# Herdr and the control plane are canned fakes - never a real session or agent.
+# Backend CLIs and the control plane are canned fakes - never a real session or agent.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -93,7 +93,20 @@ case "\${1:-} \${2:-}" in
 esac
 exit 0
 SH
-  chmod +x "$dir/fakebin/herdr" "$dir/fakebin/control" "$dir/fakebin/gh"
+  cat > "$dir/fakebin/tmux" <<'SH'
+#!/usr/bin/env bash
+set -u
+case " $* " in
+  *' #{pane_id} '*|*' #{pane_current_command} '*)
+    [ -e "$FM_FAKE_DIR/pane-alive" ] || exit 1
+    printf '%s\n' '%7'
+    ;;
+  *' kill-window '*)
+    rm -f "$FM_FAKE_DIR/pane-alive"
+    ;;
+esac
+SH
+  chmod +x "$dir/fakebin/herdr" "$dir/fakebin/control" "$dir/fakebin/gh" "$dir/fakebin/tmux"
   printf '%s\n' "$dir"
 }
 
@@ -146,6 +159,18 @@ test_arming_retires_the_finished_workers_endpoint() {
   pass "arming a finished ship's merge poll exits its worker, closes its endpoint, and records it"
 }
 
+test_tmux_retirement_closes_and_confirms_the_recorded_window() {
+  local dir
+  dir=$(make_case retire-tmux tmux)
+  run_pr_check "$dir" || fail "pr-check failed on a finished tmux ship: $(cat "$dir/err")"
+  grep -q '^endpoint: retired:' "$dir/out" || fail "the tmux endpoint was not retired: $(cat "$dir/out")"
+  [ "$(cat "$dir/control-log")" = 'exit t1 pane-alive=1' ] \
+    || fail "the tmux worker was not exited through the control plane first: $(cat "$dir/control-log")"
+  [ ! -e "$dir/pane-alive" ] || fail "the tmux endpoint still stands"
+  meta_has "$dir" endpoint_retired || fail "the tmux record lacks a retired marker"
+  pass "tmux retirement exits, closes, and confirms the worker window"
+}
+
 test_retired_task_reads_as_waiting_on_merge() {
   local dir state
   dir=$(make_case retire-state)
@@ -160,13 +185,6 @@ test_retired_task_reads_as_waiting_on_merge() {
 
 test_declined_retirements_leave_the_endpoint_alone() {
   local dir
-  # Another backend cannot be reclaimed once closed, so it keeps its endpoint.
-  dir=$(make_case retire-tmux tmux)
-  run_pr_check "$dir" || fail "pr-check failed on a tmux task: $(cat "$dir/err")"
-  grep -q '^endpoint: skipped: backend tmux' "$dir/out" || fail "a tmux task was not declined: $(cat "$dir/out")"
-  untouched "$dir" \
-    || fail "a declined tmux task was touched"
-
   # A worker whose latest status is not done may still be working.
   dir=$(make_case retire-working herdr 'working [at=1]: fixing a review comment')
   run_pr_check "$dir" || fail "pr-check failed on a working task: $(cat "$dir/err")"
@@ -184,7 +202,7 @@ test_declined_retirements_leave_the_endpoint_alone() {
   grep -q '^armed: ' "$dir/out" || fail "a refused exit prevented the armed report"
   untouched "$dir" allow-control \
     || fail "an endpoint whose worker would not exit was closed"
-  pass "retirement declines non-herdr tasks, workers not done, and exits the control plane refuses"
+  pass "retirement leaves working workers alone and respects control-plane refusal"
 }
 
 test_unconfirmed_close_is_reported_and_unrecorded() {
@@ -210,6 +228,7 @@ test_merge_time_rerecord_retires_nothing() {
 }
 
 test_arming_retires_the_finished_workers_endpoint
+test_tmux_retirement_closes_and_confirms_the_recorded_window
 test_retired_task_reads_as_waiting_on_merge
 test_declined_retirements_leave_the_endpoint_alone
 test_unconfirmed_close_is_reported_and_unrecorded
