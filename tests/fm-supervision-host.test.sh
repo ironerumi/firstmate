@@ -1111,7 +1111,10 @@ test_attended_close_that_turns_main_only_before_its_turn_passes_to_main() {
   # this read; against the live queue the answer depends on that race.
   local pi_offer frozen="$home/frozen-state"
   cp -R "$home/state" "$frozen"
-  awk -F'\t' '$5 ~ /^signal:/' "$home/state/.wake-queue" > "$frozen/.wake-queue"
+  awk -F'\t' '$5 ~ /^signal:/' "$frozen/.wake-queue" > "$frozen/.wake-queue.filtered" \
+    || fail "fixture: could not filter the frozen wake queue"
+  mv -- "$frozen/.wake-queue.filtered" "$frozen/.wake-queue" \
+    || fail "fixture: could not install the filtered frozen wake queue"
   [ -s "$frozen/.wake-queue" ] || fail "fixture: the closed cycle left no signal row to judge"
   pi_offer=$(node --input-type=module -e '
     const dispatch = await import(process.argv[1]);
