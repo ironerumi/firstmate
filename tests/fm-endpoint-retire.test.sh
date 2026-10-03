@@ -33,12 +33,15 @@ make_case() {  # <name> [backend] [last-status-line]
     echo "kind=ship"
     echo "mode=no-mistakes"
     echo "yolo=off"
+    echo "spawn_gen=gen1"
     if [ "$backend" = herdr ]; then
       echo "backend=herdr"
       echo "herdr_session=fmlab"
       echo "herdr_workspace_id=ws1"
       echo "herdr_tab_id=tab1"
       echo "herdr_pane_id=%7"
+    else
+      echo "backend=$backend"
     fi
   } > "$dir/state/t1.meta"
   printf '%s\n' "$status" > "$dir/state/t1.status"
@@ -129,6 +132,15 @@ run_pr_check() {  # <case-dir> [extra env assignments...]
     "$PR_CHECK" t1 "$PR_URL" > "$dir/out" 2> "$dir/err"
 }
 
+run_endpoint_retire() {  # <case-dir>
+  local dir=$1
+  env FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$dir/home" FM_STATE_OVERRIDE="$dir/state" \
+    FM_DATA_OVERRIDE="$dir/home/data" FM_CONFIG_OVERRIDE="$dir/home/config" \
+    FM_FAKE_DIR="$dir" FM_ENDPOINT_RETIRE_CONTROL_BIN="$dir/fakebin/control" \
+    PATH="$dir/fakebin:$PATH" \
+    bash -c '. "$0/bin/fm-wake-lib.sh"; . "$0/bin/fm-endpoint-retire-lib.sh"; fm_endpoint_retire "$FM_HOME" "$FM_STATE_OVERRIDE" t1' "$ROOT"
+}
+
 crew_state() {  # <case-dir>
   env FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$1/home" FM_STATE_OVERRIDE="$1/state" \
     FM_DATA_OVERRIDE="$1/home/data" FM_CONFIG_OVERRIDE="$1/home/config" \
@@ -192,6 +204,44 @@ test_tmux_close_probe_failure_leaves_the_endpoint_unretired() {
   pass "a tmux close-probe failure leaves the endpoint unretired"
 }
 
+test_non_recovery_backend_is_left_under_existing_supervision() {
+  local dir
+  dir=$(make_case retire-non-recovery zellij)
+  run_pr_check "$dir" || fail "a non-recovery backend prevented arming: $(cat "$dir/err")"
+  grep -q '^endpoint: skipped: backend zellij is not recovery-grade' "$dir/out" \
+    || fail "a non-recovery backend was not left under existing supervision: $(cat "$dir/out")"
+  untouched "$dir" || fail "a non-recovery backend was touched"
+  pass "non-recovery backends remain under their existing supervision contract"
+}
+
+test_relaunch_before_lifecycle_lock_is_not_retired() {
+  local dir lock holder out tmp
+  dir=$(make_case retire-race tmux)
+  lock="$dir/state/.control-t1.lock"
+  (
+    mkdir "$lock"
+    printf '%s\n' "$BASHPID" > "$lock/pid"
+    sleep 0.3
+    tmp="$dir/state/t1.meta.race"
+    awk -F= '{
+      if ($1 == "window") print "window=fmlab:%8"
+      else if ($1 == "spawn_gen") print "spawn_gen=gen2"
+      else print
+    }' "$dir/state/t1.meta" > "$tmp" && mv -f "$tmp" "$dir/state/t1.meta"
+    rm -rf "$lock"
+  ) &
+  holder=$!
+  while [ ! -f "$lock/pid" ]; do sleep 0.01; done
+  out=$(run_endpoint_retire "$dir") || fail "retirement failed while a relaunch won the lock: $out"
+  wait "$holder"
+  [ "$out" = "skipped: endpoint changed while waiting for its lifecycle lock" ] \
+    || fail "a relaunch before retirement was not rejected: $out"
+  [ ! -s "$dir/control-log" ] || fail "retirement controlled the replacement endpoint"
+  [ -e "$dir/pane-alive" ] || fail "the replacement endpoint was hidden"
+  ! meta_has "$dir" endpoint_retired || fail "a relaunch race wrote a retired marker"
+  pass "a relaunch that wins before retirement is never retired"
+}
+
 test_retired_task_reads_as_waiting_on_merge() {
   local dir state
   dir=$(make_case retire-state)
@@ -251,6 +301,8 @@ test_merge_time_rerecord_retires_nothing() {
 test_arming_retires_the_finished_workers_endpoint
 test_tmux_retirement_closes_and_confirms_the_recorded_window
 test_tmux_close_probe_failure_leaves_the_endpoint_unretired
+test_non_recovery_backend_is_left_under_existing_supervision
+test_relaunch_before_lifecycle_lock_is_not_retired
 test_retired_task_reads_as_waiting_on_merge
 test_declined_retirements_leave_the_endpoint_alone
 test_unconfirmed_close_is_reported_and_unrecorded

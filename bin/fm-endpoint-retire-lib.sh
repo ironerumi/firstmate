@@ -30,12 +30,32 @@
 
 # shellcheck source=bin/fm-backend.sh
 . "$(d=${BASH_SOURCE[0]%/*}; [ "$d" != "${BASH_SOURCE[0]}" ] || d=.; cd "${d:-/}" && pwd)/fm-backend.sh"
+. "$(d=${BASH_SOURCE[0]%/*}; [ "$d" != "${BASH_SOURCE[0]}" ] || d=.; cd "${d:-/}" && pwd)/fm-control-lib.sh"
 
 fm_endpoint_retire() {  # <home> <state-dir> <id>
   local home=$1 state=$2 id=$3 meta kind backend target last control out lock tmp line
-  local control_lock control_lock_owner tab_id expected_label
+  local control_lock control_lock_owner tab_id expected_label snapshot original_backend original_target original_spawn_gen spawn_gen
   meta="$state/$id.meta"
   [ -f "$meta" ] || { echo "skipped: no task record"; return 0; }
+  snapshot=$(awk -F= '
+    {
+      value=substr($0, index($0, "=") + 1)
+      if ($1 == "backend") backend=value
+      else if ($1 == "window") window=value
+      else if ($1 == "terminal") terminal=value
+      else if ($1 == "spawn_gen") spawn_gen=value
+    }
+    END {
+      if (backend == "") backend="tmux"
+      target=(backend == "orca" ? terminal : window)
+      printf "%s\t%s\t%s\n", backend, target, spawn_gen
+    }
+  ' "$meta" 2>/dev/null) || { echo "failed: task record identity unavailable"; return 1; }
+  IFS=$'\t' read -r original_backend original_target original_spawn_gen <<< "$snapshot"
+  if [ -z "$original_backend" ] || [ -z "$original_target" ] || [ -z "$original_spawn_gen" ]; then
+    echo "skipped: task record endpoint identity is incomplete"
+    return 0
+  fi
   lock=$(fm_meta_lock_path "$meta") || { echo "failed: task record lock unavailable"; return 1; }
   control_lock="$state/.control-$id.lock"
   fm_lock_acquire_wait "$control_lock" || { echo "failed: lifecycle lock unavailable"; return 1; }
@@ -50,6 +70,15 @@ fm_endpoint_retire() {  # <home> <state-dir> <id>
     echo "failed: task record lock unavailable"
     return 1
   }
+  backend=$(fm_backend_of_meta "$meta")
+  target=$(fm_backend_target_of_meta "$meta")
+  spawn_gen=$(fm_meta_get "$meta" spawn_gen)
+  if [ "$backend" != "$original_backend" ] || [ "$target" != "$original_target" ] || [ "$spawn_gen" != "$original_spawn_gen" ]; then
+    fm_lock_release "$lock"
+    fm_lock_release "$control_lock"
+    echo "skipped: endpoint changed while waiting for its lifecycle lock"
+    return 0
+  fi
   kind=$(fm_meta_get "$meta" kind)
   if [ -n "$kind" ] && [ "$kind" != ship ]; then
     fm_lock_release "$lock"
@@ -63,14 +92,12 @@ fm_endpoint_retire() {  # <home> <state-dir> <id>
     echo "already-retired"
     return 0
   fi
-  backend=$(fm_backend_of_meta "$meta")
-  if ! fm_backend_list_contains "$FM_BACKEND_SPAWN" "$backend"; then
+  if ! fm_control_backend_state_verified "$backend"; then
     fm_lock_release "$lock"
     fm_lock_release "$control_lock"
-    echo "skipped: backend $backend cannot reclaim a retired endpoint"
+    echo "skipped: backend $backend is not recovery-grade"
     return 0
   fi
-  target=$(fm_backend_target_of_meta "$meta")
   if [ -z "$target" ]; then
     fm_lock_release "$lock"
     fm_lock_release "$control_lock"
@@ -103,33 +130,12 @@ fm_endpoint_retire() {  # <home> <state-dir> <id>
     echo "failed: endpoint $target is not confirmed gone after its close"
     return 1
   }
-  case "$backend" in
-    tmux) ;;
-    herdr) fm_backend_herdr_endpoint_confirmed_gone "$target" || {
-      fm_lock_release "$lock"
-      fm_lock_release "$control_lock"
-      echo "failed: endpoint $target is not confirmed gone after its close"
-      return 1
-    } ;;
-    zellij) fm_backend_zellij_endpoint_confirmed_gone "$target" || {
-      fm_lock_release "$lock"
-      fm_lock_release "$control_lock"
-      echo "failed: endpoint $target is not confirmed gone after its close"
-      return 1
-    } ;;
-    orca) fm_backend_orca_endpoint_confirmed_gone "$target" || {
-      fm_lock_release "$lock"
-      fm_lock_release "$control_lock"
-      echo "failed: endpoint $target is not confirmed gone after its close"
-      return 1
-    } ;;
-    cmux) fm_backend_cmux_endpoint_confirmed_gone "$target" || {
-      fm_lock_release "$lock"
-      fm_lock_release "$control_lock"
-      echo "failed: endpoint $target is not confirmed gone after its close"
-      return 1
-    } ;;
-  esac
+  if [ "$backend" = herdr ] && ! fm_backend_herdr_endpoint_confirmed_gone "$target"; then
+    fm_lock_release "$lock"
+    fm_lock_release "$control_lock"
+    echo "failed: endpoint $target is not confirmed gone after its close"
+    return 1
+  fi
 
   tmp=$(mktemp "$state/.fm-retire-meta.XXXXXX") || {
     fm_lock_release "$lock"

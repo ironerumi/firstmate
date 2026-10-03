@@ -386,20 +386,6 @@ fm_backend_zellij_target_ready() {  # <target> [expected-label]
   fm_backend_zellij_pane_exists "$FM_BACKEND_ZELLIJ_SESSION" "$FM_BACKEND_ZELLIJ_PANE"
 }
 
-fm_backend_zellij_endpoint_confirmed_gone() {  # <target>
-  local sessions panes
-  fm_backend_zellij_parse_target "$1" || return 1
-  sessions=$(zellij list-sessions --short --no-formatting 2>/dev/null) || return 1
-  printf '%s\n' "$sessions" | grep -qxF -- "$FM_BACKEND_ZELLIJ_SESSION" || return 0
-  panes=$(fm_backend_zellij_cli "$FM_BACKEND_ZELLIJ_SESSION" action list-panes --json 2>/dev/null) || return 1
-  printf '%s' "$panes" | jq -e 'type == "array"' >/dev/null 2>&1 || return 1
-  if printf '%s' "$panes" | jq -e --argjson p "$FM_BACKEND_ZELLIJ_PANE" \
-    'any(.[]?; .id == $p and .is_plugin == false)' >/dev/null 2>&1; then
-    return 1
-  fi
-  return 0
-}
-
 # fm_backend_zellij_current_path: the live pane's cwd, or empty on any error.
 # Mirrors tmux's pane_current_path poll used for worktree-path discovery after
 # `treehouse get`.
