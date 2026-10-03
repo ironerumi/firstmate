@@ -1,0 +1,25 @@
+fixture=private tmux lab; endpoint=primary:1; watcher-live=1
+/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-lab.CHJc9c/run-live.sh
+01M3YXK15WXANA89PGK34FJR5Q  HEAD
+❯ /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-lab.CHJc9c/run-live.sh
+crew-state-before: state: working · source: pane · harness busy (fm-spawn)
+queue-before:
+1790995529	1	signal	t1.turn-ended	signal: live turn ended
+autoack-rc: 0
+autoack-carry-bytes: 0
+autoack-stderr-bytes: 0
+queue-after-bytes: 0
+recovery-marker: acked:handling:82660.1790995529.hhxxUH
+01M3YXK15WXANA89PGK34FJR5Q  HEAD
+❯
+
+
+
+
+
+
+
+
+
+
+

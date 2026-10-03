@@ -1,0 +1,25 @@
+fixture=private tmux lab; endpoint=primary:1; watcher-live=1
+/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-lab.TMPbmj/run-live.sh
+01M3YXK15WXANA89PGK34FJR5Q  HEAD
+❯ /var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T//fm-lab.TMPbmj/run-live.sh
+crew-state-before: state: unknown · source: none · no current-state source avail
+able
+queue-before-bytes: 58
+autoack-rc: 1
+autoack-carry-bytes: 0
+autoack-stderr-bytes: 0
+queue-after-bytes: 58
+ack-marker-present: yes
+01M3YXK15WXANA89PGK34FJR5Q  HEAD
+❯
+
+
+
+
+
+
+
+
+
+
+
