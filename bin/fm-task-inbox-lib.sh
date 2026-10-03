@@ -441,6 +441,9 @@ fm_task_inbox_due_action() {  # <state-dir> <task-id>
   fi
   base=${oldest##*/}
   grace=$(fm_task_inbox_grace_secs)
+  # fm-send's first prompt is the delivery doorbell; this age gate governs
+  # only watcher re-rings after that first attempt, so a fresh row is not
+  # delayed when fm-send is the writer.
   if [ "$(fm_path_age "$oldest")" -lt "$grace" ]; then
     printf 'quiet'
     return 0

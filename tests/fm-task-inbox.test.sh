@@ -661,6 +661,23 @@ idle_capture() {  # <dir>
   printf '%s\n' "$1/idle.capture"
 }
 
+test_fm_send_rings_a_fresh_oldest_immediately() {
+  local dir state log rec
+  dir=$(setup_watch_case send-fresh)
+  state="$dir/state"; log="$dir/send.log"; : > "$log"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "retired steer")
+  mv "$rec" "$state/t1.inbox/handled/"
+  FM_HOME="$dir" FM_ROOT_OVERRIDE="$dir" PATH="$dir/fakebin:$PATH" \
+    FM_SEND_SETTLE=0 FM_SEND_LOG="$log" \
+    "$ROOT/bin/fm-send.sh" fm-t1 "fresh steer" 2>/dev/null \
+    || fail "fm-send failed to deliver a fresh oldest steer"
+  rec="$state/t1.inbox/002.msg"
+  [ -f "$rec" ] || fail "fm-send did not create the fresh oldest record"
+  grep -qF 'Firstmate instruction waiting' "$log" \
+    || fail "fm-send did not ring the fresh oldest record immediately"
+  pass "fm-send: a fresh oldest record gets its first doorbell without ladder grace"
+}
+
 test_watcher_rerings_idle_pane_quietly() {
   local dir state out log pid rec
   dir=$(setup_watch_case rering)
@@ -969,6 +986,7 @@ test_fire_and_forget_records_never_enter_the_ladder
 test_fire_and_forget_retry_is_owed_once
 test_fire_and_forget_retry_is_quiet_without_the_flag
 test_ring_ladder_policy
+test_fm_send_rings_a_fresh_oldest_immediately
 test_watcher_rerings_idle_pane_quietly
 test_watcher_waits_on_busy_pane
 test_watcher_quiet_on_healthy_inbox

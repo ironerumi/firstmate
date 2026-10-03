@@ -6,15 +6,16 @@
 # decision (fm_task_inbox_due_action), bin/fm-watch.sh records busy sightings.
 # Every case drives those production functions against a fixture inbox. Ordering
 # is fixed by the fixture - records carry explicit epochs far from the grace
-# boundary and the pane is a stub that answers busy or idle on demand - so no
-# case sleeps or races a deadline.
+# boundary and the pane is a stub that answers busy or idle on demand. The
+# crash case alone uses a short real deadline to preserve the process boundary.
 #
 # The issue's three named sequences:
 #   1. ring -> in flight (busy, no ack, no state change) -> no second ring
 #   2. ring -> state change (a different oldest message) -> immediate ring
 #   3. ring -> ack lost (handling died) -> re-ring at the re-armed deadline
 # And the edge cases that broke the marker-file attempt (PR 70 review rounds):
-#   - a fresh new oldest message is a transition, never quiet
+#   - a fresh new oldest message waits for fm-send's first doorbell, then
+#     re-rings on the ladder's own age gate
 #   - a new message after an escalation (even a dead-pane one that never rang)
 #     inherits nothing from the escalated message
 #   - an unwritable record surfaces one stale wake and never rings or queues on
@@ -77,17 +78,22 @@ due() {  # <state>
 # The watcher's own inbox_steer_check against a stubbed pane and doorbell.
 # Prints "ring" when the doorbell rang and "wake" when the cycle surfaced a wake
 # (wake exits the cycle exactly as the real one does).
-watcher_check() {  # <state> <busy 0|1> [agent-state]
-  local state=$1 busy=$2 agent=${3:-running}
+watcher_check() {  # <state> <busy 0|1> [agent-state] [handler-pid] [grace]
+  local state=$1 busy=$2 agent=${3:-running} handler=${4:-} grace=${5:-$GRACE}
   # shellcheck disable=SC2016 # the stub script is expanded by the inner shell
-  env -u FM_TASK_ID FM_STATE_OVERRIDE="$state" FM_TASK_INBOX_GRACE_SECS=$GRACE \
-    FM_TASK_INBOX_RING_MAX=$MAX FAKE_BUSY="$busy" FAKE_AGENT="$agent" bash -c '
+  env -u FM_TASK_ID FM_STATE_OVERRIDE="$state" FM_TASK_INBOX_GRACE_SECS=$grace \
+    FM_TASK_INBOX_RING_MAX=$MAX FAKE_BUSY="$busy" FAKE_AGENT="$agent" \
+    FAKE_HANDLER_PID="$handler" bash -c '
       . "$1"
       window_backend() { printf tmux; }
       window_label() { printf fm-t1; }
       fm_backend_capture() { printf "pane\n"; }
       fm_backend_agent_state() { printf "%s" "$FAKE_AGENT"; }
-      window_is_busy() { [ "$FAKE_BUSY" = 1 ]; }
+      window_is_busy() {
+        [ "$FAKE_BUSY" = 1 ] || {
+          [ -n "$FAKE_HANDLER_PID" ] && kill -0 "$FAKE_HANDLER_PID" 2>/dev/null
+        }
+      }
       fm_task_inbox_ring() { printf ring; return 0; }
       wake() { printf wake; exit 0; }
       triage_log() { :; }
@@ -165,16 +171,57 @@ test_lost_handling_rerings_at_the_rearmed_deadline() {
   pass "ladder: ring -> ack lost -> re-ring at the re-armed deadline, then escalation"
 }
 
-# wake-review-2: a fresh new oldest record is never reported quiet.
-test_fresh_new_oldest_is_a_transition() {
+# The ladder's age gate applies to re-rings; fm-send owns the first doorbell
+# for a freshly written oldest record.
+test_fresh_new_oldest_waits_for_first_doorbell() {
   local state rec rec2
   state=$(new_state fresh-oldest)
   rec=$(write_msg "$state" "first" aged)
   set_record "$state" "$rec" ringing 2 20 10
   mv "$rec" "$state/t1.inbox/handled/"
-  rec2=$(write_msg "$state" "second" aged)
-  [ "$(due "$state")" = "ring $rec2" ] || fail "fresh new oldest must ring, got: $(due "$state")"
-  pass "ladder: a fresh new oldest message rings instead of reading quiet"
+  rec2=$(write_msg "$state" "second")
+  [ "$(due "$state")" = quiet ] \
+    || fail "the ladder must wait for fm-send's first doorbell, got: $(due "$state")"
+  touch -t 202001010000 "$rec2"
+  [ "$(due "$state")" = "ring $rec2" ] \
+    || fail "a fresh message must become a re-ring only after its own grace, got: $(due "$state")"
+  pass "ladder: a fresh oldest record waits for fm-send's first doorbell"
+}
+
+# A real handling process is observed busy after the first ring, then dies
+# without moving the record. The watcher must preserve the row and re-ring only
+# after the sighting's grace deadline.
+test_crashed_handling_process_rerings_after_rearmed_deadline() {
+  local state rec handler seen ring_at out i=0 now
+  state=$(new_state crashed-handler)
+  rec=$(write_msg "$state" "please continue" aged)
+  [ "$(watcher_check "$state" 0)" = ring ] || fail "the first ring must land"
+  ring_at=$(cut -f4 "$state/t1.inbox/.ring-state")
+  ( while :; do sleep 1; done ) &
+  handler=$!
+  [ "$(watcher_check "$state" 0 running "$handler" 1)" = "" ] \
+    || fail "a live handling process must not be rung again"
+  seen=$(record_seen_at "$state")
+  [ "$seen" -ge "$ring_at" ] || fail "the busy sighting was not recorded after the ring"
+  kill -KILL "$handler" 2>/dev/null || fail "the handling process could not be killed"
+  wait "$handler" 2>/dev/null || true
+  [ "$(watcher_check "$state" 0 running "$handler" 2)" = "" ] \
+    || fail "a just-crashed handling process must wait for the re-armed deadline"
+  [ -f "$rec" ] || fail "a crashed handling process must not consume the message"
+  out=
+  while [ "$i" -lt 40 ]; do
+    out=$(watcher_check "$state" 0 running "$handler" 2)
+    [ "$out" = ring ] && break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  [ "$out" = ring ] || fail "the watcher did not re-ring after the re-armed deadline"
+  now=$(date +%s)
+  [ "$((now - seen))" -ge 2 ] || fail "the re-ring preceded the busy sighting's deadline"
+  [ "$(record_state "$state")" = "${rec##*/} ringing 2" ] \
+    || fail "the crash recovery ring must spend the next attempt"
+  [ -f "$rec" ] || fail "the crash recovery ring must leave the row unhandled"
+  pass "watcher: a killed handling process re-rings at the re-armed deadline"
 }
 
 # wake-review-6: a dead-pane escalation never rang, so no ring record existed
@@ -314,7 +361,8 @@ test_unwritable_record_acknowledged_is_quiet() {
 test_in_flight_handling_is_not_rung_again
 test_state_change_rings_at_once
 test_lost_handling_rerings_at_the_rearmed_deadline
-test_fresh_new_oldest_is_a_transition
+test_fresh_new_oldest_waits_for_first_doorbell
+test_crashed_handling_process_rerings_after_rearmed_deadline
 test_new_message_after_an_escalation_inherits_nothing
 test_stale_record_for_another_message_is_ignored
 test_later_messages_do_not_reset_the_oldest
