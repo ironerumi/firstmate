@@ -122,8 +122,8 @@ ack_generation=${ack_line#* }
 # classification and the drain was never re-asked. Any other line, such as a
 # watcher-down banner, goes to the model.
 [ "$ack_through" = "$max_seq" ] || hand_back
-[ -z "$(grep -v -e '^WAKE_ACK_REQUIRED: ' \
-  -e '^WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else\.$' "$err")" ] || hand_back
+! grep -q -v -e '^WAKE_ACK_REQUIRED: ' \
+  -e '^WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else\.$' "$err" || hand_back
 awk -F '\t' -v max="$max_seq" 'NF < 5 || $2 !~ /^[0-9]+$/ || $2 + 0 > max { bad = 1 } END { exit bad }' "$out" || hand_back
 
 "$DRAIN" --ack-through "$ack_through" --recovery-generation "$ack_generation" >"$out" 2>"$err" || hand_back
