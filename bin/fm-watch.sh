@@ -721,6 +721,7 @@ signal_turnend_panes_churned() {  # <file> ...
       *)            return 1 ;;
     esac
     [ -n "$task" ] || return 1
+    [ -n "$(fm_meta_get "$STATE/$task.meta" endpoint_retired)" ] && continue
     task_index=-1
     for ((i = 0; i < ${#signal_tasks[@]}; i++)); do
       [ "${signal_tasks[$i]}" = "$task" ] && { task_index=$i; break; }
@@ -736,6 +737,7 @@ signal_turnend_panes_churned() {  # <file> ...
     [ -e "$meta" ] || continue
     rec_task=${meta##*/}
     rec_task=${rec_task%.meta}
+    [ -z "$(fm_meta_get "$meta" endpoint_retired)" ] || continue
     kind=$(fm_meta_get "$meta" kind)
     backend=$(fm_backend_of_meta "$meta")
     if [ "$backend" = orca ]; then
@@ -855,6 +857,9 @@ recorded_windows() {
   local meta w seen=
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
+    # A retired endpoint (bin/fm-endpoint-retire-lib.sh) is waiting on its merge
+    # poll, not on a pane: there is nothing here to capture, steer, or wedge.
+    [ -z "$(fm_meta_get "$meta" endpoint_retired)" ] || continue
     w=$(fm_backend_target_of_meta "$meta")
     [ -n "$w" ] || continue
     case "$seen" in
@@ -1333,6 +1338,16 @@ wait_record() {  # <kind> <subject> <whom> <action> <age-record>
 # so it is taken only behind a first fold read that finds some open
 # `needs-decision` at all, and only in the at-threshold branch - at most once per
 # window per STALE_ESCALATE_SECS, never on an ordinary poll.
+#
+# The same flag admits a third record, tried only after the second finds nothing:
+# the crew's authoritative current state is its OWN no-mistakes run working a step
+# (crew_run_step_active - `working` from the run-step source, never the pane
+# source). A run polling the forge at its ci step for twenty minutes behind a pane
+# that renders nothing is exactly the quiet the ladder misreports as a wedge, and
+# the run step is the one liveness input a quiet pane cannot show. It takes the
+# same bounded recheck, so a run that stops progressing is still re-surfaced once
+# per PAUSE_RESURFACE_SECS rather than silenced. It reads the crew state once more
+# at the threshold, under the same once-per-window bound as the second record.
 wedge_wait_evidence() {  # <task> -> one wait_record on stdout
   local task=$1 last until statusf run
   [ -n "$task" ] || return 1
@@ -1357,6 +1372,11 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
     && status_has_open_needs_decision "$statusf" "$run"; then
     wait_record 'verified wait at a parked gate' "awaiting firstmate's ask-user decision" \
       supervisor "decide the gate's ask-user finding and relay the decision to the crewmate" ''
+    return 0
+  fi
+  if crew_run_step_active "$task"; then
+    wait_record 'verified wait on a running pipeline' "awaiting its own no-mistakes run" \
+      external 'confirm the run is still progressing' ''
     return 0
   fi
   return 1

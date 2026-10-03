@@ -907,7 +907,10 @@ for meta in "$STATE"/*.meta; do
     # Only the timeout owner's own statuses mean the read itself failed: 124 is
     # the bound firing and >=128 is a signal death. Every other nonzero status
     # is the probe's own verdict that the endpoint is gone.
-    if [ "$endpoint_rc" -eq 0 ]; then
+    if [ -n "$(fm_meta_get "$meta" endpoint_retired)" ] && [ "$endpoint_rc" -ne 0 ] \
+      && [ "$endpoint_rc" -ne 124 ] && [ "$endpoint_rc" -lt 128 ]; then
+      printf 'endpoint: retired, waiting on merge (backend=%s window=%s)\n' "$backend" "$window"
+    elif [ "$endpoint_rc" -eq 0 ]; then
       printf 'endpoint: alive (backend=%s window=%s)\n' "$backend" "$window"
     elif [ "$endpoint_rc" -eq 124 ] || [ "$endpoint_rc" -ge 128 ]; then
       printf 'endpoint: error (backend=%s window=%s - the endpoint read died or hit its %ss bound; the digest continued past it)\n' \

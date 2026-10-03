@@ -33,6 +33,8 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-parent-channel-lib.sh"
 # shellcheck source=bin/fm-dod-lib.sh
 . "$SCRIPT_DIR/fm-dod-lib.sh"
+# shellcheck source=bin/fm-endpoint-retire-lib.sh
+. "$SCRIPT_DIR/fm-endpoint-retire-lib.sh"
 
 if [ "$#" -ne 2 ]; then
   echo "error: invalid PR check request" >&2
@@ -247,4 +249,18 @@ case "$READY_RC" in
   0|1) ;;
   *) printf 'actionable: PR %s is registered but its ready line did not reach the parent channel (rc=%s)\n' "$URL" "$READY_RC" >&2 ;;
 esac
+# With the poll armed and the ready report accepted, the finished worker's endpoint
+# is retired so only the poll waits (bin/fm-endpoint-retire-lib.sh owns the
+# contract and when it declines). Never fatal: arming above is already complete, and
+# an endpoint that could not be closed is left exactly as it was. The merge-time
+# re-record is not a ready report, so it retires nothing.
+if [ "${FM_PR_CHECK_MERGE:-}" != 1 ]; then
+  RETIRE_RC=0
+  RETIRE_OUT=$(fm_endpoint_retire "$FM_HOME" "$STATE" "$ID") || RETIRE_RC=$?
+  if [ "$RETIRE_RC" -eq 0 ]; then
+    printf 'endpoint: %s\n' "$RETIRE_OUT"
+  else
+    printf 'actionable: %s - the endpoint was left in place\n' "$RETIRE_OUT" >&2
+  fi
+fi
 printf 'armed: state/%s.check.sh\n' "$ID"
