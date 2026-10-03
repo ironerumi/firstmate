@@ -81,7 +81,7 @@ due() {  # <state>
 watcher_check() {  # <state> <busy 0|1> [agent-state] [handler-pid] [grace] [capture-count]
   local state=$1 busy=$2 agent=${3:-running} handler=${4:-} grace=${5:-$GRACE} count_file=${6:-}
   # shellcheck disable=SC2016 # the stub script is expanded by the inner shell
-  env -u FM_TASK_ID FM_STATE_OVERRIDE="$state" FM_TASK_INBOX_GRACE_SECS=$grace \
+  env -u FM_TASK_ID FM_STATE_OVERRIDE="$state" FM_TASK_INBOX_GRACE_SECS="$grace" \
     FM_TASK_INBOX_RING_MAX=$MAX FAKE_BUSY="$busy" FAKE_AGENT="$agent" \
     FAKE_HANDLER_PID="$handler" FAKE_CAPTURE_COUNT_FILE="$count_file" bash -c '
       . "$1"
