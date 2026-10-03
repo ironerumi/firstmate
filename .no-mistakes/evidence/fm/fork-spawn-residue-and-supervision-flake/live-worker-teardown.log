@@ -1,0 +1,49 @@
+task=labbd4505b67b5a-worker
+project=/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/home/projects/notes
+worktree=/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes
+before-state:
+/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes/state
+/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes/state/.pi-turnend-extension-loaded
+/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes/state/.pi-watch-extension-loaded
+/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes/state/nm-run
+/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes/state/nm-run/no-mistakes-output.txt
+/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes/state/pr-comment-draft.md
+before-markers:
+/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes/state/.pi-turnend-extension-loaded
+/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes/state/.pi-watch-extension-loaded
+/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes/state/pr-comment-draft.md
+error: refusing fleet lifecycle from inside a no-mistakes gate worktree (/Users/gu_yifu/.no-mistakes/repos/dd6dd5949f4a.git)
+error: refusing fleet lifecycle from inside a no-mistakes gate worktree (/Users/gu_yifu/.no-mistakes/repos/dd6dd5949f4a.git)
+after-state-exists=yes
+task-record-exists=yes
+slot-status:
+A new version of treehouse is available: v2.3.0 → v3.1.1
+Run "treehouse update" to update
+
+[]
+REFUSED: local-only worktree /private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes has work not yet merged into main and not on any remote.
+uncommitted changes present
+Merge the branch into local main first (bin/fm-merge-local.sh after the captain approves), or push to a fork/remote, or get the captain's explicit OK to discard, then --force.
+after-state-exists=yes
+task-record-exists=yes
+slot-status:
+A new version of treehouse is available: v2.3.0 → v3.1.1
+Run "treehouse update" to update
+
+[]
+cleaned-worker-status:
+teardown: reaping leaked worktree process(es) for labbd4505b67b5a-worker: 1525 2564 3517 7677 16295
+teardown: force-killing leaked worktree process(es) for labbd4505b67b5a-worker: 1525 3517
+A new version of treehouse is available: v2.3.0 → v3.1.1
+Run "treehouse update" to update
+
+🌳 Worktree returned to pool.
+teardown labbd4505b67b5a-worker complete (window firstmate:fm-labbd4505b67b5a-worker, worktree /private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes)
+Backlog: labbd4505b67b5a-worker is closed in /private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/home/data/backlog.md. Run bin/fm-tasks-axi.sh ready for dependency-cleared candidates, check date gates, and dispatch only work whose blockers are gone and date is due.
+after-state-exists=no
+task-record-exists=no
+slot-status:
+A new version of treehouse is available: v2.3.0 → v3.1.1
+Run "treehouse update" to update
+
+[]

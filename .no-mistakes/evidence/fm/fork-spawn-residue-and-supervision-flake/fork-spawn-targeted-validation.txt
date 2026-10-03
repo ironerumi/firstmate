@@ -1,0 +1,18 @@
+Targeted behavior validation for 47ea5dc3b7fefb0f4eb82802cf596275425fe4fa
+
+Live product run (real treehouse + real fm-teardown.sh, disposable project/home/pool):
+treehouse_worktree=.../pool/.treehouse/firstmate-root-b3e529/1/firstmate-root
+teardown_rc=0
+state_exists=no
+task_meta_exists=no
+ok - real treehouse returned slot and teardown scrubbed worker state
+
+Focused teardown behavior tests (from tests/fm-teardown.test.sh):
+ok - teardown clears the worker-written state/ from a returned firstmate-repo slot
+ok - teardown leaves a retired home's state/ for the spawn-time refusal
+ok - teardown leaves state in an unrelated firstmate-shaped checkout
+ok - teardown retains task records when returned worker state cannot be scrubbed
+ok - forced secondmate teardown scrubs a returned firstmate child slot
+
+Focused supervision regression test (from tests/fm-supervision-host.test.sh):
+ok - host: an attended close whose task turns main-only before its turn still reaches main unchanged

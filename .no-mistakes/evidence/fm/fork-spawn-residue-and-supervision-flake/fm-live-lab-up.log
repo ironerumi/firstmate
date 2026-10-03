@@ -1,0 +1,14 @@
+lab: /private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0 (tear down with: bin/fm-live-lab.sh down /private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0)
+tree: 47ea5dc3b7fefb0f4eb82802cf596275425fe4fa from /Users/gu_yifu/.no-mistakes/worktrees/dd6dd5949f4a/01M4071KEZKRNTGXBXWNW9YRS0
+spawned labbd4505b67b5a-worker harness=claude kind=ship mode=local-only yolo=on window=firstmate:fm-labbd4505b67b5a-worker worktree=/private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/treehouse/.treehouse/notes-fb98c9/1/notes
+gate: /private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/home/data/labbd4505b67b5a-worker/gate (touch, then message the worker to resume)
+primary: claude --setting-sources project,local --model sonnet --effort medium --permission-mode auto
+ok primary: claude pid 6279 in /private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/home
+ok probe: the primary answered LABREADY-bd4505b67b5a
+ok trust: /private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/home is trusted in the Claude store
+ok mirror: verified writer, check passed, captain=1 main=1
+ok host: supervision host pid 12212
+ok watcher: live watcher with a fresh beacon
+ok worker: labbd4505b67b5a-worker parked on /private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0/home/data/labbd4505b67b5a-worker/gate
+ok treehouse: ~/.treehouse unchanged
+ready: /private/tmp/fmlab-worker-01M4071KEZKRNTGXBXWNW9YRS0
