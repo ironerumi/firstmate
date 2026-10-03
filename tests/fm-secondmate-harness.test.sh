@@ -253,6 +253,7 @@ while [ "$#" -gt 0 ]; do
     *) shift ;;
   esac
 done
+[ -n "${FM_TEST_PS_LOG:-}" ] && printf '%s:%s\n' "$pid" "$field" >> "$FM_TEST_PS_LOG"
 case "$pid:$field" in
   4242:comm=) printf '%s\n' '/opt/test/bin/codex' ;;
   4242:args=) printf '%s\n' 'codex' ;;
@@ -283,9 +284,12 @@ SH
   # -codex label belongs to the liveness probe only, so the walk must pass
   # through it as an ordinary shell and still select 4242.
   err="$dir/fm-session-lock-ancestry-collision.err"
-  got=$(FM_TEST_PS_PARENT=5252 PATH="$fakebin:$BASE_PATH" bash -c \
+  collision_log="$dir/fm-session-lock-ancestry-collision.log"
+  got=$(FM_TEST_PS_PARENT=5252 FM_TEST_PS_LOG="$collision_log" PATH="$fakebin:$BASE_PATH" bash -c \
     '. "$0/bin/fm-session-lock-lib.sh"; fm_harness_ancestry_pid' "$ROOT" 2>"$err")
   [ "$got" = 4242 ] || fail "session-lock ancestry with pid 5252 as a real ancestor selected '$got', expected pid 4242"
+  assert_contains "$(cat "$collision_log")" "5252:" \
+    "session-lock collision ancestry did not query pid 5252"
   [ ! -s "$err" ] || fail "session-lock collision ancestry wrote noise: $(cat "$err")"
 
   err="$dir/fm-session-lock-alive.err"
