@@ -1,0 +1,75 @@
+$ bin/fm-test-run.sh --list --changed
+tests/fm-agy-harness.test.sh
+tests/fm-arm-pretool-check.test.sh
+tests/fm-ask-user-authority.test.sh
+tests/fm-bearings-board.test.sh
+tests/fm-brief-repo-guard.test.sh
+tests/fm-brief.test.sh
+tests/fm-calm-claude-mod.test.sh
+tests/fm-calm-pi-extension.test.sh
+tests/fm-captain-hold-lifecycle.test.sh
+tests/fm-cd-pretool-check.test.sh
+tests/fm-classify-decision-key-extra.test.sh
+tests/fm-classify-decision-key.test.sh
+tests/fm-composer-ghost.test.sh
+tests/fm-composer-lib.test.sh
+tests/fm-crew-state.test.sh
+tests/fm-devin-harness.test.sh
+tests/fm-documentation-audiences.test.sh
+tests/fm-dod-lib.test.sh
+tests/fm-ensure-agents-md.test.sh
+tests/fm-forge-detect.test.sh
+tests/fm-fork-free-helpers.test.sh
+tests/fm-grok-harness.test.sh
+tests/fm-harness-adapter-references.test.sh
+tests/fm-harness-precedence.test.sh
+tests/fm-herdr-lab.test.sh
+tests/fm-kimi-harness.test.sh
+tests/fm-lint-workflows.test.sh
+tests/fm-lint.test.sh
+tests/fm-muse-harness.test.sh
+tests/fm-nm-guard.test.sh
+tests/fm-omp-harness.test.sh
+tests/fm-operational-input.test.sh
+tests/fm-pi-primary-types.test.sh
+tests/fm-rovo-harness.test.sh
+tests/fm-send-popup-settle.test.sh
+tests/fm-send-settle.test.sh
+tests/fm-subagent-pretool-check.test.sh
+tests/fm-supervision-instructions.test.sh
+tests/fm-task-delivery.test.sh
+tests/fm-test-isolation-proof.test.sh
+tests/fm-test-run.test.sh
+tests/fm-timeout-lib.test.sh
+tests/fm-tmux-submit-busy.test.sh
+tests/fm-trace-context-lib.test.sh
+tests/fm-transition-lib.test.sh
+tests/fm-vendor-auth-probe.test.sh
+tests/fm-afk-inject-herdr-e2e.test.sh
+tests/fm-afk-launch.test.sh
+tests/fm-backend-autodetect-smoke.test.sh
+tests/fm-backend-herdr-agent-exit-shell-e2e.test.sh
+tests/fm-backend-herdr-eventwait-smoke.test.sh
+tests/fm-backend-herdr-focus-flash-e2e.test.sh
+tests/fm-backend-herdr-launcher-workspace-e2e.test.sh
+tests/fm-backend-herdr-presentation-e2e.test.sh
+tests/fm-backend-herdr-prune-safety-e2e.test.sh
+tests/fm-backend-herdr-respawn-idem-e2e.test.sh
+tests/fm-backend-herdr-smoke.test.sh
+tests/fm-backend-herdr-stale-active-tab-e2e.test.sh
+tests/fm-backend-herdr-workspace-per-home-e2e.test.sh
+tests/fm-control-herdr-smoke.test.sh
+tests/fm-herdr-attached-viewer-live-e2e.test.sh
+tests/fm-herdr-session-cleanup-e2e.test.sh
+$ bin/fm-test-run.sh tests/fm-nm-test-contract.test.sh
+FM_TEST_BEGIN 2026-10-03T09:37:56Z tests/fm-nm-test-contract.test.sh family=unclassified expected_gate_skip=none
+ok - no-mistakes does not configure commands.test
+FM_TEST_END 2026-10-03T09:37:56Z tests/fm-nm-test-contract.test.sh exit=0 duration_ms=115 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=170
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=115 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-nm-test-contract.test.sh duration_ms=115
+$ ruby -ryaml semantic config check
+commands.test: absent-or-empty
+explicit gate-config contract instruction: present
+$ bin/fm-test-run.sh --list --changed --base 43e22e3f44a5b46604bca929b3ec484793c98b75 | selection boundary
+changed-file map does not select gate-config contract; explicit instruction is required
