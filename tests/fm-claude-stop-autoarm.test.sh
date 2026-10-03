@@ -1752,6 +1752,23 @@ test_autoack_hand_back_carries_the_presentation() {
   pass "auto-arm: a presentation the seam consumed but could not acknowledge is carried into the banner"
 }
 
+test_autoack_hand_back_preserves_large_presentation() {
+  local dir out status
+  dir=$(make_primary_dir "$TMP_ROOT/autoack-large-carry")
+  : > "$dir/state/task.meta"
+  write_arm_fixture "$dir" actionable
+  write_autoack_stub "$dir" 3
+  {
+    printf 'large carry start\n'
+    awk 'BEGIN { for (i = 0; i < 5000; i++) printf "x" }'
+    printf '\nlarge carry end\n'
+  } > "$dir/state/autoack-carry"
+  out=$(run_autoarm "$dir" 2>/dev/null); status=$?
+  expect_code 2 "$status" "a large hand-back must ring"
+  assert_contains "$out" "large carry end" "the complete large presentation must reach the model"
+  pass "auto-arm: a large hand-back presentation is preserved"
+}
+
 test_autoack_nothing_done_rings_as_before() {
   local dir out status
   dir=$(make_primary_dir "$TMP_ROOT/autoack-none")
@@ -1834,6 +1851,7 @@ SH
 
 test_autoack_acknowledged_wake_rearms_instead_of_ringing
 test_autoack_hand_back_carries_the_presentation
+test_autoack_hand_back_preserves_large_presentation
 test_autoack_nothing_done_rings_as_before
 test_autoack_absent_script_rings_as_before
 test_autoack_consecutive_acknowledgements_are_bounded

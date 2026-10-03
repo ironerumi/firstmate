@@ -570,7 +570,7 @@ if [ "$ACTIONABLE" -eq 1 ]; then
     [ "$AUTOACK_COUNT" -eq 0 ] || printf '%s earlier wake(s) were acknowledged without a model turn because their crews were provably working again.\n' "$AUTOACK_COUNT"
     if [ -n "$AUTOACK_CARRY" ]; then
       printf 'The Stop hook already ran the wake drain once and could not acknowledge it; its presentation, verbatim (the drain will not print the unread status lines again):\n'
-      printf '%s\n' "$AUTOACK_CARRY" | head -c 4000
+      printf '%s\n' "$AUTOACK_CARRY"
     fi
     printf 'Run bin/fm-wake-drain.sh first, handle the wake, then run its exact WAKE_ACK_REQUIRED --ack-through command. Until that post-handling acknowledgement, interruption leaves the wake durable for idempotent re-handling. This Stop hook owns watcher continuity: when the handling turn ends, the next needed cycle arms automatically - do NOT run bin/fm-watch-arm.sh after an ordinary wake.\n'
   } >&2
