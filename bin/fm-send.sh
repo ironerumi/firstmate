@@ -54,8 +54,9 @@
 # fire-and-forget record is excluded from that ladder; when config/wait-no-turns
 # is present and its ring here was skipped or failed, the watcher rings it
 # exactly once more.
-# bin/fm-task-inbox-lib.sh owns the record format, the doorbell line, and the
-# re-ring ladder. The composer pre-check before the ring is ADVISORY only: when
+# bin/fm-task-inbox-lib.sh owns the inbox record format, doorbell line, and
+# re-ring policy; bin/fm-task-inbox-ladder.sh owns the durable ladder state.
+# The composer pre-check before the ring is ADVISORY only: when
 # the composer visibly holds pending text the ring is skipped with a notice and
 # the watcher re-rings an ordinary record later; no composer verdict is
 # delivery proof on this plane, and a failed ring never fails the send.
