@@ -91,7 +91,7 @@ fm_endpoint_retire() {  # <home> <state-dir> <id>
     return 0
   fi
   last=$(last_status_line "$state/$id.status")
-  if [ "$(status_line_verb "$last")" != done ]; then
+  if [ "$(status_line_verb "$last")" != "done" ]; then
     fm_lock_release "$lock"
     echo "skipped: the worker's latest status is not done"
     return 0

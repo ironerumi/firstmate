@@ -136,7 +136,7 @@ run_endpoint_retire() {  # <case-dir>
     FM_DATA_OVERRIDE="$dir/home/data" FM_CONFIG_OVERRIDE="$dir/home/config" \
     FM_FAKE_DIR="$dir" FM_ENDPOINT_RETIRE_CONTROL_BIN="$dir/fakebin/control" \
     PATH="$dir/fakebin:$PATH" \
-    bash -c '. "$0/bin/fm-wake-lib.sh"; . "$0/bin/fm-endpoint-retire-lib.sh"; fm_endpoint_retire "$FM_HOME" "$FM_STATE_OVERRIDE" t1' "$ROOT"
+    bash -c ". \"\$0/bin/fm-wake-lib.sh\"; . \"\$0/bin/fm-endpoint-retire-lib.sh\"; fm_endpoint_retire \"\$FM_HOME\" \"\$FM_STATE_OVERRIDE\" t1" "$ROOT"
 }
 
 crew_state() {  # <case-dir>
