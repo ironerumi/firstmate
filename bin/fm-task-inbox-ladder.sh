@@ -106,24 +106,34 @@ EOF
   fm_task_inbox_ladder_write "$1" "$2" "$base" escalated "$count" "$ring_at" "$seen_at"
 }
 
-# True while the oldest message is ringing: the only time a busy sighting
-# changes the schedule, so the watcher captures the pane for it only then and
-# a healthy or idle inbox stays one glob.
-fm_task_inbox_ladder_probe_due() {  # <state-dir> <task-id> <msg-basename>
+# True while the oldest message is ringing and its busy sighting may be
+# refreshed. A recent sighting gates the expensive pane capture and rewrite;
+# after half a grace the watcher may refresh it again.
+fm_task_inbox_ladder_sighting_due() {  # <ring-at> <seen-at> <grace-secs>
+  local ring_at=$1 seen_at=$2 grace=$3 half now
+  [ "$seen_at" = 0 ] && return 0
+  half=$(( (grace + 1) / 2 ))
+  now=$(date +%s)
+  [ "$((now - seen_at))" -ge "$half" ]
+}
+
+fm_task_inbox_ladder_probe_due() {  # <state-dir> <task-id> <msg-basename> <grace-secs>
   local state count ring_at seen_at
   IFS=" " read -r state count ring_at seen_at <<EOF
 $(fm_task_inbox_ladder_read "$1" "$2" "$3")
 EOF
-  [ "$state" = ringing ]
+  [ "$state" = ringing ] || return 1
+  fm_task_inbox_ladder_sighting_due "$ring_at" "$seen_at" "${4:-0}"
 }
 
 # The worker was busy while <msg> is ringing: re-arm the next ring from this
 # sighting. Anything but a ringing record for <msg> is left untouched.
-fm_task_inbox_ladder_note_inflight() {  # <state-dir> <task-id> <msg-basename>
+fm_task_inbox_ladder_note_inflight() {  # <state-dir> <task-id> <msg-basename> <grace-secs>
   local state count ring_at seen_at
   IFS=" " read -r state count ring_at seen_at <<EOF
 $(fm_task_inbox_ladder_read "$1" "$2" "$3")
 EOF
   [ "$state" = ringing ] || return 0
+  fm_task_inbox_ladder_sighting_due "$ring_at" "$seen_at" "${4:-0}" || return 0
   fm_task_inbox_ladder_write "$1" "$2" "$3" ringing "$count" "$ring_at" "$(date +%s)"
 }

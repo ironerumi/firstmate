@@ -78,16 +78,22 @@ due() {  # <state>
 # The watcher's own inbox_steer_check against a stubbed pane and doorbell.
 # Prints "ring" when the doorbell rang and "wake" when the cycle surfaced a wake
 # (wake exits the cycle exactly as the real one does).
-watcher_check() {  # <state> <busy 0|1> [agent-state] [handler-pid] [grace]
-  local state=$1 busy=$2 agent=${3:-running} handler=${4:-} grace=${5:-$GRACE}
+watcher_check() {  # <state> <busy 0|1> [agent-state] [handler-pid] [grace] [capture-count]
+  local state=$1 busy=$2 agent=${3:-running} handler=${4:-} grace=${5:-$GRACE} count_file=${6:-}
   # shellcheck disable=SC2016 # the stub script is expanded by the inner shell
   env -u FM_TASK_ID FM_STATE_OVERRIDE="$state" FM_TASK_INBOX_GRACE_SECS=$grace \
     FM_TASK_INBOX_RING_MAX=$MAX FAKE_BUSY="$busy" FAKE_AGENT="$agent" \
-    FAKE_HANDLER_PID="$handler" bash -c '
+    FAKE_HANDLER_PID="$handler" FAKE_CAPTURE_COUNT_FILE="$count_file" bash -c '
       . "$1"
       window_backend() { printf tmux; }
       window_label() { printf fm-t1; }
-      fm_backend_capture() { printf "pane\n"; }
+      fm_backend_capture() {
+        if [ -n "$FAKE_CAPTURE_COUNT_FILE" ]; then
+          capture_count=$(cat "$FAKE_CAPTURE_COUNT_FILE" 2>/dev/null || printf 0)
+          printf "%s\n" "$((capture_count + 1))" > "$FAKE_CAPTURE_COUNT_FILE"
+        fi
+        printf "pane\n"
+      }
       fm_backend_agent_state() { printf "%s" "$FAKE_AGENT"; }
       window_is_busy() {
         [ "$FAKE_BUSY" = 1 ] || {
@@ -282,6 +288,25 @@ test_busy_before_the_first_ring_writes_nothing() {
   pass "ladder: a busy worker before the first ring changes nothing"
 }
 
+test_repeated_busy_polls_are_gated_after_a_sighting() {
+  local state rec count_file before after
+  state=$(new_state busy-gated)
+  rec=$(write_msg "$state" "keep working" aged)
+  set_record "$state" "$rec" ringing 1 0 never
+  count_file="$state/capture-count"
+  printf '0\n' > "$count_file"
+  [ "$(watcher_check "$state" 1 running "" "$GRACE" "$count_file")" = "" ] \
+    || fail "the first busy sighting must stay quiet"
+  [ "$(cat "$count_file")" = 1 ] || fail "the first busy sighting must capture the pane"
+  before=$(cat "$state/t1.inbox/.ring-state")
+  [ "$(watcher_check "$state" 1 running "" "$GRACE" "$count_file")" = "" ] \
+    || fail "a repeated busy poll must stay quiet"
+  after=$(cat "$state/t1.inbox/.ring-state")
+  [ "$(cat "$count_file")" = 1 ] || fail "a recent sighting recaptured the pane"
+  [ "$after" = "$before" ] || fail "a recent sighting rewrote the ladder record"
+  pass "watcher: repeated busy polls skip capture and ladder rewrites inside half grace"
+}
+
 test_suppression_never_acks_or_consumes() {
   local state rec
   state=$(new_state no-ack)
@@ -367,6 +392,7 @@ test_new_message_after_an_escalation_inherits_nothing
 test_stale_record_for_another_message_is_ignored
 test_later_messages_do_not_reset_the_oldest
 test_busy_before_the_first_ring_writes_nothing
+test_repeated_busy_polls_are_gated_after_a_sighting
 test_suppression_never_acks_or_consumes
 test_record_writes_are_atomic_and_clean
 test_unwritable_record_surfaces_once_without_ringing_each_poll

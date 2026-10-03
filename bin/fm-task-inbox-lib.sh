@@ -479,17 +479,19 @@ EOF
 # Whether a busy sighting would change the schedule: the oldest unhandled
 # message is ringing (see fm_task_inbox_ladder_probe_due).
 fm_task_inbox_inflight_probe_due() {  # <state-dir> <task-id>
-  local oldest
+  local oldest grace
   oldest=$(fm_task_inbox_oldest_unhandled "$1" "$2") || return 1
-  fm_task_inbox_ladder_probe_due "$1" "$2" "${oldest##*/}"
+  grace=$(fm_task_inbox_grace_secs)
+  fm_task_inbox_ladder_probe_due "$1" "$2" "${oldest##*/}" "$grace"
 }
 
 # Record that the worker was busy while the oldest unhandled message is
 # ringing, so the next ring waits a full grace from this sighting.
 fm_task_inbox_note_inflight() {  # <state-dir> <task-id>
-  local oldest
+  local oldest grace
   oldest=$(fm_task_inbox_oldest_unhandled "$1" "$2") || return 0
-  fm_task_inbox_ladder_note_inflight "$1" "$2" "${oldest##*/}"
+  grace=$(fm_task_inbox_grace_secs)
+  fm_task_inbox_ladder_note_inflight "$1" "$2" "${oldest##*/}" "$grace"
 }
 
 # Advance the ladder after a delivery attempt. A positively dead or missing
