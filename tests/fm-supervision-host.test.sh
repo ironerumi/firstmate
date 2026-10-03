@@ -1110,11 +1110,11 @@ test_attended_close_that_turns_main_only_before_its_turn_passes_to_main() {
   # the needs-decision this fixture appended, at a time that is not ordered with
   # this read; against the live queue the answer depends on that race.
   local pi_offer frozen="$home/frozen-state"
-  cp -R "$home/state" "$frozen"
-  awk -F'\t' '$5 ~ /^signal:/' "$frozen/.wake-queue" > "$frozen/.wake-queue.filtered" \
-    || fail "fixture: could not filter the frozen wake queue"
-  mv -- "$frozen/.wake-queue.filtered" "$frozen/.wake-queue" \
-    || fail "fixture: could not install the filtered frozen wake queue"
+  mkdir -p "$frozen" || fail "fixture: could not create frozen state"
+  cp "$home/state/demo.meta" "$frozen/demo.meta" \
+    || fail "fixture: could not copy frozen task metadata"
+  printf '1\t1\tsignal\tdemo.status\tsignal: %s/demo.status\n' "$home/state" > "$frozen/.wake-queue" \
+    || fail "fixture: could not write frozen wake queue"
   [ -s "$frozen/.wake-queue" ] || fail "fixture: the closed cycle left no signal row to judge"
   pi_offer=$(node --input-type=module -e '
     const dispatch = await import(process.argv[1]);
