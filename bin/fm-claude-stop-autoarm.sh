@@ -396,6 +396,11 @@ start_handling_successor() {  # <closed-arm-pid>
 
 OUT=
 ACTIONABLE=0
+AUTOACK_COUNT=0
+AUTOACK_MAX=${FM_WAKE_AUTOACK_MAX:-25}
+AUTOACK_CAP_REACHED=0
+case "$AUTOACK_MAX" in ''|*[!0-9]*) AUTOACK_MAX=25 ;; esac
+AUTOACK_CARRY=
 HEALTHY=0
 HOST_MODE=0
 HOST_RC=0
@@ -437,7 +442,35 @@ while [ "$attempt" -lt "$AUTOARM_ATTEMPTS" ]; do
   if [ -n "$OUT" ]; then
     grep -Eq "$ACTIONABLE_RE" "$OUT" 2>/dev/null && ACTIONABLE=1
   fi
-  [ "$ACTIONABLE" -eq 1 ] && break
+  if [ "$ACTIONABLE" -eq 1 ]; then
+    # Fork seam (bin/fm-wake-autoack.sh owns the contract): wakes that no longer
+    # need a turn are acknowledged here and the arm runs again, so they never
+    # ring the model. Exit 3 hands back a presentation the drain already consumed.
+    if [ "$AUTOACK_COUNT" -ge "$AUTOACK_MAX" ] \
+      && ! { [ -n "$OUT" ] && grep -q '^supervision-host:' "$OUT" 2>/dev/null; }; then
+      AUTOACK_CAP_REACHED=1
+    elif [ "$AUTOACK_COUNT" -lt "$AUTOACK_MAX" ] \
+      && ! { [ -n "$OUT" ] && grep -q '^supervision-host:' "$OUT" 2>/dev/null; }; then
+      # A superseded owner must not drain or acknowledge anything.
+      if ! fm_autoarm_still_owner "$STATE" "$MY_GEN"; then
+        [ -z "$OUT" ] || rm -f "$OUT" 2>/dev/null || true
+        exit 0
+      fi
+      AUTOACK_RC=0
+      AUTOACK_CARRY=$("$SCRIPT_DIR/fm-wake-autoack.sh" 2>/dev/null) || AUTOACK_RC=$?
+      if [ "$AUTOACK_RC" -eq 0 ]; then
+        AUTOACK_COUNT=$((AUTOACK_COUNT + 1))
+        AUTOACK_CARRY=
+        [ -z "$OUT" ] || rm -f "$OUT" 2>/dev/null || true
+        OUT=
+        ACTIONABLE=0
+        attempt=$((attempt - 1))
+        continue
+      fi
+      [ "$AUTOACK_RC" -eq 3 ] || AUTOACK_CARRY=
+    fi
+    break
+  fi
   if [ "$HOST_MODE" -eq 1 ]; then
     # The host stood down because this session or generation no longer owns
     # supervision: whoever does owns continuity now.
@@ -520,6 +553,9 @@ if [ "$ACTIONABLE" -eq 1 ]; then
     start_handling_successor "$CLOSED_ARM_PID" || true
   fi
   {
+    if [ "$AUTOACK_CAP_REACHED" -eq 1 ]; then
+      printf 'auto-ack cap reached after %s acknowledged wake(s) this cycle; repeating wake sources:\n' "$AUTOACK_COUNT"
+    fi
     printf 'firstmate watcher wake - one supervision event needs a handling turn now.\n'
     if [ "$HOST_MODE" -eq 1 ]; then
       [ -n "$OUT" ] && awk '/^supervision-host:/ { print; next } /^(signal:|stale:|check:|heartbeat)/ && shown++ < 8' "$OUT" 2>/dev/null
@@ -531,6 +567,11 @@ if [ "$ACTIONABLE" -eq 1 ]; then
       printf 'This wake comes from automatic supervision under the away-posture record, not from the captain: it is not a return, so handle it under the away posture.\n'
     fi
     [ -z "$SUCCESSOR_FAILURE" ] || printf '%s\n' "$SUCCESSOR_FAILURE"
+    [ "$AUTOACK_COUNT" -eq 0 ] || printf '%s earlier wake(s) were acknowledged without a model turn because their crews were provably working again.\n' "$AUTOACK_COUNT"
+    if [ -n "$AUTOACK_CARRY" ]; then
+      printf 'The Stop hook already ran the wake drain once and could not acknowledge it; its presentation, verbatim (the drain will not print the unread status lines again):\n'
+      printf '%s\n' "$AUTOACK_CARRY"
+    fi
     printf 'Run bin/fm-wake-drain.sh first, handle the wake, then run its exact WAKE_ACK_REQUIRED --ack-through command. Until that post-handling acknowledgement, interruption leaves the wake durable for idempotent re-handling. This Stop hook owns watcher continuity: when the handling turn ends, the next needed cycle arms automatically - do NOT run bin/fm-watch-arm.sh after an ordinary wake.\n'
   } >&2
   if autoarm_commit rewake; then

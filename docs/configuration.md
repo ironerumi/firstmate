@@ -599,6 +599,25 @@ The bound is required rather than cosmetic because churn and pane staleness read
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes, which run their own crew mix.
 [`architecture.md`](architecture.md) owns the triage contract and `bin/fm-watch.sh`'s `signal_turnend_panes_churned` owns the exact evidence and fail-closed boundaries.
 
+## Wake auto-acknowledge (Claude Stop hook)
+
+The Claude Stop hook automatically tries to acknowledge qualifying queued wakes that no longer need a model turn before ringing the model; there is no enable or disable switch.
+This seam is intentionally Claude-only: the Pi, omp, and OpenCode adapters and the away daemon are unchanged.
+Supervision-host hand-backs also bypass this seam and retain their existing hand-back contract.
+
+The watcher classifies each row when it surfaces it, and a handling turn can last minutes, so the state a queued row described may have cleared by the time the next ring is delivered.
+On the ordinary watcher path, [`bin/fm-claude-stop-autoarm.sh`](../bin/fm-claude-stop-autoarm.sh) asks [`bin/fm-wake-autoack.sh`](../bin/fm-wake-autoack.sh) once an arm closes with an actionable wake.
+The script re-asks `crew_is_provably_working` at ring time and acknowledges only when every queued row is one of two narrow shapes: a turn-end for a crew that is working again, or a plain first-sight stale wake for a crew that is working again.
+Status signals, needs-decision wakes, check wakes, heartbeats, and every enriched stale form always ring.
+The acknowledgement is the same two drain calls the away daemon makes, ending in the drain's generation-bound `--ack-through`, after which the hook arms again instead of ringing.
+
+Nothing is dropped silently.
+If the drain's presentation holds anything beyond the queued rows, such as an unread status line or a watcher-down banner, the script acknowledges nothing and the hook carries that presentation verbatim into the rewake banner.
+`FM_WAKE_AUTOACK_MAX` (default 25) is a runaway-loop backstop for consecutive acknowledgements in one hook run. When it is reached, the Stop banner leads with the count acknowledged this cycle and the repeating wake sources before the wake rings.
+
+The keep-warm self-wake is not a queued wake and is unaffected, so its one benign turn per interval stays.
+
+
 ## Claude keep-warm cadence (config/keepwarm-secs / FM_NM_KEEPWARM_SECS)
 
 `config/keepwarm-secs` is the optional local, gitignored cadence for the one keep-warm mechanism: the Claude Stop hook [`bin/fm-claude-keepwarm-selfwake.sh`](../bin/fm-claude-keepwarm-selfwake.sh) that gives an idle Claude session one benign self-wake turn before its prompt cache goes cold.
@@ -2356,6 +2375,7 @@ FM_GUARD_GRACE=300      # beacon freshness threshold for guard verdicts, arm hea
 FM_CLAUDE_AUTOARM_ATTEMPTS=2   # bounded Stop-owned arm attempts per Claude auto-arm cycle; accepted values are 1, 2, or 3
 FM_CLAUDE_AUTOARM_SYNC_WAIT_MS=800   # milliseconds the --claude turn-end guard waits for watcher health, an open Stop auto-arm generation claim, or a fresh epoch before deciding recovery ownership or failure progression
 FM_CLAUDE_AUTOARM_EPOCH_FRESH=15   # seconds a recorded auto-arm outcome remains eligible for the current event epoch's recovery or failure decision
+FM_WAKE_AUTOACK_MAX=25   # maximum qualifying queued wakes the Claude Stop hook acknowledges without a model turn in one hook run; invalid values use 25, and reaching the bound leaves the repeating wake for the model
 FM_CLAUDE_TURNEND_BLOCK_BUDGET=3   # consecutive --claude guard re-blocks before the verified one-time attended fail-open; safely below Claude Code's 8-block override
 FM_ARM_CONFIRM_TIMEOUT=10   # seconds fm-watch-arm waits to confirm a fresh watcher before reporting FAILED; default 30 on Git Bash/MSYS
 FM_ARM_ATTACH_POLL=0.5  # seconds between checks while fm-watch-arm follows an attached watcher cycle (bin/fm-watch-arm.sh header)
