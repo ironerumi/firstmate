@@ -2724,6 +2724,30 @@ scrub_returned_home_slot() {
   rm -f -- "$slot/$SUB_HOME_PARENT_MARKER" "$slot/$SUB_HOME_MARKER"
 }
 
+# A worker launched into a firstmate-repo pool slot runs under that slot's own
+# checkout: the Pi extensions write their loaded-markers into its gitignored state/,
+# and the worker's scratch (validation outputs, PR drafts, failure captures) lands
+# there too. `treehouse return` leaves gitignored files, so the next spawn into the
+# slot would refuse that state/ as a retired home's leftovers. Teardown owns the
+# worker's lifetime, so it clears the worker-written state/ once the return and its
+# landed-work checks have succeeded. A slot carrying a secondmate marker is a
+# retired home, not a worker's, and keeps the spawn-time refusal; so does any slot
+# that is this home's own checkout or state.
+scrub_returned_worker_slot() {
+  local slot=$1 slot_real
+  [ -d "$slot" ] && [ -d "$slot/state" ] && [ ! -L "$slot/state" ] || return 0
+  [ -f "$slot/AGENTS.md" ] && [ -f "$slot/bin/fm-spawn.sh" ] || return 0
+  [ ! -e "$slot/$SUB_HOME_MARKER" ] && [ ! -L "$slot/$SUB_HOME_MARKER" ] || return 0
+  slot_real=$(cd "$slot" && pwd -P) || return 0
+  [ "$slot_real" != "$(cd "$FM_ROOT" && pwd -P)" ] && [ "$slot_real" != "$(cd "$FM_HOME" && pwd -P)" ] || return 0
+  [ "$slot_real/state" != "$(cd "$STATE" 2>/dev/null && pwd -P)" ] || return 0
+  git -C "$slot" check-ignore -q -- state/ 2>/dev/null || return 0
+  find "$slot/state" -type d -exec chmod u+w {} + 2>/dev/null || true
+  rm -rf -- "${slot:?}/state" || {
+    echo "warning: returned worktree $slot still holds worker-written state/; the next spawn into it will refuse until it is removed" >&2
+  }
+}
+
 remove_firstmate_home() {
   local home=$1 label=$2 expected_id=${3:-} abs_home_path process_event_backup
   [ -n "$home" ] || return 0
@@ -3697,6 +3721,7 @@ elif [ -d "$WT" ] && [ "$KIND" != secondmate ]; then
   # unclaimed until its next holder claims it, and leaves the claim in place
   # whenever the return did not actually happen.
   fm_treehouse_slot_owner_release "$WT" "$ID"
+  scrub_returned_worker_slot "$WT"
 fi
 
 HERDR_PRESENTATION_JOURNAL="$STATE/$ID.herdr-presentation"

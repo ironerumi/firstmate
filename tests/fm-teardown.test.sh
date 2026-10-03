@@ -1212,6 +1212,67 @@ test_dirty_worktree_refuses() {
   pass "dirty worktree is refused even when its committed work has landed (dirty always wins)"
 }
 
+# Make the case's task worktree a firstmate-shaped pool slot: the repository's own
+# entrypoint and a .gitignore covering state/ are landed on origin's default branch
+# and fast-forwarded into the worktree, so the slot is clean with nothing unlanded.
+make_firstmate_shaped_slot() {  # <case-dir>
+  local case_dir=$1 tmp="$1/_shape"
+  git clone -q "$case_dir/origin.git" "$tmp"
+  mkdir -p "$tmp/bin"
+  : > "$tmp/AGENTS.md"
+  : > "$tmp/bin/fm-spawn.sh"
+  printf 'state/\n.fm-secondmate-home\n' > "$tmp/.gitignore"
+  git -C "$tmp" add -f AGENTS.md bin/fm-spawn.sh .gitignore
+  git -C "$tmp" -c user.email=t@t -c user.name=t commit -q -m "firstmate-shaped"
+  git -C "$tmp" push -q origin HEAD:main
+  rm -rf "$tmp"
+  git -C "$case_dir/wt" fetch -q origin main
+  git -C "$case_dir/wt" merge -q --ff-only origin/main
+}
+
+test_teardown_clears_worker_state_from_a_firstmate_slot() {
+  local case_dir rc
+  case_dir=$(make_case worker-state-scrub)
+  write_meta "$case_dir" no-mistakes ship
+  make_firstmate_shaped_slot "$case_dir"
+  # What a finished worker leaves in its own checkout's state/: the Pi extension
+  # loaded-markers plus its own scratch, including a nested directory.
+  mkdir -p "$case_dir/wt/state/nm-run"
+  : > "$case_dir/wt/state/.pi-turnend-extension-loaded"
+  : > "$case_dir/wt/state/.pi-watch-extension-loaded"
+  printf 'draft\n' > "$case_dir/wt/state/pr-comment.md"
+  printf 'out\n' > "$case_dir/wt/state/nm-run/output.txt"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "worker-state-scrub: teardown should succeed"
+  [ ! -e "$case_dir/wt/state" ] || fail "worker-state-scrub: the returned slot still carries the worker's state/"
+  [ -f "$case_dir/state/.last-watcher-beat" ] || fail "worker-state-scrub: the supervising home's own state/ was touched"
+  pass "teardown clears the worker-written state/ from a returned firstmate-repo slot"
+}
+
+test_teardown_keeps_state_of_a_retired_home_slot() {
+  local case_dir rc
+  case_dir=$(make_case retired-home-state-kept)
+  write_meta "$case_dir" no-mistakes ship
+  make_firstmate_shaped_slot "$case_dir"
+  printf 'retired\n' > "$case_dir/wt/.fm-secondmate-home"
+  mkdir -p "$case_dir/wt/state"
+  printf 'x\n' > "$case_dir/wt/state/retired.status"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "retired-home-state-kept: teardown should succeed"
+  [ -f "$case_dir/wt/state/retired.status" ] || fail "retired-home-state-kept: a slot carrying a retired home's marker lost its state/"
+  pass "teardown leaves a retired home's state/ for the spawn-time refusal"
+}
+
 test_gh_error_and_content_absent_refuses() {
   local case_dir rc
   case_dir=$(make_case gh-error)
@@ -4302,6 +4363,8 @@ test_teardown_closes_a_gerrit_task_with_its_change_url_as_a_note
 test_teardown_manual_backend_leaves_the_backlog_to_the_operator
 test_local_only_truly_unpushed_refuses
 test_local_only_merged_to_local_main_allows
+test_teardown_clears_worker_state_from_a_firstmate_slot
+test_teardown_keeps_state_of_a_retired_home_slot
 test_no_mistakes_origin_remote_allows
 test_no_mistakes_truly_unpushed_refuses
 test_local_only_force_overrides_unpushed

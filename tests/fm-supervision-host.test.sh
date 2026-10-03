@@ -1105,11 +1105,18 @@ test_attended_close_that_turns_main_only_before_its_turn_passes_to_main() {
   assert_no_re '^supervision-host' "$home/host.out" "the close must reach main exactly as the arm printed it"
   [ "$(engine_calls "$home")" -eq 0 ] || fail "turns-main-only: the engine ran on a stale offer"
   assert_grep 'demo.status' "$home/state/.wake-queue" "the wake must stay queued for main"
-  local pi_offer
+  # Judge Pi's rule on the rows the closed cycle itself queued, in a frozen copy
+  # of the state dir. The successor watcher keeps scanning demo.status and queues
+  # the needs-decision this fixture appended, at a time that is not ordered with
+  # this read; against the live queue the answer depends on that race.
+  local pi_offer frozen="$home/frozen-state"
+  cp -R "$home/state" "$frozen"
+  awk -F'\t' '$5 ~ /^signal:/' "$home/state/.wake-queue" > "$frozen/.wake-queue"
+  [ -s "$frozen/.wake-queue" ] || fail "fixture: the closed cycle left no signal row to judge"
   pi_offer=$(node --input-type=module -e '
     const dispatch = await import(process.argv[1]);
     console.log(dispatch.branchOfferForWake(process.argv[2], process.argv[3], false).eligible);
-  ' "$ROOT/.pi/extensions/lib/fm-branch-dispatch.ts" "$home/state" "signal: $home/state/demo.status")
+  ' "$ROOT/.pi/extensions/lib/fm-branch-dispatch.ts" "$frozen" "signal: $home/state/demo.status")
   [ "$pi_offer" = true ] || fail "the host-only transition veto changed Pi's existing offer rule"
   assert_re '	pass-through	attended	main-only	signal:' "$home/state/.supervision-host.log" "the ledger must record why the close went to main"
   watcher_live "$home" || fail "the pass-through left no successor watcher"
