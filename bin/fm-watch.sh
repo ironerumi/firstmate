@@ -82,7 +82,8 @@
 #   stale: <window> (steering-inbox ladder bookkeeping unwritable: ...)
 #                          an unhandled record's ladder cannot advance; quiet
 #                          successful attempts never wake firstmate
-#                          (bin/fm-task-inbox-lib.sh owns the ladder policy)
+#                          (bin/fm-task-inbox-lib.sh owns the ladder policy;
+#                          bin/fm-task-inbox-ladder.sh owns its durable state)
 #   check: <script>: <out> authenticated check output, always actionable
 #   check: process-event result captured: <keys>
 #                          a durably captured process-to-event result is queued
@@ -223,9 +224,10 @@ WATCH_HOME_EXISTED=0
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
-# Steering-inbox loss detection: bin/fm-task-inbox-lib.sh owns the record,
-# doorbell, re-ring ladder, and unavailable-endpoint contracts; this watcher
-# supplies their live endpoint and busy checks plus wake emission
+# Steering-inbox loss detection: bin/fm-task-inbox-lib.sh owns the inbox record,
+# doorbell, re-ring policy, and unavailable-endpoint contracts, while
+# bin/fm-task-inbox-ladder.sh owns durable ladder state; this watcher supplies
+# their live endpoint and busy checks plus wake emission
 # (inbox_steer_check below).
 # shellcheck source=bin/fm-task-inbox-lib.sh
 . "$SCRIPT_DIR/fm-task-inbox-lib.sh"

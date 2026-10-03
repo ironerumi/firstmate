@@ -98,7 +98,8 @@
 # scaffold never emits a substitution a file-write tool would copy through.
 # Every scaffold also carries the steering-inbox receive-and-ack section:
 # process state/<id>.inbox/*.msg in order and acknowledge each by moving it to
-# handled/ (record, doorbell, and ladder owned by bin/fm-task-inbox-lib.sh).
+# handled/ (record, doorbell, and ladder policy owned by bin/fm-task-inbox-lib.sh;
+# durable ladder state owned by bin/fm-task-inbox-ladder.sh).
 # Ship tasks include a project-memory section bounding crewmate edits to a
 # project's AGENTS.md/CLAUDE.md: only corrections of factually wrong
 # information, including wrong information the task itself introduced - never
@@ -347,8 +348,9 @@ STATUS_APPEND="echo \"{state} [at=<epoch>]: {one short line}\" >> $STATUS_FILE &
 INBOX_DIR=$(shell_quote "$STATE/$ID.inbox")
 
 # The receive-and-ack half of the steering-inbox contract, included in every
-# scaffold kind. The record format, doorbell line, and re-ring ladder are
-# owned by bin/fm-task-inbox-lib.sh. The doorbell names the inbox as
+# scaffold kind. The inbox record format, doorbell line, and re-ring policy are
+# owned by bin/fm-task-inbox-lib.sh; durable ladder state is owned by
+# bin/fm-task-inbox-ladder.sh. The doorbell names the inbox as
 # "$FM_TASK_INBOX", which bin/fm-spawn.sh exports into every launch; the full
 # path here remains the fallback for a worker launched without that export.
 # The doorbell itself is self-describing, so this section is reinforcement
