@@ -40,16 +40,16 @@ test:
     The harness kills this step at 30 minutes and discards everything you have not yet returned, so an unreturned verdict is worth nothing and a partial one is worth a lot.
     Your first command is `T0=$(date +%s)`; before every phase and every scenario compute `$(( ($(date +%s) - T0) / 60 ))` minutes elapsed and obey the bounds below.
     Phase 1, always and first: list the suites with `bin/fm-test-run.sh --list --changed`, which is only an upper bound that over-selects dozens of scripts even for a one-line change.
-    Narrow it to the test scripts changed in the diff plus `tests/<name>.test.sh` for each changed `bin/<name>.sh`, and add another listed script only when it plainly exercises a changed file.
-    Several lifecycle suites (fm-teardown, fm-session-start, fm-supervision-host, fm-watch-triage, fm-crew-state) take 4 to 18 minutes each, so run the narrowed scripts serially by path under `timeout 300`, quickest first and those suites last.
-    Start no new suite after minute 12; a suite that hits its timeout, or was not started, is reported untested with the reason `time bound` and is covered by CI, never as a failure and never rerun.
+    Narrow it to the test scripts changed in the diff plus `tests/<name>.test.sh` for each changed `bin/<name>.sh` only when that suite path exists, and add another listed script only when it plainly exercises a changed file.
+    Several lifecycle suites (fm-teardown, fm-session-start, fm-supervision-host, fm-watch-triage, fm-crew-state) take 4 to 18 minutes each, so run the existing narrowed scripts serially by path with `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300`, quickest first and those suites last.
+    Start no new suite after minute 12; a suite that hits its per-script bound is reported untested with the reason `time bound` and is covered by CI, never as a failure and never rerun. A suite not started for another reason is reported with that actual reason.
     A suite that fails on its own assertions is rerun at most once; never debug or fix inside this step.
     When the branch changes `.no-mistakes.yaml` (gate configuration), always run `tests/fm-nm-test-contract.test.sh` first and explicitly; `--list --changed` does not select it.
     Never run a family, lane, --all, or any tree walk; the no-mistakes test configuration section of .agents/skills/firstmate-coding-guidelines/SKILL.md owns why, and CI owns broad regression coverage.
     After phase 1, write what ran, what passed, what failed, and what hit the time bound to a file in the evidence directory, so the record survives a kill.
-    Phase 2, optional (start only before minute 12, stop starting new scenarios at minute 20): live scenarios for behavior no targeted suite proves, cheapest first, each under `timeout 240`, with setup and teardown counted against the clock.
+    Phase 2, optional (start only before minute 12, stop starting new scenarios at minute 20): live scenarios for behavior no targeted suite proves, cheapest first, each bounded with portable `fm_run_timed 240` from `bin/fm-timeout-lib.sh`, with setup and teardown counted against the clock.
     Skip phase 2 entirely when phase 1 already covers every changed behavior or any phase 1 suite failed.
-    Return the final JSON by minute 22 at the latest, with every scenario you did not run reported as untested and the reason `time bound`; name the covering test for each, and set the verdict from what ran.
+    Return the final JSON by minute 22 at the latest, with every scenario you did not run reported as untested and the actual reason: use `time bound` only when a budget cutoff prevented it, `covered by <test>` when phase 1 proves the behavior, and `phase 1 failed` when phase 1 failed. Name the covering test where applicable, and set the verdict from what ran.
     In phase 2, run live Herdr scenarios only through bin/fm-herdr-lab.sh with a named non-default fm-lab-* session, following that helper's prepare, provision, run, and teardown contract exactly.
     Never touch the live default Herdr session or fleet panes.
     Prefer a throwaway lab for spawn, long-launch, and Claude-path proofs, and tear it down in the same evidence turn.
