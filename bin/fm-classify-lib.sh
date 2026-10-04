@@ -2544,9 +2544,16 @@ FM_GATE_HUMAN_DECISION='ask-user: authority decision'
 # which may make a bounded no-mistakes call, so callers take it only where they
 # already accept that cost.
 crew_gate_awaits_human_decision() {  # <id> -> <run-id> on stdout
-  local id=$1 line state src rest part human='' run=''
+  local id=$1 line
   [ -n "$id" ] || return 1
   line=$("$FM_CREW_STATE_BIN" "$id" 2>/dev/null) || true
+  _crew_state_line_human_gate_run "$line"
+}
+
+# The verdict-line half of crew_gate_awaits_human_decision, so a caller that
+# already holds the line (crew_parked_human_gate) does not pay a second read.
+_crew_state_line_human_gate_run() {  # <fm-crew-state-line> -> <run-id> on stdout
+  local line=$1 state src rest part human='' run=''
   case "$line" in state:*) ;; *) return 1 ;; esac
   state=${line#state: }; state=${state%% *}
   [ "$state" = parked ] || return 1
@@ -2562,6 +2569,36 @@ crew_gate_awaits_human_decision() {  # <id> -> <run-id> on stdout
   [ -n "$human" ] && [ -n "$run" ] || return 1
   case "$run" in *[[:space:]]*) return 1 ;; esac
   printf '%s\n' "$run"
+}
+
+# The component prefix that names the ask-user finding ids a parked human-owed
+# gate holds, minted by bin/fm-crew-state.sh right after FM_GATE_HUMAN_DECISION.
+FM_GATE_FINDING_IDS_PREFIX='ask-user findings: '
+
+# Prints "<run>\t<step>\t<finding-ids>" for crew <id> when its authoritative
+# current state is a no-mistakes gate whose answer is owed by a human (the same
+# test as crew_gate_awaits_human_decision), else fails. <step> is the gate's own
+# name from the verdict's `parked at <step>` component, which is the <step> of the
+# `nm-<run>-<step>` key the brief mandates; <finding-ids> is comma-joined and may
+# be empty when the findings table carried no `id` column. A verdict naming no
+# step is not a gate this can key on, so it fails. One fm-crew-state.sh read, with
+# the cost and caveat crew_gate_awaits_human_decision documents.
+crew_parked_human_gate() {  # <id>
+  local id=$1 line run step='' ids='' rest part
+  [ -n "$id" ] || return 1
+  line=$("$FM_CREW_STATE_BIN" "$id" 2>/dev/null) || true
+  run=$(_crew_state_line_human_gate_run "$line") || return 1
+  rest="$line · "
+  while [ -n "$rest" ]; do
+    part=${rest%% · *}
+    rest=${rest#* · }
+    case "$part" in
+      "parked at "?*) step=${part#parked at }; step=${step%%:*} ;;
+      "$FM_GATE_FINDING_IDS_PREFIX"?*) ids=${part#"$FM_GATE_FINDING_IDS_PREFIX"} ;;
+    esac
+  done
+  case "$step" in ''|*[[:space:]]*) return 1 ;; esac
+  printf '%s\t%s\t%s\n' "$run" "$step" "$ids"
 }
 
 # 0 if crew <id>'s authoritative current state is its OWN no-mistakes run

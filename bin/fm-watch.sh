@@ -113,6 +113,12 @@
 #                          running a check or removing poll artifacts
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
+#   check: ask-user gate parked: task=<id> run=<run> step=<step> findings=<ids>
+#                          a live ship task's no-mistakes run is parked at a
+#                          gate owed a human and the task has no decision record
+#                          for nm-<run>-<step>; read from the run's own state
+#                          each cycle (parked_gate_tick), once per run, step and
+#                          finding-id set, whatever the worker last declared
 #   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
 #                          inactive terminal outcome that still lacks its durable
 #                          upstream receipt
@@ -1085,6 +1091,44 @@ EOF
   return 0
 }
 
+# Deterministic wake for a no-mistakes gate that waits on firstmate. A worker whose
+# run parks at an ask-user gate may end its turn without appending needs-decision,
+# or leave an earlier `paused:` line that defers the wedge timer, so the supervisor
+# would otherwise learn of the gate only from elapsed idle time. The run's own state
+# is the authority instead: for each live ship task, crew_parked_human_gate reads
+# the crew's current state (the run-step source, never the pane or the status
+# tail), and a gate owed a HUMAN that the task has no `nm-<run>-<step>` decision
+# record for (open or closed) queues ONE check wake naming the task, run, step and
+# finding ids.
+# No timer and no pane read, and a worker's paused:/working line cannot suppress it.
+# Once per gate: the marker holds run|step|finding-ids, so the same gate on the
+# next cycle stays quiet while a new run, step or finding id wakes again. A gate the
+# worker escalated itself (open decision) or that firstmate already answered
+# (`fm-send --resolve-key` wrote the closing line) has a record and is skipped before any marker is
+# written. Every way the read can come back empty (no run, a running step, an
+# unreadable verdict) wakes nothing.
+parked_gate_tick() {
+  local meta task gate run step ids marker reason key
+  for meta in "$STATE"/*.meta; do
+    [ -e "$meta" ] || continue
+    [ "$(fm_meta_get "$meta" kind)" = ship ] || continue
+    [ -z "$(fm_meta_get "$meta" endpoint_retired)" ] || continue
+    task=$(basename "$meta" .meta)
+    gate=$(crew_parked_human_gate "$task") || continue
+    IFS=$(printf '\t') read -r run step ids <<EOF
+$gate
+EOF
+    key="nm-$run-$step"
+    [ -z "$(status_key_closing_verb "$STATE/$task.status" "$key")" ] || continue
+    marker="$STATE/.gate-wake-$task"
+    [ "$(cat "$marker" 2>/dev/null || true)" = "$run|$step|$ids" ] && continue
+    printf '%s\n' "$run|$step|$ids" > "$marker" || continue
+    reason="check: ask-user gate parked: task=$task run=$run step=$step findings=${ids:-unknown}"
+    triage_log "parked human-owed gate with no open decision: $reason"
+    wake "$reason"
+  done
+}
+
 # The ordinary-supervision half of the secondmate liveness guarantee, paired
 # with bin/fm-bootstrap.sh's session-start sweep over the shared library in
 # bin/fm-secondmate-liveness-lib.sh (which owns the state contract, the remote
@@ -1284,10 +1328,15 @@ wait_record() {  # <kind> <subject> <whom> <action> <age-record>
 # A declared clearing time that has ALREADY passed (`paused: ... until <t>`) is
 # not evidence: the wait the worker described is over, so it no longer explains
 # the silence, and the pane keeps the unchanged schedule. The records are read in
-# this order rather than pooled because the routing already guarantees it is the
-# right one: a pane whose last line is `paused:` or `captain-held:` reaches this
-# timer only through pause_state_class answering `working`, so its crew state is
-# a running step, never a parked gate.
+# this order rather than pooled because the declaration is the worker's word about
+# its OWN silence and outranks a liveness verdict. A pane whose last line is
+# `paused:` or `captain-held:` reaches this timer through pause_state_class
+# answering `working`, which does NOT mean its crew state is a running step: a
+# worker can declare a wait ("waiting on CI") and then have its run park at a gate
+# owed a human, so the declaration can defer the timer over a parked gate.
+# parked_gate_tick is what closes that gap, by waking on the parked gate from the
+# run's own state regardless of any declaration, so the timer is not the only
+# thing standing between a parked gate and the supervisor.
 #
 # The second record is OFF unless the home creates config/wedge-defer-parked-gate,
 # and that one guard is what makes an unconfigured home's behaviour identical to
@@ -2775,6 +2824,10 @@ while :; do
   # A process-event result carries richer adapter-owned wake context than the
   # generic recovery reason, so give that owner first refusal.
   resurface_after_downtime
+
+  # A no-mistakes gate waiting on firstmate is read from the run's own state, not
+  # from what the worker reported (see parked_gate_tick).
+  parked_gate_tick
 
   # The existing poll loop also owns the bounded inactive-outcome cadence.
   # This is mechanical and silent unless a durable terminal-outcome obligation
