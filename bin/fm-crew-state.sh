@@ -596,8 +596,22 @@ nm_gate_findings_count() {
 # Residual bound, which no unquoted positional parse of this table escapes: a
 # comma inside a whitelisted field's own value (a path with a comma in it, say)
 # still shifts the walk.
+#
+GATE_FINDINGS_CHECKSUM=''
+nm_findings_checksum() {
+  if command -v shasum >/dev/null 2>&1; then
+    LC_ALL=C shasum -a 256 | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    LC_ALL=C sha256sum | awk '{print $1}'
+  elif command -v cksum >/dev/null 2>&1; then
+    LC_ALL=C cksum | awk '{print $1 ":" $2}'
+  else
+    return 1
+  fi
+}
 nm_gate_awaits_human_decision() {
-  local header count cols idx i name field rows row rest
+  local header count cols idx i name field rows row rest found=1
+  GATE_FINDINGS_CHECKSUM=''
   header=$(printf '%s\n' "$RUN_OUT" | grep -E '^[[:space:]]*findings\[[0-9]+\]\{[^}]*\}:' | head -1)
   [ -n "$header" ] || return 1
   count=$(printf '%s' "$header" | sed -n 's/^[[:space:]]*findings\[\([0-9][0-9]*\)\].*/\1/p')
@@ -610,9 +624,12 @@ nm_gate_awaits_human_decision() {
   while [ -n "$cols" ]; do
     i=$((i + 1))
     name=$(strip_quotes "$(trim "${cols%%,*}")")
-    if [ "$name" = action ]; then idx=$i; break; fi
+    if [ "$name" = action ]; then
+      idx=$i
+      break
+    fi
     case "$name" in
-      id|severity|file|line) ;;
+      severity|file|line|id) ;;
       *) return 1 ;;
     esac
     case "$cols" in *,*) cols=${cols#*,} ;; *) cols='' ;; esac
@@ -620,6 +637,8 @@ nm_gate_awaits_human_decision() {
   [ "$idx" -gt 0 ] || return 1
   rows=$(printf '%s\n' "$RUN_OUT" \
     | awk -v n="$count" 'f { print; if (++c >= n) exit; next } /^[[:space:]]*findings\[[0-9]+\]\{/ { f = 1 }')
+  GATE_FINDINGS_CHECKSUM=$(printf '%s\n%s\n' "$header" "$rows" \
+    | nm_findings_checksum) || GATE_FINDINGS_CHECKSUM=''
   while IFS= read -r row; do
     case "$row" in *,*) ;; *) continue ;; esac
     rest=$row
@@ -630,11 +649,12 @@ nm_gate_awaits_human_decision() {
     done
     [ -n "$rest" ] || continue
     field=$(strip_quotes "$(trim "${rest%%,*}")")
-    [ "$field" = ask-user ] && return 0
+    [ "$field" = ask-user ] || continue
+    found=0
   done <<EOF
 $rows
 EOF
-  return 1
+  return "$found"
 }
 log_reports_ci_ready() {
   [ "$LOG_VERB" = "done" ] || return 1
@@ -1117,6 +1137,7 @@ if [ "$HAVE_RUN" = 1 ]; then
       # later note happens to contain can mint it.
       if nm_gate_awaits_human_decision; then
         RUN_DETAIL="$RUN_DETAIL${SEP}$FM_GATE_HUMAN_DECISION"
+        [ -z "$GATE_FINDINGS_CHECKSUM" ] || RUN_DETAIL="$RUN_DETAIL${SEP}$FM_GATE_FINDINGS_CHECKSUM_PREFIX$GATE_FINDINGS_CHECKSUM"
       fi
     else
       case "$status" in

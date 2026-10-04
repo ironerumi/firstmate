@@ -3030,13 +3030,17 @@ wedge_threshold_round() {  # <state> <fakebin> <out> <capture> <window> <verdict
 # wedge_timer_check only for a hash whose timer is already running, so a case on
 # that path must arm it rather than assume the plain non-terminal route.
 wedge_threshold_fixture() {  # <name> <status-log> <status-age-secs> [<wedge-timer-age-secs>]
-  local name=$1 log=$2 age=$3 timer=${4-} dir state statusf window key text back
+  local name=$1 log=$2 age=$3 timer=${4-} dir state statusf window key text back kind
   dir=$(make_case "$name"); state="$dir/state"
   window="test:fm-wedge"
   statusf="$state/wedge.status"
   text='waiting at the gate'
   printf '%s' "$text" > "$dir/pane.txt"
-  printf 'window=%s\nkind=ship\nharness=grok\nbackend=tmux\n' "$window" > "$state/wedge.meta"
+  # The parked-gate cases pin the WEDGE LADDER's own reading of a parked gate. A ship
+  # task would have that gate woken first by parked_gate_tick, which these cases
+  # are not about, so they run as a scout (no no-mistakes run for the tick to read).
+  case "$name" in parked-gate-*) kind=scout ;; *) kind=ship ;; esac
+  printf 'window=%s\nkind=%s\nharness=grok\nbackend=tmux\n' "$window" "$kind" > "$state/wedge.meta"
   printf '%s\n' "$log" > "$statusf"
   back=$(( $(date +%s) - age ))
   set_mtime "$back" "$statusf"
@@ -6730,6 +6734,139 @@ test_paused_until_that_passed_is_rechecked_before_the_cadence() {
   pass "a declared wait whose until time has passed is rechecked at once, then held to the cadence"
 }
 
+# --- parked human-owed gate: deterministic check wake ----------------------------
+# A worker whose run parks at an ask-user gate may end its turn without appending
+# needs-decision, with an older `paused:` line deferring the wedge timer. The
+# watcher reads the run's own current state every cycle and wakes ONCE per gate
+# (run + step + raw findings-table checksum) when the task has no open decision for it.
+
+gate_wake_case() {  # <name> <status-content> -> case dir
+  local dir
+  dir=$(make_case "$1")
+  fm_write_meta "$dir/state/gate-task.meta" "window=test:fm-gate-task" "kind=ship"
+  printf '%s\n' "$2" > "$dir/state/gate-task.status"
+  prime_status_seen "$dir/state" "$dir/state/gate-task.status"
+  printf '%s\n' "$dir"
+}
+
+# Run one watcher round against <verdict>; print 'woke' with its output path or
+# 'quiet' once a whole poll cycle completed with no wake.
+gate_wake_round() {  # <dir> <verdict> -> woke|quiet
+  local dir=$1 verdict=$2 pid
+  local state="$dir/state" out="$dir/watch.out"
+  ack_stopped_cycle "$state" >/dev/null 2>&1 || true
+  : > "$out"
+  FM_FAKE_CREW_STATE="$verdict" watch_bg "$state" "$dir/fakebin" "$out"
+  pid=$!
+  if wait_poll_cycle "$state" "$pid"; then
+    reap "$pid"
+    echo quiet
+  else
+    wait "$pid" 2>/dev/null || true
+    echo woke
+  fi
+}
+
+gate_findings_checksum() {  # <raw-findings-table>
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s\n' "$1" | LC_ALL=C shasum -a 256 | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    printf '%s\n' "$1" | LC_ALL=C sha256sum | awk '{print $1}'
+  else
+    printf '%s\n' "$1" | LC_ALL=C cksum | awk '{print $1 ":" $2}'
+  fi
+}
+
+test_parked_human_gate_wakes_once_per_gate() {
+  local dir state r1 r2 r3 r4 checksum1 checksum2
+  local paused='paused [at=1]: waiting on CI'
+  local table1='findings[1]{id,severity,file,line,action,description}:
+  ci-1,error,ci,,ask-user,authority decision'
+  local table2='findings[1]{id,severity,file,line,action,description}:
+  ci-1,error,ci,,ask-user,changed authority decision'
+  checksum1=$(gate_findings_checksum "$table1")
+  checksum2=$(gate_findings_checksum "$table2")
+  [ "$checksum1" != "$checksum2" ] || fail "the changed findings table must have a different checksum"
+  local gate1="state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: $checksum1 · run: 01RUNA"
+  local gate2="state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: $checksum2 · run: 01RUNA"
+  dir=$(gate_wake_case gate-wake-once "$paused"); state="$dir/state"
+
+  # A stale paused: line does not suppress the wake, and the wake names the gate.
+  r1=$(gate_wake_round "$dir" "$gate1")
+  [ "$r1" = woke ] || fail "a parked ask-user gate behind a stale paused: line did not wake: $(cat "$dir/watch.out")"
+  grep -F 'check: ask-user gate parked: task=gate-task run=01RUNA step=ci' "$dir/watch.out" >/dev/null \
+    || fail "the gate wake did not name task, run and step: $(cat "$dir/watch.out")"
+  grep -F 'findings=' "$dir/watch.out" >/dev/null \
+    && fail "the wake reason exposed findings data: $(cat "$dir/watch.out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the first gate wake"
+
+  # The same gate on the next cycle stays quiet.
+  r2=$(gate_wake_round "$dir" "$gate1")
+  [ "$r2" = quiet ] || fail "the same parked gate woke a second time: $(cat "$dir/watch.out")"
+
+  # A changed raw findings table at the same step wakes again.
+  r3=$(gate_wake_round "$dir" "$gate2")
+  [ "$r3" = woke ] || fail "a changed findings table did not wake"
+  grep -F 'check: ask-user gate parked: task=gate-task run=01RUNA step=ci' "$dir/watch.out" >/dev/null \
+    || fail "the changed-gate wake did not name task, run and step: $(cat "$dir/watch.out")"
+  ack_stopped_cycle "$state" || fail "could not acknowledge the changed-gate wake"
+
+  # A new run at the same step wakes too.
+  r4=$(gate_wake_round "$dir" "${gate2%run: 01RUNA}run: 01RUNB")
+  [ "$r4" = woke ] || fail "the same gate on a new run did not wake"
+  pass "a parked human-owed gate wakes once per run, step and findings checksum, past a stale paused: line"
+}
+
+test_failed_parked_gate_wake_append_does_not_arm_marker() {
+  local dir state r checksum
+  local table='findings[1]{id,severity,file,line,action,description}:
+  ci-1,error,ci,,ask-user,authority decision'
+  checksum=$(gate_findings_checksum "$table")
+  local gate="state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: $checksum · run: 01RUNA"
+  dir=$(gate_wake_case gate-wake-append-failure 'paused [at=1]: waiting on CI'); state="$dir/state"
+
+  rm -f "$state/.wake-queue"
+  mkdir -p "$state/.wake-queue" || fail "could not make the wake queue unwritable"
+  r=$(gate_wake_round "$dir" "$gate")
+  if [ "$r" = woke ]; then
+    grep -F 'check: ask-user gate parked: task=gate-task run=01RUNA step=ci' "$dir/watch.out" >/dev/null \
+      && fail "a failed gate wake append emitted the gate wake: $(cat "$dir/watch.out")"
+  fi
+  [ "$r" = quiet ] || [ "$r" = woke ] || fail "the watcher round had an unexpected result: $r"
+  [ ! -e "$state/.gate-wake-gate-task" ] || fail "a failed gate wake append armed the gate marker"
+  rmdir "$state/.wake-queue" || fail "could not restore the wake queue"
+
+  r=$(gate_wake_round "$dir" "$gate")
+  [ "$r" = woke ] || fail "the gate retry after a failed append did not wake: $(cat "$dir/watch.out")"
+  pass "a failed parked-gate wake append does not arm its marker"
+}
+
+test_parked_human_gate_answered_or_escalated_does_not_wake() {
+  local dir r
+  local gate='state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: 123:45 · run: 01RUNA'
+  # Answered: the closing line fm-send --resolve-key writes at answer time.
+  dir=$(gate_wake_case gate-wake-answered 'needs-decision [at=1] [key=nm-01RUNA-ci]: ask-user findings=ci-1
+resolved [at=2] [key=nm-01RUNA-ci]: answered')
+  r=$(gate_wake_round "$dir" "$gate")
+  [ "$r" = quiet ] || fail "an answered gate woke: $(cat "$dir/watch.out")"
+  # Escalated by the worker itself and still open: firstmate already knows.
+  dir=$(gate_wake_case gate-wake-escalated 'needs-decision [at=1] [key=nm-01RUNA-ci]: ask-user findings=ci-1
+working [at=2]: still parked')
+  r=$(gate_wake_round "$dir" "$gate")
+  [ "$r" = quiet ] || fail "a gate the worker escalated and left open woke: $(cat "$dir/watch.out")"
+  pass "an answered gate and an already-escalated gate do not wake"
+}
+
+test_running_pipeline_step_does_not_wake_for_a_gate() {
+  local dir r
+  dir=$(gate_wake_case gate-wake-running 'paused [at=1]: waiting on CI')
+  r=$(gate_wake_round "$dir" 'state: working · source: run-step · ci running · run: 01RUNA')
+  [ "$r" = quiet ] || fail "a running step woke as a parked gate: $(cat "$dir/watch.out")"
+  r=$(gate_wake_round "$dir" 'state: parked · source: run-step · parked at review: 1 finding(s) · run: 01RUNA')
+  [ "$r" = quiet ] || fail "a gate owed the crewmate itself woke as a human-owed gate: $(cat "$dir/watch.out")"
+  pass "a running step and a crewmate-owed gate do not wake"
+}
+
 # CI's stock macOS Bash lane sets FM_TEST_ONLY to run just the bash-3.2
 # churn-deferral regression. The rest of this file is not a 3.2 snapshot suite.
 if [ -n "${FM_TEST_ONLY:-}" ]; then
@@ -6881,3 +7018,7 @@ test_captain_held_rechecked_under_a_quiet_record
 test_paused_until_near_future_is_quiet_before_the_cadence
 test_paused_until_wrong_year_is_bounded_by_the_cadence
 test_paused_until_that_passed_is_rechecked_before_the_cadence
+test_parked_human_gate_wakes_once_per_gate
+test_failed_parked_gate_wake_append_does_not_arm_marker
+test_parked_human_gate_answered_or_escalated_does_not_wake
+test_running_pipeline_step_does_not_wake_for_a_gate
