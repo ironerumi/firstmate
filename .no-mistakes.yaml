@@ -43,7 +43,7 @@ test:
     Narrow it to the test scripts changed in the diff plus `tests/<name>.test.sh` for each changed `bin/<name>.sh` only when that suite path exists, and add another listed script only when it plainly exercises a changed file.
     Several lifecycle suites (fm-teardown, fm-session-start, fm-supervision-host, fm-watch-triage, fm-crew-state) take 4 to 18 minutes each, so run the existing narrowed scripts serially by path with `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300`, quickest first and those suites last.
     Start no new suite after minute 12; a suite that hits its per-script bound is reported untested with the reason `time bound` and is covered by CI, never as a failure and never rerun. A suite not started for another reason is reported with that actual reason.
-    A suite that fails on its own assertions is rerun at most once; never debug or fix inside this step.
+    A suite that fails on its own assertions is reported failed and never rerun; never debug or fix inside this step.
     When the branch changes `.no-mistakes.yaml` (gate configuration), always run `tests/fm-nm-test-contract.test.sh` first and explicitly; `--list --changed` does not select it.
     Never run a family, lane, --all, or any tree walk; the no-mistakes test configuration section of .agents/skills/firstmate-coding-guidelines/SKILL.md owns why, and CI owns broad regression coverage.
     After phase 1, write what ran, what passed, what failed, and what hit the time bound to a file in the evidence directory, so the record survives a kill.
