@@ -1120,6 +1120,10 @@ $gate
 EOF
     key="nm-$run-$step"
     [ -z "$(status_key_closing_verb "$STATE/$task.status" "$key")" ] || continue
+    # The same run-scoped test wedge_wait_evidence uses: the key's step is the
+    # worker's own spelling, so an open decision for any step of THIS run says
+    # firstmate was told.
+    ! status_has_open_needs_decision "$STATE/$task.status" "$run" || continue
     marker="$STATE/.gate-wake-$task"
     [ "$(cat "$marker" 2>/dev/null || true)" = "$run|$step|$ids" ] && continue
     printf '%s\n' "$run|$step|$ids" > "$marker" || continue

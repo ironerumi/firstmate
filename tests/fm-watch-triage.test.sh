@@ -3030,13 +3030,17 @@ wedge_threshold_round() {  # <state> <fakebin> <out> <capture> <window> <verdict
 # wedge_timer_check only for a hash whose timer is already running, so a case on
 # that path must arm it rather than assume the plain non-terminal route.
 wedge_threshold_fixture() {  # <name> <status-log> <status-age-secs> [<wedge-timer-age-secs>]
-  local name=$1 log=$2 age=$3 timer=${4-} dir state statusf window key text back
+  local name=$1 log=$2 age=$3 timer=${4-} dir state statusf window key text back kind
   dir=$(make_case "$name"); state="$dir/state"
   window="test:fm-wedge"
   statusf="$state/wedge.status"
   text='waiting at the gate'
   printf '%s' "$text" > "$dir/pane.txt"
-  printf 'window=%s\nkind=ship\nharness=grok\nbackend=tmux\n' "$window" > "$state/wedge.meta"
+  # The parked-gate cases pin the WEDGE LADDER's own reading of a parked gate. A ship
+  # task would have that gate woken first by parked_gate_tick, which these cases
+  # are not about, so they run as a scout (no no-mistakes run for the tick to read).
+  case "$name" in parked-gate-*) kind=scout ;; *) kind=ship ;; esac
+  printf 'window=%s\nkind=%s\nharness=grok\nbackend=tmux\n' "$window" "$kind" > "$state/wedge.meta"
   printf '%s\n' "$log" > "$statusf"
   back=$(( $(date +%s) - age ))
   set_mtime "$back" "$statusf"
