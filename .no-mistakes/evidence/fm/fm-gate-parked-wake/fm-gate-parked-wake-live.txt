@@ -1,0 +1,19 @@
+Live validation against disposable real product state
+
+Setup: disposable git repository and FM_HOME/state, real `bin/fm-crew-state.sh`, real `bin/fm-watch.sh`, and a disposable `no-mistakes` CLI responder for the authoritative run state. The worker status contained only `paused [at=1]: waiting on CI`.
+
+Real crew verdict:
+`state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: a00d9ac92c88aec4bf3daa6dee856bb982d4fd795b4f83a559c239048cc5f2f4 · run: 01RUNA`
+
+First real watcher cycle output:
+`check: ask-user gate parked: task=gate-task run=01RUNA step=ci`
+
+Durable queue row:
+`check parked-gate-gate-task-01RUNA-ci-a00d9ac92c88aec4bf3daa6dee856bb982d4fd795b4f83a559c239048cc5f2f4 check: ask-user gate parked: task=gate-task run=01RUNA step=ci`
+
+Gate marker:
+`01RUNA|ci|a00d9ac92c88aec4bf3daa6dee856bb982d4fd795b4f83a559c239048cc5f2f4`
+
+After durable acknowledgement, the same gate remained quiet. Changing only the findings description at the same run and step produced a second real watcher wake and updated the marker checksum to `01cb8f80074c2bd52cf3c15249a140c5942dc570edc48bc200048218fb799955`.
+
+Result: PASS — deterministic wake past stale paused status, durable once-per-gate deduplication, and changed-findings resurface.

@@ -1,0 +1,8 @@
+Live adversarial validation against disposable real product state
+
+A real parked human-owed gate had already been answered in the task status log with:
+`resolved [at=2] [key=nm-01RUNC-ci]: answered`
+
+The real `bin/fm-watch.sh` ran for multiple poll cycles and remained quiet; no gate wake marker was created.
+
+Result: PASS — an answered gate is not re-woken.

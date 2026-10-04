@@ -1,0 +1,9 @@
+Phase 1 targeted validation
+
+Listed suites: `bin/fm-test-run.sh --list --changed`
+
+Narrowed scripts run serially with `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300`:
+- `tests/fm-crew-state.test.sh` — passed (exit 0, 174.4s). This exercises the authoritative parked gate state and ask-user action-column/checksum output.
+- `tests/fm-watch-triage.test.sh` — hit the 300s per-script bound and was terminated (exit 124; time bound). It reached its existing watcher triage cases but did not reach the newly appended parked-gate cases before the bound. Per runbook, reported untested due to time bound and not treated as an assertion failure.
+
+No other listed suite plainly exercises the changed behavior. Phase 2 live validation is required for the deterministic parked-gate wake behavior not demonstrated by the timed-out watcher suite.

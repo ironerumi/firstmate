@@ -1,0 +1,8 @@
+Live adversarial validation against disposable real product state
+
+A disposable real `fm-crew-state.sh` verdict for a parked gate whose only finding action was `auto-fix` was:
+`state: parked · source: run-step · parked at ci: 1 finding(s) · run: 01RUNB`
+
+The real `bin/fm-watch.sh` ran for multiple poll cycles with the same stale paused status and remained quiet; no `.gate-wake-gate-task` marker was created.
+
+Result: PASS — a parked gate owed to the crewmate is not misclassified as a human decision.
