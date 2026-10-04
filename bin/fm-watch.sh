@@ -1107,7 +1107,7 @@ EOF
 # skipped before any marker is written. Every way the read can come back empty (no
 # run, a running step, an unreadable verdict) wakes nothing.
 parked_gate_tick() {
-  local meta task gate run step checksum marker reason key
+  local meta task gate run step checksum marker reason key notify_key queued
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
     [ "$(fm_meta_get "$meta" kind)" = ship ] || continue
@@ -1125,8 +1125,13 @@ EOF
     ! status_has_open_needs_decision "$STATE/$task.status" "$run" || continue
     marker="$STATE/.gate-wake-$task"
     [ "$(cat "$marker" 2>/dev/null || true)" = "$run|$step|$checksum" ] && continue
-    printf '%s\n' "$run|$step|$checksum" > "$marker" || continue
     reason="check: ask-user gate parked: task=$task run=$run step=$step"
+    notify_key="parked-gate-$task-$run-$step-$checksum"
+    queued=$(fm_wake_queued_keys check)
+    if ! printf '%s\n' "$queued" | grep -Fx "$notify_key" >/dev/null 2>&1; then
+      fm_wake_append check "$notify_key" "$reason" || continue
+    fi
+    printf '%s\n' "$run|$step|$checksum" > "$marker" || continue
     triage_log "parked human-owed gate with no open decision: $reason"
     wake "$reason"
   done

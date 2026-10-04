@@ -6817,6 +6817,30 @@ test_parked_human_gate_wakes_once_per_gate() {
   pass "a parked human-owed gate wakes once per run, step and findings checksum, past a stale paused: line"
 }
 
+test_failed_parked_gate_wake_append_does_not_arm_marker() {
+  local dir state r checksum
+  local table='findings[1]{id,severity,file,line,action,description}:
+  ci-1,error,ci,,ask-user,authority decision'
+  checksum=$(gate_findings_checksum "$table")
+  local gate="state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: $checksum · run: 01RUNA"
+  dir=$(gate_wake_case gate-wake-append-failure 'paused [at=1]: waiting on CI'); state="$dir/state"
+
+  rm -f "$state/.wake-queue"
+  mkdir -p "$state/.wake-queue" || fail "could not make the wake queue unwritable"
+  r=$(gate_wake_round "$dir" "$gate")
+  if [ "$r" = woke ]; then
+    grep -F 'check: ask-user gate parked: task=gate-task run=01RUNA step=ci' "$dir/watch.out" >/dev/null \
+      && fail "a failed gate wake append emitted the gate wake: $(cat "$dir/watch.out")"
+  fi
+  [ "$r" = quiet ] || [ "$r" = woke ] || fail "the watcher round had an unexpected result: $r"
+  [ ! -e "$state/.gate-wake-gate-task" ] || fail "a failed gate wake append armed the gate marker"
+  rmdir "$state/.wake-queue" || fail "could not restore the wake queue"
+
+  r=$(gate_wake_round "$dir" "$gate")
+  [ "$r" = woke ] || fail "the gate retry after a failed append did not wake: $(cat "$dir/watch.out")"
+  pass "a failed parked-gate wake append does not arm its marker"
+}
+
 test_parked_human_gate_answered_or_escalated_does_not_wake() {
   local dir r
   local gate='state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: 123:45 · run: 01RUNA'
@@ -6995,5 +7019,6 @@ test_paused_until_near_future_is_quiet_before_the_cadence
 test_paused_until_wrong_year_is_bounded_by_the_cadence
 test_paused_until_that_passed_is_rechecked_before_the_cadence
 test_parked_human_gate_wakes_once_per_gate
+test_failed_parked_gate_wake_append_does_not_arm_marker
 test_parked_human_gate_answered_or_escalated_does_not_wake
 test_running_pipeline_step_does_not_wake_for_a_gate
