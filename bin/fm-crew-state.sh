@@ -597,15 +597,21 @@ nm_gate_findings_count() {
 # comma inside a whitelisted field's own value (a path with a comma in it, say)
 # still shifts the walk.
 #
-# Every ask-user row's `id` column is collected, comma-joined in table order, into
-# GATE_ASK_USER_IDS as the walk goes, so the verdict can name the findings it owes
-# a human. `id` is read by the same position-from-header rule, before or after
-# `action`, but only while every column ahead of it is on the comma-free whitelist;
-# a table whose `id` is not provably reachable still answers, with no ids named.
-GATE_ASK_USER_IDS=''
+GATE_FINDINGS_CHECKSUM=''
+nm_findings_checksum() {
+  if command -v shasum >/dev/null 2>&1; then
+    LC_ALL=C shasum -a 256 | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    LC_ALL=C sha256sum | awk '{print $1}'
+  elif command -v cksum >/dev/null 2>&1; then
+    LC_ALL=C cksum | awk '{print $1 ":" $2}'
+  else
+    return 1
+  fi
+}
 nm_gate_awaits_human_decision() {
-  local header count cols idx id_idx i name field rows row rest found=1
-  GATE_ASK_USER_IDS=''
+  local header count cols idx i name field rows row rest found=1
+  GATE_FINDINGS_CHECKSUM=''
   header=$(printf '%s\n' "$RUN_OUT" | grep -E '^[[:space:]]*findings\[[0-9]+\]\{[^}]*\}:' | head -1)
   [ -n "$header" ] || return 1
   count=$(printf '%s' "$header" | sed -n 's/^[[:space:]]*findings\[\([0-9][0-9]*\)\].*/\1/p')
@@ -614,28 +620,25 @@ nm_gate_awaits_human_decision() {
   cols=$(printf '%s' "$header" | sed -n 's/^[^{]*{\([^}]*\)}.*/\1/p')
   [ -n "$cols" ] || return 1
   idx=0
-  id_idx=0
   i=0
   while [ -n "$cols" ]; do
     i=$((i + 1))
     name=$(strip_quotes "$(trim "${cols%%,*}")")
-    if [ "$idx" -eq 0 ] && [ "$name" = action ]; then
+    if [ "$name" = action ]; then
       idx=$i
-    else
-      case "$name" in
-        id) [ "$id_idx" -gt 0 ] || id_idx=$i ;;
-        severity|file|line) ;;
-        # Past `action` an unlisted column only ends the id search; before it,
-        # the walk to `action` is unsafe and the derivation refuses.
-        *) [ "$idx" -gt 0 ] && break; return 1 ;;
-      esac
-      [ "$idx" -gt 0 ] && [ "$id_idx" -gt 0 ] && break
+      break
     fi
+    case "$name" in
+      severity|file|line|id) ;;
+      *) return 1 ;;
+    esac
     case "$cols" in *,*) cols=${cols#*,} ;; *) cols='' ;; esac
   done
   [ "$idx" -gt 0 ] || return 1
   rows=$(printf '%s\n' "$RUN_OUT" \
     | awk -v n="$count" 'f { print; if (++c >= n) exit; next } /^[[:space:]]*findings\[[0-9]+\]\{/ { f = 1 }')
+  GATE_FINDINGS_CHECKSUM=$(printf '%s\n%s\n' "$header" "$rows" \
+    | nm_findings_checksum) || GATE_FINDINGS_CHECKSUM=''
   while IFS= read -r row; do
     case "$row" in *,*) ;; *) continue ;; esac
     rest=$row
@@ -648,12 +651,6 @@ nm_gate_awaits_human_decision() {
     field=$(strip_quotes "$(trim "${rest%%,*}")")
     [ "$field" = ask-user ] || continue
     found=0
-    [ "$id_idx" -gt 0 ] || continue
-    rest=$row
-    i=1
-    while [ "$i" -lt "$id_idx" ]; do rest=${rest#*,}; i=$((i + 1)); done
-    field=$(strip_quotes "$(trim "${rest%%,*}")")
-    [ -z "$field" ] || GATE_ASK_USER_IDS="${GATE_ASK_USER_IDS:+$GATE_ASK_USER_IDS,}$field"
   done <<EOF
 $rows
 EOF
@@ -1140,7 +1137,7 @@ if [ "$HAVE_RUN" = 1 ]; then
       # later note happens to contain can mint it.
       if nm_gate_awaits_human_decision; then
         RUN_DETAIL="$RUN_DETAIL${SEP}$FM_GATE_HUMAN_DECISION"
-        [ -z "$GATE_ASK_USER_IDS" ] || RUN_DETAIL="$RUN_DETAIL${SEP}$FM_GATE_FINDING_IDS_PREFIX$GATE_ASK_USER_IDS"
+        [ -z "$GATE_FINDINGS_CHECKSUM" ] || RUN_DETAIL="$RUN_DETAIL${SEP}$FM_GATE_FINDINGS_CHECKSUM_PREFIX$GATE_FINDINGS_CHECKSUM"
       fi
     else
       case "$status" in

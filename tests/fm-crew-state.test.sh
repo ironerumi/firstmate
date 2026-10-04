@@ -1029,11 +1029,10 @@ test_parked_human_decision_comes_from_the_action_column() {
   assert_contains "$out" "state: parked" "an ask-user row still reports parked"
   assert_contains "$out" " · ask-user: authority decision" \
     "an action column of ask-user mints the human-decision component"
-  # Only the ask-user row's id is named (r1 is auto-fix), so a wake can cite it.
-  assert_contains "$out" " · ask-user findings: r2" \
-    "the ask-user row's id column names the finding the human owes"
-  assert_not_contains "$out" "ask-user findings: r1" \
-    "an auto-fix row's id is not named as owed to a human"
+  assert_contains "$out" " · ask-user findings checksum: " \
+    "the human gate carries a checksum of its raw findings table"
+  assert_not_contains "$out" "ask-user findings: r2" \
+    "the human gate does not expose positional finding ids"
 
   # The counterexample. Nothing here is owed a human: every action column is
   # auto-fix. A description enumerating the action values, and a branch named
@@ -1069,8 +1068,8 @@ test_parked_human_decision_comes_from_the_action_column() {
   out=$(run_crew_state "$d" feat-ar)
   assert_contains "$out" " · ask-user: authority decision" \
     "the action column is located by header index, not by fixed position"
-  assert_contains "$out" " · ask-user findings: r2" \
-    "the id column is located by header index too"
+  assert_contains "$out" " · ask-user findings checksum: " \
+    "the reordered findings table still carries its checksum"
 
   # A header index alone is not enough, because the row is split on raw commas.
   # With `description` ahead of `action` the comma walk lands inside free text,

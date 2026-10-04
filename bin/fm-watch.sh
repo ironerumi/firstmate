@@ -113,12 +113,12 @@
 #                          running a check or removing poll artifacts
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
-#   check: ask-user gate parked: task=<id> run=<run> step=<step> findings=<ids>
+#   check: ask-user gate parked: task=<id> run=<run> step=<step>
 #                          a live ship task's no-mistakes run is parked at a
 #                          gate owed a human and the task has no decision record
 #                          for nm-<run>-<step>; read from the run's own state
 #                          each cycle (parked_gate_tick), once per run, step and
-#                          finding-id set, whatever the worker last declared
+#                          raw findings-table checksum, whatever the worker last declared
 #   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
 #                          inactive terminal outcome that still lacks its durable
 #                          upstream receipt
@@ -1098,24 +1098,23 @@ EOF
 # is the authority instead: for each live ship task, crew_parked_human_gate reads
 # the crew's current state (the run-step source, never the pane or the status
 # tail), and a gate owed a HUMAN that the task has no `nm-<run>-<step>` decision
-# record for (open or closed) queues ONE check wake naming the task, run, step and
-# finding ids.
+# record for (open or closed) queues ONE check wake naming the task, run and step.
 # No timer and no pane read, and a worker's paused:/working line cannot suppress it.
-# Once per gate: the marker holds run|step|finding-ids, so the same gate on the
-# next cycle stays quiet while a new run, step or finding id wakes again. A gate the
-# worker escalated itself (open decision) or that firstmate already answered
-# (`fm-send --resolve-key` wrote the closing line) has a record and is skipped before any marker is
-# written. Every way the read can come back empty (no run, a running step, an
-# unreadable verdict) wakes nothing.
+# Once per gate: the marker holds run|step|raw-findings-checksum, so the same gate
+# on the next cycle stays quiet while a new run, step or findings table wakes again.
+# A gate the worker escalated itself (open decision) or that firstmate already
+# answered (`fm-send --resolve-key` wrote the closing line) has a record and is
+# skipped before any marker is written. Every way the read can come back empty (no
+# run, a running step, an unreadable verdict) wakes nothing.
 parked_gate_tick() {
-  local meta task gate run step ids marker reason key
+  local meta task gate run step checksum marker reason key
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
     [ "$(fm_meta_get "$meta" kind)" = ship ] || continue
     [ -z "$(fm_meta_get "$meta" endpoint_retired)" ] || continue
     task=$(basename "$meta" .meta)
     gate=$(crew_parked_human_gate "$task") || continue
-    IFS=$(printf '\t') read -r run step ids <<EOF
+    IFS=$(printf '\t') read -r run step checksum <<EOF
 $gate
 EOF
     key="nm-$run-$step"
@@ -1125,9 +1124,9 @@ EOF
     # firstmate was told.
     ! status_has_open_needs_decision "$STATE/$task.status" "$run" || continue
     marker="$STATE/.gate-wake-$task"
-    [ "$(cat "$marker" 2>/dev/null || true)" = "$run|$step|$ids" ] && continue
-    printf '%s\n' "$run|$step|$ids" > "$marker" || continue
-    reason="check: ask-user gate parked: task=$task run=$run step=$step findings=${ids:-unknown}"
+    [ "$(cat "$marker" 2>/dev/null || true)" = "$run|$step|$checksum" ] && continue
+    printf '%s\n' "$run|$step|$checksum" > "$marker" || continue
+    reason="check: ask-user gate parked: task=$task run=$run step=$step"
     triage_log "parked human-owed gate with no open decision: $reason"
     wake "$reason"
   done

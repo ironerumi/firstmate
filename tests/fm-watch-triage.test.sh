@@ -6738,7 +6738,7 @@ test_paused_until_that_passed_is_rechecked_before_the_cadence() {
 # A worker whose run parks at an ask-user gate may end its turn without appending
 # needs-decision, with an older `paused:` line deferring the wedge timer. The
 # watcher reads the run's own current state every cycle and wakes ONCE per gate
-# (run + step + finding ids) when the task has no open decision for it.
+# (run + step + raw findings-table checksum) when the task has no open decision for it.
 
 gate_wake_case() {  # <name> <status-content> -> case dir
   local dir
@@ -6767,40 +6767,59 @@ gate_wake_round() {  # <dir> <verdict> -> woke|quiet
   fi
 }
 
+gate_findings_checksum() {  # <raw-findings-table>
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s\n' "$1" | LC_ALL=C shasum -a 256 | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    printf '%s\n' "$1" | LC_ALL=C sha256sum | awk '{print $1}'
+  else
+    printf '%s\n' "$1" | LC_ALL=C cksum | awk '{print $1 ":" $2}'
+  fi
+}
+
 test_parked_human_gate_wakes_once_per_gate() {
-  local dir state r1 r2 r3 r4
+  local dir state r1 r2 r3 r4 checksum1 checksum2
   local paused='paused [at=1]: waiting on CI'
-  local gate1='state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings: ci-1 · run: 01RUNA'
-  local gate2='state: parked · source: run-step · parked at ci: 2 finding(s) · ask-user: authority decision · ask-user findings: ci-1,ci-2 · run: 01RUNA'
+  local table1='findings[1]{id,severity,file,line,action,description}:
+  ci-1,error,ci,,ask-user,authority decision'
+  local table2='findings[1]{id,severity,file,line,action,description}:
+  ci-1,error,ci,,ask-user,changed authority decision'
+  checksum1=$(gate_findings_checksum "$table1")
+  checksum2=$(gate_findings_checksum "$table2")
+  [ "$checksum1" != "$checksum2" ] || fail "the changed findings table must have a different checksum"
+  local gate1="state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: $checksum1 · run: 01RUNA"
+  local gate2="state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: $checksum2 · run: 01RUNA"
   dir=$(gate_wake_case gate-wake-once "$paused"); state="$dir/state"
 
   # A stale paused: line does not suppress the wake, and the wake names the gate.
   r1=$(gate_wake_round "$dir" "$gate1")
   [ "$r1" = woke ] || fail "a parked ask-user gate behind a stale paused: line did not wake: $(cat "$dir/watch.out")"
-  grep -F 'check: ask-user gate parked: task=gate-task run=01RUNA step=ci findings=ci-1' "$dir/watch.out" >/dev/null \
-    || fail "the gate wake did not name task, run, step and finding ids: $(cat "$dir/watch.out")"
+  grep -F 'check: ask-user gate parked: task=gate-task run=01RUNA step=ci' "$dir/watch.out" >/dev/null \
+    || fail "the gate wake did not name task, run and step: $(cat "$dir/watch.out")"
+  grep -F 'findings=' "$dir/watch.out" >/dev/null \
+    && fail "the wake reason exposed findings data: $(cat "$dir/watch.out")"
   ack_stopped_cycle "$state" || fail "could not acknowledge the first gate wake"
 
   # The same gate on the next cycle stays quiet.
   r2=$(gate_wake_round "$dir" "$gate1")
   [ "$r2" = quiet ] || fail "the same parked gate woke a second time: $(cat "$dir/watch.out")"
 
-  # A new finding id is a changed gate and wakes again.
+  # A changed raw findings table at the same step wakes again.
   r3=$(gate_wake_round "$dir" "$gate2")
-  [ "$r3" = woke ] || fail "a gate with a new finding id did not wake"
-  grep -F 'findings=ci-1,ci-2' "$dir/watch.out" >/dev/null \
-    || fail "the changed-gate wake did not name the new finding ids: $(cat "$dir/watch.out")"
+  [ "$r3" = woke ] || fail "a changed findings table did not wake"
+  grep -F 'check: ask-user gate parked: task=gate-task run=01RUNA step=ci' "$dir/watch.out" >/dev/null \
+    || fail "the changed-gate wake did not name task, run and step: $(cat "$dir/watch.out")"
   ack_stopped_cycle "$state" || fail "could not acknowledge the changed-gate wake"
 
   # A new run at the same step wakes too.
   r4=$(gate_wake_round "$dir" "${gate2%run: 01RUNA}run: 01RUNB")
   [ "$r4" = woke ] || fail "the same gate on a new run did not wake"
-  pass "a parked human-owed gate wakes once per run, step and finding set, past a stale paused: line"
+  pass "a parked human-owed gate wakes once per run, step and findings checksum, past a stale paused: line"
 }
 
 test_parked_human_gate_answered_or_escalated_does_not_wake() {
   local dir r
-  local gate='state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings: ci-1 · run: 01RUNA'
+  local gate='state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: 123:45 · run: 01RUNA'
   # Answered: the closing line fm-send --resolve-key writes at answer time.
   dir=$(gate_wake_case gate-wake-answered 'needs-decision [at=1] [key=nm-01RUNA-ci]: ask-user findings=ci-1
 resolved [at=2] [key=nm-01RUNA-ci]: answered')
