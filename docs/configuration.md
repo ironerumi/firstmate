@@ -632,7 +632,13 @@ Each launch clears an unchanged cadence marked as injected by an earlier launch 
 Absent, unreadable, or empty files mean unset.
 The file is inherited into secondmate homes through the [primary-authoritative configuration contract](../.agents/skills/secondmate-provisioning/SKILL.md), so a secondmate's own supervisor session and its crews keep the primary's cadence; a home that sets nothing keeps the default.
 
-## Parked-gate wait deferral (config/wedge-defer-parked-gate)
+## Parked-gate supervision
+
+The watcher checks live ship tasks for a human-owed no-mistakes gate and queues a durable `check` wake naming the task, run, and step when firstmate has not already been told about that gate.
+This deterministic wake is independent of `config/wedge-defer-parked-gate` and is not suppressed by a stale worker `paused:` line.
+[`architecture.md`](architecture.md) owns the exact state, decision-fold, checksum, marker, and retry contract.
+
+### Optional wedge-timer deferral (config/wedge-defer-parked-gate)
 
 The optional local, gitignored `config/wedge-defer-parked-gate` presence flag opts this home into a default-off second form of wait evidence in the watcher's wedge timer.
 
@@ -645,7 +651,7 @@ It stays opt-in because the other evidence is the worker's own declaration about
 With the flag absent the wedge timer spends no fold or current-state read for it, writes no record, and keeps the unchanged escalation schedule, reasons, and `demand-deep-inspection` wording.
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes, which supervise their own crew and own that trade separately.
 
-[`architecture.md`](architecture.md) owns the wait-evidence contract and which records may take the ladder away; `bin/fm-watch.sh`'s `wedge_wait_evidence` owns the exact derivation and its fail-closed boundaries.
+[`architecture.md`](architecture.md) owns the supervision contract and the distinction between deterministic gate wakes and optional wedge-timer deferral; `bin/fm-watch.sh`'s `parked_gate_tick` and `wedge_wait_evidence` own the exact derivations and their fail-closed boundaries.
 
 ## Gate defaults (.no-mistakes.yaml)
 
@@ -2349,11 +2355,11 @@ FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=3   # how long reconcile waits for the runne
 FM_WHEN_OUTPUT_TAIL_BYTES=8192          # bound on the command-output tail inside one condition->action outcome document
 FM_CODEX_WATCH_CHECKPOINT=180   # seconds per foreground watcher checkpoint in Codex primary supervision
 FM_CODEX_WATCH_CHECKPOINT_AWAY=3600  # requested away checkpoint bound on a home that runs the supervision host; longer of this and attended bound, capped at 27000
-FM_CREW_STATE_NM_TIMEOUT=10   # seconds allowed per no-mistakes query inside fm-crew-state.sh, and per state-database run-inventory read behind a capped AXI overview
+FM_CREW_STATE_NM_TIMEOUT=10   # seconds allowed per no-mistakes query inside fm-crew-state.sh, including the current-state read used for deterministic parked-gate wakes and the state-database run-inventory read behind a capped AXI overview
 FM_TEARDOWN_NM_TIMEOUT=10    # seconds allowed per no-mistakes query or abort inside fm-teardown.sh
 FM_CREW_STATE_RUNS_LIMIT=200  # plain runs-ledger rows scanned for fallback attribution; does not change the CLI's AXI overview window (selection owner: bin/fm-nm-run-lib.sh)
 FM_TEARDOWN_NM_RUNS_LIMIT=200  # recent no-mistakes run rows scanned to prove an unresolved-head parked run belongs to teardown's task
-FM_CREW_STATE_BIN=bin/fm-crew-state.sh   # test override for the current-state reader used by watcher triage: the working/paused classification, and the wedge timer's parked-gate or active-run-step wait evidence
+FM_CREW_STATE_BIN=bin/fm-crew-state.sh   # test override for the current-state reader used by watcher triage: working/paused classification, deterministic parked-gate wakes, and the wedge timer's parked-gate or active-run-step wait evidence
 FM_MAIL_USER=      # mail-plane IMAP/SMTP login, from .env or environment (docs/configuration.md "Mail plane")
 FM_MAIL_PASS=      # mail-plane IMAP/SMTP password
 FM_IMAP_HOST=      # mail-plane IMAP server hostname
