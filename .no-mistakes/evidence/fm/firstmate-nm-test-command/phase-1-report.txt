@@ -1,0 +1,14 @@
+Phase 1 targeted validation
+
+Changed file: .no-mistakes.yaml
+
+Ran:
+- bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 --json /Users/gu_yifu/.no-mistakes/evidence/01M43JJMHZC707P26MEBSZNFNR/fm-nm-test-contract.json tests/fm-nm-test-contract.test.sh
+  Result: passed (exit 0; 237 ms)
+- bin/fm-test-run.sh --list --changed
+  Result: inspection only; it listed a broad upper bound of changed-file candidates, so no additional suite was selected for this gate-config-only diff.
+
+Failed: none.
+Time-bound: none.
+
+Phase 2: skipped. The targeted gate-config contract passed, and the external no-mistakes Test-step consumer is outside this assigned test phase; no live product scenario was started.
