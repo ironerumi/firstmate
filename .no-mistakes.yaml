@@ -1,4 +1,12 @@
 # Per-repo no-mistakes overrides.
+#
+# Pipeline agent (captain decision 2026-10-05): pi with openai-codex/gpt-6-luna at
+# effort medium, on every step. no-mistakes accepts agent_config (model, effort)
+# only in the global config, so the pin lives in ~/.no-mistakes/config.yaml as
+# `agent: pi` + `agent_config.pi`; this note is the repo-side record of that
+# choice. `agent: auto` is not acceptable here: it silently resolved to claude at
+# claude-opus-4-8 until 2026-10-05. Verify what ran with
+# `sqlite3 ~/.no-mistakes/state.sqlite "select step_name, agent, model from agent_invocations order by rowid desc limit 5"`.
 
 # firstmate is an agent-orchestration repo: its AGENTS.md installs a fleet-captain
 # identity. Disable project-level agent settings/instructions for gate agents so a
