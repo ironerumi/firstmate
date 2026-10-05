@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Regression test for the claude) branch of bin/fm-spawn.sh: the generated
 # <worktree>/.claude/settings.local.json must carry the lifecycle hooks it
-# exists for, the task-keyed keep-warm self-wake entry, the crew auto-compaction
-# override, and NO attribution object.
+# exists for, the crew auto-compaction override, and NO attribution object.
 #
 # Co-author suppression is owned upstream now: upstream 72bfdd0 (#3945) passes an
 # explicit `"attribution":{"commit":"","pr":"","sessionUrl":false}` object in
@@ -102,8 +101,7 @@ run_spawn_command() {
   local fake_relaunch=0
   [ "${2:-}" != --relaunch ] || fake_relaunch=1
   : > "$HOME_DIR/state/.fake-tmux-send.log"
-  env -u FM_NM_KEEPWARM_SECS \
-    FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
+  env FM_ROOT_OVERRIDE='' FM_HOME="$HOME_DIR" \
     FM_STATE_OVERRIDE="$HOME_DIR/state" FM_DATA_OVERRIDE="$HOME_DIR/data" \
     FM_PROJECTS_OVERRIDE="$HOME_DIR/projects" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
     FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" \
@@ -118,28 +116,6 @@ run_spawn_command() {
 run_spawn() {
   local id=$1 harness=$2
   run_spawn_command "$id" "$PROJ_DIR" "$harness" --mode no-mistakes --yolo off
-}
-
-run_relaunch() {
-  run_spawn_command "$1" --relaunch
-}
-
-pane_keepwarm_secs() {
-  env -i bash -c ". '$HOME_DIR/state/.fake-pane-env'; printf '%s' \"\${FM_NM_KEEPWARM_SECS-}\""
-}
-
-set_pane_keepwarm_secs() {
-  local pane_env="$HOME_DIR/state/.fake-pane-env"
-  # shellcheck disable=SC2016  # Variables deliberately expand in the isolated child shell.
-  env -i PANE_ENV="$pane_env" KEEPWARM_SECS="$1" bash -c \
-    '. "$PANE_ENV"; export FM_NM_KEEPWARM_SECS="$KEEPWARM_SECS"; export -p > "$PANE_ENV.tmp"; mv "$PANE_ENV.tmp" "$PANE_ENV"'
-}
-
-unset_pane_keepwarm_secs() {
-  local pane_env="$HOME_DIR/state/.fake-pane-env"
-  # shellcheck disable=SC2016  # Variables deliberately expand in the isolated child shell.
-  env -i PANE_ENV="$pane_env" bash -c \
-    '. "$PANE_ENV"; unset FM_NM_KEEPWARM_SECS; export -p > "$PANE_ENV.tmp"; mv "$PANE_ENV.tmp" "$PANE_ENV"'
 }
 
 # The claude settings artifact must keep the lifecycle hooks and must NOT
@@ -191,122 +167,7 @@ test_non_claude_spawn_has_no_claude_settings_file() {
   pass "non-claude spawn carries no claude settings file"
 }
 
-# The keep-warm self-wake (bin/fm-claude-keepwarm-selfwake.sh) rides the same
-# artifact as a second asyncRewake Stop entry keyed to this task, so an idle
-# Claude crew in any project repo warms its own cache. The injected command is
-# run for real with a seconds-scale interval: it must fire the marked wake from
-# the spawning home's state dir, and stand down when the home disables it.
-test_claude_spawn_settings_inject_keepwarm_selfwake() {
-  local rec id out status settings cmd rc marker
-  id=claude-keepwarm-inject-z3
-  rec=$(make_case claude-keepwarm "$id" claude)
-  read_case_record "$rec"
-
-  out=$(run_spawn "$id" claude)
-  status=$?
-  expect_code 0 "$status" "claude spawn should succeed against the fake tmux"
-  settings="$WT_DIR/.claude/settings.local.json"
-  [ -f "$settings" ] || fail "claude spawn did not generate $settings"
-  cmd=$(jq -r '.hooks.Stop[0].hooks[] | select(.asyncRewake == true) | .command' "$settings")
-  [ -n "$cmd" ] || fail "generated settings carry no asyncRewake Stop entry for the keep-warm self-wake"
-  jq -e '.hooks.Stop[0].hooks[] | select(.asyncRewake == true) | .timeout == 3600' "$settings" >/dev/null \
-    || fail "the keep-warm Stop entry must declare the 3600s hook timeout"
-
-  marker="$HOME_DIR/state/.keepwarm-$id"
-  rc=0
-  printf '%s\n' '{"session_id":"sess-crew","stop_hook_active":false}' \
-    | (cd "$WT_DIR" && FM_NM_KEEPWARM_SECS=1 sh -c "$cmd") > "$TMP_ROOT/keepwarm-inject.out" 2>&1 || rc=$?
-  expect_code 2 "$rc" "the injected crew hook must fire the native wake at the deadline"
-  assert_contains "$(cat "$TMP_ROOT/keepwarm-inject.out")" $'\xE2\x81\xA3FIRSTMATE_OP: v1 keep-warm: ' \
-    "the injected crew hook must deliver the marked keep-warm banner"
-  assert_present "$marker" "the crew wake must record its marker in the spawning home's state dir"
-  assert_absent "$WT_DIR/state" "the crew wake must not create state inside the project worktree"
-
-  rm -f "$marker"
-  rc=0
-  printf '%s\n' '{"session_id":"sess-crew","stop_hook_active":false}' \
-    | (cd "$WT_DIR" && FM_NM_KEEPWARM_SECS=0 sh -c "$cmd") > "$TMP_ROOT/keepwarm-inject-off.out" 2>&1 || rc=$?
-  expect_code 0 "$rc" "FM_NM_KEEPWARM_SECS=0 must disable the injected crew hook"
-  assert_absent "$marker" "a disabled home must not arm the crew wake"
-  pass "claude spawn injects the task-keyed keep-warm self-wake into the crew's Stop hooks"
-}
-
-# A home that configures config/keepwarm-secs hands its spawned crew the
-# resolved cadence in the pane environment, so the crew's injected keep-warm
-# hook needs no reach into this home's config dir from a project worktree. A
-# home without that file leaves the pane exactly as it was before.
-test_claude_spawn_injects_configured_keepwarm_cadence() {
-  local rec id out status log
-  id=claude-keepwarm-config-off-z4
-  rec=$(make_case claude-keepwarm-config "$id" claude)
-  read_case_record "$rec"
-
-  out=$(run_spawn "$id" claude)
-  status=$?
-  expect_code 0 "$status" "claude spawn should succeed against the fake tmux"
-  log="$HOME_DIR/state/.fake-tmux-send.log"
-  assert_present "$log" "the fake tmux must record the text lines the spawn sends"
-  assert_contains "$(cat "$log")" "export FM_TASK_ID=$id" \
-    "the ship marker must still be sent into the pane"
-  assert_not_contains "$(cat "$log")" "export FM_NM_KEEPWARM_SECS=" \
-    "an unconfigured home must not inject a keep-warm cadence"
-  [ -z "$(pane_keepwarm_secs)" ] \
-    || fail "an unconfigured home must leave an unmarked pane cadence unset"
-
-  id=claude-keepwarm-config-on-z5
-  rec=$(make_case claude-keepwarm-config-set "$id" claude)
-  read_case_record "$rec"
-  printf '3000\n' > "$HOME_DIR/config/keepwarm-secs"
-  out=$(run_spawn "$id" claude)
-  status=$?
-  expect_code 0 "$status" "claude spawn should succeed against the fake tmux"
-  log="$HOME_DIR/state/.fake-tmux-send.log"
-  assert_contains "$(cat "$log")" "export FM_NM_KEEPWARM_SECS=3000" \
-    "a configured home must hand the crew the resolved keep-warm cadence"
-  assert_contains "$(cat "$log")" "export FM_TASK_ID=$id" \
-    "the ship marker must still be sent alongside it"
-  [ "$(pane_keepwarm_secs)" = 3000 ] \
-    || fail "the configured cadence did not reach the pane environment"
-
-  set_pane_keepwarm_secs 600
-  out=$(run_relaunch "$id")
-  status=$?
-  expect_code 0 "$status" "claude relaunch should preserve an independent pane cadence: $out"
-  [ "$(pane_keepwarm_secs)" = 600 ] \
-    || fail "relaunch overwrote the pane's independent keep-warm cadence"
-
-  unset_pane_keepwarm_secs
-  out=$(run_relaunch "$id")
-  status=$?
-  expect_code 0 "$status" "claude relaunch should restore config cadence injection: $out"
-  [ "$(pane_keepwarm_secs)" = 3000 ] \
-    || fail "relaunch did not restore the configured cadence after clearing the pane override"
-
-  rm -f "$HOME_DIR/config/keepwarm-secs"
-  out=$(run_relaunch "$id")
-  status=$?
-  expect_code 0 "$status" "claude relaunch should succeed after keepwarm-secs removal: $out"
-  [ -z "$(pane_keepwarm_secs)" ] \
-    || fail "relaunch retained a cadence injected from the removed config file"
-
-  # The injected value is the resolved interval, not the raw file: the cap
-  # clamps a request above 3000 exactly as it does for the environment variable.
-  id=claude-keepwarm-config-cap-z6
-  rec=$(make_case claude-keepwarm-config-cap "$id" claude)
-  read_case_record "$rec"
-  printf '7200\n' > "$HOME_DIR/config/keepwarm-secs"
-  out=$(run_spawn "$id" claude)
-  status=$?
-  expect_code 0 "$status" "claude spawn should succeed against the fake tmux"
-  assert_contains "$(cat "$HOME_DIR/state/.fake-tmux-send.log")" \
-    "export FM_NM_KEEPWARM_SECS=3000" \
-    "an above-cap config value must reach the crew already clamped"
-  pass "claude spawn preserves pane overrides and clears stale injected cadence on relaunch"
-}
-
 test_claude_spawn_settings_carry_hooks_without_attribution
 test_non_claude_spawn_has_no_claude_settings_file
-test_claude_spawn_settings_inject_keepwarm_selfwake
-test_claude_spawn_injects_configured_keepwarm_cadence
 
 echo "# all fm-spawn-claude-attribution tests passed"

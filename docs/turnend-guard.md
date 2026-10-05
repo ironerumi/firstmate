@@ -257,7 +257,7 @@ Each enabled primary harness adapts its own turn-end mechanism to the shared gua
 
 | Harness | Turn-end hook | How it enforces the guard |
 | --- | --- | --- |
-| Claude | Three `Stop` hooks in `.claude/settings.json` | Blocks with exit status 2, cooperating with the Stop auto-arm |
+| Claude | Two `Stop` hooks in `.claude/settings.json` | Blocks with exit status 2, cooperating with the Stop auto-arm |
 | Codex | `Stop` hook in `.codex/hooks.json` | Blocks with exit status 2 |
 | OpenCode | `session.idle` in `.opencode/plugins/fm-primary-turnend-guard.js` | Passive callback that schedules one follow-up |
 | Pi | `agent_settled` in `.pi/extensions/fm-primary-turnend-guard.ts` | Passive callback that schedules one follow-up |
@@ -267,8 +267,7 @@ Each enabled primary harness adapts its own turn-end mechanism to the shared gua
 
 The registrations in detail:
 
-- Claude registers three `Stop` hooks in `.claude/settings.json`, all anchored through `CLAUDE_PROJECT_DIR`: `bin/fm-turnend-guard.sh --claude`, `bin/fm-claude-stop-autoarm.sh` with `asyncRewake: true` and `timeout: 28800`, and `bin/fm-claude-keepwarm-selfwake.sh` with `asyncRewake: true` and `timeout: 3600`.
-  The third is the keep-warm self-wake: it sleeps to the cadence configured under [Claude keep-warm cadence](configuration.md#claude-keep-warm-cadence-configkeepwarm-secs--fm_nm_keepwarm_secs) and exits 2 with a marked benign banner only if no real turn superseded it, so an idle Claude primary or secondmate primary keeps its prompt cache warm without the watcher; `bin/fm-spawn.sh` injects the same hook with `--task <id>` into every Claude crew's per-task `settings.local.json`, so an idle crew or scout in any project repo warms itself the same way; marker cancellation covers all normal real turns, and if a real turn crosses the exact deadline before its Stop rewrites the marker, at most one extra benign acknowledgement turn is delivered by design; its header owns the two forms, the gates, and the cancellation contract.
+- Claude registers two `Stop` hooks in `.claude/settings.json`, both anchored through `CLAUDE_PROJECT_DIR`: `bin/fm-turnend-guard.sh --claude`, and `bin/fm-claude-stop-autoarm.sh` with `asyncRewake: true` and `timeout: 28800`.
 - Codex registers a `Stop` hook in `.codex/hooks.json`, anchors the executable to the hook process working directory, verifies a Firstmate-shaped hook-bearing root, and passes the original payload to the shared guard.
 - OpenCode listens for `session.idle` in `.opencode/plugins/fm-primary-turnend-guard.js`, lets the watcher coordinator act first, and calls `client.session.promptAsync` once when the guard returns 2.
 - Pi listens for `agent_settled` in `.pi/extensions/fm-primary-turnend-guard.ts`, runs once per logical agent run, and calls `pi.sendUserMessage(..., { deliverAs: "followUp" })` once when the guard returns 2.
@@ -280,9 +279,9 @@ The registrations in detail:
   Cursor also loads `<project>/.claude/settings.json`, so every tracked Claude-shaped entrypoint whose event Cursor covers stands down on a Cursor-delivered payload through `bin/fm-hook-host-lib.sh`.
   That predicate reads the delivered payload's own `cursor_version`, never the environment.
   Cursor exports `CURSOR_INVOKED_AS`, `CURSOR_PROJECT_DIR`, and `CURSOR_VERSION` into every child process, so an environment guard would also disable the hooks of a Claude session started by hand from a Cursor pane, which is the hazard the `GROK_SESSION_ID` exclusion below records.
-  The guarded set is the `SessionStart` entry, the two `PreToolUse` Bash entries, and all three `Stop` entries.
+  The guarded set is the `SessionStart` entry, the two `PreToolUse` Bash entries, and both `Stop` entries.
   Cursor 2026.08.11-e8db854 does not fire the Claude-shaped `Stop` entries at all, but they are guarded anyway because Cursor has no `asyncRewake`.
-  If a later build did fire them, `bin/fm-claude-stop-autoarm.sh` would run synchronously inside Cursor's stop step and hold that turn open for its declared multi-hour timeout, exactly the wedge grok 1.0.0 produced, and `bin/fm-claude-keepwarm-selfwake.sh` would hold it for the keep-warm interval.
+  If a later build did fire it, `bin/fm-claude-stop-autoarm.sh` would run synchronously inside Cursor's stop step and hold that turn open for its declared multi-hour timeout, exactly the wedge grok 1.0.0 produced.
 - Grok registers a `Stop` hook in `.grok/hooks/fm-primary-turnend-guard.json` and delegates capability selection to `bin/fm-turnend-guard-grok.sh`.
   The tracked Claude Stop entries are inert when `GROK_AGENT` or `GROK_HOOK_EVENT` is present, so Grok's Claude-compatible settings loading cannot create a second continuation path.
   Both markers are required because Grok does not inject the same variables into every process kind.
@@ -290,7 +289,7 @@ The registrations in detail:
   A guard keyed on `GROK_AGENT` alone therefore stopped firing on grok 1.0.0, and the resulting Claude-only auto-arm ran synchronously under Grok.
   Grok has no `asyncRewake`, so it waited on the foregrounded watcher for the declared 28800-second timeout and the Grok turn never ended.
   Do NOT widen this guard to `GROK_SESSION_ID`: Grok injects that into every child process, so it can survive into a Claude session that Grok launched and would silently disable Claude's own continuity.
-  The same marker guard carries every tracked `.claude/settings.json` entry whose event Grok already covers through its own `.grok/hooks/` registration, which is all three `Stop` entries, the `SessionStart` entry, and the two `PreToolUse` Bash entries.
+  The same marker guard carries every tracked `.claude/settings.json` entry whose event Grok already covers through its own `.grok/hooks/` registration, which is both `Stop` entries, the `SessionStart` entry, and the two `PreToolUse` Bash entries.
   `bin/fm-subagent-pretool-check.sh` is the one deliberate unguarded exception because no Grok registration covers the subagent-spawn event, recorded in [`subagent-guard.md`](subagent-guard.md) "Known residual gap".
   `tests/fm-turnend-guard.test.sh` pins that inventory so neither the guarded set nor the exception can change silently.
 - pi-code, Pi's Claude-hook compatibility extension, also loads `<project>/.claude/settings.json` and has no `asyncRewake`, so it awaits every Stop hook it delivers.
@@ -564,8 +563,6 @@ That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it alwa
 - Typed field precedence.
 - Malformed input.
 - Exactly-one-path safety.
-
-`tests/fm-claude-keepwarm-selfwake.test.sh` covers the self-wake deadline, the 50-minute cap, default, env-override, config-file, invalid-value, and disabled cadence, cancellation and re-arm, the supervisor and crew forms with independent markers, the bare form standing down in a crew worktree, and the Cursor, malformed-argument, missing-state, and missing-`jq` stand-down paths, while `tests/fm-spawn-claude-attribution.test.sh` runs the injected crew entry end to end from a spawned worktree.
 
 `tests/fm-turnend-foreign-owner-arm-fix.test.sh` runs the extracted isolated executable reproduction against real auto-arm and turn-end guard scripts.
 It proves that a live foreign owner still prevents arming while repeated non-owner Stops receive a diagnostic and exit safely.

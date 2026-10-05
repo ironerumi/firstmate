@@ -17,16 +17,7 @@ set -u
 TMP_ROOT=$(fm_test_tmproot fm-worker-role-inert)
 fm_git_identity fmtest fmtest@example.invalid
 
-KEEPWARM_PIDS="$TMP_ROOT/keepwarm-pids"
-: > "$KEEPWARM_PIDS"
-stop_keepwarm() {
-  local pid
-  while IFS= read -r pid; do
-    [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null
-  done < "$KEEPWARM_PIDS"
-  true
-}
-trap 'stop_keepwarm; fm_test_cleanup' EXIT
+trap fm_test_cleanup EXIT
 
 # A retired secondmate home left in a pool slot: plain checkout, the marker,
 # an in-flight task record, and the bin/ the hooks resolve themselves from.
@@ -101,55 +92,6 @@ test_stop_autoarm_stands_down_for_worker() {
   pass "fm-claude-stop-autoarm: inert for a worker in a stale home slot"
 }
 
-start_bare_keepwarm() {  # <dir> <out-file> [env assignments...]
-  local dir=$1 out=$2
-  shift 2
-  (
-    printf '{"session_id":"s","stop_hook_active":false}\n' \
-      | env FM_HOME="$dir" FM_NM_KEEPWARM_SECS=600 "$@" bash "$dir/bin/fm-claude-keepwarm-selfwake.sh" > "$out" 2>&1
-  ) &
-  printf '%s\n' "$!" >> "$KEEPWARM_PIDS"
-}
-
-test_bare_keepwarm_stands_down_for_worker() {
-  local dir i
-  dir=$(make_stale_home_slot "$TMP_ROOT/keepwarm")
-  start_bare_keepwarm "$dir" "$TMP_ROOT/keepwarm-home.out"
-  i=0
-  while [ ! -e "$dir/state/.keepwarm-selfwake" ] && [ "$i" -lt 30 ]; do sleep 0.1; i=$((i + 1)); done
-  [ -e "$dir/state/.keepwarm-selfwake" ] || fail "control: the marked home's bare keep-warm never armed"
-  rm -f "$dir/state/.keepwarm-selfwake"
-  start_bare_keepwarm "$dir" "$TMP_ROOT/keepwarm-worker.out" FM_TASK_ID=some-task
-  sleep 1
-  [ ! -e "$dir/state/.keepwarm-selfwake" ] || fail "the bare keep-warm armed inside a worker pane"
-  pass "fm-claude-keepwarm-selfwake: bare supervisor form stands down for a worker"
-}
-
-# The Pi (and OMP, same template) turn-end extension owns session start, the
-# turn-end guard, and the pretool seatbelts: it must register none of them.
-test_pi_turnend_extension_registers_nothing_for_worker() {
-  local repo ext out status
-  repo="$TMP_ROOT/pi-turnend"
-  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
-  mkdir -p "$repo/.pi/extensions/lib" "$repo/bin"
-  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$ext"
-  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
-  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
-  out=$(PLUGIN="$ext" FM_HOME="$repo" FM_TASK_ID=some-task node --input-type=module 2>&1 <<'EOF'
-import { pathToFileURL } from "node:url";
-
-const calls = [];
-const pi = new Proxy({}, { get: (_target, name) => () => { calls.push(String(name)); } });
-const mod = await import(pathToFileURL(process.env.PLUGIN).href);
-mod.default(pi);
-if (calls.length !== 0) throw new Error(`worker pane registered Pi turn-end surfaces: ${calls.join(",")}`);
-EOF
-)
-  status=$?
-  expect_code 0 "$status" "Pi turn-end extension must register nothing for a worker: $out"
-  pass ".pi primary turn-end extension: registers nothing in a worker pane (FM_TASK_ID)"
-}
-
 test_home_entrypoints_refuse_a_worker() {
   local dir script out status
   dir=$(make_stale_home_slot "$TMP_ROOT/entrypoints")
@@ -196,5 +138,4 @@ test_session_start_run_stands_down_for_worker
 test_session_start_nudge_stands_down_for_worker
 test_turnend_guard_stands_down_for_worker
 test_stop_autoarm_stands_down_for_worker
-test_bare_keepwarm_stands_down_for_worker
 test_home_entrypoints_refuse_a_worker

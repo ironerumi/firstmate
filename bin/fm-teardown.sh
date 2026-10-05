@@ -387,7 +387,7 @@ unset _teardown_source
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
 # shellcheck source=bin/fm-nm-run-lib.sh
 . "$SCRIPT_DIR/fm-nm-run-lib.sh"
-if [ "$#" -lt 1 ] || ! fm_task_id_task_valid "$1"; then
+if [ "$#" -lt 1 ] || ! fm_task_id_path_safe "$1"; then
   echo "error: invalid teardown request" >&2
   exit 2
 fi
@@ -1489,21 +1489,6 @@ remove_pr_poll_artifacts() {
   rm -f "$state_dir/$id.check.sh" "$state_dir/$id.pr-poll" \
     "$state_dir/$id.pr-poll-registration" "$state_dir/$id.pr-poll-retirement" \
     "$state_dir/$id.merge-authority" "$state_dir/$id.check-trust" || return 1
-}
-
-FM_TEARDOWN_KEEPWARM_TEMP_LIMIT=${FM_TEARDOWN_KEEPWARM_TEMP_LIMIT:-2000}
-remove_keepwarm_temp_siblings() { # <state-dir> <id>
-  local state_dir=$1 id=$2
-  local temp_dir=$state_dir/.keepwarm-tmp/$id path removed=0
-  [ -d "$temp_dir" ] || return 0
-  for path in "$temp_dir"/*; do
-    [ -e "$path" ] || [ -L "$path" ] || continue
-    rm -f -- "$path" || continue
-    removed=$((removed + 1))
-    [ "$removed" -lt "$FM_TEARDOWN_KEEPWARM_TEMP_LIMIT" ] || break
-  done
-  rmdir -- "$temp_dir" 2>/dev/null || true
-  return 0
 }
 
 # Resolve the PR number for a worktree branch via gh-axi. Echoes the number on a
@@ -3399,7 +3384,6 @@ cleanup_firstmate_home_children() {
     remove_grok_turnend_auth "$sub_state" "$child_id" || return 1
     remove_kimi_turnend_auth "$sub_state" "$child_id" || return 1
     remove_pr_poll_artifacts "$sub_state" "$child_id" || return 1
-    remove_keepwarm_temp_siblings "$sub_state" "$child_id" || return 1
     child_busy_gen=$(meta_value "$child_meta" busy_gen)
     if [ -z "$child_busy_gen" ]; then
       child_busy_gen=$(cat "$sub_state/$child_id.busy-gen" 2>/dev/null || true)
@@ -3414,7 +3398,6 @@ cleanup_firstmate_home_children() {
       "$sub_state/$child_id.grok-turnend-token" "$sub_state/$child_id.kimi-turnend-token" \
       "$sub_state/$child_id.muse-session" "$sub_state/$child_id.muse-session-current" \
       "$sub_state/$child_id.cursor-session" "$sub_state/$child_id.reconcile-nudged" \
-      "$sub_state/.keepwarm-$child_id" \
       "$sub_state/$child_id.devin-config.json" \
       "$sub_state/.$child_id.branch-outcome-index"
     chmod u+w "$sub_state/$child_id.git-hooks" 2>/dev/null || true
@@ -3876,7 +3859,6 @@ if [ -n "$LAUNCH_HOME_TOKEN" ]; then
   rm -rf "/tmp/fm-$ID+$LAUNCH_HOME_TOKEN"
 fi
 remove_pr_poll_artifacts "$STATE" "$ID" || exit 1
-remove_keepwarm_temp_siblings "$STATE" "$ID" || exit 1
 retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 # Opt-in fleet activity ledger (docs/fleet-ledger.md), before the status log is
 # retired so its last lines are captured; off costs one file test.
@@ -3891,7 +3873,6 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
   "$STATE/$ID.control-relaunch" "$STATE/$ID.control-relaunch.meta-prior" \
   "$STATE/$ID.control-relaunch.brief-prior" "$STATE/$ID.control-relaunch.note" \
   "$STATE/$ID.reconcile-nudged" "$STATE/$ID.gemini-settings.json" "$STATE/$ID.devin-config.json" \
-  "$STATE/.keepwarm-$ID" \
   "$STATE/.$ID.branch-outcome-index" \
   "$STATE/.secondmate-relaunch-$ID" "$STATE/.secondmate-relaunch-bound-$ID"
 # The steering inbox (bin/fm-task-inbox-lib.sh) is runtime state for the

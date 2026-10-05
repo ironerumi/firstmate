@@ -235,11 +235,6 @@ assert_contains "$out" "published=0 started=0" "reconcile is a no-op with nothin
 [ -z "$(ls -A "$IDLE/state" 2>/dev/null)" ] || fail "an unconfigured home generated state: $(ls -A "$IDLE/state")"
 pass "no configured source means no generated state and no process"
 
-HSELFWAKE="$TMP_ROOT/selfwake-source"; mkdir -p "$HSELFWAKE/state"
-out=$(pe_register "$HSELFWAKE" lavish selfwake -- /bin/echo "reserved task namespace remains a source id")
-assert_contains "$out" "registered: selfwake" "the process-event source namespace must remain independent"
-pass "a process-event source can use the supervisor's reserved task name"
-
 sup=$(PATH="${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}" bash -c \
   '. "$1/bin/fm-supervision-lib.sh"; fm_supervision_needed "$2" && echo yes || echo no' _ "$ROOT" "$IDLE/state")
 assert_contains "$sup" no "an unconfigured home does not need supervision"
