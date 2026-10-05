@@ -305,11 +305,10 @@
 #   TMUX TMUX_PANE HERDR_ENV HERDR_SESSION HERDR_SOCKET_PATH HERDR_PANE_ID
 #   CMUX_WORKSPACE_ID CMUX_SURFACE_ID CMUX_TAB_ID CMUX_PANEL_ID CMUX_SOCKET_PATH
 #   ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID FM_ZELLIJ_SESSION, plus the task
-#   marker FM_TASK_ID and the keep-warm cadence FM_NM_KEEPWARM_SECS that ship
-#   and scout panes receive above, plus the compact-adviser kill switch
-#   COMPACT_ADVISER_DISABLE, which the floor also pins to 1 with a literal
-#   assignment so it survives the cleared environment even on a host that
-#   never had it set.
+#   marker FM_TASK_ID that ship and scout panes receive above, plus the
+#   compact-adviser kill switch COMPACT_ADVISER_DISABLE, which the floor also
+#   pins to 1 with a literal assignment so it survives the cleared environment
+#   even on a host that never had it set.
 #   An enabled task trace also retains TRACEPARENT. Explicit Firstmate launch
 #   assignments still apply inside the filtered environment, including the
 #   FM_TASK_INBOX export every launch carries (the absolute state/<id>.inbox
@@ -628,8 +627,6 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
-# shellcheck source=bin/fm-keepwarm-cadence-lib.sh
-. "$SCRIPT_DIR/fm-keepwarm-cadence-lib.sh"
 # shellcheck source=bin/fm-cursor-lib.sh
 . "$SCRIPT_DIR/fm-cursor-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
@@ -4554,9 +4551,8 @@ if [ "$KIND" != secondmate ]; then
     j_stop=$(json_escape "touch $(shell_quote "$TURNEND"); $busy_cmd_prefix idle $busy_suffix --event stop 2>/dev/null || true")
     j_stopfail=$(json_escape "$busy_cmd_prefix idle $busy_suffix --event stop-failure 2>/dev/null || true")
     j_sessionend=$(json_escape "$busy_cmd_prefix idle $busy_suffix --event session-end 2>/dev/null || true")
-    j_keepwarm=$(json_escape "FM_STATE_OVERRIDE=$(shell_quote "$STATE_REAL") exec $(shell_quote "$FM_ROOT/bin/fm-claude-keepwarm-selfwake.sh") --task $(shell_quote "$ID")")
     cat >"$WT/.claude/settings.local.json" <<EOF
-{"autoCompactEnabled":true,"autoCompactWindow":500000,"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"},{"type":"command","command":"$j_keepwarm","asyncRewake":true,"timeout":3600}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
+{"autoCompactEnabled":true,"autoCompactWindow":500000,"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
 EOF
     exclude_path '.claude/settings.local.json'
     ;;
@@ -5313,12 +5309,6 @@ fi
 # syntax of its own.
 if [ "$KIND" = ship ] || [ "$KIND" = scout ]; then
   spawn_send_text_line "$T" "export FM_TASK_ID=$ID"
-  # shellcheck disable=SC2016  # Pane variables deliberately expand in the crewmate shell.
-  spawn_send_text_line "$T" 'if [ "${FM_FIRSTMATE_KEEPWARM_SECS_INJECTED+x}" = x ] && [ "${FM_NM_KEEPWARM_SECS-}" = "$FM_FIRSTMATE_KEEPWARM_SECS_INJECTED" ]; then unset FM_NM_KEEPWARM_SECS; fi; unset FM_FIRSTMATE_KEEPWARM_SECS_INJECTED'
-  if fm_keepwarm_config_present; then
-    KEEPWARM_SECS=$(fm_keepwarm_interval_secs)
-    spawn_send_text_line "$T" "if [ -z \"\${FM_NM_KEEPWARM_SECS:-}\" ]; then export FM_NM_KEEPWARM_SECS=$KEEPWARM_SECS FM_FIRSTMATE_KEEPWARM_SECS_INJECTED=$KEEPWARM_SECS; fi"
-  fi
 fi
 # Send through the exact channel that already ships GOTMPDIR, so every backend
 # and harness - ship, scout, and secondmate - gets it before launch. Skipped
@@ -5346,7 +5336,7 @@ if [ "$LAUNCH_ENV_ENABLED" = 1 ]; then
     TMPDIR TMP TEMP GOTMPDIR TMUX TMUX_PANE HERDR_ENV HERDR_SESSION HERDR_SOCKET_PATH \
     HERDR_PANE_ID CMUX_WORKSPACE_ID CMUX_SURFACE_ID CMUX_TAB_ID CMUX_PANEL_ID \
     CMUX_SOCKET_PATH ZELLIJ ZELLIJ_SESSION_NAME ZELLIJ_PANE_ID FM_ZELLIJ_SESSION \
-    FM_TASK_ID FM_NM_KEEPWARM_SECS COMPACT_ADVISER_DISABLE LAVISH_AXI_HOST \
+    FM_TASK_ID COMPACT_ADVISER_DISABLE LAVISH_AXI_HOST \
     $LAUNCH_ENV_NAMES; do
     # Only validated names enter shell syntax. Values expand once, quoted, in
     # the pane shell and never become source text or spawn-process snapshots.

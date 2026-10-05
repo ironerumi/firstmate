@@ -104,14 +104,9 @@ fm_task_id_path_safe() {
   esac
 }
 
-fm_task_id_task_valid() {
-  local id=${1-}
-  fm_task_id_path_safe "$id" && [ "$id" != selfwake ]
-}
-
 fm_pr_task_id_valid() {
   local id=${1-}
-  fm_task_id_task_valid "$id"
+  fm_task_id_path_safe "$id"
 }
 
 fm_task_id_creation_valid() {
