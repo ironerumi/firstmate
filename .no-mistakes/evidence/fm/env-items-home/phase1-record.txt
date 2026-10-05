@@ -1,0 +1,23 @@
+Phase 1 narrowed suites (changed test scripts in diff):
+- tests/fm-spawn-claude-attribution.test.sh  => PASS (2 tests ok)
+    drives fm-spawn.sh claude branch; asserts generated .claude/settings.local.json
+    carries hooks, no attribution, and (per intent) no autoCompact keys.
+- tests/fm-calm-pi-extension.test.sh          => FAILED at unrelated renderer test
+    "Pi calm renderer and lifecycle contract" assertStockHtmlRendering:
+    "grep disappeared from /export calm.html HTML while calm mode was on"
+    Node.js v25.8.1 crashed the node eval; working-ship test did not run.
+    Failure is in tool-call-row export HTML path, NOT the working-ship widget key.
+    Needs causation check vs base commit d72ca55.
+
+--- Scenario 2 isolation (phase 2) ---
+Env: Pi @earendil-works/pi-coding-agent 1.0.3, node v25.8.1.
+Drove test_working_ship_geometry_and_lifecycle in isolation (scoped copy, removed after):
+  PASS - "Pi Calm working ship keeps its centered two-row asymmetric Unicode boat...
+          freezes and resumes across settle/start... leaves Calm-off visibility untouched"
+  This registers the boat under CALM_WORKING_SHIP_WIDGET_KEY (now "firstmate-calm-working-ship")
+  via the real Pi package and asserts one-boat geometry/lifecycle. Scenario 2 proven.
+
+Causation of the fm-calm-pi-extension suite failure:
+  Failing assert = createToolHtmlRenderer().renderCall("grep",...) returns falsy under Pi 1.0.3
+  (tool HTML export path). Independent of the one-line widget-key string edit; pre-existing /
+  environmental (Pi 1.0.3 + node v25.8). Covered by CI; not introduced by this change.
