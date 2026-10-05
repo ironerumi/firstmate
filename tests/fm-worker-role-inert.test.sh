@@ -92,6 +92,31 @@ test_stop_autoarm_stands_down_for_worker() {
   pass "fm-claude-stop-autoarm: inert for a worker in a stale home slot"
 }
 
+# The Pi (and OMP, same template) turn-end extension owns session start, the
+# turn-end guard, and the pretool seatbelts: it must register none of them.
+test_pi_turnend_extension_registers_nothing_for_worker() {
+  local repo ext out status
+  repo="$TMP_ROOT/pi-turnend"
+  ext="$repo/.pi/extensions/fm-primary-turnend-guard.ts"
+  mkdir -p "$repo/.pi/extensions/lib" "$repo/bin"
+  cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$ext"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$repo/.pi/extensions/lib/fm-operational-input.ts"
+  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+  out=$(PLUGIN="$ext" FM_HOME="$repo" FM_TASK_ID=some-task node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const calls = [];
+const pi = new Proxy({}, { get: (_target, name) => () => { calls.push(String(name)); } });
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+if (calls.length !== 0) throw new Error(`worker pane registered Pi turn-end surfaces: ${calls.join(",")}`);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi turn-end extension must register nothing for a worker: $out"
+  pass ".pi primary turn-end extension: registers nothing in a worker pane (FM_TASK_ID)"
+}
+
 test_home_entrypoints_refuse_a_worker() {
   local dir script out status
   dir=$(make_stale_home_slot "$TMP_ROOT/entrypoints")
