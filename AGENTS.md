@@ -250,7 +250,6 @@ Load `validation-supervision` when a ship starts or already has an active no-mis
 ### PR ready, landing, and teardown
 
 Load `ship-landing` when a ship reports a PR or ready branch, when deciding or monitoring landing, and before task cleanup.
-For a direct Firstmate-repo ship executed by the primary session rather than a worker, register its task identity through `bin/fm-task-register.sh` before PR check or merge.
 
 ### Scout outcome and promotion
 

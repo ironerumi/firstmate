@@ -14,18 +14,17 @@
 #   Exit 1 - refused; stderr names the task(s) already in flight.
 #   Exit 2 - usage or argument error.
 #
-# The callers are bin/fm-spawn.sh's pre-flight pass for every fresh ship spawn,
-# bin/fm-promote.sh for scout promotion, and bin/fm-task-register.sh for direct
-# Firstmate-repo ships, so this script owns the whole trigger rule.
+# The callers are bin/fm-spawn.sh's pre-flight pass for every fresh ship spawn
+# and bin/fm-promote.sh for scout promotion, so this script owns the whole
+# trigger rule.
 #
-# "In flight" is the presence of another ship or adhoc task record for the same
+# "In flight" is the presence of another ship task record for the same
 # project in <state-dir>: bin/fm-teardown.sh removes that record only after
 # landing is confirmed, so the record covers an agent still implementing, a
 # validation run still working, an open PR held for merge, and a finished agent
 # whose PR has not landed yet. A record carrying no kind= is read as ship, the
-# same default bin/fm-spawn.sh applies to a legacy record. kind=adhoc is a direct
-# Firstmate implementation record without a worker endpoint, so it counts as a
-# ship; kind=scout (read-only, no PR) and kind=secondmate (not an implementation
+# same default bin/fm-spawn.sh applies to a legacy record. kind=scout
+# (read-only, no PR) and kind=secondmate (not an implementation
 # task) are the only exemptions, and a project's own other repositories never
 # block each other.
 # <task-id> is excluded from the scan, so the same task re-checking itself (a
@@ -104,7 +103,7 @@ for meta in "$STATE_DIR"/*.meta; do
   kind=$(fm_meta_get "$meta" kind)
   [ -n "$kind" ] || kind=ship
   case "$kind" in
-    ship | adhoc) ;;
+    ship) ;;
     *) continue ;;
   esac
   project=$(fm_meta_get "$meta" project)
