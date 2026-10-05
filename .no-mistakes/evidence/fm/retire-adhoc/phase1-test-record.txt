@@ -1,0 +1,6 @@
+Phase 1 targeted suites (bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300), base d72ca55 -> target 560554c
+PASS tests/fm-gotmp.test.sh                 (3 ok)  - teardown tasktmp cleanup + deleted-script symlink lines removed
+PASS tests/fm-brief-repo-guard.test.sh      (5 ok)  - allow-list scaffolding, sentence ends with fm-merge-local
+PASS tests/fm-spawn-concurrent-impl.test.sh (13 ok) - impl concurrency guard: ship/scout/local blocking, no-kind=ship; ad-hoc case removed
+RUNNING/CUT tests/fm-test-run.test.sh       - exercises fm-test-run-fork family entry; in flight when step forced to finalize; covered by CI
+NOT STARTED tests/fm-teardown.test.sh       - slow lifecycle suite (4609 lines); covered by CI
