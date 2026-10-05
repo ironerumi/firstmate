@@ -1,0 +1,1 @@
+Phase 1: `bin/fm-test-run.sh --list --changed` completed. Diff narrowing: only `.no-mistakes.yaml` changed; no test scripts changed and no `bin/<name>.sh` changed, so no targeted scripts apply. No suites run; none failed or hit time bound. `--jobs 1` requires explicit selection and was not run without a narrowed suite.
