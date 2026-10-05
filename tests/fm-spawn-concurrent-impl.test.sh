@@ -179,29 +179,6 @@ EOF
   pass "a ship spawn for a different repository is allowed"
 }
 
-test_adhoc_implementation_on_a_busy_repository_is_refused() {
-  local repo_rec world home fakebin project slot out status
-  world=$(make_world adhoc-busy)
-  IFS='|' read -r _ home fakebin <<EOF
-$world
-EOF
-  repo_rec=$(make_repo adhoc-busy project)
-  IFS='|' read -r project slot <<EOF
-$repo_rec
-EOF
-  fm_write_meta "$home/state/adhoc-inflight-z22.meta" \
-    "project=$project" \
-    "kind=adhoc"
-  write_brief "$home" impl-after-adhoc-z23
-
-  out=$(run_spawn "$home" "$slot" "$fakebin" impl-after-adhoc-z23 "$project" --mode no-mistakes --yolo off)
-  status=$?
-  [ "$status" -ne 0 ] || fail "a ship spawn should be refused while an adhoc implementation is in flight"$'\n'"$out"
-  assert_contains "$out" "an implementation task is already in flight for project: adhoc-inflight-z22" \
-    "the adhoc refusal did not name the implementation already in flight"
-  pass "a live adhoc implementation record blocks a new ship spawn"
-}
-
 test_scout_on_a_busy_repository_is_allowed() {
   local repo_rec world home fakebin project slot_a slot_b out status
   world=$(make_world scout-parallel)
@@ -477,7 +454,6 @@ test_second_ship_on_one_repo_is_refused
 test_direct_pr_second_ship_is_refused_too
 test_same_origin_clones_are_one_repository
 test_other_repository_is_independent
-test_adhoc_implementation_on_a_busy_repository_is_refused
 test_scout_on_a_busy_repository_is_allowed
 test_second_local_only_ship_is_refused
 test_promotion_is_refused_while_repository_is_busy

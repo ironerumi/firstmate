@@ -17,7 +17,7 @@ fm_fork_family_for_basename() {  # <basename>
     fm-spawn-claude-attribution.test.sh)
       printf '%s\n' backend-dispatch
       ;;
-    fm-merge-local.test.sh|fm-pr-merge-admin.test.sh|fm-task-register.test.sh|fm-endpoint-retire.test.sh)
+    fm-merge-local.test.sh|fm-pr-merge-admin.test.sh|fm-endpoint-retire.test.sh)
       printf '%s\n' pr-forge
       ;;
     fm-wake-autoack.test.sh|fm-task-inbox-ladder.test.sh)

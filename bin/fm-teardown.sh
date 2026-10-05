@@ -159,9 +159,6 @@
 # Projected closes share the presentation-order lock, refuse to close the
 # captain's active tab, and restore the exact response-derived pre-close tab
 # if Herdr's last-pane cleanup focuses an unrelated neighboring workspace.
-# Ad-hoc primary-session tasks (kind=adhoc in meta) have no worker endpoint or
-# isolated worktree. Their cleanup removes only volatile task records;
-# bin/fm-task-adhoc-lib.sh owns that metadata-only shape and its authorization.
 # Secondmates (kind=secondmate in meta) are retired explicitly. Normal
 # teardown refuses while their home has in-flight crewmate meta files; --force
 # is the approved discard path that prevalidates child removal targets, locks each
@@ -190,9 +187,7 @@
 #   when the captain has explicitly said to discard the work.
 #   --legacy-record accepts a task record that predates the spawn_gen field:
 #   teardown then proceeds only when the recorded endpoint is confirmed dead or
-#   agent-less (bin/fm-backend.sh's recovery-grade classifier; a kind=adhoc
-#   record has no endpoint by design, so that gate is satisfied without a
-#   backend read), and without
+#   agent-less (bin/fm-backend.sh's recovery-grade classifier), and without
 #   --force the worktree still passes the ordinary landed-work checks. The
 #   accepted legacy incarnation is stamped into the record before its close is
 #   recorded and named in the teardown line; the flag never relaxes the
@@ -365,8 +360,6 @@ unset _teardown_source
 . "$SCRIPT_DIR/fm-backlog-transition-lib.sh"
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh"
-# shellcheck source=bin/fm-task-adhoc-lib.sh
-. "$SCRIPT_DIR/fm-task-adhoc-lib.sh"
 # shellcheck source=bin/fm-control-lib.sh
 . "$SCRIPT_DIR/fm-control-lib.sh"
 # shellcheck source=bin/fm-lock-lib.sh
@@ -1119,16 +1112,10 @@ fi
 # A windowless record names no endpoint: the shared validator would refuse it
 # (and must keep refusing it for control/kill callers), so teardown skips the
 # validator rather than probing or closing an ambient current window.
-# Fork delta: a direct primary-session ship (kind=adhoc) has that same shape by
-# design; bin/fm-task-adhoc-lib.sh owns its metadata-only authorization and the
-# kind=adhoc exclusions below are its no-endpoint, no-worktree, no-clone
-# consequences.
 WT=$(fm_meta_get "$META" worktree)
 PROJ=$(fm_meta_get "$META" project)
 T_ORCA=
-if fm_task_adhoc_is_record "$META"; then
-  fm_adhoc_teardown_select_endpoint "$META" "$ID" || exit 1
-elif [ "$TEARDOWN_WINDOWLESS" = 1 ]; then
+if [ "$TEARDOWN_WINDOWLESS" = 1 ]; then
   BACKEND=tmux
   T=
 else
@@ -1140,12 +1127,7 @@ fi
 # The recorded backend, including every sibling its adapter sources, has to
 # be readable before the first destructive step. --force does not override
 # this. A forced descendant is proved in validate_firstmate_home_children_removal.
-# Fork delta: a kind=adhoc record has no runtime backend to source, so the
-# upstream prerequisite check is skipped for it; validate_adhoc_task_record
-# above already proved its metadata-only shape.
-if [ "$BACKEND" != adhoc ]; then
-  teardown_require_backend_prerequisites "$BACKEND" "$ID" || exit 1
-fi
+teardown_require_backend_prerequisites "$BACKEND" "$ID" || exit 1
 if [ "${FM_TEARDOWN_GUARD_DONE:-0}" != 1 ]; then
   "$FM_ROOT/bin/fm-guard.sh" || true
 fi
@@ -1192,20 +1174,8 @@ MODE=$(grep '^mode=' "$META" | cut -d= -f2- || true)
 # here; the record itself is stamped only once every landed-work refusal has
 # passed, immediately before the close marker binds to it, so any refusal
 # leaves the record byte-identical.
-#
-# kind=adhoc is the exception, and it satisfies the same gate by construction:
-# bin/fm-task-register.sh records an ad-hoc primary-session ship with no window,
-# worktree, or tasktmp, and validate_adhoc_task_record above has already proved
-# exactly that shape, so there is no endpoint an agent could still be bound to.
-# Asking the backend classifier about it would also be meaningless - 'adhoc' is
-# a harness/kind marker, not a runtime backend - and fm_backend_agent_state
-# reports it as unverified, which refused every ad-hoc teardown that reached
-# this gate (the 2026-09-15 kitpicker defect). So the endpoint is agent-less by
-# design, and no backend function is consulted for it.
 if [ "$TEARDOWN_LEGACY_PENDING" = 1 ]; then
-  if [ "$BACKEND" = adhoc ]; then
-    TEARDOWN_LEGACY_ENDPOINT='agent-less'
-  elif [ "$TEARDOWN_WINDOWLESS" = 1 ]; then
+  if [ "$TEARDOWN_WINDOWLESS" = 1 ]; then
     TEARDOWN_LEGACY_ENDPOINT=missing
   else
     TEARDOWN_LEGACY_ENDPOINT=$(fm_backend_agent_state "$BACKEND" "$T")
@@ -1665,7 +1635,7 @@ backlog_done_args() {
 # only where a human still owes the edit.
 backlog_refresh_reminder() {
   local backlog_display root backend=markdown
-  case "$KIND" in secondmate|adhoc) return 0 ;; esac
+  [ "$KIND" = secondmate ] && return 0
   [ "$CLEANUP_RECOVERY" = orca ] && return 0
   if root=$(fm_backlog_root "$DATA"); then
     backend=$(fm_tasks_axi_backend "$root") || return 2
@@ -3521,7 +3491,7 @@ if [ -n "$X_REQUEST" ]; then
   echo "warning: task $ID still carries an unreconciled Relay request link ($X_REQUEST) on its task record." >&2
 fi
 
-if [ "$BACKEND" = orca ] && [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$KIND" != adhoc ] && [ "$FORCE" != "--force" ]; then
+if [ "$BACKEND" = orca ] && [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$FORCE" != "--force" ]; then
   if ! inspectable_git_worktree "$WT"; then
     echo "REFUSED: Orca ship task $ID has no inspectable git worktree at ${WT:-<missing>}." >&2
     echo "Cannot verify dirty or unlanded work; restore the worktree path or get explicit OK to discard, then --force." >&2
@@ -3646,7 +3616,7 @@ fi
 # kind=secondmate: a secondmate home's own runtime lifecycle is owned by the
 # dedicated process-event and firstmate-home removal machinery further below,
 # not by task-worktree cleanup.
-if [ "$KIND" != secondmate ] && [ "$KIND" != adhoc ] && teardown_owns_worktree; then
+if [ "$KIND" != secondmate ] && teardown_owns_worktree; then
   conclude_task_no_mistakes_run "$WT"
   reap_task_worktree_processes worktree "$WT" "$TASK_TMP"
 elif [ "$KIND" != secondmate ]; then
@@ -3771,7 +3741,7 @@ elif [ "$BACKEND" = herdr ]; then
   else
     echo "warning: herdr session presentation lock path is unavailable; skipping the pane close rather than closing unlocked" >&2
   fi
-elif [ "$BACKEND" != orca ] && [ "$TEARDOWN_WINDOWLESS" != 1 ] && [ "$KIND" != adhoc ]; then
+elif [ "$BACKEND" != orca ] && [ "$TEARDOWN_WINDOWLESS" != 1 ]; then
   fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
     || endpoint_close_refusal "$ID" "$BACKEND" "$T" 1 || exit 1
 fi
@@ -3791,7 +3761,7 @@ fi
 # the locked close. Only a structured not-found proves the pane gone; unknown
 # presence, missing or malformed endpoint identity, and missing confirmation
 # machinery all refuse.
-if [ "$KIND" != adhoc ] && [ "$BACKEND" = herdr ]; then
+if [ "$BACKEND" = herdr ]; then
   fm_backend_source herdr || true
   if ! declare -F fm_backend_herdr_endpoint_confirmed_gone >/dev/null 2>&1; then
     echo "error: herdr endpoint confirmation is unavailable for $ID; retaining every durable task record" >&2
@@ -3927,7 +3897,7 @@ else
 fi
 fm_lock_release "$META_LOCK"
 META_LOCK_HELD=0
-if [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$KIND" != adhoc ] && [ "$MODE" != local-only ]; then
+if [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$MODE" != local-only ]; then
   "$FM_ROOT/bin/fm-fleet-sync.sh" "$PROJ" || true
 fi
 # A secondmate retirement may remove the home containing an overridden control
@@ -3935,9 +3905,7 @@ fi
 if [ -d "$STATE" ]; then
   "$SCRIPT_DIR/fm-home-summary-refresh.sh" --best-effort || true
 fi
-if [ "$KIND" = adhoc ]; then
-  echo "teardown $ID complete (ad-hoc primary-session ship)"
-elif [ "$TEARDOWN_LEGACY_ACCEPTED" = 1 ]; then
+if [ "$TEARDOWN_LEGACY_ACCEPTED" = 1 ]; then
   echo "teardown $ID complete (window ${T:-none}, worktree $WT, legacy record accepted without spawn_gen: endpoint $TEARDOWN_LEGACY_ENDPOINT, incarnation $TEARDOWN_META_SPAWN_GEN)"
 elif teardown_owns_worktree; then
   echo "teardown $ID complete (window ${T:-none}, worktree $WT)"
