@@ -250,7 +250,7 @@ Tool rows, tool result blocks, and folded tool groups draw at zero height, so a 
 
 A user row draws at zero height when the canonical operational-input parser recognizes its text as one of these:
 
-- A Firstmate session-start, watcher, turn-end guard, away-supervisor, launch-brief, or branch-outcome envelope.
+- A Firstmate session-start, watcher, turn-end guard, away-supervisor, launch-brief, branch-outcome, or keep-warm envelope.
 - A from-firstmate routed message.
 - One of the narrow pre-protocol shapes kept for old transcripts.
 
