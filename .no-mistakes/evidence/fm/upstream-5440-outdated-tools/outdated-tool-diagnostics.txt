@@ -1,0 +1,9 @@
+head=fbdca6001bf66487b4505e5166b81d780ffeff72
+[absent tasks-axi]
+MISSING: tasks-axi (install: npm install -g tasks-axi)
+[below-floor tasks-axi]
+OUTDATED: tasks-axi (installed: 0.1.0; requires 0.2.6; upgrade: npm install -g tasks-axi)
+[at-floor tasks-axi missing both capabilities]
+OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body and mv multi-ID; upgrade: npm install -g tasks-axi)
+[unparseable no-mistakes]
+OUTDATED: no-mistakes (installed: unparseable; requires 1.46.0; upgrade: no-mistakes update)
