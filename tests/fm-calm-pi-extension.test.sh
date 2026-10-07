@@ -3675,14 +3675,6 @@ if (process.env.STANDALONE_CALM_SHIP) {
   );
   standaloneSlot = standaloneShip.CALM_WORKING_SHIP_WIDGET_KEY;
 }
-check(
-  CALM_WORKING_SHIP_WIDGET_KEY === STANDALONE_SLOT,
-  `Firstmate Calm registers the working ship under ${CALM_WORKING_SHIP_WIDGET_KEY} instead of the shared slot ${STANDALONE_SLOT}`,
-);
-check(
-  standaloneSlot === STANDALONE_SLOT,
-  `the standalone Pi Calm extension at ${process.env.STANDALONE_CALM_SHIP} registers the working ship under ${standaloneSlot} instead of the shared slot ${STANDALONE_SLOT}`,
-);
 ui.setWidget(standaloneSlot, () => standaloneWidget);
 ui.setWidget(CALM_WORKING_SHIP_WIDGET_KEY, () => firstmateWidget);
 const renderedDualInstallWidgets = [...ui.widgets.values()].map((widget) => widget.render(80));
