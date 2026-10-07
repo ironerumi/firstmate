@@ -24,6 +24,8 @@ set -u
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-control-lib.sh"
 # shellcheck source=/dev/null
+. "$ROOT/bin/fm-pr-lib.sh"
+# shellcheck source=/dev/null
 . "$ROOT/bin/fm-trace-context-lib.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-tasks-axi-lib.sh"
@@ -488,6 +490,33 @@ test_relaunch_preserves_durable_task_metadata() {
   [ "$(meta_field "$dir" rl19 decisions_reviewed)" = 1 ] \
     || fail "the task decision state must survive relaunch"
   pass "fm-control relaunch: durable task metadata survives replacement launch publication"
+}
+
+test_relaunch_keeps_armed_pr_poll_valid() {
+  local dir state url template out rc
+  dir=$(new_case armed-pr-poll rl47)
+  add_ship_task "$dir" rl47 claude
+  state="$dir/home/state"
+  url=https://github.com/example/repo/pull/47
+  template="$ROOT/bin/fm-pr-poll.sh"
+  printf '%s\n' "$$" > "$state/.lock"
+  printf '%s on\n' "$$" > "$state/.trace-context-effective"
+  printf 'pr=%s\npr_head=%s\n' "$url" 0123456789abcdef0123456789abcdef01234567 >> "$state/rl47.meta"
+  fm_pr_poll_prepare "$state" rl47 github "$url" github.com example/repo 47 "$template" \
+    || fail "could not prepare relaunch PR poll fixture"
+  fm_pr_poll_publish_prepared || fail "could not publish relaunch PR poll fixture"
+  fm_pr_poll_snapshot_capture "$state" rl47 "$template" \
+    || fail "PR poll fixture was not authenticated before relaunch"
+
+  out=$(run_control "$dir" rl47 relaunch --note "continue watching the PR"); rc=$?
+  expect_code 0 "$rc" "relaunch with an armed PR poll should succeed"$'\n'"$out"
+  [ -n "$(meta_field "$dir" rl47 control_relaunch_tx)" ] \
+    || fail "relaunch transaction marker was not recorded"
+  [ -n "$(meta_field "$dir" rl47 traceparent)" ] \
+    || fail "trace context was not recorded"
+  fm_pr_poll_snapshot_matches "$state" rl47 "$template" \
+    || fail "relaunch broke the previously authenticated PR poll"
+  pass "fm-control relaunch: armed PR poll remains authenticated after transaction and trace publication"
 }
 
 test_relaunch_serializes_concurrent_durable_metadata_publication() {
@@ -2415,6 +2444,7 @@ test_relaunch_refuses_before_exit_when_the_composer_holds_pending_text
 test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven
 test_relaunch_from_linked_home_preserves_recorded_worktree
 test_relaunch_preserves_durable_task_metadata
+test_relaunch_keeps_armed_pr_poll_valid
 test_relaunch_serializes_concurrent_durable_metadata_publication
 test_disabled_relaunch_clears_prior_trace_context
 test_relaunch_appends_the_progress_note_to_the_instructions

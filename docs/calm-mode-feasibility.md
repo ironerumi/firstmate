@@ -187,7 +187,7 @@ Only `genuine-user-prompt`, `genuine-agent-response`, and `working-status` are p
 Every other audited class is policy-hidden when Pi exposes a supported presentation boundary, but semantic input is never transformed to enforce that preference.
 The home-local persistence schema is owned by [`docs/configuration.md`](configuration.md#calm-preference-configcalm).
 
-On Pi, current session-start, watcher, turn-end guard, away supervisor, and launch-brief inputs use their versioned U+2063 static envelopes.
+On Pi, current operational inputs use their versioned U+2063 static envelopes; the current kind list and presentation contract are owned by [`calm.md`](calm.md#what-calm-hides-on-claude-code).
 The established leading `[fm-from-firstmate]` plus U+2063 routing carrier remains current so running secondmate charters remain compatible.
 Claude-bound typed away escalations and launch briefs instead use the record-backed carrier owned by `bin/fm-operational-input.sh`; its replay limit is described in [`calm.md`](calm.md#claude-code).
 Calm classifies only at Pi's transcript-presentation owner through the canonical parser and never replaces, reorders, or weakens those messages.
