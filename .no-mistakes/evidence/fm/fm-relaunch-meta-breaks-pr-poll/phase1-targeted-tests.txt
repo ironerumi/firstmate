@@ -1,0 +1,16 @@
+Phase 1 targeted validation
+
+Changed diff narrowed to:
+- tests/fm-operational-input.test.sh (changed test)
+- tests/fm-control-relaunch.test.sh (changed test)
+- bin/fm-operational-input.sh (matching suite)
+- bin/fm-spawn.sh (no exact tests/fm-spawn.test.sh suite exists)
+
+Command:
+`bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-operational-input.test.sh tests/fm-control-relaunch.test.sh`
+
+Result: both scripts passed; no assertion failures and no per-script time bounds hit.
+- fm-operational-input.test.sh: exit 0, 5.328 s
+- fm-control-relaunch.test.sh: exit 0, 289.806 s
+
+The relaunch suite emitted cleanup-time permission-denied warnings while removing disposable git-hook fixtures, but completed with exit 0 and all assertions passing.
