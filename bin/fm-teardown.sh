@@ -3516,7 +3516,7 @@ if teardown_owns_worktree && [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
     fi
   fi
 fi
-[ "$KIND" = secondmate ] || fm_procevent_task_feedback_teardown_gate "$STATE" "$ID" "$HAND_OVER" || exit 1
+[ "$KIND" = secondmate ] || { [ ! -d "$STATE/procevent" ] && [ ! -d "$STATE/procevent-inbox" ] && [ ! -d "$STATE/$ID.inbox" ]; } || FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" "$SCRIPT_DIR/fm-procevent.sh" task-feedback inventory "$ID" "$HAND_OVER" || exit 1
 # A Herdr close may reposition shared workspace order, so the whole
 # destructive sequence below (worktree return, pane close, record removal)
 # runs under the named-session presentation lock, acquired BEFORE anything is
@@ -3774,7 +3774,7 @@ if [ "$BACKEND" = herdr ]; then
     exit 1
   fi
 fi
-[ "$KIND" = secondmate ] || [ "$HAND_OVER" != 1 ] || fm_procevent_task_feedback_hand_over "$STATE" "$DATA" "$FM_HOME" "$SCRIPT_DIR" "$ID" || exit 1
+[ "$KIND" = secondmate ] || [ "$HAND_OVER" != 1 ] || { [ ! -d "$STATE/procevent" ] && [ ! -d "$STATE/procevent-inbox" ] && [ ! -d "$STATE/$ID.inbox" ]; } || FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" "$SCRIPT_DIR/fm-procevent.sh" task-feedback hand-over "$ID" || exit 1
 if [ "$KIND" != secondmate ]; then
   if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
       "$SCRIPT_DIR/fm-inactive-reconcile.sh" report "$ID"; then

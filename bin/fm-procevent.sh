@@ -7,6 +7,8 @@
 #   fm-procevent.sh register <adapter> <source-id> -- <argv>...
 #   fm-procevent.sh register-task <adapter> <source-id> <task-id> -- <argv>...
 #   fm-procevent.sh hand-over <source-id> <task-id>
+#   fm-procevent.sh task-feedback inventory <task-id> [--hand-over]
+#   fm-procevent.sh task-feedback hand-over <task-id>
 #   fm-procevent.sh register-extension <adapter> <source-id> --config-ref <reference>
 #   fm-procevent.sh start <source-id>
 #   fm-procevent.sh ensure-listening <source-id>
@@ -314,6 +316,113 @@ task_lifecycle_lock_parent_owned() {  # <task-id>
   owner=$(cat "$lock/pid" 2>/dev/null || true)
   parent=$(ps -p "$$" -o ppid= 2>/dev/null | tr -d '[:space:]') || return 1
   [ -n "$owner" ] && [ "$owner" = "$parent" ]
+}
+
+# Inventory task-owned process-event feedback at teardown's refusal boundary.
+# This executable boundary keeps teardown's ShellCheck graph independent of the
+# feedback implementation while preserving its three durable representations.
+fm_procevent_task_feedback_inventory() {  # <state> <task-id>
+  local state=$1 task=$2 rec result owner first id adapter artifact
+  FM_PROCEVENT_TASK_ATTACHED_SOURCES=0
+  FM_PROCEVENT_TASK_ATTACHED_MESSAGES=0
+  for rec in "$state/procevent"/*.source; do
+    [ -e "$rec" ] || continue
+    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe source $rec" >&2; return 1; }
+    owner=$(fm_meta_get "$rec" owner_task)
+    [ "$owner" = "$task" ] || continue
+    id=${rec##*/}; id=${id%.source}
+    adapter=$(fm_meta_get "$rec" adapter)
+    artifact=$(awk '/^argv:$/ { getline; getline; getline; print; exit }' "$rec")
+    printf 'attached listener: source=%s adapter=%s artifact=%s\n' "$id" "$adapter" "$artifact" >&2
+    FM_PROCEVENT_TASK_ATTACHED_SOURCES=$((FM_PROCEVENT_TASK_ATTACHED_SOURCES + 1))
+  done
+  for rec in "$state/$task.inbox"/*.msg; do
+    [ -e "$rec" ] || continue
+    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe inbox message $rec" >&2; return 1; }
+    first=$(awk 'seen { print; exit } $0 == "--" { seen=1 }' "$rec")
+    printf 'attached message: file=%s first-line=%s\n' "$rec" "$first" >&2
+    FM_PROCEVENT_TASK_ATTACHED_MESSAGES=$((FM_PROCEVENT_TASK_ATTACHED_MESSAGES + 1))
+  done
+  for result in "$state/procevent-inbox"/*.owner-task; do
+    [ -e "$result" ] || continue
+    [ -f "$result" ] && [ ! -L "$result" ] || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
+    [ "$(cat "$result")" = "$task" ] || continue
+    rec="${result%.owner-task}.result"
+    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe capture $rec" >&2; return 1; }
+    [ ! -L "${result%.owner-task}.handled" ] || { echo "REFUSED: unsafe capture marker ${result%.owner-task}.handled" >&2; return 1; }
+    [ ! -e "${result%.owner-task}.handled" ] || continue
+    printf 'attached result: file=%s owner-task=%s\n' "$rec" "$task" >&2
+    FM_PROCEVENT_TASK_ATTACHED_MESSAGES=$((FM_PROCEVENT_TASK_ATTACHED_MESSAGES + 1))
+  done
+}
+
+cmd_task_feedback() {
+  local operation=${1-} task=${2-} option=${3-}
+  case "$operation" in
+    inventory)
+      [ "$#" -ge 2 ] && [ "$#" -le 3 ] || usage
+      fm_pr_task_id_valid "$task" || die "invalid task id: $task"
+      [ "$option" = 0 ] || [ "$option" = 1 ] || [ "$option" = --hand-over ] || usage
+      fm_procevent_task_feedback_inventory "$STATE" "$task" || return 1
+      if [ "$option" = 0 ] \
+         && { [ "$FM_PROCEVENT_TASK_ATTACHED_SOURCES" -gt 0 ] \
+           || [ "$FM_PROCEVENT_TASK_ATTACHED_MESSAGES" -gt 0 ]; }; then
+        echo "REFUSED: task $task still owns listeners or unread feedback; use --hand-over (--force does not authorize transfer)." >&2
+        return 1
+      fi
+      ;;
+    hand-over)
+      [ "$#" -eq 2 ] || usage
+      fm_pr_task_id_valid "$task" || die "invalid task id: $task"
+      fm_procevent_task_feedback_hand_over "$STATE" \
+        "${FM_DATA_OVERRIDE:-$FM_HOME/data}" "$FM_HOME" "$SCRIPT_DIR" "$task" || return 1
+      ;;
+    *) usage ;;
+  esac
+}
+
+# Transfer task-owned listeners, captured rounds, and unread steering messages
+# only after teardown has closed the task endpoint.
+fm_procevent_task_feedback_hand_over() {  # <state> <data> <home> <script-dir> <task-id>
+  local state=$1 data=$2 home=$3 script_dir=$4 task=$5 rec id result pending
+  for rec in "$state/procevent"/*.source; do
+    [ -f "$rec" ] && [ "$(fm_meta_get "$rec" owner_task)" = "$task" ] || continue
+    id=${rec##*/}; id=${id%.source}
+    FM_PROCEVENT_TEARDOWN_HANDOVER=1 cmd_hand_over "$id" "$task" || return 1
+    pending=0
+    for result in "$state/procevent-inbox/$id".*.result; do
+      [ -f "$result" ] && [ ! -e "${result%.result}.handled" ] && pending=1
+    done
+    if [ "$pending" = 0 ]; then
+      FM_HOME="$home" FM_STATE_OVERRIDE="$state" \
+        "$script_dir/fm-procevent.sh" ensure-listening "$id" || return 1
+    else
+      echo "teardown: listener $id has captured feedback; re-arm after home handles it" >&2
+    fi
+    echo "teardown: handed over listener $id to home" >&2
+  done
+  for rec in "$state/procevent-inbox"/*.owner-task; do
+    [ -f "$rec" ] && [ "$(cat "$rec")" = "$task" ] || continue
+    id=${rec##*/}; id=${id%.*.*}
+    FM_PROCEVENT_TEARDOWN_HANDOVER=1 cmd_hand_over "$id" "$task" || return 1
+    echo "teardown: handed over captured result $rec to home" >&2
+  done
+  for rec in "$state/$task.inbox"/*.msg; do
+    [ -f "$rec" ] && [ ! -L "$rec" ] || continue
+    mkdir -p "$data/$task/handed-over" || return 1
+    [ ! -e "$data/$task/handed-over/${rec##*/}" ] || {
+      echo "REFUSED: hand-over destination already exists for ${rec##*/}" >&2
+      return 1
+    }
+    mv -- "$rec" "$data/$task/handed-over/${rec##*/}" || return 1
+    echo "teardown: handed over message ${rec##*/} to home" >&2
+  done
+  for rec in "$data/$task/handed-over"/*.msg; do
+    [ -e "$rec" ] || continue
+    [ -f "$rec" ] && [ ! -L "$rec" ] || return 1
+    fm_wake_append check "teardown-inbox:$task:${rec##*/}" \
+      "check: worker $task message handed over at $rec" || return 1
+  done
 }
 
 state_root_bind() {  # [create]
@@ -2780,6 +2889,7 @@ case "${1-}" in
   register)           shift; cmd_register "$@" ;;
   register-task)      shift; cmd_register_task "$@" ;;
   hand-over)          shift; cmd_hand_over "$@" ;;
+  task-feedback)      shift; cmd_task_feedback "$@" ;;
   register-extension) shift; cmd_register_extension "$@" ;;
   start)              shift; cmd_start_public "$@" ;;
   ensure-listening)   shift; cmd_ensure_listening "$@" ;;
