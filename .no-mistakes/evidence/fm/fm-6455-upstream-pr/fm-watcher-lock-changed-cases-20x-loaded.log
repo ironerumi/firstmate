@@ -1,0 +1,122 @@
+
+=== run 01/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 01 result=PASS elapsed=5s ===
+
+=== run 02/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 02 result=PASS elapsed=3s ===
+
+=== run 03/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 03 result=PASS elapsed=4s ===
+
+=== run 04/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 04 result=PASS elapsed=5s ===
+
+=== run 05/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 05 result=PASS elapsed=5s ===
+
+=== run 06/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 06 result=PASS elapsed=4s ===
+
+=== run 07/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 07 result=PASS elapsed=4s ===
+
+=== run 08/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 08 result=PASS elapsed=3s ===
+
+=== run 09/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 09 result=PASS elapsed=3s ===
+
+=== run 10/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 10 result=PASS elapsed=3s ===
+
+=== run 11/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 11 result=PASS elapsed=3s ===
+
+=== run 12/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 12 result=PASS elapsed=3s ===
+
+=== run 13/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 13 result=PASS elapsed=3s ===
+
+=== run 14/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 14 result=PASS elapsed=3s ===
+
+=== run 15/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 15 result=PASS elapsed=3s ===
+
+=== run 16/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 16 result=PASS elapsed=9s ===
+
+=== run 17/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 17 result=PASS elapsed=5s ===
+
+=== run 18/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 18 result=PASS elapsed=4s ===
+
+=== run 19/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 19 result=PASS elapsed=7s ===
+
+=== run 20/20 ===
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a competing reaper cannot remove the successor's steal mutex
+ok - concurrent stale-lock steal yields exactly one winner
+=== run 20 result=PASS elapsed=10s ===
+
+SUMMARY passed=20 failed=0 elapsed=90s
