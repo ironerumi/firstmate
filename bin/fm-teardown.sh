@@ -3523,48 +3523,11 @@ if teardown_owns_worktree && [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
   fi
 fi
 
-# Hold the task lifecycle lock already owned by teardown while inventorying.
-# Registration, captures, and steering inbox writes take the same lock, so a
-# late board answer cannot enter the retired task's inbox after this scan.
-attached_feedback_inventory() {
-  local rec result owner first id adapter artifact
-  TASK_ATTACHED_SOURCES=0
-  TASK_ATTACHED_MESSAGES=0
-  for rec in "$STATE/procevent"/*.source; do
-    [ -e "$rec" ] || continue
-    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe source $rec" >&2; return 1; }
-    owner=$(fm_meta_get "$rec" owner_task)
-    [ "$owner" = "$ID" ] || continue
-    id=${rec##*/}; id=${id%.source}
-    adapter=$(fm_meta_get "$rec" adapter)
-    artifact=$(awk '/^argv:$/ { getline; getline; getline; print; exit }' "$rec")
-    printf 'attached listener: source=%s adapter=%s artifact=%s\n' "$id" "$adapter" "$artifact" >&2
-    TASK_ATTACHED_SOURCES=$((TASK_ATTACHED_SOURCES + 1))
-  done
-  for rec in "$STATE/$ID.inbox"/*.msg; do
-    [ -e "$rec" ] || continue
-    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe inbox message $rec" >&2; return 1; }
-    first=$(awk 'seen { print; exit } $0 == "--" { seen=1 }' "$rec")
-    printf 'attached message: file=%s first-line=%s\n' "$rec" "$first" >&2
-    TASK_ATTACHED_MESSAGES=$((TASK_ATTACHED_MESSAGES + 1))
-  done
-  for result in "$STATE/procevent-inbox"/*.owner-task; do
-    [ -e "$result" ] || continue
-    [ -f "$result" ] && [ ! -L "$result" ] || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
-    [ "$(cat "$result")" = "$ID" ] || continue
-    rec="${result%.owner-task}.result"
-    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe capture $rec" >&2; return 1; }
-    [ ! -L "${result%.owner-task}.handled" ] || { echo "REFUSED: unsafe capture marker ${result%.owner-task}.handled" >&2; return 1; }
-    [ ! -e "${result%.owner-task}.handled" ] || continue
-    printf 'attached result: file=%s owner-task=%s\n' "$rec" "$ID" >&2
-    TASK_ATTACHED_MESSAGES=$((TASK_ATTACHED_MESSAGES + 1))
-  done
-}
-
 if [ "$KIND" != secondmate ]; then
-  attached_feedback_inventory || exit 1
+  fm_procevent_task_feedback_inventory "$STATE" "$ID" || exit 1
   if [ "$HAND_OVER" != 1 ] \
-     && { [ "$TASK_ATTACHED_SOURCES" -gt 0 ] || [ "$TASK_ATTACHED_MESSAGES" -gt 0 ]; }; then
+     && { [ "$FM_PROCEVENT_TASK_ATTACHED_SOURCES" -gt 0 ] \
+       || [ "$FM_PROCEVENT_TASK_ATTACHED_MESSAGES" -gt 0 ]; }; then
     echo "REFUSED: task $ID still owns listeners or unread feedback; use --hand-over (--force does not authorize transfer)." >&2
     exit 1
   fi
@@ -3828,46 +3791,7 @@ if [ "$BACKEND" = herdr ]; then
   fi
 fi
 if [ "$KIND" != secondmate ] && [ "$HAND_OVER" = 1 ]; then
-  for rec in "$STATE/procevent"/*.source; do
-    [ -f "$rec" ] && [ "$(fm_meta_get "$rec" owner_task)" = "$ID" ] || continue
-    id=${rec##*/}; id=${id%.source}
-    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_PROCEVENT_TEARDOWN_HANDOVER=1 \
-      "$SCRIPT_DIR/fm-procevent.sh" hand-over "$id" "$ID" || exit 1
-    pending=0
-    for result in "$STATE/procevent-inbox/$id".*.result; do
-      [ -f "$result" ] && [ ! -e "${result%.result}.handled" ] && pending=1
-    done
-    if [ "$pending" = 0 ]; then
-      FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
-        "$SCRIPT_DIR/fm-procevent.sh" ensure-listening "$id" || exit 1
-    else
-      echo "teardown: listener $id has captured feedback; re-arm after home handles it" >&2
-    fi
-    echo "teardown: handed over listener $id to home" >&2
-  done
-  for rec in "$STATE/procevent-inbox"/*.owner-task; do
-    [ -f "$rec" ] && [ "$(cat "$rec")" = "$ID" ] || continue
-    id=${rec##*/}; id=${id%.*.*}
-    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_PROCEVENT_TEARDOWN_HANDOVER=1 \
-      "$SCRIPT_DIR/fm-procevent.sh" hand-over "$id" "$ID" || exit 1
-    echo "teardown: handed over captured result $rec to home" >&2
-  done
-  for rec in "$STATE/$ID.inbox"/*.msg; do
-    [ -f "$rec" ] && [ ! -L "$rec" ] || continue
-    mkdir -p "$DATA/$ID/handed-over" || exit 1
-    [ ! -e "$DATA/$ID/handed-over/${rec##*/}" ] || {
-      echo "REFUSED: hand-over destination already exists for ${rec##*/}" >&2
-      exit 1
-    }
-    mv -- "$rec" "$DATA/$ID/handed-over/${rec##*/}" || exit 1
-    echo "teardown: handed over message ${rec##*/} to home" >&2
-  done
-  for rec in "$DATA/$ID/handed-over"/*.msg; do
-    [ -e "$rec" ] || continue
-    [ -f "$rec" ] && [ ! -L "$rec" ] || exit 1
-    fm_wake_append check "teardown-inbox:$ID:${rec##*/}" \
-      "check: worker $ID message handed over at $rec" || exit 1
-  done
+  fm_procevent_task_feedback_hand_over "$STATE" "$DATA" "$FM_HOME" "$SCRIPT_DIR" "$ID" || exit 1
 fi
 if [ "$KIND" != secondmate ]; then
   if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
