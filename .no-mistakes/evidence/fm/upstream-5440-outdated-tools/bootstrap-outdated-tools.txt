@@ -1,10 +1,15 @@
-Live product evidence: bin/fm-bootstrap.sh against disposable fake toolchains
---- absent tasks-axi (tool hidden from fallback PATH) ---
-MISSING: tasks-axi (install: npm install -g tasks-axi)
---- at-floor tasks-axi missing update --archive-body capability ---
-OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body; upgrade: npm install -g tasks-axi)
---- tasks-axi subprocesses observed ---
---version
-update --help
-mv --help
---version
+$ PATH=<disposable fake toolchain> FM_BOOTSTRAP_NETWORK=skip bin/fm-bootstrap.sh
+--- installed tools below floor/capability ---
+OUTDATED: treehouse (installed: 0.3.0; requires --lease support; upgrade: treehouse update)
+OUTDATED: no-mistakes (installed: 1.45.4; requires 1.46.0; upgrade: no-mistakes update)
+OUTDATED: gh-axi (installed: 0.1.19; requires 0.1.29; upgrade: gh-axi update)
+PRESENTATION_UNAVAILABLE: lavish-axi (requires >=0.1.77; install: npm install -g lavish-axi && lavish-axi setup hooks) - nonvisual work may proceed with plain-text decisions and reports; install or upgrade before using Lavish
+OUTDATED: quota-axi (installed: 0.1.50; requires 0.1.51; upgrade: quota-axi update)
+OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body and mv multi-ID; upgrade: npm install -g tasks-axi)
+--- treehouse absent ---
+MISSING: treehouse (install: curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh)
+OUTDATED: no-mistakes (installed: 1.45.4; requires 1.46.0; upgrade: no-mistakes update)
+OUTDATED: gh-axi (installed: 0.1.19; requires 0.1.29; upgrade: gh-axi update)
+PRESENTATION_UNAVAILABLE: lavish-axi (requires >=0.1.77; install: npm install -g lavish-axi && lavish-axi setup hooks) - nonvisual work may proceed with plain-text decisions and reports; install or upgrade before using Lavish
+OUTDATED: quota-axi (installed: 0.1.50; requires 0.1.51; upgrade: quota-axi update)
+OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body and mv multi-ID; upgrade: npm install -g tasks-axi)
