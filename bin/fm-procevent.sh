@@ -6,6 +6,7 @@
 # Usage:
 #   fm-procevent.sh register <adapter> <source-id> -- <argv>...
 #   fm-procevent.sh register-task <adapter> <source-id> <task-id> -- <argv>...
+#   fm-procevent.sh hand-over <source-id> <task-id>
 #   fm-procevent.sh register-extension <adapter> <source-id> --config-ref <reference>
 #   fm-procevent.sh start <source-id>
 #   fm-procevent.sh ensure-listening <source-id>
@@ -258,8 +259,18 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh"
 
-die() { printf 'error: %s\n' "$1" >&2; exit 1; }
-usage() { sed -n '2,/^set -u$/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; exit 2; }
+die() {
+  task_lifecycle_lock_release 2>/dev/null || true
+  printf 'error: %s\n' "$1" >&2
+  exit 1
+}
+usage() {
+  if declare -F task_lifecycle_lock_release >/dev/null 2>&1; then
+    task_lifecycle_lock_release 2>/dev/null || true
+  fi
+  sed -n '2,/^set -u$/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'
+  exit 2
+}
 
 case "${1-}" in ''|-h|--help|help) usage ;; esac
 
@@ -267,6 +278,43 @@ REG=$(fm_procevent_registry_dir "$STATE")
 MAX_OUTPUT_BYTES=${FM_PROCEVENT_MAX_OUTPUT_BYTES:-1048576}
 EXTENSION_HOST="$SCRIPT_DIR/fm-extension.mjs"
 EXTENSION_LIFECYCLE_LOCK="$REG/.extension-binding-lifecycle.lock"
+
+TASK_LIFECYCLE_LOCK=
+TASK_LIFECYCLE_LOCK_REENTRANT=0
+
+task_lifecycle_lock_acquire() {  # <task-id>
+  local task=$1 lock
+  [ -z "$TASK_LIFECYCLE_LOCK" ] || return 0
+  lock=$(fm_procevent_task_lifecycle_lock_path "$STATE" "$task") || return 1
+  if [ "${FM_PROCEVENT_TEARDOWN_HANDOVER:-0}" = 1 ]; then
+    task_lifecycle_lock_parent_owned "$task" || return 1
+    TASK_LIFECYCLE_LOCK=$lock
+    TASK_LIFECYCLE_LOCK_REENTRANT=1
+    return 0
+  fi
+  fm_lock_acquire_wait "$lock" || return 1
+  TASK_LIFECYCLE_LOCK=$lock
+  TASK_LIFECYCLE_LOCK_REENTRANT=0
+}
+
+task_lifecycle_lock_release() {
+  [ -n "$TASK_LIFECYCLE_LOCK" ] || return 0
+  if [ "$TASK_LIFECYCLE_LOCK_REENTRANT" = 1 ]; then
+    TASK_LIFECYCLE_LOCK=
+    TASK_LIFECYCLE_LOCK_REENTRANT=0
+    return 0
+  fi
+  fm_lock_release "$TASK_LIFECYCLE_LOCK" || return 1
+  TASK_LIFECYCLE_LOCK=
+}
+
+task_lifecycle_lock_parent_owned() {  # <task-id>
+  local task=$1 lock owner parent
+  lock=$(fm_procevent_task_lifecycle_lock_path "$STATE" "$task") || return 1
+  owner=$(cat "$lock/pid" 2>/dev/null || true)
+  parent=$(ps -p "$$" -o ppid= 2>/dev/null | tr -d '[:space:]') || return 1
+  [ -n "$owner" ] && [ "$owner" = "$parent" ]
+}
 
 state_root_bind() {  # [create]
   if [ ! -e "$STATE" ] && [ ! -L "$STATE" ]; then
@@ -551,6 +599,101 @@ cmd_register() {
   printf 'registered: %s (%s)\n' "$id" "$adapter"
 }
 
+# Transfer a worker's board and captured rounds to the home after quiescing
+# its live poller. Source and capture sidecars change under the source lock;
+# reconcile republishes the still-unhandled captures to the home wake queue.
+cmd_hand_over() {  # <source-id> <task-id>
+  local id=${1-} task=${2-} rec result sidecar tmp kind owner source_task transfer_source=0
+  local claim_home='' claim_pid='' claim_token='' claim_identity='' stop_state
+  if [ "$#" -ne 2 ] || ! fm_procevent_source_id_valid "$id" || ! fm_pr_task_id_valid "$task"; then
+    usage
+  fi
+  state_root_bind create || die "cannot safely prepare the process-event state root"
+  task_lifecycle_lock_acquire "$task" || die "cannot lock task lifecycle"
+  fm_procevent_source_lock_acquire "$id" || die "cannot lock the source"
+  rec=$(source_file "$id")
+  while IFS= read -r result; do
+    [ -n "$result" ] || continue
+    sidecar="${result%.result}.owner-task"
+    [ -e "$sidecar" ] || continue
+    [ -f "$sidecar" ] && [ ! -L "$sidecar" ] \
+      && [ "$(cat "$sidecar")" = "$task" ] || {
+        fm_procevent_source_lock_release "$id"
+        die "unsafe captured owner: $sidecar"
+      }
+  done < <(source_pending "$id")
+  if [ -e "$rec" ] || [ -L "$rec" ]; then
+    [ -f "$rec" ] && [ ! -L "$rec" ] || {
+      fm_procevent_source_lock_release "$id"
+      die "source $id is not owned by task $task"
+    }
+    kind=$(source_kind "$id")
+    owner=$(source_field "$id" owner)
+    source_task=$(source_owner_task "$id")
+    if [ "$kind" = task-owned ]; then
+      [ -z "$owner" ] && [ "$source_task" = "$task" ] || {
+        fm_procevent_source_lock_release "$id"
+        die "source $id is not owned by task $task"
+      }
+      transfer_source=1
+    elif [ -n "$kind$owner$source_task" ]; then
+      fm_procevent_source_lock_release "$id"
+      die "source $id is not owned by task $task"
+    fi
+    if [ "$transfer_source" = 1 ]; then
+      if [ -e "$(fm_procevent_claim_path "$id")" ] || [ -L "$(fm_procevent_claim_path "$id")" ]; then
+        if ! fm_procevent_claim_load_locked "$id" 2>/dev/null; then
+          fm_procevent_source_lock_release "$id"
+          die "cannot safely read the live poller ownership: $id"
+        fi
+        claim_home=$FM_PROCEVENT_CLAIM_HOME
+        claim_pid=$FM_PROCEVENT_CLAIM_PID
+        claim_token=$FM_PROCEVENT_CLAIM_TOKEN
+        claim_identity=$FM_PROCEVENT_CLAIM_IDENTITY
+        fm_procevent_claim_owned_by_state "$STATE" "$FM_HOME" || {
+          fm_procevent_source_lock_release "$id"
+          die "cannot hand over source $id while another home owns its live poller"
+        }
+        stop_runner_pid "$claim_pid" "$claim_identity"
+        stop_state=$?
+        [ "$stop_state" -ne 2 ] || {
+          fm_procevent_source_lock_release "$id"
+          die "cannot confirm the live poller identity; source remains task-owned: $id"
+        }
+        if ! fm_procevent_claim_reclaim_locked "$id" "$claim_home" "$claim_pid" "$claim_token"; then
+          fm_procevent_source_lock_release "$id"
+          die "cannot release the live poller ownership: $id"
+        fi
+        rm -f -- "$(staging_file "$id" "$claim_token")"
+      fi
+      tmp=$(umask 077; mktemp "$REG/.handover.XXXXXX") || {
+        fm_procevent_source_lock_release "$id"
+        die "cannot stage source transfer"
+      }
+      if ! sed '1,/^argv:$/ { /^kind=task-owned$/d; /^owner_task=/d; }' "$rec" > "$tmp" \
+        || ! chmod 0600 "$tmp" || ! mv -f -- "$tmp" "$rec"; then
+        rm -f -- "$tmp"
+        fm_procevent_source_lock_release "$id"
+        die "cannot transfer source $id"
+      fi
+    fi
+  fi
+  while IFS= read -r result; do
+    [ -n "$result" ] || continue
+    sidecar="${result%.result}.owner-task"
+    [ -e "$sidecar" ] || continue
+    rm -f -- "$sidecar" || {
+      fm_procevent_source_lock_release "$id"
+      die "cannot transfer capture $result"
+    }
+  done < <(source_pending "$id")
+  fm_procevent_source_lock_release "$id"
+  task_lifecycle_lock_release
+  printf 'handed over source/results: %s to home\n' "$id"
+  # A failed publication remains eligible for the watcher's next reconcile.
+  publish_pending || true
+}
+
 cmd_register_task() {
   local adapter=${1-} id=${2-} task=${3-} sep=${4-} result pending pending_adapter
   local reply_source='' reply_dest='' stale arg i adopting=0 pending_owner prior_record=''
@@ -569,9 +712,10 @@ cmd_register_task() {
   done
   [ -f "$(adapter_script "$adapter")" ] || die "no installed adapter for: $adapter"
   state_root_bind create || die "cannot safely prepare the process-event state root"
+  (umask 077; mkdir -p "$REG") || die "cannot prepare the process-event registry"
+  task_lifecycle_lock_acquire "$task" || die "cannot lock task lifecycle"
   fm_backend_validate_task_endpoint "$STATE/$task.meta" "$task" >/dev/null \
     || die "cannot own a board for task $task; its captured feedback would reach no endpoint"
-  (umask 077; mkdir -p "$REG") || die "cannot prepare the process-event registry"
   fm_procevent_source_lock_acquire "$id" || die "cannot lock the source"
   if [ -e "$(source_file "$id")" ] || [ -L "$(source_file "$id")" ]; then
     if [ "$(source_kind "$id" 2>/dev/null || true)" != task-owned ]; then
@@ -695,6 +839,7 @@ cmd_register_task() {
     rm -f -- "$stale"
   done
   fm_procevent_source_lock_release "$id"
+  task_lifecycle_lock_release
   owner_lease_refresh
   printf 'registered: %s (%s, task=%s)\n' "$id" "$adapter" "$task"
 }
@@ -810,14 +955,37 @@ cmd_register_extension() {
 publish_result() {  # <result-file>
   local result=$1 id seq adapter line status=1 owner_task='' message='' record=''
   local ring_backend ring_target ring_meta inbox_dir handled_dir pre_existing existing new_record
+  local task_lock_owner='' owner_task_snapshot='' source_kind_current='' source_owner_current='' result_owner_current=''
   id=$(fm_procevent_result_source_id "$result")
   seq=$(fm_procevent_result_sequence "$result")
   fm_procevent_source_id_valid "$id" || return 1
   adapter=$(fm_procevent_result_adapter "$result" 2>/dev/null || true)
   [ -n "$adapter" ] || return 1
   line=$(fm_procevent_event_line "$adapter" "$id" "$seq") || return 1
-  owner_task=$(fm_procevent_result_owner_task "$result" 2>/dev/null || true)
-  fm_procevent_source_lock_acquire "$id" || return 1
+  owner_task_snapshot=$(fm_procevent_result_owner_task "$result" 2>/dev/null || true)
+  if [ -n "$owner_task_snapshot" ]; then
+    task_lifecycle_lock_acquire "$owner_task_snapshot" || return 1
+    task_lock_owner=$owner_task_snapshot
+  fi
+  fm_procevent_source_lock_acquire "$id" || { [ -z "$task_lock_owner" ] || task_lifecycle_lock_release; return 1; }
+  source_kind_current=$(source_kind "$id" 2>/dev/null || true)
+  source_owner_current=$(source_owner_task "$id" 2>/dev/null || true)
+  result_owner_current=$(fm_procevent_result_owner_task "$result" 2>/dev/null || true)
+  if [ "$source_kind_current" = task-owned ]; then
+    if [ "$source_owner_current" != "$owner_task_snapshot" ] \
+      || [ -n "$result_owner_current" ] && [ "$result_owner_current" != "$source_owner_current" ]; then
+      fm_procevent_source_lock_release "$id"
+      [ -z "$task_lock_owner" ] || task_lifecycle_lock_release
+      return 1
+    fi
+    owner_task=$source_owner_current
+  elif [ -n "$source_kind_current$source_owner_current$result_owner_current" ]; then
+    fm_procevent_source_lock_release "$id"
+    [ -z "$task_lock_owner" ] || task_lifecycle_lock_release
+    return 1
+  else
+    owner_task=
+  fi
   if ! fm_procevent_is_handled "$STATE" "$id" "$seq"; then
     if [ -n "$owner_task" ]; then
       if adapter_result_is_terminal "$adapter" "$result"; then
@@ -830,6 +998,7 @@ publish_result() {  # <result-file>
           case "$?" in
             0|1)
               fm_procevent_source_lock_release "$id"
+              [ -z "$task_lock_owner" ] || task_lifecycle_lock_release
               return 1
               ;;
           esac
@@ -858,6 +1027,7 @@ $pre_existing
 EOF
       fi
       fm_procevent_source_lock_release "$id"
+      [ -z "$task_lock_owner" ] || task_lifecycle_lock_release
       if [ "$new_record" -eq 1 ]; then
         ring_meta="$STATE/$owner_task.meta"
         if [ -f "$ring_meta" ] && [ ! -L "$ring_meta" ]; then
@@ -884,6 +1054,7 @@ EOF
       case "$?" in
         0|1)
           fm_procevent_source_lock_release "$id"
+          [ -z "$task_lock_owner" ] || task_lifecycle_lock_release
           return 1
           ;;
       esac
@@ -894,6 +1065,7 @@ EOF
     fi
   fi
   fm_procevent_source_lock_release "$id"
+  [ -z "$task_lock_owner" ] || task_lifecycle_lock_release
   return "$status"
 }
 
@@ -996,7 +1168,7 @@ cmd_start_public() {
 }
 
 cmd_start() {
-  local id=${1-} adapter out rc claimed bound_rc published_capture=0 handled_capture=0 self_announcing=0 task_owner='' task_pending
+  local id=${1-} adapter out rc claimed bound_rc published_capture=0 handled_capture=0 self_announcing=0 task_owner='' current_task_owner='' task_pending task_lock_owner=''
   local extension_owner=0 extension_load_state extension_sequence='' extension_request_id=''
   fm_procevent_source_id_valid "$id" || die "source id must be path-safe: $id"
   require_runner_group
@@ -1354,13 +1526,31 @@ EOF
   if [ "$extension_owner" -eq 1 ]; then
     :
   else
+    # A teardown hand-over can change ownership while this poll is blocked.
+    # Serialize the capture with that change so a late answer cannot be sent
+    # into an inbox whose worker no longer exists.
+    while :; do
+      if [ -n "$task_owner" ] && [ -z "$task_lock_owner" ]; then
+        task_lifecycle_lock_acquire "$task_owner" || die "cannot lock task lifecycle"
+        task_lock_owner=$task_owner
+      fi
+      fm_procevent_source_lock_acquire "$id" || die "cannot lock capture source"
+      current_task_owner=$(source_owner_task "$id" 2>/dev/null || true)
+      [ "$current_task_owner" = "$task_owner" ] && break
+      fm_procevent_source_lock_release "$id"
+      [ -z "$task_lock_owner" ] || task_lifecycle_lock_release
+      task_lock_owner=
+      task_owner=$current_task_owner
+    done
     if [ -n "$task_owner" ]; then
       durable=$(fm_procevent_capture "$STATE" "$id" "$adapter" "$out" "$task_owner") \
-        || { rm -f -- "$out"; die "cannot durably capture the result"; }
+        || { fm_procevent_source_lock_release "$id"; rm -f -- "$out"; die "cannot durably capture the result"; }
     else
       durable=$(fm_procevent_capture "$STATE" "$id" "$adapter" "$out") \
-        || { rm -f -- "$out"; die "cannot durably capture the result"; }
+        || { fm_procevent_source_lock_release "$id"; rm -f -- "$out"; die "cannot durably capture the result"; }
     fi
+    fm_procevent_source_lock_release "$id"
+    [ -z "$task_lock_owner" ] || task_lifecycle_lock_release
   fi
   [ "$extension_owner" -eq 1 ] || rm -f -- "$out"
   STAGED_OUTPUT=
@@ -2079,13 +2269,45 @@ cmd_classify() {
 }
 
 cmd_handled() {
-  local id=${1-} seq=${2-} status result='' result_adapter='' conclude=0 registration='' retained=''
+  local id=${1-} seq=${2-} status result='' result_adapter='' conclude=0 registration='' retained='' task_owner=''
+  local source_kind_current='' source_owner_current='' result_owner_current='' result_owner_snapshot=''
   fm_procevent_source_id_valid "$id" || die "source id must be path-safe: $id"
   case "$seq" in ''|*[!0-9]*) die "sequence must be a nonnegative integer: $seq" ;; esac
   owner_lease_refresh
-  fm_procevent_source_lock_acquire "$id" || die "cannot lock source: $id"
-  if [ "$(source_kind "$id" 2>/dev/null || true)" = task-owned ]; then
-    result=$(source_pending "$id" | awk -v want="/$id.$seq.result" 'index($0, want) { print; exit }')
+  registration=$(source_file "$id")
+  task_owner=$(source_owner_task "$id" 2>/dev/null || true)
+  result=$(source_pending "$id" | awk -v want="/$id.$seq.result" 'index($0, want) { print; exit }')
+  result_owner_snapshot=
+  [ -z "$result" ] || result_owner_snapshot=$(fm_procevent_result_owner_task "$result" 2>/dev/null || true)
+  [ -n "$task_owner" ] || task_owner=$result_owner_snapshot
+  [ -z "$task_owner" ] || task_lifecycle_lock_acquire "$task_owner" || die "cannot lock task lifecycle"
+  fm_procevent_source_lock_acquire "$id" || {
+    [ -z "$task_owner" ] || task_lifecycle_lock_release
+    die "cannot lock source: $id"
+  }
+  source_kind_current=$(source_kind "$id" 2>/dev/null || true)
+  source_owner_current=$(source_owner_task "$id" 2>/dev/null || true)
+  result_owner_current=
+  [ -z "$result" ] || result_owner_current=$(fm_procevent_result_owner_task "$result" 2>/dev/null || true)
+  if [ "$source_kind_current" = task-owned ]; then
+    if [ "$source_owner_current" != "$task_owner" ] \
+      || { [ -n "$result_owner_current" ] && [ "$result_owner_current" != "$source_owner_current" ]; }; then
+      fm_procevent_source_lock_release "$id"
+      [ -z "$task_owner" ] || task_lifecycle_lock_release
+      return 1
+    fi
+  elif [ -e "$registration" ] || [ -L "$registration" ]; then
+    if [ -n "$source_kind_current$source_owner_current$result_owner_current" ]; then
+      fm_procevent_source_lock_release "$id"
+      [ -z "$task_owner" ] || task_lifecycle_lock_release
+      return 1
+    fi
+  elif [ -n "$result_owner_current" ] && [ "$result_owner_current" != "$task_owner" ]; then
+    fm_procevent_source_lock_release "$id"
+    [ -z "$task_owner" ] || task_lifecycle_lock_release
+    return 1
+  fi
+  if [ "$source_kind_current" = task-owned ]; then
     if [ -n "$result" ] \
       && result_adapter=$(fm_procevent_result_adapter "$result" 2>/dev/null) \
       && adapter_result_is_terminal "$result_adapter" "$result"; then
@@ -2093,7 +2315,6 @@ cmd_handled() {
     fi
   fi
   if [ "$conclude" -eq 1 ]; then
-    registration=$(source_file "$id")
     retained=$(umask 077; mktemp "$REG/.$id.concluding.XXXXXX") || {
       fm_procevent_source_lock_release "$id"
       die "cannot stage the registration this conclusion retires: $id"
@@ -2121,6 +2342,7 @@ cmd_handled() {
     fi
   fi
   fm_procevent_source_lock_release "$id"
+  [ -z "$task_owner" ] || task_lifecycle_lock_release
   case "$status" in
     0) printf 'handled: %s %s\n' "$id" "$seq" ;;
     1) printf 'already-handled: %s %s\n' "$id" "$seq" ;;
@@ -2133,7 +2355,7 @@ cmd_handled() {
 
 cmd_retire() {
   local id=${1-} condition=${2-} adapter='' sep='' expected_owner='' owner='' pid='' token='' identity='' stop_state owner_state
-  local extension_binding_digest='' round_owner=''
+  local extension_binding_digest='' round_owner='' task_owner=''
   fm_procevent_source_id_valid "$id" || die "source id must be path-safe: $id"
   case "$condition" in
     '') [ "$#" -eq 1 ] || usage ;;
@@ -2154,7 +2376,13 @@ cmd_retire() {
       ;;
     *) usage ;;
   esac
+  task_owner=$(source_owner_task "$id" 2>/dev/null || true)
+  [ -z "$task_owner" ] || task_lifecycle_lock_acquire "$task_owner" || die "cannot lock task lifecycle"
   fm_procevent_source_lock_acquire "$id" || die "cannot lock source: $id"
+  if [ -n "$task_owner" ] && [ "$(source_owner_task "$id" 2>/dev/null || true)" != "$task_owner" ]; then
+    fm_procevent_source_lock_release "$id"
+    die "source $id changed task ownership during retirement"
+  fi
   if source_retirement_blocked_locked "$id"; then
     round_owner=$(source_owner_task "$id")
     fm_procevent_source_lock_release "$id"
@@ -2240,6 +2468,7 @@ cmd_retire() {
   rm -f -- "$(launch_failed_file "$id")"
   rm -f -- "$REG/.$id.reply."*
   fm_procevent_source_lock_release "$id"
+  [ -z "$task_owner" ] || task_lifecycle_lock_release
   # A retired source produces no further answer, so drop any decision binding it
   # carried. Generic and idempotent: the binding owner is asked to forget this
   # source id, and an unbound source is unaffected.
@@ -2550,6 +2779,7 @@ unset FM_PROCEVENT_CAPTURE_PINNED_INBOX FM_PROCEVENT_CAPTURE_ABSOLUTE_INBOX \
 case "${1-}" in
   register)           shift; cmd_register "$@" ;;
   register-task)      shift; cmd_register_task "$@" ;;
+  hand-over)          shift; cmd_hand_over "$@" ;;
   register-extension) shift; cmd_register_extension "$@" ;;
   start)              shift; cmd_start_public "$@" ;;
   ensure-listening)   shift; cmd_ensure_listening "$@" ;;

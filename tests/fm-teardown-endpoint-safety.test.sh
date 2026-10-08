@@ -1420,6 +1420,76 @@ test_already_gone_endpoint_still_completes_without_a_refusal() {
   pass "fm-teardown: an already-exited endpoint, and a server that is already gone, still complete cleanup silently"
 }
 
+test_task_owned_feedback_requires_handover() {
+  local dir id=board-scout rc source
+  dir=$(make_case board-feedback)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent" "$dir/home/state/procevent-inbox" "$dir/home/state/$id.inbox"
+  source="$dir/home/state/procevent/board.source"
+  printf '#!/usr/bin/env bash\nsleep 30\n' > "$dir/fakebin/board-poll"
+  chmod +x "$dir/fakebin/board-poll"
+  printf 'adapter=lavish\nkind=task-owned\nowner_task=%s\nargc=3\nargv:\n%s\npoll\n%s\n' \
+    "$id" "$dir/fakebin/board-poll" "$dir/board.html" > "$source"
+  printf 'schema=fm-task-inbox.v1\nat=now\n--\nboard answer\n' \
+    > "$dir/home/state/$id.inbox/001.msg"
+  printf '%s\n' "$id" > "$dir/home/state/procevent-inbox/board.1.owner-task"
+  printf 'lavish\n' > "$dir/home/state/procevent-inbox/board.1.adapter"
+  printf 'status: feedback\nmessage: captured answer\n' > "$dir/home/state/procevent-inbox/board.1.result"
+  set +e
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "board-owned scout cleaned up without hand-over"
+  assert_grep "source=board adapter=lavish artifact=$dir/board.html" "$dir/refused.err" "listener artifact was not named"
+  assert_grep '001.msg first-line=board answer' "$dir/refused.err" "unread message was not named"
+  assert_grep 'board.1.result owner-task=' "$dir/refused.err" "unhandled capture was not named"
+  assert_present "$dir/home/state/$id.meta" "--force bypassed feedback refusal"
+  [ ! -s "$dir/runtime.log" ] || fail "refusal closed endpoint before inventory"
+
+  fm_test_track_procevent_home "$dir/home"
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$dir/runtime.log" \
+    FM_PROCEVENT_CLAIM_ROOT="$dir/claims" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=1 \
+    PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force --hand-over \
+    > "$dir/handover.out" 2> "$dir/handover.err" \
+    || fail "hand-over failed: $(cat "$dir/handover.err")"
+  assert_absent "$dir/home/state/$id.meta" "hand-over left worker record"
+  assert_present "$source" "hand-over lost board listener"
+  assert_no_grep '^owner_task=' "$source" "board is still task-owned"
+  assert_present "$dir/home/data/$id/handed-over/001.msg" "board answer was lost"
+  assert_absent "$dir/home/state/procevent-inbox/board.1.owner-task" "capture was not transferred"
+  assert_grep 'check: worker board-scout message handed over' "$dir/home/state/.wake-queue" "message did not wake home"
+  assert_grep 'procevent:board:1' "$dir/home/state/.wake-queue" "capture did not wake home"
+  assert_grep 'kill-window' "$dir/runtime.log" "worker was not closed before hand-over"
+
+  dir=$(make_case board-rearm)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent"
+  printf '#!/usr/bin/env bash\nsleep 30\n' > "$dir/fakebin/board-poll"
+  chmod +x "$dir/fakebin/board-poll"
+  printf 'adapter=lavish\nkind=task-owned\nowner_task=%s\nargc=3\nargv:\n%s\npoll\n%s\n' \
+    "$id" "$dir/fakebin/board-poll" "$dir/board.html" \
+    > "$dir/home/state/procevent/board.source"
+  fm_test_track_procevent_home "$dir/home"
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$dir/runtime.log" \
+    FM_PROCEVENT_CLAIM_ROOT="$dir/claims" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=1 \
+    PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force --hand-over \
+    > "$dir/handover.out" 2> "$dir/handover.err" \
+    || {
+      FM_HOME="$dir/home" FM_PROCEVENT_CLAIM_ROOT="$dir/claims" \
+        "$ROOT/bin/fm-procevent.sh" list > "$dir/list.out" 2> "$dir/list.err" || true
+      fail "board re-arm failed: $(cat "$dir/handover.err"); list: $(cat "$dir/list.out") $(cat "$dir/list.err")"
+    }
+  assert_absent "$dir/home/state/$id.meta" "re-armed board left worker record"
+  assert_no_grep '^owner_task=' "$dir/home/state/procevent/board.source" "re-armed board is task-owned"
+  assert_grep 'handed over listener board to home' "$dir/handover.err" "board re-arm was not recorded"
+  pass "fm-teardown: --force cannot discard task-owned listener or unread feedback; --hand-over transfers and re-arms home listener"
+}
+
+test_task_owned_feedback_requires_handover
 test_invalid_endpoint_records_refuse_before_mutation
 test_control_lock_contention_refuses_before_mutation
 test_non_pool_teardown_ignores_task_set_lock

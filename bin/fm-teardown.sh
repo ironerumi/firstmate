@@ -181,7 +181,11 @@
 # finally .fm-secondmate-home) so the next worker leased that slot does not resolve a
 # home that no longer exists; it touches nothing tracked, and only while the slot still
 # carries this home's own marker (scrub_returned_home_slot).
-# Usage: fm-teardown.sh <task-id> [--force] [--legacy-record]
+# Usage: fm-teardown.sh <task-id> [--force] [--hand-over] [--legacy-record]
+#   Task-owned board listeners, unread steering messages, and unhandled captured
+#   results refuse cleanup before any destructive action, including with --force.
+#   --hand-over closes the endpoint first, then transfers the listener and
+#   feedback to the home. Remote secondmate retirement is a separate path.
 #   --force skips ordinary-task dirty and landed-work checks, skips scout report
 #   checks, and discards secondmate child work for kind=secondmate. Only use it
 #   when the captain has explicitly said to discard the work.
@@ -362,6 +366,8 @@ unset _teardown_source
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-control-lib.sh
 . "$SCRIPT_DIR/fm-control-lib.sh"
+# shellcheck source=bin/fm-procevent-lib.sh
+. "$SCRIPT_DIR/fm-procevent-lib.sh"
 # shellcheck source=bin/fm-lock-lib.sh
 . "$SCRIPT_DIR/fm-lock-lib.sh"
 # shellcheck source=bin/fm-classify-lib.sh
@@ -386,11 +392,13 @@ if [ "$#" -lt 1 ] || ! fm_task_id_path_safe "$1"; then
 fi
 ID=$1
 FORCE=
+HAND_OVER=0
 LEGACY_RECORD_GIVEN=0
 shift
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --force) FORCE=--force ;;
+    --hand-over) HAND_OVER=1 ;;
     --legacy-record) LEGACY_RECORD_GIVEN=1 ;;
     *)
       echo "error: invalid teardown request" >&2
@@ -3515,6 +3523,53 @@ if teardown_owns_worktree && [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
   fi
 fi
 
+# Hold the task lifecycle lock already owned by teardown while inventorying.
+# Registration, captures, and steering inbox writes take the same lock, so a
+# late board answer cannot enter the retired task's inbox after this scan.
+attached_feedback_inventory() {
+  local rec result owner first id adapter artifact
+  TASK_ATTACHED_SOURCES=0
+  TASK_ATTACHED_MESSAGES=0
+  for rec in "$STATE/procevent"/*.source; do
+    [ -e "$rec" ] || continue
+    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe source $rec" >&2; return 1; }
+    owner=$(fm_meta_get "$rec" owner_task)
+    [ "$owner" = "$ID" ] || continue
+    id=${rec##*/}; id=${id%.source}
+    adapter=$(fm_meta_get "$rec" adapter)
+    artifact=$(awk '/^argv:$/ { getline; getline; getline; print; exit }' "$rec")
+    printf 'attached listener: source=%s adapter=%s artifact=%s\n' "$id" "$adapter" "$artifact" >&2
+    TASK_ATTACHED_SOURCES=$((TASK_ATTACHED_SOURCES + 1))
+  done
+  for rec in "$STATE/$ID.inbox"/*.msg; do
+    [ -e "$rec" ] || continue
+    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe inbox message $rec" >&2; return 1; }
+    first=$(awk 'seen { print; exit } $0 == "--" { seen=1 }' "$rec")
+    printf 'attached message: file=%s first-line=%s\n' "$rec" "$first" >&2
+    TASK_ATTACHED_MESSAGES=$((TASK_ATTACHED_MESSAGES + 1))
+  done
+  for result in "$STATE/procevent-inbox"/*.owner-task; do
+    [ -e "$result" ] || continue
+    [ -f "$result" ] && [ ! -L "$result" ] || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
+    [ "$(cat "$result")" = "$ID" ] || continue
+    rec="${result%.owner-task}.result"
+    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe capture $rec" >&2; return 1; }
+    [ ! -L "${result%.owner-task}.handled" ] || { echo "REFUSED: unsafe capture marker ${result%.owner-task}.handled" >&2; return 1; }
+    [ ! -e "${result%.owner-task}.handled" ] || continue
+    printf 'attached result: file=%s owner-task=%s\n' "$rec" "$ID" >&2
+    TASK_ATTACHED_MESSAGES=$((TASK_ATTACHED_MESSAGES + 1))
+  done
+}
+
+if [ "$KIND" != secondmate ]; then
+  attached_feedback_inventory || exit 1
+  if [ "$HAND_OVER" != 1 ] \
+     && { [ "$TASK_ATTACHED_SOURCES" -gt 0 ] || [ "$TASK_ATTACHED_MESSAGES" -gt 0 ]; }; then
+    echo "REFUSED: task $ID still owns listeners or unread feedback; use --hand-over (--force does not authorize transfer)." >&2
+    exit 1
+  fi
+fi
+
 # A Herdr close may reposition shared workspace order, so the whole
 # destructive sequence below (worktree return, pane close, record removal)
 # runs under the named-session presentation lock, acquired BEFORE anything is
@@ -3772,6 +3827,48 @@ if [ "$BACKEND" = herdr ]; then
     exit 1
   fi
 fi
+if [ "$KIND" != secondmate ] && [ "$HAND_OVER" = 1 ]; then
+  for rec in "$STATE/procevent"/*.source; do
+    [ -f "$rec" ] && [ "$(fm_meta_get "$rec" owner_task)" = "$ID" ] || continue
+    id=${rec##*/}; id=${id%.source}
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_PROCEVENT_TEARDOWN_HANDOVER=1 \
+      "$SCRIPT_DIR/fm-procevent.sh" hand-over "$id" "$ID" || exit 1
+    pending=0
+    for result in "$STATE/procevent-inbox/$id".*.result; do
+      [ -f "$result" ] && [ ! -e "${result%.result}.handled" ] && pending=1
+    done
+    if [ "$pending" = 0 ]; then
+      FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+        "$SCRIPT_DIR/fm-procevent.sh" ensure-listening "$id" || exit 1
+    else
+      echo "teardown: listener $id has captured feedback; re-arm after home handles it" >&2
+    fi
+    echo "teardown: handed over listener $id to home" >&2
+  done
+  for rec in "$STATE/procevent-inbox"/*.owner-task; do
+    [ -f "$rec" ] && [ "$(cat "$rec")" = "$ID" ] || continue
+    id=${rec##*/}; id=${id%.*.*}
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_PROCEVENT_TEARDOWN_HANDOVER=1 \
+      "$SCRIPT_DIR/fm-procevent.sh" hand-over "$id" "$ID" || exit 1
+    echo "teardown: handed over captured result $rec to home" >&2
+  done
+  for rec in "$STATE/$ID.inbox"/*.msg; do
+    [ -f "$rec" ] && [ ! -L "$rec" ] || continue
+    mkdir -p "$DATA/$ID/handed-over" || exit 1
+    [ ! -e "$DATA/$ID/handed-over/${rec##*/}" ] || {
+      echo "REFUSED: hand-over destination already exists for ${rec##*/}" >&2
+      exit 1
+    }
+    mv -- "$rec" "$DATA/$ID/handed-over/${rec##*/}" || exit 1
+    echo "teardown: handed over message ${rec##*/} to home" >&2
+  done
+  for rec in "$DATA/$ID/handed-over"/*.msg; do
+    [ -e "$rec" ] || continue
+    [ -f "$rec" ] && [ ! -L "$rec" ] || exit 1
+    fm_wake_append check "teardown-inbox:$ID:${rec##*/}" \
+      "check: worker $ID message handed over at $rec" || exit 1
+  done
+fi
 if [ "$KIND" != secondmate ]; then
   if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
       "$SCRIPT_DIR/fm-inactive-reconcile.sh" report "$ID"; then
@@ -3845,9 +3942,8 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
   "$STATE/$ID.reconcile-nudged" "$STATE/$ID.gemini-settings.json" "$STATE/$ID.devin-config.json" \
   "$STATE/.$ID.branch-outcome-index" \
   "$STATE/.secondmate-relaunch-$ID" "$STATE/.secondmate-relaunch-bound-$ID"
-# The steering inbox (bin/fm-task-inbox-lib.sh) is runtime state for the
-# retired endpoint; teardown only runs after landing is confirmed, so any
-# leftover unhandled steer here is moot rather than unlanded work.
+# The steering inbox is removed only after its unread messages have either
+# been absent or copied to the home's durable hand-over directory and wake queue.
 # state/<id>.git-hooks is the spawn-owned commit-msg strip directory, left
 # read-only by its installer.
 chmod u+w "$STATE/$ID.git-hooks" 2>/dev/null || true
