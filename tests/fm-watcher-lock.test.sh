@@ -547,7 +547,6 @@ SH
     FM_TEST_RACE_ONCE="$dir/race-once" FM_TEST_RACE_OUT="$out" \
     FM_STATE_OVERRIDE="$state" bash -c '
       . "$1"
-      fm_lock_reap_dead_link "$2" || exit 1
       fm_lock_try_acquire_steal_mutex "$2" || exit 1
       [ "$(cat "$2/pid" 2>/dev/null)" = "${BASHPID:-$$}" ] || exit 2
     ' _ "$LIB" "$steal" || rc=$?
