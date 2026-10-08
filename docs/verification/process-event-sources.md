@@ -128,6 +128,7 @@ Exercised by `tests/fm-procevent.test.sh` against a fake blocking source whose c
 | foreign ownership | sweeping one home removes its registration without signaling or releasing another home's live claim |
 | nested and force cleanup | normal, force, and nested secondmate removal invoke each target home's sweep at its final removal boundary, a failed removal restores and rearms registrations, and failed rearming at any nested level retains and reports its recovery backup with a distinct status |
 | teardown refusal ordering | a later public-followup refusal retains the home and its active process-event registration without invoking its sweep |
+| task-owned feedback teardown gate | `tests/fm-teardown-endpoint-safety.test.sh` refuses cleanup before endpoint mutation and names the task-owned listener, unread inbox message, and unhandled capture even with `--force`; its `--hand-over` cases stop the endpoint, transfer the source, capture, and message to the home, wake the home, and re-arm a capture-free source |
 | healthy-home invariance | homes with no registration or owned runner claim retain ordinary registration-only supervision and teardown behavior |
 | source-only supervision | a registered source with no task metadata trips the shared predicate and general guard |
 | argv integrity | an argument containing spaces survives as one argument, a shell-looking argument is passed literally with no interpretation, and an unrepresentable newline is rejected at registration |
@@ -162,6 +163,7 @@ node --version
 bin/fm-test-run.sh tests/fm-extension-binding.test.sh
 FM_EXTENSION_BINDING_SEGMENT=lifecycle-invocation-cleanup bin/fm-test-run.sh tests/fm-extension-binding.test.sh
 bin/fm-test-run.sh tests/fm-procevent.test.sh
+bin/fm-test-run.sh tests/fm-teardown-endpoint-safety.test.sh
 FM_BEARINGS_LAVISH_LIVE=1 bin/fm-test-run.sh tests/fm-bearings-board-lavish-live-e2e.test.sh
 bin/fm-doc-audience-check.sh
 ```
