@@ -1255,6 +1255,18 @@ fm_procevent_task_feedback_inventory() {  # <state> <task-id>
   done
 }
 
+# Gate teardown before destructive work, then transfer only after its endpoint closes.
+fm_procevent_task_feedback_teardown_gate() {  # <state> <task-id> <hand-over>
+  local state=$1 task=$2 hand_over=$3
+  fm_procevent_task_feedback_inventory "$state" "$task" || return 1
+  if [ "$hand_over" != 1 ] \
+     && { [ "$FM_PROCEVENT_TASK_ATTACHED_SOURCES" -gt 0 ] \
+       || [ "$FM_PROCEVENT_TASK_ATTACHED_MESSAGES" -gt 0 ]; }; then
+    echo "REFUSED: task $task still owns listeners or unread feedback; use --hand-over (--force does not authorize transfer)." >&2
+    return 1
+  fi
+}
+
 # Transfer task-owned listeners, captured results, and unread steering messages
 # after the caller has closed the task endpoint. This preserves the hand-over
 # publication order and re-arm behavior of teardown's lifecycle path.
