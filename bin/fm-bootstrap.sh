@@ -911,12 +911,10 @@ tool_version_at_least() {  # <tool> <min-version>
 # rule as tool_version_at_least so a version a floor would refuse is never
 # displayed as a clean one.
 tool_version() {  # <tool>
-  local tool=$1 output version
-  command -v "$tool" >/dev/null 2>&1 || { printf 'unparseable'; return 0; }
-  output=$("$tool" --version 2>/dev/null) || { printf 'unparseable'; return 0; }
-  version=$(printf '%s\n' "$output" | sed -nE 's/.*[vV]?([0-9]+)\.([0-9]+)\.([0-9]+).*/\1.\2.\3/p' | head -n 1)
-  [ -n "$version" ] || version=unparseable
-  printf '%s' "$version"
+  local parts major minor patch
+  parts=$(tool_version_parts "$1") || { printf 'unparseable'; return 0; }
+  IFS=' ' read -r major minor patch <<< "$parts"
+  printf '%s.%s.%s' "$major" "$minor" "$patch"
 }
 
 # The requirement a tasks-axi OUTDATED line reports: its version floor plus any
