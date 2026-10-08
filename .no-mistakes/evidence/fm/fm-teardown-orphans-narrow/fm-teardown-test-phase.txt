@@ -1,0 +1,9 @@
+Phase 1 targeted validation (T0=1791482055)
+
+Ran serially with `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300`:
+- `tests/fm-teardown-endpoint-safety.test.sh` — the targeted worker-feedback scenario passed: task-owned listener and unread feedback refused loudly, `--force` did not bypass, and `--hand-over` transferred/re-armed and preserved wake evidence. The script later hit the 300s per-script time bound while continuing unrelated cases; not rerun.
+- `tests/fm-procevent.test.sh` — passed many earlier process-event cases, then hit the 300s per-script time bound; no assertion failure observed before termination; not rerun.
+- `tests/fm-send-inbox.test.sh` — completed successfully.
+- `tests/fm-teardown.test.sh` — passed many earlier teardown cases, then hit the 300s per-script time bound; no assertion failure observed before termination; not rerun.
+
+No phase-2 scenarios started: the changed worker-listener/unread-inbox behavior is directly covered by the targeted executable test above, and phase-1 scripts that hit their bound are covered by CI per the runbook.
