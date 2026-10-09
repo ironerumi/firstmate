@@ -431,7 +431,7 @@ SH
 
   run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=1
   report=$(cat "$out")
-  assert_contains "$report" "no-mistakes check failed: $dir/no-mistakes-fixture did not answer when asked for its update announcement" "an announcement probe that stalled twice in a row was read as a clean sweep"
+  assert_equals "tool updates: no-mistakes check failed: $dir/no-mistakes-fixture did not answer when asked for its update announcement twice in a row" "$report" "an announcement probe did not require two consecutive timeouts"
 
   # An answer resets the count, so the next lone timeout is silent again.
   rm -f "$mute"
