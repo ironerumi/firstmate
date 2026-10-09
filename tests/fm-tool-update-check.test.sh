@@ -482,7 +482,7 @@ SH
   rm -f "$slow_version"
   : > "$mute"
   run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=2 FM_TOOL_UPDATE_BUDGET_SECS=2
-  assert_contains "$(cat "$out")" "did not answer when asked for its update announcement" "a timeout after a budget-skipped probe was treated as the first timeout"
+  assert_equals "tool updates: no-mistakes check failed: $dir/no-mistakes-fixture did not answer when asked for its update announcement twice in a row" "$(cat "$out")" "a timeout after a budget-skipped probe was not treated as consecutive"
   pass "a budget-skipped announcement probe preserves timeout state"
 }
 
