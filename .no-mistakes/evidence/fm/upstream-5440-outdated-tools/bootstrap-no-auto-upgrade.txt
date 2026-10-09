@@ -1,0 +1,10 @@
+Live product: outdated detection with disposable toolchain
+Boundary oracle: detection must not execute any updater; consent stays detect then ask then act
+
+OUTDATED: treehouse (installed: 0.4.2; requires --lease support; upgrade: treehouse update)
+OUTDATED: no-mistakes (installed: 1.45.4; requires 1.46.0; upgrade: no-mistakes update)
+OUTDATED: gh-axi (installed: 0.1.28; requires 0.1.29; upgrade: gh-axi update)
+OUTDATED: quota-axi (installed: 0.1.50; requires 0.1.51; upgrade: quota-axi update)
+
+Updater/setup invocations observed (excluding tasks-axi update --help capability probe):
+none (only version/help probes ran)

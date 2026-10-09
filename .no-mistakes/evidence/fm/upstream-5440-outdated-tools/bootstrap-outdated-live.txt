@@ -1,0 +1,27 @@
+Live product: bin/fm-bootstrap.sh against disposable fake toolchain
+Oracle: issue #5440 contract (MISSING absent; OUTDATED present below floor/capability; at-floor silent; lavish fallback preserved)
+
+[baseline: all required tools at floor/capability]
+[treehouse: present without --lease capability]
+OUTDATED: treehouse (installed: 0.4.2; requires --lease support; upgrade: treehouse update)
+[no-mistakes: present below 1.46.0]
+OUTDATED: no-mistakes (installed: 1.45.4; requires 1.46.0; upgrade: no-mistakes update)
+[gh-axi: present below 0.1.29]
+OUTDATED: gh-axi (installed: 0.1.28; requires 0.1.29; upgrade: gh-axi update)
+[quota-axi: present below 0.1.51]
+OUTDATED: quota-axi (installed: 0.1.50; requires 0.1.51; upgrade: quota-axi update)
+[tasks-axi: at version floor, missing update --archive-body]
+OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body; upgrade: npm install -g tasks-axi)
+[lavish-axi: present below board compatibility floor]
+PRESENTATION_UNAVAILABLE: lavish-axi (requires >=0.1.77; install: npm install -g lavish-axi && lavish-axi setup hooks) - nonvisual work may proceed with plain-text decisions and reports; install or upgrade before using Lavish
+[treehouse: absent]
+MISSING: treehouse (install: curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh)
+[no-mistakes: absent]
+MISSING: no-mistakes (install: curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh)
+[gh-axi: absent]
+MISSING: gh-axi (install: npm install -g gh-axi && gh-axi setup hooks)
+[quota-axi: absent]
+MISSING: quota-axi (install: npm install -g quota-axi)
+[tasks-axi: absent]
+MISSING: tasks-axi (install: npm install -g tasks-axi)
+[at-floor recheck: no-mistakes 1.46.0, gh-axi 0.1.29, quota-axi 0.1.51, tasks-axi 0.2.6 with capabilities]
