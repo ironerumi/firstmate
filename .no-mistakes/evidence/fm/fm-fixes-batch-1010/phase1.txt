@@ -1,0 +1,7 @@
+Phase 1 targeted suites (serial, jobs=1, per-script-timeout-secs=300)
+
+- `tests/fm-remote-doctor.test.sh`: PASS (exit 0; 19 assertions, including absent tasks-axi=MISSING and installed incompatible tasks-axi=OUTDATED, including worker probe).
+- `tests/fm-tool-update-check.test.sh`: PASS (exit 0; timeout repeat, budget-skip preservation, recovery reset, and default 24-hour cadence scenarios passed).
+- `tests/fm-teardown.test.sh`: UNTESTED — time bound. Started and ran for the full 300-second per-script bound; harness terminated it with exit 124 before completion. Per runbook this is not a product failure and was not rerun.
+
+No additional suites were started after the lifecycle suite hit its bound.
