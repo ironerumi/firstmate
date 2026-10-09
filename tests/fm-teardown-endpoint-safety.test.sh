@@ -60,6 +60,35 @@ run_case() {  # <case> <id>
     "$TEARDOWN" "$id" --force
 }
 
+kill_process_tree() {
+  local parent=$1 child
+  for child in $(ps -eo pid=,ppid= 2>/dev/null | awk -v parent="$parent" '$2 == parent {print $1}'); do
+    kill_process_tree "$child"
+    kill "$child" 2>/dev/null || true
+  done
+}
+
+run_handover_bounded() {  # <case> <id> <stdout> <stderr>
+  local dir=$1 id=$2 stdout=$3 stderr=$4 pid i=0
+  (
+    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$dir/runtime.log" \
+      FM_PROCEVENT_CLAIM_ROOT="$dir/claims" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=1 \
+      PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force --hand-over
+  ) > "$stdout" 2> "$stderr" &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$i" -ge 100 ]; then
+      kill_process_tree "$pid"
+      kill "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      fail "hand-over did not complete within the bounded test deadline"
+    fi
+    sleep 0.05
+    i=$((i + 1))
+  done
+  wait "$pid"
+}
+
 assert_refused_without_mutation() {  # <case> <id> <description>
   local dir=$1 id=$2 description=$3 rc
   set +e
@@ -1420,6 +1449,21 @@ test_already_gone_endpoint_still_completes_without_a_refusal() {
   pass "fm-teardown: an already-exited endpoint, and a server that is already gone, still complete cleanup silently"
 }
 
+test_handover_completes_under_teardown_lock() {
+  local dir id=lock-handover
+  dir=$(make_case lock-handover)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/missing-worktree" "project=$dir/missing-project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent"
+  run_handover_bounded "$dir" "$id" "$dir/stdout" "$dir/stderr" \
+    || fail "hand-over deadlocked or failed under teardown's lifecycle lock: $(cat "$dir/stderr")"
+  assert_absent "$dir/home/state/$id.meta" "reentrant hand-over left the task record"
+  assert_grep "kill-window" "$dir/runtime.log" "reentrant hand-over did not close the endpoint"
+  assert_grep "teardown $id complete" "$dir/stdout" "reentrant hand-over did not complete teardown"
+  pass "fm-teardown: --hand-over completes while teardown owns the lifecycle lock"
+}
+
 test_task_owned_feedback_requires_handover() {
   local dir id=board-scout rc source
   dir=$(make_case board-feedback)
@@ -1451,10 +1495,7 @@ test_task_owned_feedback_requires_handover() {
 
   fm_test_track_procevent_home "$dir/home"
   set +e
-  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$dir/runtime.log" \
-    FM_PROCEVENT_CLAIM_ROOT="$dir/claims" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=1 \
-    PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force --hand-over \
-    > "$dir/handover.out" 2> "$dir/handover.err"
+  run_handover_bounded "$dir" "$id" "$dir/handover.out" "$dir/handover.err"
   rc=$?
   set -e
   [ "$rc" -ne 0 ] || fail "hand-over discarded an unhandled capture"
@@ -1464,10 +1505,7 @@ test_task_owned_feedback_requires_handover() {
   assert_grep "owner_task=$id" "$source" "failed hand-over changed listener owner"
 
   : > "$dir/home/state/procevent-inbox/board.1.handled"
-  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$dir/runtime.log" \
-    FM_PROCEVENT_CLAIM_ROOT="$dir/claims" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=1 \
-    PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force --hand-over \
-    > "$dir/handover.out" 2> "$dir/handover.err" \
+  run_handover_bounded "$dir" "$id" "$dir/handover.out" "$dir/handover.err" \
     || fail "hand-over after handling failed: $(cat "$dir/handover.err")"
   assert_absent "$dir/home/state/$id.meta" "hand-over left worker record"
   assert_present "$source" "hand-over lost board listener"
@@ -1523,6 +1561,7 @@ test_task_owned_feedback_requires_handover() {
   pass "fm-teardown: --force cannot discard task-owned listener or unread feedback; --hand-over transfers and re-arms home listener"
 }
 
+test_handover_completes_under_teardown_lock
 test_task_owned_feedback_requires_handover
 test_invalid_endpoint_records_refuse_before_mutation
 test_control_lock_contention_refuses_before_mutation

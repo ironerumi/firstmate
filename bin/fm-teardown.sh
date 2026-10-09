@@ -3772,7 +3772,7 @@ if [ "$BACKEND" = herdr ]; then
     exit 1
   fi
 fi
-[ "$KIND" = secondmate ] || [ "$HAND_OVER" != 1 ] || { [ ! -d "$STATE/procevent" ] && [ ! -d "$STATE/procevent-inbox" ] && [ ! -d "$STATE/$ID.inbox" ]; } || FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" "$SCRIPT_DIR/fm-procevent.sh" task-feedback hand-over "$ID" || exit 1
+[ "$KIND" = secondmate ] || [ "$HAND_OVER" != 1 ] || { [ ! -d "$STATE/procevent" ] && [ ! -d "$STATE/procevent-inbox" ] && [ ! -d "$STATE/$ID.inbox" ]; } || FM_PROCEVENT_TEARDOWN_HANDOVER=1 FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" "$SCRIPT_DIR/fm-procevent.sh" task-feedback hand-over "$ID" || exit 1
 if [ "$KIND" != secondmate ]; then
   if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
       "$SCRIPT_DIR/fm-inactive-reconcile.sh" report "$ID"; then
