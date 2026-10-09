@@ -1281,6 +1281,30 @@ test_teardown_clears_worker_state_from_a_firstmate_slot() {
   pass "teardown clears the worker-written state/ from a returned firstmate-repo slot"
 }
 
+test_teardown_clears_worker_state_from_a_separate_firstmate_clone_slot() {
+  local case_dir rc
+  case_dir=$(make_case worker-state-scrub-contrib-clone)
+  write_meta "$case_dir" no-mistakes ship
+  make_firstmate_pool_slot "$case_dir"
+  # This home's own checkout is a different clone of the same repository than the
+  # one the task's slot was leased from, as a contribution checkout is: a separate
+  # git directory that shares history.
+  git clone -q "$case_dir/firstmate-root" "$case_dir/home-root"
+  mkdir -p "$case_dir/home-root/state"
+  mkdir -p "$case_dir/wt/state"
+  : > "$case_dir/wt/state/.pi-turnend-extension-loaded"
+  : > "$case_dir/wt/state/.pi-watch-extension-loaded"
+
+  set +e
+  FM_TEST_ROOT_OVERRIDE="$case_dir/home-root" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "worker-state-scrub-contrib-clone: teardown should succeed"
+  [ ! -e "$case_dir/wt/state" ] || fail "worker-state-scrub-contrib-clone: a slot of a separate firstmate clone kept the worker's state/, so the next spawn would refuse it"
+  pass "teardown clears the worker-written state/ from a slot of a separate firstmate clone"
+}
+
 test_teardown_keeps_state_of_a_retired_home_slot() {
   local case_dir rc
   case_dir=$(make_case retired-home-state-kept)
@@ -4517,6 +4541,7 @@ test_teardown_manual_backend_leaves_the_backlog_to_the_operator
 test_local_only_truly_unpushed_refuses
 test_local_only_merged_to_local_main_allows
 test_teardown_clears_worker_state_from_a_firstmate_slot
+test_teardown_clears_worker_state_from_a_separate_firstmate_clone_slot
 test_teardown_does_not_scrub_an_unrelated_firstmate_shaped_slot
 test_teardown_keeps_state_of_a_retired_home_slot
 test_teardown_retains_records_when_worker_state_scrub_fails
