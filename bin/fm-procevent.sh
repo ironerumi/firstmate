@@ -303,7 +303,6 @@ task_feedback_source_owner_validate() {
         ;;
     esac
   done < "$file" || return 1
-  [ "$kind_seen" -eq 1 ] || return 1
   if [ "$owner_seen" -eq 1 ]; then
     fm_pr_task_id_valid "$owner" || return 1
   fi

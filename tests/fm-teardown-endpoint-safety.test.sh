@@ -1460,6 +1460,36 @@ test_feedback_inventory_rechecks_before_endpoint_close() {
   pass "fm-teardown: feedback published after the initial inventory is refused before endpoint close"
 }
 
+test_unrelated_feedback_sources_do_not_refuse() {
+  local dir id=unrelated-sources
+  dir=$(make_case unrelated-feedback)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent"
+  printf 'adapter=lavish\nargc=1\nargv:\n%s\n' \
+    "$dir/fakebin/ordinary-board" > "$dir/home/state/procevent/ordinary-board.source"
+  cat > "$dir/home/state/procevent/extension-board.source" <<'SOURCE'
+adapter=extension
+owner=extension
+extension_schema=fm-procevent-extension-owner.v1
+extension_id=demo
+extension_version=1
+capability_version=1
+package_digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+binding_digest=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+config_ref=demo-config
+registration_token=demo-token
+argc=0
+argv:
+SOURCE
+  run_case "$dir" "$id" > "$dir/success.out" 2> "$dir/success.err" \
+    || fail "unrelated ordinary and extension sources blocked teardown: $(cat "$dir/success.err")"
+  assert_absent "$dir/home/state/$id.meta" \
+    "successful teardown left the unrelated-source task metadata"
+  pass "fm-teardown: unrelated ordinary and extension sources do not trigger task feedback refusal"
+}
+
 test_task_owned_feedback_refuses_before_mutation() {
   local dir id=board-scout rc source
   dir=$(make_case board-feedback)
@@ -1563,6 +1593,7 @@ test_task_owned_feedback_refuses_before_mutation() {
 
 test_task_owned_feedback_refuses_before_mutation
 test_feedback_inventory_rechecks_before_endpoint_close
+test_unrelated_feedback_sources_do_not_refuse
 test_invalid_endpoint_records_refuse_before_mutation
 test_control_lock_contention_refuses_before_mutation
 test_non_pool_teardown_ignores_task_set_lock
