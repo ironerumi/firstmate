@@ -1,0 +1,12 @@
+Phase 1 targeted validation
+
+Command: bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-procevent.test.sh tests/fm-teardown-endpoint-safety.test.sh tests/fm-teardown.test.sh
+
+Passed:
+- tests/fm-teardown-endpoint-safety.test.sh (completed; all assertions passed), including task-owned feedback refusal, late feedback refusal before endpoint close, malformed/symlink safety, and no-mutation checks.
+
+Time bound (not failures; terminated at the configured 300s per-script bound):
+- tests/fm-procevent.test.sh (exit 124 at 300s)
+- tests/fm-teardown.test.sh (exit 124 at 300s)
+
+No standalone assertion failure was observed. Phase 2 is skipped because the focused endpoint-safety suite directly exercises every changed cleanup behavior; the two broader suites are covered by CI beyond this runbook time bound.
