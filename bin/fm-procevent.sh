@@ -6,8 +6,7 @@
 # Usage:
 #   fm-procevent.sh register <adapter> <source-id> -- <argv>...
 #   fm-procevent.sh register-task <adapter> <source-id> <task-id> -- <argv>...
-#   fm-procevent.sh hand-over <source-id> <task-id>
-#   fm-procevent.sh task-feedback inventory <task-id> [--hand-over]
+#   fm-procevent.sh task-feedback inventory <task-id>
 #   fm-procevent.sh task-feedback hand-over <task-id>
 #   fm-procevent.sh register-extension <adapter> <source-id> --config-ref <reference>
 #   fm-procevent.sh start <source-id>
@@ -357,17 +356,16 @@ fm_procevent_task_feedback_inventory() {  # <state> <task-id>
 }
 
 cmd_task_feedback() {
-  local operation=${1-} task=${2-} option=${3-}
+  local operation=${1-} task=${2-}
   case "$operation" in
     inventory)
-      [ "$#" -ge 2 ] && [ "$#" -le 3 ] || usage
+      [ "$#" -eq 2 ] || usage
       fm_pr_task_id_valid "$task" || die "invalid task id: $task"
-      [ "$option" = 0 ] || [ "$option" = 1 ] || [ "$option" = --hand-over ] || usage
       fm_procevent_task_feedback_inventory "$STATE" "$task" || return 1
-      if [ "$option" = 0 ] \
+      if [ "${FM_PROCEVENT_TEARDOWN_HANDOVER:-0}" != 1 ] \
          && { [ "$FM_PROCEVENT_TASK_ATTACHED_SOURCES" -gt 0 ] \
            || [ "$FM_PROCEVENT_TASK_ATTACHED_MESSAGES" -gt 0 ]; }; then
-        echo "REFUSED: task $task still owns listeners or unread feedback; use --hand-over (--force does not authorize transfer)." >&2
+        echo "REFUSED: task $task still owns listeners or unread feedback; use teardown --hand-over (--force does not authorize transfer)." >&2
         return 1
       fi
       ;;
@@ -2888,7 +2886,6 @@ unset FM_PROCEVENT_CAPTURE_PINNED_INBOX FM_PROCEVENT_CAPTURE_ABSOLUTE_INBOX \
 case "${1-}" in
   register)           shift; cmd_register "$@" ;;
   register-task)      shift; cmd_register_task "$@" ;;
-  hand-over)          shift; cmd_hand_over "$@" ;;
   task-feedback)      shift; cmd_task_feedback "$@" ;;
   register-extension) shift; cmd_register_extension "$@" ;;
   start)              shift; cmd_start_public "$@" ;;

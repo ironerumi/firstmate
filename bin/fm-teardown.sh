@@ -3514,7 +3514,7 @@ if teardown_owns_worktree && [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
     fi
   fi
 fi
-[ "$KIND" = secondmate ] || { [ ! -d "$STATE/procevent" ] && [ ! -d "$STATE/procevent-inbox" ] && [ ! -d "$STATE/$ID.inbox" ]; } || FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" "$SCRIPT_DIR/fm-procevent.sh" task-feedback inventory "$ID" "$HAND_OVER" || exit 1
+[ "$KIND" = secondmate ] || { [ ! -d "$STATE/procevent" ] && [ ! -d "$STATE/procevent-inbox" ] && [ ! -d "$STATE/$ID.inbox" ]; } || FM_PROCEVENT_TEARDOWN_HANDOVER="$HAND_OVER" FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" "$SCRIPT_DIR/fm-procevent.sh" task-feedback inventory "$ID" || exit 1
 # A Herdr close may reposition shared workspace order, so the whole
 # destructive sequence below (worktree return, pane close, record removal)
 # runs under the named-session presentation lock, acquired BEFORE anything is
