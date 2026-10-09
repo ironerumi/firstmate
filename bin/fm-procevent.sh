@@ -317,11 +317,57 @@ task_lifecycle_lock_parent_owned() {  # <task-id>
   [ -n "$owner" ] && [ "$owner" = "$parent" ]
 }
 
+task_feedback_directory_check() {
+  local directory=$1
+  if [ ! -e "$directory" ] && [ ! -L "$directory" ]; then
+    return 0
+  fi
+  fm_procevent_private_directory_valid "$directory" 0 || {
+    echo "REFUSED: unsafe feedback directory $directory" >&2
+    return 1
+  }
+}
+
+task_feedback_directory_require() {
+  local directory=$1
+  [ -e "$directory" ] && [ ! -L "$directory" ] || {
+    echo "REFUSED: unsafe feedback directory $directory" >&2
+    return 1
+  }
+  fm_procevent_private_directory_valid "$directory" 0 || {
+    echo "REFUSED: unsafe feedback directory $directory" >&2
+    return 1
+  }
+}
+
+task_feedback_state_directories_validate() {
+  local state=$1 task=$2
+  task_feedback_directory_check "$state/procevent" || return 1
+  task_feedback_directory_check "$state/procevent-inbox" || return 1
+  task_feedback_directory_check "$state/$task.inbox" || return 1
+}
+
+task_feedback_handover_directories_validate() {
+  local state=$1 data=$2 task=$3 destination
+  task_feedback_state_directories_validate "$state" "$task" || return 1
+  task_feedback_directory_require "$data" || return 1
+  if [ ! -e "$data/$task" ] && [ ! -L "$data/$task" ]; then
+    mkdir -- "$data/$task" || return 1
+  fi
+  task_feedback_directory_require "$data/$task" || return 1
+  destination="$data/$task/handed-over"
+  if [ ! -e "$destination" ] && [ ! -L "$destination" ]; then
+    mkdir -- "$destination" || return 1
+  fi
+  task_feedback_directory_require "$destination"
+}
+
 # Inventory task-owned process-event feedback at teardown's refusal boundary.
 # This executable boundary keeps teardown's ShellCheck graph independent of the
 # feedback implementation while preserving its three durable representations.
 fm_procevent_task_feedback_inventory() {  # <state> <task-id>
   local state=$1 task=$2 rec result owner id adapter artifact
+  task_feedback_state_directories_validate "$state" "$task" || return 1
   FM_PROCEVENT_TASK_ATTACHED_SOURCES=0
   FM_PROCEVENT_TASK_ATTACHED_MESSAGES=0
   for rec in "$state/procevent"/*.source; do
@@ -382,6 +428,7 @@ cmd_task_feedback() {
 # only after teardown has closed the task endpoint.
 fm_procevent_task_feedback_hand_over() {  # <state> <data> <home> <script-dir> <task-id>
   local state=$1 data=$2 home=$3 script_dir=$4 task=$5 rec id
+  task_feedback_handover_directories_validate "$state" "$data" "$task" || return 1
   for rec in "$state/procevent"/*.source; do
     [ -f "$rec" ] && [ "$(fm_meta_get "$rec" owner_task)" = "$task" ] || continue
     id=${rec##*/}; id=${id%.source}
@@ -399,7 +446,6 @@ fm_procevent_task_feedback_hand_over() {  # <state> <data> <home> <script-dir> <
   done
   for rec in "$state/$task.inbox"/*.msg; do
     [ -f "$rec" ] && [ ! -L "$rec" ] || continue
-    mkdir -p "$data/$task/handed-over" || return 1
     [ ! -e "$data/$task/handed-over/${rec##*/}" ] || {
       echo "REFUSED: hand-over destination already exists for ${rec##*/}" >&2
       return 1

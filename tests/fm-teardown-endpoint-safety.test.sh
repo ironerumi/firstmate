@@ -1478,6 +1478,25 @@ test_task_owned_feedback_requires_handover() {
   assert_no_grep 'procevent:board:1' "$dir/home/state/.wake-queue" "handled capture was re-published"
   assert_grep 'kill-window' "$dir/runtime.log" "worker was not closed before hand-over"
 
+  id=board-symlink
+  dir=$(make_case feedback-symlink)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent" "$dir/home/state/procevent-inbox" "$dir/external-inbox"
+  printf 'must remain external\n' > "$dir/external-inbox/001.msg"
+  ln -s "$dir/external-inbox" "$dir/home/state/$id.inbox"
+  [ -L "$dir/home/state/$id.inbox" ] || fail "symlinked inbox fixture was not created"
+  set +e
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "symlinked inbox directory was accepted"
+  assert_grep "unsafe feedback directory $dir/home/state/$id.inbox" "$dir/refused.err" "symlinked inbox was not named"
+  assert_present "$dir/home/state/$id.meta" "symlinked inbox refusal removed worker record"
+  assert_present "$dir/external-inbox/001.msg" "symlinked inbox refusal changed external data"
+  [ ! -s "$dir/runtime.log" ] || fail "symlinked inbox refusal closed endpoint"
+
   dir=$(make_case board-rearm)
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=isolated:fm-$id" "endpoint_task_id=$id" \
