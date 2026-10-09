@@ -46,7 +46,7 @@
 # edit, never a code change. docs/configuration.md owns that schema.
 #
 # Probing costs real time, so `check` runs its probes at most once per
-# FM_TOOL_UPDATE_INTERVAL (default 900, 0 disables the gate, otherwise 60..86400)
+# FM_TOOL_UPDATE_INTERVAL (default 86400, 0 disables the gate, otherwise 60..86400)
 # and stays silent in between. Each probe is bounded by
 # FM_TOOL_UPDATE_PROBE_SECS (default 5, valid 1..30) and a whole sweep by
 # FM_TOOL_UPDATE_BUDGET_SECS (default 20, valid 1..120).
@@ -66,6 +66,12 @@
 # while a new finding that lands past the one-line cut is still news. A sweep
 # killed part way through leaves no record and is retried, instead of
 # suppressing its finding.
+#
+# An update-announcement probe that does not answer in time is network bound and
+# often passes on the next try, so one such timeout is not reported. The record
+# also carries the tools whose announcement probe timed out in the last sweep,
+# and a tool is reported only when it timed out again on the sweep after that.
+# Any other answer from the tool resets its count.
 set -u
 export LC_ALL=C
 # A watched git remote must never stop to ask for credentials; an unauthenticated
@@ -114,7 +120,7 @@ die_usage() {
   exit 2
 }
 
-INTERVAL=${FM_TOOL_UPDATE_INTERVAL:-900}
+INTERVAL=${FM_TOOL_UPDATE_INTERVAL:-86400}
 case "$INTERVAL" in
   ''|*[!0-9]*)
     printf 'fm-tool-update-check: FM_TOOL_UPDATE_INTERVAL must be 0 or a whole number from 60 to 86400\n' >&2
@@ -414,7 +420,7 @@ probe_output() {
 command_findings() {
   local name=$1 command_name=$2 args_joined=$3 announce=$4 announce_args=$5
   local hit out version matched announce_out status matched_line announced_version
-  local resolved_path='' resolved_version='' resolved_out=''
+  local resolved_path='' resolved_version='' resolved_out='' resolved_status=0
   local best_path='' best_version='' unreadable='' hits=''
 
   # This tool's announcement source is dead if its pattern cannot be used, which
@@ -438,11 +444,13 @@ command_findings() {
     fi
     # shellcheck disable=SC2086  # deliberate split on validated space-free tokens
     out=$(probe_output "$hit" $args_joined)
+    status=$?
     version=$(parse_version "$out")
     if [ -z "$resolved_path" ]; then
       resolved_path=$hit
       resolved_version=$version
       resolved_out=$out
+      resolved_status=$status
     fi
     if [ -z "$version" ]; then
       [ -n "$unreadable" ] || unreadable=$hit
@@ -473,12 +481,27 @@ EOF
         announce_out=$(probe_output "$resolved_path" $announce_args)
         status=$?
         if [ "$status" -eq 124 ]; then
-          # A source that was asked and never answered is not a source that had
-          # nothing to say. The one that answers with nothing stays silent below.
-          emit "$name check failed: $resolved_path did not answer when asked for its update announcement"
+          timeout_note "$name"
+          case ",$RECORD_TIMEOUTS," in
+            *",$name,"*)
+              emit "$name check failed: $resolved_path did not answer when asked for its update announcement twice in a row"
+              ;;
+          esac
           announce_out=
+        else
+          timeout_clear "$name"
         fi
       fi
+    elif [ "$resolved_status" -eq 124 ]; then
+      timeout_note "$name"
+      case ",$RECORD_TIMEOUTS," in
+        *",$name,"*)
+          emit "$name check failed: $resolved_path did not answer when asked for its update announcement twice in a row"
+          ;;
+      esac
+      announce_out=
+    else
+      timeout_clear "$name"
     fi
     if [ -n "$announce_out" ]; then
       # Not a pipeline, so grep's own status is still readable here: a pattern
@@ -503,7 +526,11 @@ EOF
   if [ -z "$resolved_version" ]; then
     # No copy was probed at all when the path is empty, and the budget report
     # already covers that, so do not blame a copy that was never asked.
-    [ -z "$resolved_path" ] || emit "$name check failed: $resolved_path did not report a version"
+    if [ -n "$resolved_path" ]; then
+      if [ -z "$announce" ] || [ "$announce_args" != "$args_joined" ] || [ "$resolved_status" -ne 124 ]; then
+        emit "$name check failed: $resolved_path did not report a version"
+      fi
+    fi
     return 0
   fi
 
@@ -663,11 +690,38 @@ git_findings() {
 
 RECORD_EPOCH=0
 RECORD_REPORTED=
+# Comma separated tools whose announcement probe timed out in the previous sweep,
+# and in this one. Tool names never contain a comma.
+RECORD_TIMEOUTS=
+NEW_TIMEOUTS=
+
+# Remember that this tool's announcement probe timed out in this sweep.
+timeout_note() {
+  case ",$NEW_TIMEOUTS," in
+    *",$1,"*) ;;
+    *) NEW_TIMEOUTS=${NEW_TIMEOUTS:+$NEW_TIMEOUTS,}$1 ;;
+  esac
+}
+
+timeout_clear() {
+  local name=$1 item kept=
+  local -a timeout_names
+  case ",$NEW_TIMEOUTS," in
+    *",$name,"*) ;;
+    *) return 0 ;;
+  esac
+  IFS=, read -r -a timeout_names <<< "$NEW_TIMEOUTS"
+  for item in "${timeout_names[@]}"; do
+    [ "$item" = "$name" ] || kept=${kept:+$kept,}$item
+  done
+  NEW_TIMEOUTS=$kept
+}
 
 record_read() {
   local line first=1
   RECORD_EPOCH=0
   RECORD_REPORTED=
+  RECORD_TIMEOUTS=
   [ -f "$RECORD" ] || return 0
   while IFS= read -r line; do
     if [ "$first" = 1 ]; then
@@ -684,19 +738,21 @@ record_read() {
         esac
         ;;
       reported=*) RECORD_REPORTED=${line#reported=} ;;
+      timeouts=*) RECORD_TIMEOUTS=${line#timeouts=} ;;
     esac
   done < "$RECORD"
   return 0
 }
 
 record_write() {
-  local reported=$1 tmp
+  local reported=$1 timeouts=$2 tmp
   tmp=$(mktemp "$RECORD.XXXXXX" 2>/dev/null) || return 1
   chmod 0600 "$tmp" 2>/dev/null || { rm -f -- "$tmp"; return 1; }
   {
     printf '%s\n' "$RECORD_SCHEMA"
     printf 'epoch=%s\n' "$(record_epoch_now)"
     printf 'reported=%s\n' "$reported"
+    printf 'timeouts=%s\n' "$timeouts"
   } > "$tmp" || { rm -f -- "$tmp"; return 1; }
   mv -f -- "$tmp" "$RECORD" || { rm -f -- "$tmp"; return 1; }
   return 0
@@ -711,6 +767,7 @@ action_check() {
   [ -f "$CONFIG" ] || return 0
 
   record_read
+  NEW_TIMEOUTS=$RECORD_TIMEOUTS
   now=$(record_epoch_now)
   if [ "$INTERVAL" -ne 0 ] && [ "$RECORD_EPOCH" -gt 0 ] \
     && [ "$now" -ge "$RECORD_EPOCH" ] && [ $((now - RECORD_EPOCH)) -lt "$INTERVAL" ]; then
@@ -752,7 +809,7 @@ action_check() {
   if [ -n "$line" ] && [ "$FINDINGS" != "$RECORD_REPORTED" ]; then
     printf '%s\n' "$line"
   fi
-  record_write "$FINDINGS" || true
+  record_write "$FINDINGS" "$NEW_TIMEOUTS" || true
   return 0
 }
 

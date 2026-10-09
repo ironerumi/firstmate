@@ -2679,6 +2679,20 @@ scrub_returned_home_slot() {
   rm -f -- "$slot/$SUB_HOME_PARENT_MARKER" "$slot/$SUB_HOME_MARKER"
 }
 
+# True when the slot's repository shares a root commit with this home's checkout,
+# so a firstmate fork or contribution clone qualifies while an unrelated project
+# that merely has the same file shape does not.
+slot_shares_firstmate_history() { # <slot>
+  local roots slot_roots root
+  roots=$(git -C "$FM_ROOT" rev-list --max-parents=0 HEAD 2>/dev/null) || return 1
+  slot_roots=$(git -C "$1" rev-list --max-parents=0 HEAD 2>/dev/null) || return 1
+  [ -n "$roots" ] && [ -n "$slot_roots" ] || return 1
+  for root in $roots; do
+    case $'\n'"$slot_roots"$'\n' in *$'\n'"$root"$'\n'*) return 0 ;; esac
+  done
+  return 1
+}
+
 # A worker launched into a firstmate-repo pool slot runs under that slot's own
 # checkout: the Pi extensions write their loaded-markers into its gitignored state/,
 # and the worker's scratch (validation outputs, PR drafts, failure captures) lands
@@ -2688,13 +2702,18 @@ scrub_returned_home_slot() {
 # landed-work checks have succeeded. A slot carrying a secondmate marker is a
 # retired home, not a worker's, and keeps the spawn-time refusal; so does any slot
 # that is this home's own checkout or state.
+# The slot is checked against the task's own project clone, which it was leased
+# from, because a firstmate-repo project need not be this home's own clone: a
+# contribution checkout has its own git directory, and checking against this
+# home's checkout would skip its slots and leave the next spawn to refuse them.
 scrub_returned_worker_slot() {
-  local slot=$1 label=$2 slot_real
+  local slot=$1 label=$2 project=$3 slot_real
   [ -d "$slot" ] && [ -d "$slot/state" ] && [ ! -L "$slot/state" ] || return 0
   [ -f "$slot/AGENTS.md" ] && [ -f "$slot/bin/fm-spawn.sh" ] || return 0
   [ ! -e "$slot/$SUB_HOME_MARKER" ] && [ ! -L "$slot/$SUB_HOME_MARKER" ] || return 0
   [ ! -e "$slot/$SUB_HOME_PARENT_MARKER" ] && [ ! -L "$slot/$SUB_HOME_PARENT_MARKER" ] || return 0
-  fm_treehouse_pool_slot "$FM_ROOT" "$slot" || return 0
+  fm_treehouse_pool_slot "$project" "$slot" || return 0
+  slot_shares_firstmate_history "$slot" || return 0
   slot_real=$(cd "$slot" && pwd -P) || return 0
   [ "$slot_real" != "$(cd "$FM_ROOT" && pwd -P)" ] && [ "$slot_real" != "$(cd "$FM_HOME" && pwd -P)" ] || return 0
   [ "$slot_real/state" != "$(cd "$STATE" 2>/dev/null && pwd -P)" ] || return 0
@@ -3338,7 +3357,7 @@ cleanup_firstmate_home_children() {
         if [ -n "$child_proj" ] && [ -d "$child_proj" ] && command -v treehouse >/dev/null 2>&1; then
           if teardown_treehouse_return "$child_wt" "$child_proj" "child worktree"; then
             fm_treehouse_slot_owner_release "$child_wt" "$child_id"
-            scrub_returned_worker_slot "$child_wt" "child worktree" || return 1
+            scrub_returned_worker_slot "$child_wt" "child worktree" "$child_proj" || return 1
           else
             child_return_rc=$?
             if [ "$child_return_rc" -eq "$TEARDOWN_TREEHOUSE_LOCK_REFUSED" ]; then
@@ -3704,7 +3723,7 @@ elif [ -d "$WT" ] && [ "$KIND" != secondmate ]; then
   # unclaimed until its next holder claims it, and leaves the claim in place
   # whenever the return did not actually happen.
   fm_treehouse_slot_owner_release "$WT" "$ID"
-  scrub_returned_worker_slot "$WT" "worktree" || exit 1
+  scrub_returned_worker_slot "$WT" "worktree" "$PROJ" || exit 1
 fi
 
 HERDR_PRESENTATION_JOURNAL="$STATE/$ID.herdr-presentation"

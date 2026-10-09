@@ -400,29 +400,90 @@ SH
   pass "an announcement source the budget could not reach is reported, not read as current"
 }
 
-test_an_announcement_probe_that_does_not_answer_is_reported() {
-  local home dir out report
+test_an_announcement_probe_timeout_is_reported_only_when_it_repeats() {
+  local home dir out report mute
   # no-mistakes learns about a new release from the network, so the command that
-  # carries the announcement is exactly the one that stalls on a flaky link. A
-  # source that was asked and never answered must not read as a clean sweep.
+  # carries the announcement is exactly the one that stalls on a flaky link. One
+  # stall is noise that clears on the next try; the same tool stalling on two
+  # sweeps in a row is the finding, and an answer in between starts the count over.
   home=$(make_home announce-mute)
   dir="$TMP_ROOT/announce-mute/bin"
   mkdir -p "$dir"
-  cat > "$dir/no-mistakes-fixture" <<'SH'
+  mute="$TMP_ROOT/announce-mute/mute"
+  : > "$mute"
+  cat > "$dir/no-mistakes-fixture" <<SH
 #!/usr/bin/env bash
-if [ "${1:-}" = "--version" ]; then
+if [ "\${1:-}" = "--version" ]; then
   printf 'no-mistakes version v1.46.0\n'
   exit 0
 fi
-sleep 30
+if [ -e "$mute" ]; then
+  sleep 30
+fi
 SH
   chmod 0755 "$dir/no-mistakes-fixture"
   write_config "$home" '{"tools":[{"name":"no-mistakes","command":"no-mistakes-fixture","version_args":["--version"],"announce_args":["--help"],"announce_pattern":"A new version of no-mistakes is available: [^ ]+ -> [^ ]+"}]}'
   out="$home/out.txt"
+
+  run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=1
+  [ ! -s "$out" ] || fail "a single announcement timeout woke the supervisor: $(cat "$out")"
+  assert_grep 'timeouts=no-mistakes' "$home/state/.tool-updates" "the first timeout was not remembered in the record"
+
   run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=1
   report=$(cat "$out")
-  assert_contains "$report" "no-mistakes check failed: $dir/no-mistakes-fixture did not answer when asked for its update announcement" "an announcement probe that never answered was read as a clean sweep"
-  pass "an announcement probe that does not answer is reported, not read as current"
+  assert_equals "tool updates: no-mistakes check failed: $dir/no-mistakes-fixture did not answer when asked for its update announcement twice in a row" "$report" "an announcement probe did not require two consecutive timeouts"
+
+  # An answer resets the count, so the next lone timeout is silent again.
+  rm -f "$mute"
+  run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=1
+  [ ! -s "$out" ] || fail "a recovered announcement probe still reported: $(cat "$out")"
+  assert_no_grep 'timeouts=no-mistakes' "$home/state/.tool-updates" "an answered probe did not clear the remembered timeout"
+  : > "$mute"
+  run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=1
+  [ ! -s "$out" ] || fail "a timeout after a recovery was counted as a repeat: $(cat "$out")"
+  pass "an announcement probe that stalls is reported on the second consecutive timeout, and recovery resets"
+}
+
+test_budget_skipping_announcement_preserves_timeout_state() {
+  local home dir out mute slow_version
+  home=$(make_home announce-budget-timeout-state)
+  dir="$TMP_ROOT/announce-budget-timeout-state/bin"
+  mkdir -p "$dir"
+  mute="$TMP_ROOT/announce-budget-timeout-state/mute"
+  slow_version="$TMP_ROOT/announce-budget-timeout-state/slow-version"
+  : > "$mute"
+  cat > "$dir/no-mistakes-fixture" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-}" = "--version" ]; then
+  if [ -e "$slow_version" ]; then
+    sleep 30
+  fi
+  printf 'no-mistakes version v1.46.0\n'
+  exit 0
+fi
+if [ -e "$mute" ]; then
+  sleep 30
+fi
+SH
+  chmod 0755 "$dir/no-mistakes-fixture"
+  write_config "$home" '{"tools":[{"name":"no-mistakes","command":"no-mistakes-fixture","version_args":["--version"],"announce_args":["--help"],"announce_pattern":"A new version of no-mistakes is available: [^ ]+ -> [^ ]+"}]}'
+  out="$home/out.txt"
+
+  run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=2 FM_TOOL_UPDATE_BUDGET_SECS=2
+  [ ! -s "$out" ] || fail "the first timeout woke the supervisor: $(cat "$out")"
+  assert_grep 'timeouts=no-mistakes' "$home/state/.tool-updates" "the first timeout was not recorded"
+
+  rm -f "$mute"
+  : > "$slow_version"
+  run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=2 FM_TOOL_UPDATE_BUDGET_SECS=2
+  assert_grep 'timeouts=no-mistakes' "$home/state/.tool-updates" "a budget-skipped announcement probe cleared the timeout"
+  assert_not_contains "$(cat "$out")" "did not answer when asked for its update announcement twice" "the skipped announcement probe was counted as a timeout"
+
+  rm -f "$slow_version"
+  : > "$mute"
+  run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=2 FM_TOOL_UPDATE_BUDGET_SECS=2
+  assert_equals "tool updates: no-mistakes check failed: $dir/no-mistakes-fixture did not answer when asked for its update announcement twice in a row" "$(cat "$out")" "a timeout after a budget-skipped probe was not treated as consecutive"
+  pass "a budget-skipped announcement probe preserves timeout state"
 }
 
 test_quiet_tool_with_announce_pattern_is_silent() {
@@ -812,6 +873,35 @@ test_probes_are_skipped_between_intervals() {
   pass "probes run once per interval, not on every poll"
 }
 
+test_default_interval_is_one_day() {
+  local home dir out status now
+  home=$(make_home default-interval)
+  dir="$TMP_ROOT/default-interval/bin"
+  make_copy "$dir" "$TOOL" 'herdr 0.8.2'
+  write_config "$home" "{\"tools\":[{\"name\":\"herdr\",\"command\":\"$TOOL\"}]}"
+  out="$home/out.txt"
+  now=1700000000
+
+  status=0
+  env -u FM_TOOL_UPDATE_INTERVAL FM_HOME="$home" PATH="$(fixture_path "$dir")" FM_CHECK_TIMEOUT=30 FM_TOOL_UPDATE_NOW="$now" \
+    "$CHECK" >"$out" 2>&1 || status=$?
+  expect_code 0 "$status" "first default-interval run exit"
+
+  make_copy "$dir" "$TOOL" 'no version here'
+  status=0
+  env -u FM_TOOL_UPDATE_INTERVAL FM_HOME="$home" PATH="$(fixture_path "$dir")" FM_CHECK_TIMEOUT=30 FM_TOOL_UPDATE_NOW="$((now + 86399))" \
+    "$CHECK" >"$out" 2>&1 || status=$?
+  expect_code 0 "$status" "run just inside the default interval exit"
+  [ ! -s "$out" ] || fail "a run inside the default 24h interval probed and spoke: $(cat "$out")"
+
+  status=0
+  env -u FM_TOOL_UPDATE_INTERVAL FM_HOME="$home" PATH="$(fixture_path "$dir")" FM_CHECK_TIMEOUT=30 FM_TOOL_UPDATE_NOW="$((now + 86400))" \
+    "$CHECK" >"$out" 2>&1 || status=$?
+  expect_code 0 "$status" "run at the default interval exit"
+  assert_contains "$(cat "$out")" "did not report a version" "the run after 24h did not probe"
+  pass "the default probe interval is 24 hours"
+}
+
 test_an_oversized_budget_is_cut_to_fit_and_reported() {
   local home stale fresh out report status
   # A sweep budget larger than the watcher's own per check bound lets the watcher
@@ -1068,7 +1158,8 @@ test_announcement_is_read_from_a_second_command
 test_unusable_announce_pattern_is_reported_not_read_as_silence
 test_one_broken_pattern_does_not_blind_the_rest_of_the_sweep
 test_an_unchecked_announcement_source_is_not_read_as_current
-test_an_announcement_probe_that_does_not_answer_is_reported
+test_an_announcement_probe_timeout_is_reported_only_when_it_repeats
+test_budget_skipping_announcement_preserves_timeout_state
 test_quiet_tool_with_announce_pattern_is_silent
 test_commits_behind_origin_are_reported
 test_default_branch_is_detected_when_branch_is_omitted
@@ -1086,6 +1177,7 @@ test_findings_are_reported_once_until_they_change
 test_an_overlong_report_says_it_was_cut
 test_a_finding_past_the_cut_is_still_reported
 test_probes_are_skipped_between_intervals
+test_default_interval_is_one_day
 test_an_oversized_budget_is_cut_to_fit_and_reported
 test_invalid_environment_and_action_refuse
 test_arm_registers_the_check_and_disarm_removes_it
