@@ -6,6 +6,7 @@
 # Usage:
 #   fm-procevent.sh register <adapter> <source-id> -- <argv>...
 #   fm-procevent.sh register-task <adapter> <source-id> <task-id> -- <argv>...
+#   fm-procevent.sh task-feedback inventory <task-id>
 #   fm-procevent.sh register-extension <adapter> <source-id> --config-ref <reference>
 #   fm-procevent.sh start <source-id>
 #   fm-procevent.sh ensure-listening <source-id>
@@ -267,6 +268,116 @@ REG=$(fm_procevent_registry_dir "$STATE")
 MAX_OUTPUT_BYTES=${FM_PROCEVENT_MAX_OUTPUT_BYTES:-1048576}
 EXTENSION_HOST="$SCRIPT_DIR/fm-extension.mjs"
 EXTENSION_LIFECYCLE_LOCK="$REG/.extension-binding-lifecycle.lock"
+
+task_feedback_directory_check() {
+  local directory=$1
+  if [ ! -e "$directory" ] && [ ! -L "$directory" ]; then
+    return 0
+  fi
+  fm_procevent_private_directory_valid "$directory" 0 || {
+    echo "REFUSED: unsafe feedback directory $directory" >&2
+    return 1
+  }
+}
+
+task_feedback_state_directories_validate() {
+  local state=$1 task=$2
+  task_feedback_directory_check "$state/procevent" || return 1
+  task_feedback_directory_check "$state/procevent-inbox" || return 1
+  task_feedback_directory_check "$state/$task.inbox" || return 1
+}
+
+task_feedback_source_owner_validate() {
+  local file=$1 line kind='' owner='' kind_seen=0 owner_seen=0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      kind=*)
+        [ "$kind_seen" -eq 0 ] || return 1
+        kind=${line#kind=}
+        kind_seen=1
+        ;;
+      owner_task=*)
+        [ "$owner_seen" -eq 0 ] || return 1
+        owner=${line#owner_task=}
+        owner_seen=1
+        ;;
+    esac
+  done < "$file" || return 1
+  if [ "$owner_seen" -eq 1 ]; then
+    fm_pr_task_id_valid "$owner" || return 1
+  fi
+  if [ "$kind" = task-owned ]; then
+    [ "$owner_seen" -eq 1 ] || return 1
+  elif [ "$owner_seen" -eq 1 ]; then
+    return 1
+  fi
+  FM_PROCEVENT_TASK_SOURCE_OWNER=$owner
+}
+
+fm_procevent_task_feedback_inventory() {  # <state> <task-id>
+  local state=$1 task=$2 rec result marker owner id adapter artifact owner_lines
+  task_feedback_state_directories_validate "$state" "$task" || return 1
+  FM_PROCEVENT_TASK_ATTACHED_SOURCES=0
+  FM_PROCEVENT_TASK_ATTACHED_MESSAGES=0
+  for rec in "$state/procevent"/*.source; do
+    [ -e "$rec" ] || continue
+    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe source $rec" >&2; return 1; }
+    task_feedback_source_owner_validate "$rec" \
+      || { echo "REFUSED: unsafe source ownership $rec" >&2; return 1; }
+    owner=$FM_PROCEVENT_TASK_SOURCE_OWNER
+    [ "$owner" = "$task" ] || continue
+    id=${rec##*/}; id=${id%.source}
+    adapter=$(fm_meta_get "$rec" adapter)
+    artifact=$(awk '/^argv:$/ { getline; getline; getline; print; exit }' "$rec")
+    printf 'attached listener: source=%s adapter=%s artifact=%s\n' "$id" "$adapter" "$artifact" >&2
+    FM_PROCEVENT_TASK_ATTACHED_SOURCES=$((FM_PROCEVENT_TASK_ATTACHED_SOURCES + 1))
+  done
+  for rec in "$state/$task.inbox"/*.msg; do
+    [ -e "$rec" ] || continue
+    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe inbox message $rec" >&2; return 1; }
+    printf 'attached message: file=%s\n' "$rec" >&2
+    FM_PROCEVENT_TASK_ATTACHED_MESSAGES=$((FM_PROCEVENT_TASK_ATTACHED_MESSAGES + 1))
+  done
+  for result in "$state/procevent-inbox"/*.owner-task; do
+    [ -e "$result" ] || continue
+    [ -f "$result" ] && [ ! -L "$result" ] || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
+    owner=$(cat "$result") \
+      || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
+    owner_lines=$(wc -l < "$result" | tr -d ' ') \
+      || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
+    if [ "$owner_lines" != 1 ] || ! fm_pr_task_id_valid "$owner"; then
+      echo "REFUSED: unsafe capture owner $result" >&2
+      return 1
+    fi
+    [ "$owner" = "$task" ] || continue
+    rec="${result%.owner-task}.result"
+    [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe capture $rec" >&2; return 1; }
+    marker="${result%.owner-task}.handled"
+    if [ -e "$marker" ] || [ -L "$marker" ]; then
+      [ -f "$marker" ] && [ ! -L "$marker" ] || { echo "REFUSED: unsafe capture marker $marker" >&2; return 1; }
+      continue
+    fi
+    printf 'attached result: file=%s owner-task=%s\n' "$rec" "$task" >&2
+    FM_PROCEVENT_TASK_ATTACHED_MESSAGES=$((FM_PROCEVENT_TASK_ATTACHED_MESSAGES + 1))
+  done
+}
+
+cmd_task_feedback() {
+  local operation=${1-} task=${2-}
+  case "$operation" in
+    inventory)
+      [ "$#" -eq 2 ] || usage
+      fm_pr_task_id_valid "$task" || die "invalid task id: $task"
+      fm_procevent_task_feedback_inventory "$STATE" "$task" || return 1
+      if [ "$FM_PROCEVENT_TASK_ATTACHED_SOURCES" -gt 0 ] \
+         || [ "$FM_PROCEVENT_TASK_ATTACHED_MESSAGES" -gt 0 ]; then
+        echo "REFUSED: task $task still has attached process-event feedback; --force does not bypass this refusal." >&2
+        return 1
+      fi
+      ;;
+    *) usage ;;
+  esac
+}
 
 state_root_bind() {  # [create]
   if [ ! -e "$STATE" ] && [ ! -L "$STATE" ]; then
@@ -2550,6 +2661,7 @@ unset FM_PROCEVENT_CAPTURE_PINNED_INBOX FM_PROCEVENT_CAPTURE_ABSOLUTE_INBOX \
 case "${1-}" in
   register)           shift; cmd_register "$@" ;;
   register-task)      shift; cmd_register_task "$@" ;;
+  task-feedback)      shift; cmd_task_feedback "$@" ;;
   register-extension) shift; cmd_register_extension "$@" ;;
   start)              shift; cmd_start_public "$@" ;;
   ensure-listening)   shift; cmd_ensure_listening "$@" ;;

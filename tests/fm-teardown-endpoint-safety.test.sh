@@ -22,6 +22,11 @@ make_case() {  # <name>
 printf 'tmux' >> "${FM_RUNTIME_LOG:?}"
 printf ' <%s>' "$@" >> "${FM_RUNTIME_LOG:?}"
 printf '\n' >> "${FM_RUNTIME_LOG:?}"
+if [ "${1-}" = kill-window ] && [ -n "${FM_ENDPOINT_LOG:-}" ]; then
+  printf 'tmux' >> "$FM_ENDPOINT_LOG"
+  printf ' <%s>' "$@" >> "$FM_ENDPOINT_LOG"
+  printf '\n' >> "$FM_ENDPOINT_LOG"
+fi
 exit 0
 SH
   cat > "$TMP_ROOT/$dir/fakebin/treehouse" <<'SH'
@@ -29,6 +34,13 @@ SH
 printf 'treehouse' >> "${FM_RUNTIME_LOG:?}"
 printf ' <%s>' "$@" >> "${FM_RUNTIME_LOG:?}"
 printf '\n' >> "${FM_RUNTIME_LOG:?}"
+if [ "$1" = return ] && [ -e "$FM_HOME/state/.register-after-inventory" ]; then
+  task=$(cat "$FM_HOME/state/.register-after-inventory")
+  rm -f "$FM_HOME/state/.register-after-inventory"
+  FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT_OVERRIDE" \
+    "$FM_ROOT_OVERRIDE/bin/fm-procevent.sh" register-task lavish late-board "$task" -- \
+    "$FM_ROOT_OVERRIDE/bin/fm-procevent-lavish.sh" poll "$FM_HOME/state/late-board.html" || exit 1
+fi
 exit 0
 SH
   chmod +x "$TMP_ROOT/$dir/fakebin/tmux" "$TMP_ROOT/$dir/fakebin/treehouse"
@@ -1420,6 +1432,168 @@ test_already_gone_endpoint_still_completes_without_a_refusal() {
   pass "fm-teardown: an already-exited endpoint, and a server that is already gone, still complete cleanup silently"
 }
 
+test_feedback_inventory_rechecks_before_endpoint_close() {
+  local dir id=late-board rc
+  dir=$(make_case late-feedback)
+  mark_case_as_treehouse_pool "$dir"
+  claim_pool_slot "$dir" "$id"
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent" "$dir/home/state/procevent-inbox"
+  printf '%s\n' "$id" > "$dir/home/state/.register-after-inventory"
+  set +e
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
+    FM_RUNTIME_LOG="$dir/runtime.log" FM_ENDPOINT_LOG="$dir/endpoint.log" \
+    PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force \
+    > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "feedback published during cleanup was missed"
+  assert_grep "source=late-board adapter=lavish artifact=$dir/home/state/late-board.html" \
+    "$dir/refused.err" "late task-owned listener was not named"
+  assert_present "$dir/home/state/$id.meta" "late feedback refusal removed task metadata"
+  assert_present "$dir/home/state/procevent/late-board.source" \
+    "late feedback refusal removed the attached listener"
+  [ ! -s "$dir/endpoint.log" ] \
+    || fail "late feedback refusal closed the endpoint: $(cat "$dir/endpoint.log")"
+  pass "fm-teardown: feedback published after the initial inventory is refused before endpoint close"
+}
+
+test_unrelated_feedback_sources_do_not_refuse() {
+  local dir id=unrelated-sources
+  dir=$(make_case unrelated-feedback)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent"
+  printf 'adapter=lavish\nargc=1\nargv:\n%s\n' \
+    "$dir/fakebin/ordinary-board" > "$dir/home/state/procevent/ordinary-board.source"
+  cat > "$dir/home/state/procevent/extension-board.source" <<'SOURCE'
+adapter=extension
+owner=extension
+extension_schema=fm-procevent-extension-owner.v1
+extension_id=demo
+extension_version=1
+capability_version=1
+package_digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+binding_digest=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+config_ref=demo-config
+registration_token=demo-token
+argc=0
+argv:
+SOURCE
+  run_case "$dir" "$id" > "$dir/success.out" 2> "$dir/success.err" \
+    || fail "unrelated ordinary and extension sources blocked teardown: $(cat "$dir/success.err")"
+  assert_absent "$dir/home/state/$id.meta" \
+    "successful teardown left the unrelated-source task metadata"
+  pass "fm-teardown: unrelated ordinary and extension sources do not trigger task feedback refusal"
+}
+
+test_task_owned_feedback_refuses_before_mutation() {
+  local dir id=board-scout rc source
+  dir=$(make_case board-feedback)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent" "$dir/home/state/procevent-inbox" "$dir/home/state/$id.inbox"
+  source="$dir/home/state/procevent/board.source"
+  printf 'adapter=lavish\nkind=task-owned\nowner_task=%s\nargc=3\nargv:\n%s\npoll\n%s\n' \
+    "$id" "$dir/fakebin/board-poll" "$dir/board.html" > "$source"
+  printf 'schema=fm-task-inbox.v1\nat=now\n--\nboard answer\n' \
+    > "$dir/home/state/$id.inbox/001.msg"
+  printf '%s\n' "$id" > "$dir/home/state/procevent-inbox/board.1.owner-task"
+  printf 'status: feedback\nmessage: captured answer\n' > "$dir/home/state/procevent-inbox/board.1.result"
+  set +e
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "task-owned feedback was discarded under --force"
+  assert_grep "source=board adapter=lavish artifact=$dir/board.html" "$dir/refused.err" "listener was not named"
+  assert_grep "attached message: file=$dir/home/state/$id.inbox/001.msg" "$dir/refused.err" "unread message was not named"
+  assert_grep "attached result: file=$dir/home/state/procevent-inbox/board.1.result owner-task=$id" "$dir/refused.err" "unhandled capture was not named"
+  assert_no_grep 'board answer' "$dir/refused.err" "unread message body was disclosed"
+  assert_present "$dir/home/state/$id.meta" "feedback refusal removed task metadata"
+  [ ! -s "$dir/runtime.log" ] || fail "feedback refusal closed endpoint before inventory"
+
+  id=malformed-source
+  dir=$(make_case malformed-source-owner)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent"
+  printf 'kind=task-owned\nadapter=lavish\n' \
+    > "$dir/home/state/procevent/board.source"
+  set +e
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "malformed source ownership was accepted"
+  assert_grep "unsafe source ownership $dir/home/state/procevent/board.source" \
+    "$dir/refused.err" "malformed source ownership was not named"
+  assert_present "$dir/home/state/$id.meta" "malformed source refusal removed task metadata"
+  [ ! -s "$dir/runtime.log" ] || fail "malformed source refusal closed endpoint"
+
+  id=malformed-owner
+  dir=$(make_case malformed-capture-owner)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent-inbox" "$dir/home/state/procevent"
+  printf '%s\nother-owner\n' "$id" \
+    > "$dir/home/state/procevent-inbox/board.1.owner-task"
+  printf 'status: feedback\n' > "$dir/home/state/procevent-inbox/board.1.result"
+  set +e
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "malformed capture ownership was accepted"
+  assert_grep "unsafe capture owner $dir/home/state/procevent-inbox/board.1.owner-task" \
+    "$dir/refused.err" "malformed capture ownership was not named"
+  assert_present "$dir/home/state/$id.meta" "malformed capture refusal removed task metadata"
+  [ ! -s "$dir/runtime.log" ] || fail "malformed capture refusal closed endpoint"
+
+  id=malformed-capture
+  dir=$(make_case malformed-handled)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent-inbox" "$dir/home/state/procevent"
+  printf '%s\n' "$id" > "$dir/home/state/procevent-inbox/board.1.owner-task"
+  printf 'status: feedback\n' > "$dir/home/state/procevent-inbox/board.1.result"
+  mkdir "$dir/home/state/procevent-inbox/board.1.handled"
+  set +e
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "malformed handled marker was accepted"
+  assert_grep "unsafe capture marker $dir/home/state/procevent-inbox/board.1.handled" "$dir/refused.err" "malformed handled marker was not named"
+  assert_present "$dir/home/state/$id.meta" "malformed marker refusal removed task metadata"
+  [ ! -s "$dir/runtime.log" ] || fail "malformed marker refusal closed endpoint"
+
+  id=board-symlink
+  dir=$(make_case feedback-symlink)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent" "$dir/external-inbox"
+  printf 'must remain external\n' > "$dir/external-inbox/001.msg"
+  ln -s "$dir/external-inbox" "$dir/home/state/$id.inbox"
+  set +e
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "symlinked feedback directory was accepted"
+  assert_grep "unsafe feedback directory $dir/home/state/$id.inbox" "$dir/refused.err" "symlinked feedback directory was not named"
+  assert_present "$dir/home/state/$id.meta" "symlink refusal removed task metadata"
+  assert_present "$dir/external-inbox/001.msg" "symlink refusal changed external data"
+  [ ! -s "$dir/runtime.log" ] || fail "symlink refusal closed endpoint"
+  pass "fm-teardown: task-owned feedback, malformed markers, and symlinked inboxes refuse before mutation"
+}
+
+test_task_owned_feedback_refuses_before_mutation
+test_feedback_inventory_rechecks_before_endpoint_close
+test_unrelated_feedback_sources_do_not_refuse
 test_invalid_endpoint_records_refuse_before_mutation
 test_control_lock_contention_refuses_before_mutation
 test_non_pool_teardown_ignores_task_set_lock

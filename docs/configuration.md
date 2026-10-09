@@ -497,6 +497,11 @@ Missing, empty, duplicate, malformed, backend-inconsistent, or task-mismatched e
 
 Legacy tmux metadata remains cleanup-compatible when its exact window name is `fm-<id>`; opaque non-tmux endpoints require their recorded `endpoint_task_id=` binding.
 
+### Task-owned feedback at teardown
+
+A non-secondmate task cannot be cleaned up while it owns a process-event source, has unread steering-inbox messages, or has an unhandled task-routed process-event capture.
+`fm-teardown.sh` inventories these under the task lifecycle lock before closing the endpoint or deleting state, names each source, inbox message, and capture in its refusal, and does not let `--force` bypass this gate.
+
 ### Herdr homes and presentation
 
 `FM_HOME` determines Herdr's home label: the primary home uses `firstmate`, and a secondmate home marked by `.fm-secondmate-home` uses `2ndmate-<secondmate-id>`.
