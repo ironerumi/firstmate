@@ -1410,6 +1410,7 @@ Arm the check once per home with `bin/fm-tool-update-check.sh arm`.
 
 - The check prints nothing when everything is current, and `state/.tool-updates` records the findings the last report was made from so the same pending update is reported once instead of on every poll.
 - A changed or returning condition is reported again.
+- An update-announcement probe that times out is reported only when the same tool timed out on the previous sweep too; the record carries that per-tool state and any other answer resets it.
 - Adding, removing, or changing a watched tool is an edit to this file and needs no code change or re-arming.
 - This file is not inherited by secondmate homes, so each home watches the tools it actually depends on.
 
@@ -1417,7 +1418,7 @@ Arm the check once per home with `bin/fm-tool-update-check.sh arm`.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `FM_TOOL_UPDATE_INTERVAL` | 900 seconds | Time between probes; `0` probes on every run. |
+| `FM_TOOL_UPDATE_INTERVAL` | 86400 seconds (24 hours) | Time between probes; `0` probes on every run. |
 | `FM_TOOL_UPDATE_PROBE_SECS` | 5 | Bounds one probe. |
 | `FM_TOOL_UPDATE_BUDGET_SECS` | 20 | Bounds a whole sweep. |
 
@@ -2327,7 +2328,7 @@ FM_CHECK_TIMEOUT=30     # seconds allowed per slow check script
 FM_MAIL_CHECK_BUDGET=15   # seconds allowed for one standing mail poll; valid 5..25, cut to fit FM_CHECK_TIMEOUT
 FM_MAIL_POLL_MAX_WAKES=20   # per-poll wake cap for a mail poll; valid 1..200, keeps a flood from flooding firstmate
 FM_MAIL_TIMEOUT=20   # mail-plane IMAP/SMTP socket timeout in seconds; invalid or non-positive values become 20
-FM_TOOL_UPDATE_INTERVAL=900   # seconds between watched-tool probe sweeps; 0 probes on every run, other values must be 60..86400
+FM_TOOL_UPDATE_INTERVAL=86400   # seconds between watched-tool probe sweeps; 0 probes on every run, other values must be 60..86400
 FM_TOOL_UPDATE_PROBE_SECS=5   # 1..30 seconds allowed for one version or git probe
 FM_TOOL_UPDATE_BUDGET_SECS=20   # 1..120 seconds allowed for a whole watched-tool sweep; cut to fit FM_CHECK_TIMEOUT, and the cut is reported
 FM_TOOL_UPDATE_NOW=     # test override for the watched-tool sweep clock; the sweep budget still uses real time
