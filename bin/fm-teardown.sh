@@ -361,8 +361,6 @@ unset _teardown_source
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-control-lib.sh
 . "$SCRIPT_DIR/fm-control-lib.sh"
-# shellcheck source=bin/fm-procevent-lib.sh
-. "$SCRIPT_DIR/fm-procevent-lib.sh"
 # shellcheck source=bin/fm-lock-lib.sh
 . "$SCRIPT_DIR/fm-lock-lib.sh"
 # shellcheck source=bin/fm-classify-lib.sh
