@@ -381,21 +381,13 @@ cmd_task_feedback() {
 # Transfer task-owned listeners, captured rounds, and unread steering messages
 # only after teardown has closed the task endpoint.
 fm_procevent_task_feedback_hand_over() {  # <state> <data> <home> <script-dir> <task-id>
-  local state=$1 data=$2 home=$3 script_dir=$4 task=$5 rec id result pending
+  local state=$1 data=$2 home=$3 script_dir=$4 task=$5 rec id
   for rec in "$state/procevent"/*.source; do
     [ -f "$rec" ] && [ "$(fm_meta_get "$rec" owner_task)" = "$task" ] || continue
     id=${rec##*/}; id=${id%.source}
     FM_PROCEVENT_TEARDOWN_HANDOVER=1 cmd_hand_over "$id" "$task" || return 1
-    pending=0
-    for result in "$state/procevent-inbox/$id".*.result; do
-      [ -f "$result" ] && [ ! -e "${result%.result}.handled" ] && pending=1
-    done
-    if [ "$pending" = 0 ]; then
-      FM_HOME="$home" FM_STATE_OVERRIDE="$state" \
-        "$script_dir/fm-procevent.sh" ensure-listening "$id" || return 1
-    else
-      echo "teardown: listener $id has captured feedback; re-arm after home handles it" >&2
-    fi
+    FM_HOME="$home" FM_STATE_OVERRIDE="$state" \
+      "$script_dir/fm-procevent.sh" ensure-listening "$id" || return 1
     echo "teardown: handed over listener $id to home" >&2
   done
   for rec in "$state/procevent-inbox"/*.owner-task; do
