@@ -1,0 +1,14 @@
+Phase 1 targeted validation
+
+Changed files: .github/workflows/ci.yml, .github/workflows/fork-ci.yml, CONTRIBUTING.md
+Selected suites:
+- tests/fm-lint-workflows.test.sh (workflow YAML/actionlint path plainly exercises changed workflow files)
+- tests/fm-ci-workflow.test.sh (semantic ci.yml contract plainly exercises changed CI job definitions)
+Commands:
+- bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-lint-workflows.test.sh
+- bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-ci-workflow.test.sh
+Results: both passed (exit 0; about 7 seconds and 5 seconds)
+Failed suites: none
+Time-bound suites: none
+
+The suites validated the current workflow files through the repository's pinned actionlint path and YAML semantic contract, including malformed workflow rejection, the fm-lint default path catching a self-broken ci.yml, CI matrix partition coverage, and existing concurrency/timeout behavior. No other changed-file test scripts or bin/<name>.sh mappings exist.
