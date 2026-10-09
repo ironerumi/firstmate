@@ -1395,7 +1395,8 @@ This section is the single owner of the canonical schema.
 - A `git` entry reports how many commits the local clone is behind its remote branch, and stays silent when the clone is current or ahead.
 - An omitted `branch` uses the remote's default branch, taken from the clone's own record of it and otherwise asked of the remote directly, so a `--single-branch` clone still resolves.
 
-Both probe kinds are read-only and bounded, and a probe that cannot answer is reported as a check failure rather than assumed current.
+Version and git probes are read-only and bounded, and an unanswered version or git probe is reported as a check failure rather than assumed current unless the version command also serves as the announcement probe.
+Announcement-probe timeouts follow the consecutive-timeout rule in Repeat reporting and inheritance.
 See [`docs/examples/watched-tools.json`](examples/watched-tools.json) for a starting point to copy into local `config/watched-tools.json`.
 
 **Arm, edit, and disarm**
