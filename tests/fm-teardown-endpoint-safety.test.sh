@@ -60,35 +60,6 @@ run_case() {  # <case> <id>
     "$TEARDOWN" "$id" --force
 }
 
-kill_process_tree() {
-  local parent=$1 child
-  for child in $(ps -eo pid=,ppid= 2>/dev/null | awk -v parent="$parent" '$2 == parent {print $1}'); do
-    kill_process_tree "$child"
-    kill "$child" 2>/dev/null || true
-  done
-}
-
-run_handover_bounded() {  # <case> <id> <stdout> <stderr>
-  local dir=$1 id=$2 stdout=$3 stderr=$4 pid i=0
-  (
-    FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$dir/runtime.log" \
-      FM_PROCEVENT_CLAIM_ROOT="$dir/claims" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=1 \
-      PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force --hand-over
-  ) > "$stdout" 2> "$stderr" &
-  pid=$!
-  while kill -0 "$pid" 2>/dev/null; do
-    if [ "$i" -ge 100 ]; then
-      kill_process_tree "$pid"
-      kill "$pid" 2>/dev/null || true
-      wait "$pid" 2>/dev/null || true
-      fail "hand-over did not complete within the bounded test deadline"
-    fi
-    sleep 0.05
-    i=$((i + 1))
-  done
-  wait "$pid"
-}
-
 assert_refused_without_mutation() {  # <case> <id> <description>
   local dir=$1 id=$2 description=$3 rc
   set +e
@@ -1449,22 +1420,7 @@ test_already_gone_endpoint_still_completes_without_a_refusal() {
   pass "fm-teardown: an already-exited endpoint, and a server that is already gone, still complete cleanup silently"
 }
 
-test_handover_completes_under_teardown_lock() {
-  local dir id=lock-handover
-  dir=$(make_case lock-handover)
-  fm_write_meta "$dir/home/state/$id.meta" \
-    "window=isolated:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/missing-worktree" "project=$dir/missing-project" "kind=scout"
-  mkdir -p "$dir/home/state/procevent"
-  run_handover_bounded "$dir" "$id" "$dir/stdout" "$dir/stderr" \
-    || fail "hand-over deadlocked or failed under teardown's lifecycle lock: $(cat "$dir/stderr")"
-  assert_absent "$dir/home/state/$id.meta" "reentrant hand-over left the task record"
-  assert_grep "kill-window" "$dir/runtime.log" "reentrant hand-over did not close the endpoint"
-  assert_grep "teardown $id complete" "$dir/stdout" "reentrant hand-over did not complete teardown"
-  pass "fm-teardown: --hand-over completes while teardown owns the lifecycle lock"
-}
-
-test_task_owned_feedback_requires_handover() {
+test_task_owned_feedback_refuses_before_mutation() {
   local dir id=board-scout rc source
   dir=$(make_case board-feedback)
   fm_write_meta "$dir/home/state/$id.meta" \
@@ -1472,97 +1428,63 @@ test_task_owned_feedback_requires_handover() {
     "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
   mkdir -p "$dir/home/state/procevent" "$dir/home/state/procevent-inbox" "$dir/home/state/$id.inbox"
   source="$dir/home/state/procevent/board.source"
-  printf '#!/usr/bin/env bash\nsleep 30\n' > "$dir/fakebin/board-poll"
-  chmod +x "$dir/fakebin/board-poll"
   printf 'adapter=lavish\nkind=task-owned\nowner_task=%s\nargc=3\nargv:\n%s\npoll\n%s\n' \
     "$id" "$dir/fakebin/board-poll" "$dir/board.html" > "$source"
   printf 'schema=fm-task-inbox.v1\nat=now\n--\nboard answer\n' \
     > "$dir/home/state/$id.inbox/001.msg"
   printf '%s\n' "$id" > "$dir/home/state/procevent-inbox/board.1.owner-task"
-  printf 'lavish\n' > "$dir/home/state/procevent-inbox/board.1.adapter"
   printf 'status: feedback\nmessage: captured answer\n' > "$dir/home/state/procevent-inbox/board.1.result"
   set +e
   run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
   rc=$?
   set -e
-  [ "$rc" -ne 0 ] || fail "board-owned scout cleaned up without hand-over"
-  assert_grep "source=board adapter=lavish artifact=$dir/board.html" "$dir/refused.err" "listener artifact was not named"
+  [ "$rc" -ne 0 ] || fail "task-owned feedback was discarded under --force"
+  assert_grep "source=board adapter=lavish artifact=$dir/board.html" "$dir/refused.err" "listener was not named"
   assert_grep "attached message: file=$dir/home/state/$id.inbox/001.msg" "$dir/refused.err" "unread message was not named"
+  assert_grep "attached result: file=$dir/home/state/procevent-inbox/board.1.result owner-task=$id" "$dir/refused.err" "unhandled capture was not named"
   assert_no_grep 'board answer' "$dir/refused.err" "unread message body was disclosed"
-  assert_grep 'board.1.result owner-task=' "$dir/refused.err" "unhandled capture was not named"
-  assert_present "$dir/home/state/$id.meta" "--force bypassed feedback refusal"
-  [ ! -s "$dir/runtime.log" ] || fail "refusal closed endpoint before inventory"
+  assert_present "$dir/home/state/$id.meta" "feedback refusal removed task metadata"
+  [ ! -s "$dir/runtime.log" ] || fail "feedback refusal closed endpoint before inventory"
 
-  fm_test_track_procevent_home "$dir/home"
+  id=malformed-capture
+  dir=$(make_case malformed-handled)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent-inbox" "$dir/home/state/procevent"
+  printf '%s\n' "$id" > "$dir/home/state/procevent-inbox/board.1.owner-task"
+  printf 'status: feedback\n' > "$dir/home/state/procevent-inbox/board.1.result"
+  mkdir "$dir/home/state/procevent-inbox/board.1.handled"
   set +e
-  run_handover_bounded "$dir" "$id" "$dir/handover.out" "$dir/handover.err"
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
   rc=$?
   set -e
-  [ "$rc" -ne 0 ] || fail "hand-over discarded an unhandled capture"
-  assert_grep "unhandled capture remains: $dir/home/state/procevent-inbox/board.1.result" "$dir/handover.err" "hand-over did not name the pending capture"
-  assert_present "$dir/home/state/$id.meta" "failed hand-over removed worker record"
-  assert_grep 'kind=task-owned' "$source" "failed hand-over changed listener ownership"
-  assert_grep "owner_task=$id" "$source" "failed hand-over changed listener owner"
-
-  : > "$dir/home/state/procevent-inbox/board.1.handled"
-  run_handover_bounded "$dir" "$id" "$dir/handover.out" "$dir/handover.err" \
-    || fail "hand-over after handling failed: $(cat "$dir/handover.err")"
-  assert_absent "$dir/home/state/$id.meta" "hand-over left worker record"
-  assert_present "$source" "hand-over lost board listener"
-  assert_no_grep 'owner_task=' "$source" "board is still task-owned"
-  assert_present "$dir/home/data/$id/handed-over/001.msg" "board answer was lost"
-  assert_absent "$dir/home/state/procevent-inbox/board.1.owner-task" "capture ownership was not transferred"
-  assert_grep 'check: worker board-scout message handed over' "$dir/home/state/.wake-queue" "message did not wake home"
-  assert_no_grep 'procevent:board:1' "$dir/home/state/.wake-queue" "handled capture was re-published"
-  assert_grep 'kill-window' "$dir/runtime.log" "worker was not closed before hand-over"
+  [ "$rc" -ne 0 ] || fail "malformed handled marker was accepted"
+  assert_grep "unsafe capture marker $dir/home/state/procevent-inbox/board.1.handled" "$dir/refused.err" "malformed handled marker was not named"
+  assert_present "$dir/home/state/$id.meta" "malformed marker refusal removed task metadata"
+  [ ! -s "$dir/runtime.log" ] || fail "malformed marker refusal closed endpoint"
 
   id=board-symlink
   dir=$(make_case feedback-symlink)
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=isolated:fm-$id" "endpoint_task_id=$id" \
     "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
-  mkdir -p "$dir/home/state/procevent" "$dir/home/state/procevent-inbox" "$dir/external-inbox"
+  mkdir -p "$dir/home/state/procevent" "$dir/external-inbox"
   printf 'must remain external\n' > "$dir/external-inbox/001.msg"
   ln -s "$dir/external-inbox" "$dir/home/state/$id.inbox"
-  [ -L "$dir/home/state/$id.inbox" ] || fail "symlinked inbox fixture was not created"
   set +e
   run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
   rc=$?
   set -e
-  [ "$rc" -ne 0 ] || fail "symlinked inbox directory was accepted"
-  assert_grep "unsafe feedback directory $dir/home/state/$id.inbox" "$dir/refused.err" "symlinked inbox was not named"
-  assert_present "$dir/home/state/$id.meta" "symlinked inbox refusal removed worker record"
-  assert_present "$dir/external-inbox/001.msg" "symlinked inbox refusal changed external data"
-  [ ! -s "$dir/runtime.log" ] || fail "symlinked inbox refusal closed endpoint"
-
-  dir=$(make_case board-rearm)
-  fm_write_meta "$dir/home/state/$id.meta" \
-    "window=isolated:fm-$id" "endpoint_task_id=$id" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
-  mkdir -p "$dir/home/state/procevent"
-  printf '#!/usr/bin/env bash\nsleep 30\n' > "$dir/fakebin/board-poll"
-  chmod +x "$dir/fakebin/board-poll"
-  printf 'adapter=lavish\nkind=task-owned\nowner_task=%s\nargc=3\nargv:\n%s\npoll\n%s\n' \
-    "$id" "$dir/fakebin/board-poll" "$dir/board.html" \
-    > "$dir/home/state/procevent/board.source"
-  fm_test_track_procevent_home "$dir/home"
-  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$dir/runtime.log" \
-    FM_PROCEVENT_CLAIM_ROOT="$dir/claims" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=1 \
-    PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force --hand-over \
-    > "$dir/handover.out" 2> "$dir/handover.err" \
-    || {
-      FM_HOME="$dir/home" FM_PROCEVENT_CLAIM_ROOT="$dir/claims" \
-        "$ROOT/bin/fm-procevent.sh" list > "$dir/list.out" 2> "$dir/list.err" || true
-      fail "board re-arm failed: $(cat "$dir/handover.err"); list: $(cat "$dir/list.out") $(cat "$dir/list.err")"
-    }
-  assert_absent "$dir/home/state/$id.meta" "re-armed board left worker record"
-  assert_no_grep 'owner_task=' "$dir/home/state/procevent/board.source" "re-armed board is task-owned"
-  assert_grep 'handed over listener board to home' "$dir/handover.err" "board re-arm was not recorded"
-  pass "fm-teardown: --force cannot discard task-owned listener or unread feedback; --hand-over transfers and re-arms home listener"
+  [ "$rc" -ne 0 ] || fail "symlinked feedback directory was accepted"
+  assert_grep "unsafe feedback directory $dir/home/state/$id.inbox" "$dir/refused.err" "symlinked feedback directory was not named"
+  assert_present "$dir/home/state/$id.meta" "symlink refusal removed task metadata"
+  assert_present "$dir/external-inbox/001.msg" "symlink refusal changed external data"
+  [ ! -s "$dir/runtime.log" ] || fail "symlink refusal closed endpoint"
+  pass "fm-teardown: task-owned feedback, malformed markers, and symlinked inboxes refuse before mutation"
 }
 
-test_handover_completes_under_teardown_lock
-test_task_owned_feedback_requires_handover
+test_task_owned_feedback_refuses_before_mutation
 test_invalid_endpoint_records_refuse_before_mutation
 test_control_lock_contention_refuses_before_mutation
 test_non_pool_teardown_ignores_task_set_lock

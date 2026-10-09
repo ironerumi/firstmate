@@ -331,10 +331,6 @@ fm_procevent_claim_path() {
   printf '%s/%s.claim\n' "$(fm_procevent_claim_root)" "$1"
 }
 
-fm_procevent_task_lifecycle_lock_path() {
-  printf '%s/.control-%s.lock\n' "$1" "$2"
-}
-
 fm_procevent_source_lock_path() {
   printf '%s/%s.lock\n' "$(fm_procevent_claim_root)" "$1"
 }

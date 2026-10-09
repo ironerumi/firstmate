@@ -181,7 +181,7 @@
 # finally .fm-secondmate-home) so the next worker leased that slot does not resolve a
 # home that no longer exists; it touches nothing tracked, and only while the slot still
 # carries this home's own marker (scrub_returned_home_slot).
-# Usage: fm-teardown.sh <task-id> [--force] [--hand-over] [--legacy-record]
+# Usage: fm-teardown.sh <task-id> [--force] [--legacy-record]
 #   --force skips ordinary-task dirty and landed-work checks, skips scout report
 #   checks, and discards secondmate child work for kind=secondmate. Only use it
 #   when the captain has explicitly said to discard the work.
@@ -316,6 +316,7 @@ teardown_require_source() {  # <path>
     exit 1
   fi
 }
+
 teardown_require_backend_prerequisites() {  # <backend> <task-id>
   local backend=$1 task_id=$2
   if ! fm_backend_source "$backend"; then
@@ -384,13 +385,12 @@ if [ "$#" -lt 1 ] || ! fm_task_id_path_safe "$1"; then
   exit 2
 fi
 ID=$1
-FORCE='' HAND_OVER=0
+FORCE=
 LEGACY_RECORD_GIVEN=0
 shift
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --force) FORCE=--force ;;
-    --hand-over) HAND_OVER=1 ;;
     --legacy-record) LEGACY_RECORD_GIVEN=1 ;;
     *)
       echo "error: invalid teardown request" >&2
@@ -3514,7 +3514,15 @@ if teardown_owns_worktree && [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
     fi
   fi
 fi
-[ "$KIND" = secondmate ] || { [ ! -d "$STATE/procevent" ] && [ ! -d "$STATE/procevent-inbox" ] && [ ! -d "$STATE/$ID.inbox" ]; } || FM_PROCEVENT_TEARDOWN_HANDOVER="$HAND_OVER" FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" "$SCRIPT_DIR/fm-procevent.sh" task-feedback inventory "$ID" || exit 1
+
+if [ "$KIND" != secondmate ] \
+  && { [ -e "$STATE/procevent" ] || [ -L "$STATE/procevent" ] \
+    || [ -e "$STATE/procevent-inbox" ] || [ -L "$STATE/procevent-inbox" ] \
+    || [ -e "$STATE/$ID.inbox" ] || [ -L "$STATE/$ID.inbox" ]; }; then
+  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-procevent.sh" \
+    task-feedback inventory "$ID" || exit 1
+fi
+
 # A Herdr close may reposition shared workspace order, so the whole
 # destructive sequence below (worktree return, pane close, record removal)
 # runs under the named-session presentation lock, acquired BEFORE anything is
@@ -3772,7 +3780,6 @@ if [ "$BACKEND" = herdr ]; then
     exit 1
   fi
 fi
-[ "$KIND" = secondmate ] || [ "$HAND_OVER" != 1 ] || { [ ! -d "$STATE/procevent" ] && [ ! -d "$STATE/procevent-inbox" ] && [ ! -d "$STATE/$ID.inbox" ]; } || FM_PROCEVENT_TEARDOWN_HANDOVER=1 FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" "$SCRIPT_DIR/fm-procevent.sh" task-feedback hand-over "$ID" || exit 1
 if [ "$KIND" != secondmate ]; then
   if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" \
       "$SCRIPT_DIR/fm-inactive-reconcile.sh" report "$ID"; then
@@ -3846,6 +3853,9 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
   "$STATE/$ID.reconcile-nudged" "$STATE/$ID.gemini-settings.json" "$STATE/$ID.devin-config.json" \
   "$STATE/.$ID.branch-outcome-index" \
   "$STATE/.secondmate-relaunch-$ID" "$STATE/.secondmate-relaunch-bound-$ID"
+# The steering inbox (bin/fm-task-inbox-lib.sh) is runtime state for the
+# retired endpoint; teardown only runs after landing is confirmed, so any
+# leftover unhandled steer here is moot rather than unlanded work.
 # state/<id>.git-hooks is the spawn-owned commit-msg strip directory, left
 # read-only by its installer.
 chmod u+w "$STATE/$ID.git-hooks" 2>/dev/null || true

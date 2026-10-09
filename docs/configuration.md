@@ -499,11 +499,8 @@ Legacy tmux metadata remains cleanup-compatible when its exact window name is `f
 
 ### Task-owned feedback at teardown
 
-A non-secondmate task cannot be cleaned up while it owns a process-event source, has unread steering-inbox messages, or has unhandled task-routed process-event captures.
+A non-secondmate task cannot be cleaned up while it owns a process-event source, has unread steering-inbox messages, or has an unhandled task-routed process-event capture.
 `fm-teardown.sh` inventories these under the task lifecycle lock before closing the endpoint or deleting state, names each source, inbox message, and capture in its refusal, and does not let `--force` bypass this gate.
-Use `fm-teardown.sh <id> --hand-over` when the worker must be removed while preserving that feedback.
-If a capture is still unhandled, this option refuses before changing the source; handle every capture first.
-After the endpoint closes, this option stops the task-owned listener, transfers the source and handled capture ownership to the home, moves steering messages into `data/<id>/handed-over/`, wakes the home to handle them, and re-arms the capture-free source as home-owned.
 
 ### Herdr homes and presentation
 
