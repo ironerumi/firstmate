@@ -321,7 +321,7 @@ task_lifecycle_lock_parent_owned() {  # <task-id>
 # This executable boundary keeps teardown's ShellCheck graph independent of the
 # feedback implementation while preserving its three durable representations.
 fm_procevent_task_feedback_inventory() {  # <state> <task-id>
-  local state=$1 task=$2 rec result owner first id adapter artifact
+  local state=$1 task=$2 rec result owner id adapter artifact
   FM_PROCEVENT_TASK_ATTACHED_SOURCES=0
   FM_PROCEVENT_TASK_ATTACHED_MESSAGES=0
   for rec in "$state/procevent"/*.source; do
@@ -338,8 +338,7 @@ fm_procevent_task_feedback_inventory() {  # <state> <task-id>
   for rec in "$state/$task.inbox"/*.msg; do
     [ -e "$rec" ] || continue
     [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe inbox message $rec" >&2; return 1; }
-    first=$(awk 'seen { print; exit } $0 == "--" { seen=1 }' "$rec")
-    printf 'attached message: file=%s first-line=%s\n' "$rec" "$first" >&2
+    printf 'attached message: file=%s\n' "$rec" >&2
     FM_PROCEVENT_TASK_ATTACHED_MESSAGES=$((FM_PROCEVENT_TASK_ATTACHED_MESSAGES + 1))
   done
   for result in "$state/procevent-inbox"/*.owner-task; do
@@ -403,6 +402,7 @@ fm_procevent_task_feedback_hand_over() {  # <state> <data> <home> <script-dir> <
     [ -f "$rec" ] && [ "$(cat "$rec")" = "$task" ] || continue
     id=${rec##*/}; id=${id%.*.*}
     FM_PROCEVENT_TEARDOWN_HANDOVER=1 cmd_hand_over "$id" "$task" || return 1
+    rm -f -- "$rec" || return 1
     echo "teardown: handed over captured result $rec to home" >&2
   done
   for rec in "$state/$task.inbox"/*.msg; do
@@ -722,12 +722,13 @@ cmd_hand_over() {  # <source-id> <task-id>
   while IFS= read -r result; do
     [ -n "$result" ] || continue
     sidecar="${result%.result}.owner-task"
-    [ -e "$sidecar" ] || continue
-    [ -f "$sidecar" ] && [ ! -L "$sidecar" ] \
-      && [ "$(cat "$sidecar")" = "$task" ] || {
-        fm_procevent_source_lock_release "$id"
-        die "unsafe captured owner: $sidecar"
-      }
+    if [ -e "$sidecar" ] && { [ ! -f "$sidecar" ] || [ -L "$sidecar" ] \
+      || [ "$(cat "$sidecar")" != "$task" ]; }; then
+      fm_procevent_source_lock_release "$id"
+      die "unsafe captured owner: $sidecar"
+    fi
+    fm_procevent_source_lock_release "$id"
+    die "cannot hand over source $id while unhandled capture remains: $result"
   done < <(source_pending "$id")
   if [ -e "$rec" ] || [ -L "$rec" ]; then
     [ -f "$rec" ] && [ ! -L "$rec" ] || {

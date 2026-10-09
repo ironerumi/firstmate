@@ -1443,24 +1443,39 @@ test_task_owned_feedback_requires_handover() {
   set -e
   [ "$rc" -ne 0 ] || fail "board-owned scout cleaned up without hand-over"
   assert_grep "source=board adapter=lavish artifact=$dir/board.html" "$dir/refused.err" "listener artifact was not named"
-  assert_grep '001.msg first-line=board answer' "$dir/refused.err" "unread message was not named"
+  assert_grep "attached message: file=$dir/home/state/$id.inbox/001.msg" "$dir/refused.err" "unread message was not named"
+  assert_no_grep 'board answer' "$dir/refused.err" "unread message body was disclosed"
   assert_grep 'board.1.result owner-task=' "$dir/refused.err" "unhandled capture was not named"
   assert_present "$dir/home/state/$id.meta" "--force bypassed feedback refusal"
   [ ! -s "$dir/runtime.log" ] || fail "refusal closed endpoint before inventory"
 
   fm_test_track_procevent_home "$dir/home"
+  set +e
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$dir/runtime.log" \
+    FM_PROCEVENT_CLAIM_ROOT="$dir/claims" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=1 \
+    PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force --hand-over \
+    > "$dir/handover.out" 2> "$dir/handover.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "hand-over discarded an unhandled capture"
+  assert_grep "unhandled capture remains: $dir/home/state/procevent-inbox/board.1.result" "$dir/handover.err" "hand-over did not name the pending capture"
+  assert_present "$dir/home/state/$id.meta" "failed hand-over removed worker record"
+  assert_grep 'kind=task-owned' "$source" "failed hand-over changed listener ownership"
+  assert_grep "owner_task=$id" "$source" "failed hand-over changed listener owner"
+
+  : > "$dir/home/state/procevent-inbox/board.1.handled"
   FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$dir/runtime.log" \
     FM_PROCEVENT_CLAIM_ROOT="$dir/claims" FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=1 \
     PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force --hand-over \
     > "$dir/handover.out" 2> "$dir/handover.err" \
-    || fail "hand-over failed: $(cat "$dir/handover.err")"
+    || fail "hand-over after handling failed: $(cat "$dir/handover.err")"
   assert_absent "$dir/home/state/$id.meta" "hand-over left worker record"
   assert_present "$source" "hand-over lost board listener"
-  assert_no_grep '^owner_task=' "$source" "board is still task-owned"
+  assert_no_grep 'owner_task=' "$source" "board is still task-owned"
   assert_present "$dir/home/data/$id/handed-over/001.msg" "board answer was lost"
-  assert_absent "$dir/home/state/procevent-inbox/board.1.owner-task" "capture was not transferred"
+  assert_absent "$dir/home/state/procevent-inbox/board.1.owner-task" "capture ownership was not transferred"
   assert_grep 'check: worker board-scout message handed over' "$dir/home/state/.wake-queue" "message did not wake home"
-  assert_grep 'procevent:board:1' "$dir/home/state/.wake-queue" "capture did not wake home"
+  assert_no_grep 'procevent:board:1' "$dir/home/state/.wake-queue" "handled capture was re-published"
   assert_grep 'kill-window' "$dir/runtime.log" "worker was not closed before hand-over"
 
   dir=$(make_case board-rearm)
@@ -1484,7 +1499,7 @@ test_task_owned_feedback_requires_handover() {
       fail "board re-arm failed: $(cat "$dir/handover.err"); list: $(cat "$dir/list.out") $(cat "$dir/list.err")"
     }
   assert_absent "$dir/home/state/$id.meta" "re-armed board left worker record"
-  assert_no_grep '^owner_task=' "$dir/home/state/procevent/board.source" "re-armed board is task-owned"
+  assert_no_grep 'owner_task=' "$dir/home/state/procevent/board.source" "re-armed board is task-owned"
   assert_grep 'handed over listener board to home' "$dir/handover.err" "board re-arm was not recorded"
   pass "fm-teardown: --force cannot discard task-owned listener or unread feedback; --hand-over transfers and re-arms home listener"
 }
