@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Fork-only entry point (fork-ci.yml); upstream never calls it.
+  workflow_call:
+    inputs:
+      full:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,9 +32,13 @@ concurrency:
 # tiers and their rationale; tests/fm-ci-workflow.test.sh guards this workflow.
 # Each job comment identifies the tier implemented by its executable value.
 
+# Fork slimming: outside kunchenguid/firstmate only the seconds-long guards
+# (test-coverage, invariants) run on push and PR; fork-ci.yml passes full=true
+# to run every job on manual dispatch. Rationale: CONTRIBUTING.md "Fork CI".
 jobs:
   lint:
     name: Lint ${{ matrix.partition }}
+    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: ubuntu-latest
     # Normal tier (see the timeout policy above).
     timeout-minutes: 30
@@ -90,6 +100,7 @@ jobs:
   # set only. Composition owner: bin/fm-test-run.sh (docs/fm-test-portable-shards.md).
   tests-portable-parallel-1:
     name: Behavior portable parallel 1
+    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: ubuntu-latest
     # Normal tier (see the timeout policy above).
     timeout-minutes: 30
@@ -135,6 +146,7 @@ jobs:
 
   tests-portable-parallel-2:
     name: Behavior portable parallel 2
+    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: ubuntu-latest
     # Normal tier (see the timeout policy above).
     timeout-minutes: 30
@@ -179,6 +191,7 @@ jobs:
   # whose "ofN" disagrees with it (docs/fm-test-portable-shards.md).
   tests-portable-serial:
     name: Behavior portable serial ${{ matrix.shard }}
+    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: ubuntu-latest
     # Normal tier (see the timeout policy above).
     timeout-minutes: 30
@@ -252,6 +265,7 @@ jobs:
   # the failure evidence and move the job to macOS rather than skip assertions.
   tests-herdr:
     name: Behavior tests (Herdr)
+    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: ubuntu-latest
     # Heavy tier (see the timeout policy above): the last-resort job backstop.
     # The family-run step below owns the hang tripwire, so a wedged suite fails
@@ -381,7 +395,7 @@ jobs:
       - tests-portable-parallel-2
       - tests-portable-serial
       - tests-herdr
-    if: always()
+    if: always() && (github.repository == 'kunchenguid/firstmate' || inputs.full)
     steps:
       - uses: actions/checkout@v6
       - name: Download lane timing artifacts
@@ -413,6 +427,7 @@ jobs:
 
   macos-stock-bash:
     name: Stock macOS Bash snapshot compatibility
+    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: macos-latest
     # Normal tier (see the timeout policy above).
     timeout-minutes: 30
