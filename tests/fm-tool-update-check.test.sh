@@ -444,6 +444,48 @@ SH
   pass "an announcement probe that stalls is reported on the second consecutive timeout, and recovery resets"
 }
 
+test_budget_skipping_announcement_preserves_timeout_state() {
+  local home dir out mute slow_version
+  home=$(make_home announce-budget-timeout-state)
+  dir="$TMP_ROOT/announce-budget-timeout-state/bin"
+  mkdir -p "$dir"
+  mute="$TMP_ROOT/announce-budget-timeout-state/mute"
+  slow_version="$TMP_ROOT/announce-budget-timeout-state/slow-version"
+  : > "$mute"
+  cat > "$dir/no-mistakes-fixture" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-}" = "--version" ]; then
+  if [ -e "$slow_version" ]; then
+    sleep 30
+  fi
+  printf 'no-mistakes version v1.46.0\n'
+  exit 0
+fi
+if [ -e "$mute" ]; then
+  sleep 30
+fi
+SH
+  chmod 0755 "$dir/no-mistakes-fixture"
+  write_config "$home" '{"tools":[{"name":"no-mistakes","command":"no-mistakes-fixture","version_args":["--version"],"announce_args":["--help"],"announce_pattern":"A new version of no-mistakes is available: [^ ]+ -> [^ ]+"}]}'
+  out="$home/out.txt"
+
+  run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=2 FM_TOOL_UPDATE_BUDGET_SECS=2
+  [ ! -s "$out" ] || fail "the first timeout woke the supervisor: $(cat "$out")"
+  assert_grep 'timeouts=no-mistakes' "$home/state/.tool-updates" "the first timeout was not recorded"
+
+  rm -f "$mute"
+  : > "$slow_version"
+  run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=2 FM_TOOL_UPDATE_BUDGET_SECS=2
+  assert_grep 'timeouts=no-mistakes' "$home/state/.tool-updates" "a budget-skipped announcement probe cleared the timeout"
+  assert_not_contains "$(cat "$out")" "did not answer when asked for its update announcement twice" "the skipped announcement probe was counted as a timeout"
+
+  rm -f "$slow_version"
+  : > "$mute"
+  run_check "$home" "$(fixture_path "$dir")" "$out" FM_TOOL_UPDATE_PROBE_SECS=2 FM_TOOL_UPDATE_BUDGET_SECS=2
+  assert_contains "$(cat "$out")" "did not answer when asked for its update announcement" "a timeout after a budget-skipped probe was treated as the first timeout"
+  pass "a budget-skipped announcement probe preserves timeout state"
+}
+
 test_quiet_tool_with_announce_pattern_is_silent() {
   local home dir out
   home=$(make_home announce-quiet)
@@ -1117,6 +1159,7 @@ test_unusable_announce_pattern_is_reported_not_read_as_silence
 test_one_broken_pattern_does_not_blind_the_rest_of_the_sweep
 test_an_unchecked_announcement_source_is_not_read_as_current
 test_an_announcement_probe_timeout_is_reported_only_when_it_repeats
+test_budget_skipping_announcement_preserves_timeout_state
 test_quiet_tool_with_announce_pattern_is_silent
 test_commits_behind_origin_are_reported
 test_default_branch_is_detected_when_branch_is_omitted

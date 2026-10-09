@@ -420,7 +420,7 @@ probe_output() {
 command_findings() {
   local name=$1 command_name=$2 args_joined=$3 announce=$4 announce_args=$5
   local hit out version matched announce_out status matched_line announced_version
-  local resolved_path='' resolved_version='' resolved_out=''
+  local resolved_path='' resolved_version='' resolved_out='' resolved_status=0
   local best_path='' best_version='' unreadable='' hits=''
 
   # This tool's announcement source is dead if its pattern cannot be used, which
@@ -444,11 +444,13 @@ command_findings() {
     fi
     # shellcheck disable=SC2086  # deliberate split on validated space-free tokens
     out=$(probe_output "$hit" $args_joined)
+    status=$?
     version=$(parse_version "$out")
     if [ -z "$resolved_path" ]; then
       resolved_path=$hit
       resolved_version=$version
       resolved_out=$out
+      resolved_status=$status
     fi
     if [ -z "$version" ]; then
       [ -n "$unreadable" ] || unreadable=$hit
@@ -479,9 +481,6 @@ EOF
         announce_out=$(probe_output "$resolved_path" $announce_args)
         status=$?
         if [ "$status" -eq 124 ]; then
-          # A source that was asked and never answered is not a source that had
-          # nothing to say. The one that answers with nothing stays silent below.
-          # One timeout is only remembered; the one after it is the finding.
           timeout_note "$name"
           case ",$RECORD_TIMEOUTS," in
             *",$name,"*)
@@ -489,8 +488,20 @@ EOF
               ;;
           esac
           announce_out=
+        else
+          timeout_clear "$name"
         fi
       fi
+    elif [ "$resolved_status" -eq 124 ]; then
+      timeout_note "$name"
+      case ",$RECORD_TIMEOUTS," in
+        *",$name,"*)
+          emit "$name check failed: $resolved_path did not answer when asked for its update announcement twice in a row"
+          ;;
+      esac
+      announce_out=
+    else
+      timeout_clear "$name"
     fi
     if [ -n "$announce_out" ]; then
       # Not a pipeline, so grep's own status is still readable here: a pattern
@@ -515,7 +526,11 @@ EOF
   if [ -z "$resolved_version" ]; then
     # No copy was probed at all when the path is empty, and the budget report
     # already covers that, so do not blame a copy that was never asked.
-    [ -z "$resolved_path" ] || emit "$name check failed: $resolved_path did not report a version"
+    if [ -n "$resolved_path" ]; then
+      if [ -z "$announce" ] || [ "$announce_args" != "$args_joined" ] || [ "$resolved_status" -ne 124 ]; then
+        emit "$name check failed: $resolved_path did not report a version"
+      fi
+    fi
     return 0
   fi
 
@@ -688,6 +703,20 @@ timeout_note() {
   esac
 }
 
+timeout_clear() {
+  local name=$1 item kept=
+  local -a timeout_names
+  case ",$NEW_TIMEOUTS," in
+    *",$name,"*) ;;
+    *) return 0 ;;
+  esac
+  IFS=, read -r -a timeout_names <<< "$NEW_TIMEOUTS"
+  for item in "${timeout_names[@]}"; do
+    [ "$item" = "$name" ] || kept=${kept:+$kept,}$item
+  done
+  NEW_TIMEOUTS=$kept
+}
+
 record_read() {
   local line first=1
   RECORD_EPOCH=0
@@ -738,6 +767,7 @@ action_check() {
   [ -f "$CONFIG" ] || return 0
 
   record_read
+  NEW_TIMEOUTS=$RECORD_TIMEOUTS
   now=$(record_epoch_now)
   if [ "$INTERVAL" -ne 0 ] && [ "$RECORD_EPOCH" -gt 0 ] \
     && [ "$now" -ge "$RECORD_EPOCH" ] && [ $((now - RECORD_EPOCH)) -lt "$INTERVAL" ]; then
