@@ -1,0 +1,20 @@
+Targeted validation record
+
+Phase 1 suites (serial, per-script timeout 300s):
+  bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-lint-workflows.test.sh
+  bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-ci-workflow.test.sh
+
+Passed:
+  tests/fm-lint-workflows.test.sh (workflow YAML lint and malformed-workflow regressions)
+  tests/fm-ci-workflow.test.sh (typed ci.yml concurrency, timeout, matrix, and tier contracts)
+
+Failed: none
+Time bound: none
+
+Additional phase-2 bounded semantic check (not live GitHub Actions):
+  source bin/fm-timeout-lib.sh; fm_run_timed 240 ruby -ryaml ...
+  PASS semantic fork CI contract: fork push/PR=test-coverage,invariants; fork manual full=9 ci jobs; upstream push/PR=full
+
+Selection rationale: the target diff changes only .github/workflows/ci.yml, .github/workflows/fork-ci.yml, and CONTRIBUTING.md. No changed bin/<name>.sh has a corresponding suite; fm-ci-workflow.test.sh was added because it plainly exercises ci.yml. No suite exists for fork-ci.yml.
+
+Live limitation: GitHub Actions event evaluation was not driven. act is unavailable; Docker is present but is not an Actions runner; remote workflow dispatch/pull_request event creation requires the fork's GitHub Actions service and credentials and is outside this assigned local test phase.
