@@ -34,7 +34,7 @@ concurrency:
 
 # Fork slimming: outside kunchenguid/firstmate only the seconds-long guards
 # (test-coverage, invariants) run on push and PR; fork-ci.yml passes full=true
-# to run every job on a schedule. Rationale: CONTRIBUTING.md "Fork CI".
+# to run every job on manual dispatch. Rationale: CONTRIBUTING.md "Fork CI".
 jobs:
   lint:
     name: Lint ${{ matrix.partition }}

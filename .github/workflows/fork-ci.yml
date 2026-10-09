@@ -4,10 +4,9 @@ name: Fork full CI
 # runs only the seconds-long guards. Every fork change already passed
 # bin/fm-lint.sh and targeted tests in no-mistakes before the push; what that
 # cannot prove is the full regression suite, clean-runner setup, and stock macOS
-# Bash on the merged upstream result. This weekly run covers exactly that.
+# Bash on the merged upstream result. Dispatch this run by hand when that proof
+# is wanted, for example after merging upstream.
 on:
-  schedule:
-    - cron: '47 4 * * 1'
   workflow_dispatch:
 
 permissions:
