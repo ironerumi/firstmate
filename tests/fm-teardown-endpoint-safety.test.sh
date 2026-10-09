@@ -29,6 +29,13 @@ SH
 printf 'treehouse' >> "${FM_RUNTIME_LOG:?}"
 printf ' <%s>' "$@" >> "${FM_RUNTIME_LOG:?}"
 printf '\n' >> "${FM_RUNTIME_LOG:?}"
+if [ "$1" = return ] && [ -e "$FM_HOME/state/.register-after-inventory" ]; then
+  task=$(cat "$FM_HOME/state/.register-after-inventory")
+  rm -f "$FM_HOME/state/.register-after-inventory"
+  FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT_OVERRIDE" \
+    "$FM_ROOT_OVERRIDE/bin/fm-procevent.sh" register-task lavish late-board "$task" -- \
+    "$FM_ROOT_OVERRIDE/bin/fm-procevent-lavish.sh" poll "$FM_HOME/state/late-board.html" || exit 1
+fi
 exit 0
 SH
   chmod +x "$TMP_ROOT/$dir/fakebin/tmux" "$TMP_ROOT/$dir/fakebin/treehouse"
@@ -1420,6 +1427,29 @@ test_already_gone_endpoint_still_completes_without_a_refusal() {
   pass "fm-teardown: an already-exited endpoint, and a server that is already gone, still complete cleanup silently"
 }
 
+test_feedback_inventory_rechecks_before_endpoint_close() {
+  local dir id=late-board rc
+  dir=$(make_case late-feedback)
+  mark_case_as_treehouse_pool "$dir"
+  claim_pool_slot "$dir" "$id"
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent" "$dir/home/state/procevent-inbox"
+  printf '%s\n' "$id" > "$dir/home/state/.register-after-inventory"
+  set +e
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "feedback published during cleanup was missed"
+  assert_grep "source=late-board adapter=lavish artifact=$dir/home/state/late-board.html" \
+    "$dir/refused.err" "late task-owned listener was not named"
+  assert_present "$dir/home/state/$id.meta" "late feedback refusal removed task metadata"
+  assert_present "$dir/home/state/procevent/late-board.source" \
+    "late feedback refusal removed the attached listener"
+  pass "fm-teardown: feedback published after the initial inventory is refused before endpoint close"
+}
+
 test_task_owned_feedback_refuses_before_mutation() {
   local dir id=board-scout rc source
   dir=$(make_case board-feedback)
@@ -1485,6 +1515,7 @@ test_task_owned_feedback_refuses_before_mutation() {
 }
 
 test_task_owned_feedback_refuses_before_mutation
+test_feedback_inventory_rechecks_before_endpoint_close
 test_invalid_endpoint_records_refuse_before_mutation
 test_control_lock_contention_refuses_before_mutation
 test_non_pool_teardown_ignores_task_set_lock

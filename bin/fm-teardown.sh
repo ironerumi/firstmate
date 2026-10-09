@@ -3515,13 +3515,15 @@ if teardown_owns_worktree && [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
   fi
 fi
 
-if [ "$KIND" != secondmate ] \
-  && { [ -e "$STATE/procevent" ] || [ -L "$STATE/procevent" ] \
-    || [ -e "$STATE/procevent-inbox" ] || [ -L "$STATE/procevent-inbox" ] \
-    || [ -e "$STATE/$ID.inbox" ] || [ -L "$STATE/$ID.inbox" ]; }; then
+task_feedback_inventory() {
+  [ "$KIND" != secondmate ] \
+    && { [ -e "$STATE/procevent" ] || [ -L "$STATE/procevent" ] \
+      || [ -e "$STATE/procevent-inbox" ] || [ -L "$STATE/procevent-inbox" ] \
+      || [ -e "$STATE/$ID.inbox" ] || [ -L "$STATE/$ID.inbox" ]; } || return 0
   FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-procevent.sh" \
-    task-feedback inventory "$ID" || exit 1
-fi
+    task-feedback inventory "$ID"
+}
+task_feedback_inventory || exit 1
 
 # A Herdr close may reposition shared workspace order, so the whole
 # destructive sequence below (worktree return, pane close, record removal)
@@ -3652,6 +3654,7 @@ if [ "$BACKEND" = orca ] && [ "$KIND" != secondmate ]; then
       "$WT/.opencode/plugins/fm-busy-state.js" \
       "$WT/.fm-grok-turnend" "$WT/.fm-kimi-turnend"
   fi
+  task_feedback_inventory || exit 1
   if [ -n "$T_ORCA" ]; then
     fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
       || { endpoint_close_refusal "$ID" "$BACKEND" "$T" 0; exit 1; }
@@ -3726,6 +3729,9 @@ if [ "$BACKEND" = herdr ] \
   fi
 fi
 
+if [ "$BACKEND" != orca ]; then
+  task_feedback_inventory || exit 1
+fi
 if [ "$HERDR_PRESENTATION_RETIRE_CANDIDATE" = 1 ]; then
   # The presentation lock was acquired before the worktree return above; a
   # contended lock already refused this teardown while everything was intact.
