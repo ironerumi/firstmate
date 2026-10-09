@@ -70,6 +70,8 @@ REAL_LSOF_FOR_TEST=$(command -v lsof)
 export REAL_LSOF_FOR_TEST
 REAL_RM_FOR_TEST=$(command -v rm)
 export REAL_RM_FOR_TEST
+REAL_STAT_FOR_TEST=$(fm_real_tool stat)
+export REAL_STAT_FOR_TEST
 
 # Build a fresh sandbox for one test case. Sets up:
 #   $CASE/state/        - firstmate state dir (with a fresh watcher beacon)
@@ -578,8 +580,12 @@ add_stat_error() {
   local case_dir=$1
   cat > "$case_dir/fakebin/stat" <<'SH'
 #!/usr/bin/env bash
-echo "stat: simulated failure" >&2
-exit 1
+real=${REAL_STAT_FOR_TEST:?}
+if [ "${1:-}" = -c ] && [ "${2:-}" = %Y ]; then
+  echo "stat: simulated failure" >&2
+  exit 1
+fi
+exec "$real" "$@"
 SH
   chmod +x "$case_dir/fakebin/stat"
 }
