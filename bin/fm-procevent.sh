@@ -287,15 +287,45 @@ task_feedback_state_directories_validate() {
   task_feedback_directory_check "$state/$task.inbox" || return 1
 }
 
+task_feedback_source_owner_validate() {
+  local file=$1 line kind='' owner='' kind_seen=0 owner_seen=0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      kind=*)
+        [ "$kind_seen" -eq 0 ] || return 1
+        kind=${line#kind=}
+        kind_seen=1
+        ;;
+      owner_task=*)
+        [ "$owner_seen" -eq 0 ] || return 1
+        owner=${line#owner_task=}
+        owner_seen=1
+        ;;
+    esac
+  done < "$file" || return 1
+  [ "$kind_seen" -eq 1 ] || return 1
+  if [ "$owner_seen" -eq 1 ]; then
+    fm_pr_task_id_valid "$owner" || return 1
+  fi
+  if [ "$kind" = task-owned ]; then
+    [ "$owner_seen" -eq 1 ] || return 1
+  elif [ "$owner_seen" -eq 1 ]; then
+    return 1
+  fi
+  FM_PROCEVENT_TASK_SOURCE_OWNER=$owner
+}
+
 fm_procevent_task_feedback_inventory() {  # <state> <task-id>
-  local state=$1 task=$2 rec result marker owner id adapter artifact
+  local state=$1 task=$2 rec result marker owner id adapter artifact owner_lines
   task_feedback_state_directories_validate "$state" "$task" || return 1
   FM_PROCEVENT_TASK_ATTACHED_SOURCES=0
   FM_PROCEVENT_TASK_ATTACHED_MESSAGES=0
   for rec in "$state/procevent"/*.source; do
     [ -e "$rec" ] || continue
     [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe source $rec" >&2; return 1; }
-    owner=$(fm_meta_get "$rec" owner_task)
+    task_feedback_source_owner_validate "$rec" \
+      || { echo "REFUSED: unsafe source ownership $rec" >&2; return 1; }
+    owner=$FM_PROCEVENT_TASK_SOURCE_OWNER
     [ "$owner" = "$task" ] || continue
     id=${rec##*/}; id=${id%.source}
     adapter=$(fm_meta_get "$rec" adapter)
@@ -312,7 +342,15 @@ fm_procevent_task_feedback_inventory() {  # <state> <task-id>
   for result in "$state/procevent-inbox"/*.owner-task; do
     [ -e "$result" ] || continue
     [ -f "$result" ] && [ ! -L "$result" ] || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
-    [ "$(cat "$result")" = "$task" ] || continue
+    owner=$(cat "$result") \
+      || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
+    owner_lines=$(wc -l < "$result" | tr -d ' ') \
+      || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
+    if [ "$owner_lines" != 1 ] || ! fm_pr_task_id_valid "$owner"; then
+      echo "REFUSED: unsafe capture owner $result" >&2
+      return 1
+    fi
+    [ "$owner" = "$task" ] || continue
     rec="${result%.owner-task}.result"
     [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe capture $rec" >&2; return 1; }
     marker="${result%.owner-task}.handled"

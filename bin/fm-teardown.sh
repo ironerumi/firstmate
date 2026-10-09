@@ -3516,10 +3516,7 @@ if teardown_owns_worktree && [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
 fi
 
 task_feedback_inventory() {
-  [ "$KIND" != secondmate ] \
-    && { [ -e "$STATE/procevent" ] || [ -L "$STATE/procevent" ] \
-      || [ -e "$STATE/procevent-inbox" ] || [ -L "$STATE/procevent-inbox" ] \
-      || [ -e "$STATE/$ID.inbox" ] || [ -L "$STATE/$ID.inbox" ]; } || return 0
+  [ "$KIND" = secondmate ] && return 0
   FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-procevent.sh" \
     task-feedback inventory "$ID"
 }

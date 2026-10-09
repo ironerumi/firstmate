@@ -1486,6 +1486,43 @@ test_task_owned_feedback_refuses_before_mutation() {
   assert_present "$dir/home/state/$id.meta" "feedback refusal removed task metadata"
   [ ! -s "$dir/runtime.log" ] || fail "feedback refusal closed endpoint before inventory"
 
+  id=malformed-source
+  dir=$(make_case malformed-source-owner)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent"
+  printf 'kind=task-owned\nadapter=lavish\n' \
+    > "$dir/home/state/procevent/board.source"
+  set +e
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "malformed source ownership was accepted"
+  assert_grep "unsafe source ownership $dir/home/state/procevent/board.source" \
+    "$dir/refused.err" "malformed source ownership was not named"
+  assert_present "$dir/home/state/$id.meta" "malformed source refusal removed task metadata"
+  [ ! -s "$dir/runtime.log" ] || fail "malformed source refusal closed endpoint"
+
+  id=malformed-owner
+  dir=$(make_case malformed-capture-owner)
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  mkdir -p "$dir/home/state/procevent-inbox" "$dir/home/state/procevent"
+  printf '%s\nother-owner\n' "$id" \
+    > "$dir/home/state/procevent-inbox/board.1.owner-task"
+  printf 'status: feedback\n' > "$dir/home/state/procevent-inbox/board.1.result"
+  set +e
+  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "malformed capture ownership was accepted"
+  assert_grep "unsafe capture owner $dir/home/state/procevent-inbox/board.1.owner-task" \
+    "$dir/refused.err" "malformed capture ownership was not named"
+  assert_present "$dir/home/state/$id.meta" "malformed capture refusal removed task metadata"
+  [ ! -s "$dir/runtime.log" ] || fail "malformed capture refusal closed endpoint"
+
   id=malformed-capture
   dir=$(make_case malformed-handled)
   fm_write_meta "$dir/home/state/$id.meta" \
