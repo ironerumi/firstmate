@@ -22,6 +22,11 @@ make_case() {  # <name>
 printf 'tmux' >> "${FM_RUNTIME_LOG:?}"
 printf ' <%s>' "$@" >> "${FM_RUNTIME_LOG:?}"
 printf '\n' >> "${FM_RUNTIME_LOG:?}"
+if [ "${1-}" = kill-window ] && [ -n "${FM_ENDPOINT_LOG:-}" ]; then
+  printf 'tmux' >> "$FM_ENDPOINT_LOG"
+  printf ' <%s>' "$@" >> "$FM_ENDPOINT_LOG"
+  printf '\n' >> "$FM_ENDPOINT_LOG"
+fi
 exit 0
 SH
   cat > "$TMP_ROOT/$dir/fakebin/treehouse" <<'SH'
@@ -1438,7 +1443,10 @@ test_feedback_inventory_rechecks_before_endpoint_close() {
   mkdir -p "$dir/home/state/procevent" "$dir/home/state/procevent-inbox"
   printf '%s\n' "$id" > "$dir/home/state/.register-after-inventory"
   set +e
-  run_case "$dir" "$id" > "$dir/refused.out" 2> "$dir/refused.err"
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
+    FM_RUNTIME_LOG="$dir/runtime.log" FM_ENDPOINT_LOG="$dir/endpoint.log" \
+    PATH="$dir/fakebin:$PATH" "$TEARDOWN" "$id" --force \
+    > "$dir/refused.out" 2> "$dir/refused.err"
   rc=$?
   set -e
   [ "$rc" -ne 0 ] || fail "feedback published during cleanup was missed"
@@ -1447,6 +1455,8 @@ test_feedback_inventory_rechecks_before_endpoint_close() {
   assert_present "$dir/home/state/$id.meta" "late feedback refusal removed task metadata"
   assert_present "$dir/home/state/procevent/late-board.source" \
     "late feedback refusal removed the attached listener"
+  [ ! -s "$dir/endpoint.log" ] \
+    || fail "late feedback refusal closed the endpoint: $(cat "$dir/endpoint.log")"
   pass "fm-teardown: feedback published after the initial inventory is refused before endpoint close"
 }
 

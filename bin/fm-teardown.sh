@@ -3595,7 +3595,6 @@ teardown_legacy_stamp_rollback() {
       exit 1
     fi
   fi
-  BACKLOG_CLOSED=1
   META_SPAWN_GEN=$TEARDOWN_META_SPAWN_GEN
   if ! fm_backlog_close_marker_write "$STATE" "$ID" "$DATA" "$META_SPAWN_GEN" \
       "${BACKLOG_TRANSITION_FLAGS[@]+"${BACKLOG_TRANSITION_FLAGS[@]}"}" \
@@ -3611,6 +3610,7 @@ teardown_legacy_stamp_rollback() {
     fi
     exit 1
   fi
+  BACKLOG_CLOSED=1
 else
   if [ "$CLEANUP_RECOVERY" = orca ]; then
     BACKLOG_SKIP_REASON="Orca cleanup recovery is not a launched backlog worker"
@@ -3618,6 +3618,24 @@ else
     BACKLOG_SKIP_REASON=$TEARDOWN_BACKLOG_SKIP_REASON
   fi
 fi
+
+task_feedback_late_inventory() {
+  task_feedback_inventory && return 0
+  if [ "$BACKLOG_CLOSED" = 1 ]; then
+    if fm_backlog_close_marker_clear "$STATE" "$ID"; then
+      BACKLOG_CLOSED=0
+    else
+      echo "error: could not roll back the pending backlog close for $ID after feedback refusal" >&2
+    fi
+  fi
+  if [ "$TEARDOWN_LEGACY_ACCEPTED" = 1 ] \
+     && [ -z "$TEARDOWN_LEGACY_RETAINED_STAMP" ] \
+     && [ "$TEARDOWN_LEGACY_PRESTAMP_SIZE" -gt 0 ] 2>/dev/null; then
+    teardown_legacy_stamp_rollback \
+      || echo "error: the legacy incarnation stamp on $ID's record could not be rolled back after feedback refusal" >&2
+  fi
+  return 1
+}
 
 # Every landed/discard-work refusal above has now passed (or --force skipped
 # them). Fix 1 and Fix 2 (see script header) run here, unconditionally on
@@ -3654,7 +3672,7 @@ if [ "$BACKEND" = orca ] && [ "$KIND" != secondmate ]; then
       "$WT/.opencode/plugins/fm-busy-state.js" \
       "$WT/.fm-grok-turnend" "$WT/.fm-kimi-turnend"
   fi
-  task_feedback_inventory || exit 1
+  task_feedback_late_inventory || exit 1
   if [ -n "$T_ORCA" ]; then
     fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
       || { endpoint_close_refusal "$ID" "$BACKEND" "$T" 0; exit 1; }
@@ -3730,7 +3748,7 @@ if [ "$BACKEND" = herdr ] \
 fi
 
 if [ "$BACKEND" != orca ]; then
-  task_feedback_inventory || exit 1
+  task_feedback_late_inventory || exit 1
 fi
 if [ "$HERDR_PRESENTATION_RETIRE_CANDIDATE" = 1 ]; then
   # The presentation lock was acquired before the worktree return above; a
