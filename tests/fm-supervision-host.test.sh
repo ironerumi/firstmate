@@ -50,6 +50,8 @@ FAKE_CLAUDE="$FAKEBIN/claude"
 #   held        handle, but first block reading the $FM_HOME/stub-release FIFO
 #               until the test writes to it, so the test chooses when the turn
 #               ends
+#   held-redrain the same as held, but drain again once released, as a turn that
+#               looks at the queue again before it reports does
 #   emptyresult the same as handle, but print {} as its result
 #   noreport    drain and exit cleanly without a report
 #   go-away     the captain goes away (the record is written) mid-turn, then
@@ -90,8 +92,9 @@ verdict=routine
 [ "$mode" != go-away ] || verdict=captain
 case "$mode" in
   fail) exit 3 ;;
-  handle|captain|held|hold-lease|return|return-silent|return-fail|return-fail-silent|return-many|return-lookup-fail|return-first|noack|emptyresult|go-away)
-    [ "$mode" != held ] || read -r _ < "$FM_HOME/stub-release"
+  handle|captain|held|held-redrain|hold-lease|return|return-silent|return-fail|return-fail-silent|return-many|return-lookup-fail|return-first|noack|emptyresult|go-away)
+    case "$mode" in held|held-redrain) read -r _ < "$FM_HOME/stub-release" ;; esac
+    [ "$mode" != held-redrain ] || "$FM_REPO/bin/fm-wake-drain.sh" >> "$FM_HOME/engine-redrain.log" 2>&1
     [ "$mode" != return-first ] || "$FM_REPO/bin/fm-afk-contract.sh" archive >> "$FM_HOME/engine-return.log" 2>&1
     [ "$mode" != go-away ] || "$FM_REPO/bin/fm-afk-contract.sh" enter --words 'gone mid-turn' >> "$FM_HOME/engine-return.log" 2>&1
     "$FM_REPO/bin/fm-lease.sh" claim "$task" >> "$FM_HOME/engine-lease.log" 2>&1
@@ -1343,6 +1346,36 @@ test_successor_close_during_main_turn_is_delivered_at_the_next_turn_end() {
   assert_contains "$drained" 'which region?' "the successor's close must reach main's drain"
   watcher_live "$home" || fail "successor close: the next turn end left no watcher"
   pass "host+hook: a successor close that lands during main's turn is delivered at the next turn end"
+}
+
+# The live stall: a main-only row lands while the host's own engine turn is
+# running, so the close that carries it is the host's very next pass-through.
+# Main's Stop hook must still rewake for it instead of exiting in silence.
+test_claude_stop_hook_rewakes_for_a_main_only_row_that_lands_during_the_hosts_turn() {
+  local home
+  home=$(make_primary_home hook-main-only-during-turn)
+  # This case runs an engine turn from the primary root, whose prompt reads the skills.
+  ln -s "$ROOT/.agents" "$home/.agents"
+  echo held-redrain > "$home/stub-mode"
+  mkfifo "$home/stub-release"
+  start_hook_session "$home"
+  turn_end "$home"
+  wait_until 150 watcher_live "$home" || fail "during turn: the Stop hook never started a watcher cycle: $(cat "$home/hook.err" 2>/dev/null)"
+  append_status "$home" 'step one'
+  wait_until 450 test -e "$home/engine-call.1" || fail "during turn: the host never started its engine turn: $(cat "$home/state/.supervision-host.log")"
+  append_status "$home" 'which export format?' needs-decision
+  wait_until 250 sh -c '[ "$(grep -c . "$1/state/.wake-queue" 2>/dev/null)" -ge 2 ]' _ "$home" \
+    || fail "during turn: the main-only row never reached the wake queue: $(cat "$home/state/.wake-queue")"
+  exec 3<> "$home/stub-release"
+  printf 'release\n' >&3
+  wait_until 450 hook_exited "$home" || fail "during turn: the Stop hook never closed: $(cat "$home/state/.supervision-host.log")"
+  exec 3>&-
+  assert_re '	handled	turn=' "$home/state/.supervision-host.log" "fixture: the first wake was not handled"
+  [ -s "$home/engine-redrain.log" ] || fail "fixture: the turn did not drain again after the main-only row landed"
+  assert_re '	pass-through	attended	main-only	signal:' "$home/state/.supervision-host.log" "fixture: the second close was not a main-only pass-through"
+  assert_rewoke_main "$home" "during turn"
+  assert_re '^signal: .*demo.status' "$home/hook.err" "the rewake must carry the close"
+  pass "host+hook: a main-only row that lands during the host's own turn rewakes main"
 }
 
 # The captain returns after the loop accepted a decision close away but before
@@ -2665,6 +2698,7 @@ test_claude_stop_hook_runs_the_host_without_the_file_and_off_opts_out
 test_claude_stop_hook_delivers_a_close_that_turns_main_only_at_its_turn
 test_claude_stop_hook_notifies_when_at_turn_downtime_write_fails
 test_successor_close_during_main_turn_is_delivered_at_the_next_turn_end
+test_claude_stop_hook_rewakes_for_a_main_only_row_that_lands_during_the_hosts_turn
 test_primary_without_a_verified_mirror_runs_away_only
 test_attended_wake_carries_the_dialog_mirror
 test_dialog_bearing_files_are_owner_only

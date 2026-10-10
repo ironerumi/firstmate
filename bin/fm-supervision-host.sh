@@ -52,10 +52,11 @@
 #     that is unsafe or holds nothing for the branch) stay main's. That
 #     pass-through starts the successor watcher cycle and leaves it running
 #     before the close is printed, so supervision continues when the session
-#     drops the handoff. It confirms no handling handoff, so the recovery
-#     marker still reads downtime and the re-arm owner delivers the close to
-#     main. The watcher singleton lock makes the session's next arm attach to
-#     that cycle instead of starting a second one;
+#     drops the handoff. It confirms no handling handoff and publishes the
+#     recovery marker as downtime, so the re-arm owner delivers the close to
+#     main even when an earlier handled wake or a drain in the host's own turn
+#     left the marker reading handling. The watcher singleton lock makes the
+#     session's next arm attach to that cycle instead of starting a second one;
 #   - away (an away record exists): every close goes to the engine.
 # Every turn that starts attended meets that rule again at its start, so a
 # close accepted away whose turn starts attended (the captain returned in
@@ -651,8 +652,8 @@ detach_successor() {
 
 # Start the same successor a handled wake starts and leave it running. It
 # confirms no handling handoff: main, not the engine, handles this close, and
-# the re-arm owner delivers it only while the recovery marker still reads
-# downtime (autoarm_commit in bin/fm-claude-stop-autoarm.sh). A failed start
+# hand_close_to_main publishes the downtime the re-arm owner requires
+# (autoarm_commit in bin/fm-claude-stop-autoarm.sh). A failed start
 # returns 1; the caller still prints the close unchanged.
 leave_successor_for_main() {
   if ! start_successor "$CLOSED_ARM_PID"; then
@@ -660,6 +661,22 @@ leave_successor_for_main() {
     return 1
   fi
   detach_successor
+}
+
+# Hand the close to main exactly as the arm printed it and exit. The re-arm
+# owner delivers it only while the recovery marker reads downtime, and the marker
+# can have moved since the close arrived: the handoff a handled wake confirmed,
+# or a drain the engine turn ran after a main-only row landed, leaves it reading
+# handling. So the downtime is published here, which is what keeps a close the
+# host did not take from ending without a rewake. A failed publish exits 1,
+# so the owner reports the undelivered close instead of dropping it.
+hand_close_to_main() {
+  if ! fm_recovery_marker_publish "$STATE/.watcher-down" downtime >/dev/null 2>&1; then
+    log_line "pass-through	downtime-unrestored	$(printf '%s\n' "$REASON" | head -n 1)"
+    exit 1
+  fi
+  emit
+  exit 0
 }
 
 # The engine conversation for this turn: the recorded one while it belongs to
@@ -1041,8 +1058,7 @@ while :; do
       if [ "$ATTENDED_WHY" = main-only ]; then
         leave_successor_for_main || true
       fi
-      emit
-      exit 0
+      hand_close_to_main
     fi
     host_still_owner || stand_down "this session no longer owns supervision"
   else
@@ -1083,16 +1099,7 @@ while :; do
     # The successor this turn already started and confirmed stays up. Retiring
     # it is what left no watcher after a close that became main-only.
     detach_successor
-    # Main handles this close after all, so hand back the downtime the handoff
-    # above consumed: the re-arm owner delivers the close only while the
-    # recovery marker reads downtime (leave_successor_for_main).
-    if [ -n "$SUCCESSOR_GENERATION" ] \
-      && ! fm_recovery_marker_publish "$STATE/.watcher-down" downtime >/dev/null 2>&1; then
-      log_line "pass-through	downtime-unrestored	$(printf '%s\n' "$REASON" | head -n 1)"
-      exit 1
-    fi
-    emit
-    exit 0
+    hand_close_to_main
   fi
   if [ "$HANDLE_RC" -ne 0 ]; then
     if returned_during_turn; then
