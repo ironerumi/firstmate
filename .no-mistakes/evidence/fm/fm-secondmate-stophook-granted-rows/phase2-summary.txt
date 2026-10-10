@@ -1,0 +1,5 @@
+Phase 2 live scenario
+
+Scenario: a main-only row arrives while the supervision host is in its own engine turn. The focused regression case ran the real `fm-supervision-host.sh`, watcher/arm, Claude Stop-hook owner, wake queue, recovery marker, and production wake/drain scripts against a disposable fixture home and fake engine/harness. The engine drained again after the row landed; the next close was recorded as an attended main-only pass-through, the Stop-hook owner rewoke main carrying the close, and the successor watcher remained live.
+
+Command was bounded with `fm_run_timed 240` and completed successfully. Evidence: `scenario-main-only-row-during-host-turn-focused.log`.

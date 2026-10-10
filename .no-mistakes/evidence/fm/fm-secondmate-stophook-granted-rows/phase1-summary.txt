@@ -1,0 +1,8 @@
+Phase 1 targeted validation
+
+Command:
+`bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-supervision-host.test.sh`
+
+Result: the narrowed supervision-host suite ran for 300 seconds and was terminated by its per-script bound (exit 124). It produced no assertion failure before termination; the runner reported the suite as time-bound/untested per the live-validation runbook. The suite reached and passed its earlier host/report/drain/attended-hook/mirror assertions, but did not complete the full script. No other suite was started.
+
+Relevant changed behavior: ensuring an attended main-only close restores the downtime recovery marker before handing the close to the Claude Stop-hook owner, including when the marker was left in handling state by an earlier handled wake or a drain during the host's own engine turn. The suite's new regression case was not reached before the time bound.
