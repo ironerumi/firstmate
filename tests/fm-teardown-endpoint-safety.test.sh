@@ -1594,7 +1594,7 @@ test_task_owned_feedback_refuses_before_mutation() {
 
 test_unsafe_feedback_owner_evidence_refuses() {
   local dir id=unsafe-owner form
-  for form in dangling-source dangling-owner dangling-message unknown-kind empty-kind duplicate-owner malformed-kind-key malformed-owner-key; do
+  for form in dangling-source dangling-owner dangling-message unknown-kind empty-kind duplicate-owner malformed-kind-key malformed-owner-key colon-kind colon-owner spaced-kind mixed-case-kind mixed-case-owner unknown-key duplicate-kind; do
     dir=$(make_case "unsafe-feedback-$form")
     fm_write_meta "$dir/home/state/$id.meta" \
       "window=isolated:fm-$id" "endpoint_task_id=$id" \
@@ -1610,16 +1610,33 @@ test_unsafe_feedback_owner_evidence_refuses() {
         mkdir -p "$dir/home/state/$id.inbox"
         ln -s "$dir/missing" "$dir/home/state/$id.inbox/001.msg" ;;
       unknown-kind)
-        printf 'kind=broken-task-owned\nadapter=lavish\n' > "$dir/home/state/procevent/board.source" ;;
+        printf 'adapter=lavish\nargc=0\nkind=broken-task-owned\nargv:\n' \
+          > "$dir/home/state/procevent/board.source" ;;
       empty-kind)
-        printf 'kind=\nadapter=lavish\n' > "$dir/home/state/procevent/board.source" ;;
+        printf 'adapter=lavish\nargc=0\nkind=\nargv:\n' \
+          > "$dir/home/state/procevent/board.source" ;;
       duplicate-owner)
-        printf 'kind=task-owned\nowner_task=%s\nowner_task=other\n' "$id" \
+        printf 'adapter=lavish\nargc=0\nkind=task-owned\nowner_task=%s\nowner_task=other\nargv:\n' "$id" \
           > "$dir/home/state/procevent/board.source" ;;
       malformed-kind-key)
-        printf 'kind\nadapter=lavish\n' > "$dir/home/state/procevent/board.source" ;;
+        printf 'adapter=lavish\nargc=0\nkind\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
       malformed-owner-key)
-        printf 'owner_task\nadapter=lavish\n' > "$dir/home/state/procevent/board.source" ;;
+        printf 'adapter=lavish\nargc=0\nowner_task\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
+      colon-kind)
+        printf 'adapter=lavish\nargc=0\nkind:task-owned\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
+      colon-owner)
+        printf 'adapter=lavish\nargc=0\nowner_task:%s\nargv:\n' "$id" > "$dir/home/state/procevent/board.source" ;;
+      spaced-kind)
+        printf 'adapter=lavish\nargc=0\nkind =task-owned\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
+      mixed-case-kind)
+        printf 'adapter=lavish\nargc=0\nKind=task-owned\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
+      mixed-case-owner)
+        printf 'adapter=lavish\nargc=0\nOWNER_TASK=%s\nargv:\n' "$id" > "$dir/home/state/procevent/board.source" ;;
+      unknown-key)
+        printf 'adapter=lavish\nargc=0\nrogue=value\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
+      duplicate-kind)
+        printf 'adapter=lavish\nargc=0\nkind=task-owned\nkind=task-owned\nowner_task=%s\nargv:\n' "$id" \
+          > "$dir/home/state/procevent/board.source" ;;
     esac
     assert_refused_without_mutation "$dir" "$id" "$form ownership evidence"
     assert_grep 'REFUSED: unsafe' "$dir/stderr" "unsafe ownership evidence was not named"
