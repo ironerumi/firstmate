@@ -1,0 +1,22 @@
+[all floored tools at floor]
+<silent>
+[treehouse absent]
+MISSING: treehouse (install: curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh)
+[treehouse present without lease]
+OUTDATED: treehouse (installed: 0.4.2; requires --lease support; upgrade: treehouse update)
+[no-mistakes absent]
+MISSING: no-mistakes (install: curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh)
+[no-mistakes below floor]
+OUTDATED: no-mistakes (installed: 1.45.4; requires 1.46.0; upgrade: no-mistakes update)
+[gh-axi absent]
+MISSING: gh-axi (install: npm install -g gh-axi && gh-axi setup hooks)
+[gh-axi below floor]
+OUTDATED: gh-axi (installed: 0.1.19; requires 0.1.29; upgrade: gh-axi update)
+[quota-axi absent]
+MISSING: quota-axi (install: npm install -g quota-axi)
+[quota-axi below floor]
+OUTDATED: quota-axi (installed: 0.1.50; requires 0.1.51; upgrade: quota-axi update)
+[tasks-axi absent]
+MISSING: tasks-axi (install: npm install -g tasks-axi)
+[tasks-axi at floor missing both capabilities]
+OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body and mv multi-ID; upgrade: npm install -g tasks-axi)
