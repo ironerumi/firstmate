@@ -3325,12 +3325,15 @@ cleanup_firstmate_home_children() {
           || { endpoint_close_refusal "child $child_id" "$child_backend" "$child_t" 0; return 1; }
       fi
     fi
+    FM_HOME="$home" FM_STATE_OVERRIDE="$sub_state" "$SCRIPT_DIR/fm-procevent.sh" \
+      task-feedback inventory "$child_id" || return 1
     if [ "$child_kind" = secondmate ]; then
       child_home=$(meta_value "$child_meta" home)
       [ -n "$child_home" ] || child_home=$child_wt
       if [ -n "$child_home" ] && [ -d "$child_home" ]; then
         cleanup_firstmate_home_children "$child_home" || return $?
-        remove_firstmate_home "$child_home" "child firstmate home" "$child_id" || return $?
+        preflight_firstmate_home_process_event_tree "$child_home" \
+          "child firstmate home for $child_id" || return 1
       fi
     elif [ "$child_backend" = orca ]; then
       if [ -n "$child_wt" ] && [ -d "$child_wt" ]; then
@@ -3372,6 +3375,12 @@ cleanup_firstmate_home_children() {
           safe_rm_rf_child_worktree "$child_wt" "$child_proj"
         fi
       fi
+    fi
+    FM_HOME="$home" FM_STATE_OVERRIDE="$sub_state" "$SCRIPT_DIR/fm-procevent.sh" \
+      task-feedback inventory "$child_id" || return 1
+    if [ "$child_kind" = secondmate ] \
+       && [ -n "$child_home" ] && [ -d "$child_home" ]; then
+      remove_firstmate_home "$child_home" "child firstmate home" "$child_id" || return $?
     fi
     remove_grok_turnend_auth "$sub_state" "$child_id" || return 1
     remove_kimi_turnend_auth "$sub_state" "$child_id" || return 1

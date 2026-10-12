@@ -291,6 +291,7 @@ task_feedback_source_owner_validate() {
   local file=$1 line kind='' owner='' kind_seen=0 owner_seen=0
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
+      argv:) break ;;
       kind=*)
         [ "$kind_seen" -eq 0 ] || return 1
         kind=${line#kind=}

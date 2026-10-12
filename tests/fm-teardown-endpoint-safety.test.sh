@@ -1467,8 +1467,9 @@ test_unrelated_feedback_sources_do_not_refuse() {
     "window=isolated:fm-$id" "endpoint_task_id=$id" \
     "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
   mkdir -p "$dir/home/state/procevent"
-  printf 'adapter=lavish\nargc=1\nargv:\n%s\n' \
-    "$dir/fakebin/ordinary-board" > "$dir/home/state/procevent/ordinary-board.source"
+  printf 'adapter=lavish\nargc=3\nargv:\n%s\n%s\n%s\n' \
+    "$dir/fakebin/ordinary-board" "kind=board" "owner_task=argv-value" \
+    > "$dir/home/state/procevent/ordinary-board.source"
   cat > "$dir/home/state/procevent/extension-board.source" <<'SOURCE'
 adapter=extension
 owner=extension
