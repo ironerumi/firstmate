@@ -163,8 +163,9 @@
 # teardown refuses while their home has in-flight crewmate meta files; --force
 # is the approved discard path that prevalidates child removal targets, locks each
 # descendant home's task set before enumeration, and holds those locks through
-# child cleanup. Contention refuses the complete forced teardown before child
-# mutation. Local and remote retirement serialize their destructive phase with
+# child cleanup. Contention or attached feedback on any descendant task refuses
+# the complete forced teardown before child mutation, including under --force.
+# Local and remote retirement serialize their destructive phase with
 # that mate's backlog-handoff lock under the registry lock. Pending handoff wake
 # state is retired with the home, and local removal failure restores that state
 # before preserving the route for retry. After a successful local or remote
@@ -2878,9 +2879,11 @@ preflight_firstmate_home_process_event_tree() {
   if [ -d "$sub_state" ]; then
     for child_meta in "$sub_state"/*.meta; do
       [ -e "$child_meta" ] || continue
+      child_id=$(basename "$child_meta" .meta)
+      FM_HOME="$home" FM_STATE_OVERRIDE="$sub_state" "$SCRIPT_DIR/fm-procevent.sh" \
+        task-feedback inventory "$child_id" || return 1
       child_kind=$(meta_value "$child_meta" kind)
       [ "$child_kind" = secondmate ] || continue
-      child_id=$(basename "$child_meta" .meta)
       child_wt=$(meta_value "$child_meta" worktree)
       child_home=$(meta_value "$child_meta" home)
       [ -n "$child_home" ] || child_home=$child_wt

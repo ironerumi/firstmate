@@ -306,8 +306,8 @@ task_feedback_source_owner_validate() {
   if [ "$owner_seen" -eq 1 ]; then
     fm_pr_task_id_valid "$owner" || return 1
   fi
-  if [ "$kind" = task-owned ]; then
-    [ "$owner_seen" -eq 1 ] || return 1
+  if [ "$kind_seen" -eq 1 ]; then
+    [ "$kind" = task-owned ] && [ "$owner_seen" -eq 1 ] || return 1
   elif [ "$owner_seen" -eq 1 ]; then
     return 1
   fi
@@ -320,7 +320,7 @@ fm_procevent_task_feedback_inventory() {  # <state> <task-id>
   FM_PROCEVENT_TASK_ATTACHED_SOURCES=0
   FM_PROCEVENT_TASK_ATTACHED_MESSAGES=0
   for rec in "$state/procevent"/*.source; do
-    [ -e "$rec" ] || continue
+    [ -e "$rec" ] || [ -L "$rec" ] || continue
     [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe source $rec" >&2; return 1; }
     task_feedback_source_owner_validate "$rec" \
       || { echo "REFUSED: unsafe source ownership $rec" >&2; return 1; }
@@ -333,13 +333,13 @@ fm_procevent_task_feedback_inventory() {  # <state> <task-id>
     FM_PROCEVENT_TASK_ATTACHED_SOURCES=$((FM_PROCEVENT_TASK_ATTACHED_SOURCES + 1))
   done
   for rec in "$state/$task.inbox"/*.msg; do
-    [ -e "$rec" ] || continue
+    [ -e "$rec" ] || [ -L "$rec" ] || continue
     [ -f "$rec" ] && [ ! -L "$rec" ] || { echo "REFUSED: unsafe inbox message $rec" >&2; return 1; }
     printf 'attached message: file=%s\n' "$rec" >&2
     FM_PROCEVENT_TASK_ATTACHED_MESSAGES=$((FM_PROCEVENT_TASK_ATTACHED_MESSAGES + 1))
   done
   for result in "$state/procevent-inbox"/*.owner-task; do
-    [ -e "$result" ] || continue
+    [ -e "$result" ] || [ -L "$result" ] || continue
     [ -f "$result" ] && [ ! -L "$result" ] || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
     owner=$(cat "$result") \
       || { echo "REFUSED: unsafe capture owner $result" >&2; return 1; }
