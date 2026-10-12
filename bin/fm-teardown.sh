@@ -163,9 +163,8 @@
 # teardown refuses while their home has in-flight crewmate meta files; --force
 # is the approved discard path that prevalidates child removal targets, locks each
 # descendant home's task set before enumeration, and holds those locks through
-# child cleanup. Contention or attached feedback on any descendant task refuses
-# the complete forced teardown before child mutation, including under --force.
-# Local and remote retirement serialize their destructive phase with
+# child cleanup. Contention refuses the complete forced teardown before child
+# mutation. Local and remote retirement serialize their destructive phase with
 # that mate's backlog-handoff lock under the registry lock. Pending handoff wake
 # state is retired with the home, and local removal failure restores that state
 # before preserving the route for retry. After a successful local or remote
@@ -2879,11 +2878,9 @@ preflight_firstmate_home_process_event_tree() {
   if [ -d "$sub_state" ]; then
     for child_meta in "$sub_state"/*.meta; do
       [ -e "$child_meta" ] || continue
-      child_id=$(basename "$child_meta" .meta)
-      FM_HOME="$home" FM_STATE_OVERRIDE="$sub_state" "$SCRIPT_DIR/fm-procevent.sh" \
-        task-feedback inventory "$child_id" || return 1
       child_kind=$(meta_value "$child_meta" kind)
       [ "$child_kind" = secondmate ] || continue
+      child_id=$(basename "$child_meta" .meta)
       child_wt=$(meta_value "$child_meta" worktree)
       child_home=$(meta_value "$child_meta" home)
       [ -n "$child_home" ] || child_home=$child_wt
@@ -3325,15 +3322,12 @@ cleanup_firstmate_home_children() {
           || { endpoint_close_refusal "child $child_id" "$child_backend" "$child_t" 0; return 1; }
       fi
     fi
-    FM_HOME="$home" FM_STATE_OVERRIDE="$sub_state" "$SCRIPT_DIR/fm-procevent.sh" \
-      task-feedback inventory "$child_id" || return 1
     if [ "$child_kind" = secondmate ]; then
       child_home=$(meta_value "$child_meta" home)
       [ -n "$child_home" ] || child_home=$child_wt
       if [ -n "$child_home" ] && [ -d "$child_home" ]; then
         cleanup_firstmate_home_children "$child_home" || return $?
-        preflight_firstmate_home_process_event_tree "$child_home" \
-          "child firstmate home for $child_id" || return 1
+        remove_firstmate_home "$child_home" "child firstmate home" "$child_id" || return $?
       fi
     elif [ "$child_backend" = orca ]; then
       if [ -n "$child_wt" ] && [ -d "$child_wt" ]; then
@@ -3375,12 +3369,6 @@ cleanup_firstmate_home_children() {
           safe_rm_rf_child_worktree "$child_wt" "$child_proj"
         fi
       fi
-    fi
-    FM_HOME="$home" FM_STATE_OVERRIDE="$sub_state" "$SCRIPT_DIR/fm-procevent.sh" \
-      task-feedback inventory "$child_id" || return 1
-    if [ "$child_kind" = secondmate ] \
-       && [ -n "$child_home" ] && [ -d "$child_home" ]; then
-      remove_firstmate_home "$child_home" "child firstmate home" "$child_id" || return $?
     fi
     remove_grok_turnend_auth "$sub_state" "$child_id" || return 1
     remove_kimi_turnend_auth "$sub_state" "$child_id" || return 1
@@ -3546,13 +3534,6 @@ if teardown_owns_worktree && [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
   fi
 fi
 
-task_feedback_inventory() {
-  [ "$KIND" = secondmate ] && return 0
-  FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-procevent.sh" \
-    task-feedback inventory "$ID"
-}
-task_feedback_inventory || exit 1
-
 # A Herdr close may reposition shared workspace order, so the whole
 # destructive sequence below (worktree return, pane close, record removal)
 # runs under the named-session presentation lock, acquired BEFORE anything is
@@ -3623,6 +3604,7 @@ teardown_legacy_stamp_rollback() {
       exit 1
     fi
   fi
+  BACKLOG_CLOSED=1
   META_SPAWN_GEN=$TEARDOWN_META_SPAWN_GEN
   if ! fm_backlog_close_marker_write "$STATE" "$ID" "$DATA" "$META_SPAWN_GEN" \
       "${BACKLOG_TRANSITION_FLAGS[@]+"${BACKLOG_TRANSITION_FLAGS[@]}"}" \
@@ -3638,7 +3620,6 @@ teardown_legacy_stamp_rollback() {
     fi
     exit 1
   fi
-  BACKLOG_CLOSED=1
 else
   if [ "$CLEANUP_RECOVERY" = orca ]; then
     BACKLOG_SKIP_REASON="Orca cleanup recovery is not a launched backlog worker"
@@ -3646,24 +3627,6 @@ else
     BACKLOG_SKIP_REASON=$TEARDOWN_BACKLOG_SKIP_REASON
   fi
 fi
-
-task_feedback_late_inventory() {
-  task_feedback_inventory && return 0
-  if [ "$BACKLOG_CLOSED" = 1 ]; then
-    if fm_backlog_close_marker_clear "$STATE" "$ID"; then
-      BACKLOG_CLOSED=0
-    else
-      echo "error: could not roll back the pending backlog close for $ID after feedback refusal" >&2
-    fi
-  fi
-  if [ "$TEARDOWN_LEGACY_ACCEPTED" = 1 ] \
-     && [ -z "$TEARDOWN_LEGACY_RETAINED_STAMP" ] \
-     && [ "$TEARDOWN_LEGACY_PRESTAMP_SIZE" -gt 0 ] 2>/dev/null; then
-    teardown_legacy_stamp_rollback \
-      || echo "error: the legacy incarnation stamp on $ID's record could not be rolled back after feedback refusal" >&2
-  fi
-  return 1
-}
 
 # Every landed/discard-work refusal above has now passed (or --force skipped
 # them). Fix 1 and Fix 2 (see script header) run here, unconditionally on
@@ -3700,7 +3663,6 @@ if [ "$BACKEND" = orca ] && [ "$KIND" != secondmate ]; then
       "$WT/.opencode/plugins/fm-busy-state.js" \
       "$WT/.fm-grok-turnend" "$WT/.fm-kimi-turnend"
   fi
-  task_feedback_late_inventory || exit 1
   if [ -n "$T_ORCA" ]; then
     fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
       || { endpoint_close_refusal "$ID" "$BACKEND" "$T" 0; exit 1; }
@@ -3775,9 +3737,6 @@ if [ "$BACKEND" = herdr ] \
   fi
 fi
 
-if [ "$BACKEND" != orca ]; then
-  task_feedback_late_inventory || exit 1
-fi
 if [ "$HERDR_PRESENTATION_RETIRE_CANDIDATE" = 1 ]; then
   # The presentation lock was acquired before the worktree return above; a
   # contended lock already refused this teardown while everything was intact.
