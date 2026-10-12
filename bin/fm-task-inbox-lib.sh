@@ -109,36 +109,6 @@ FM_TASK_INBOX_SCHEMA='fm-task-inbox.v1'
 FM_TASK_INBOX_GRACE_DEFAULT=90
 FM_TASK_INBOX_RING_MAX_DEFAULT=3
 FM_TASK_INBOX_LOCK_WAIT_DEFAULT=5
-FM_TASK_INBOX_CONTROL_LOCK=
-FM_TASK_INBOX_CONTROL_LOCK_DEPTH=0
-
-fm_task_inbox_control_lock_acquire() {
-  local state=$1 task=$2 mode=${3:-try} lock
-  lock="$state/.control-$task.lock"
-  if [ "${FM_TASK_INBOX_CONTROL_LOCK:-}" = "$lock" ]; then
-    FM_TASK_INBOX_CONTROL_LOCK_DEPTH=$(( ${FM_TASK_INBOX_CONTROL_LOCK_DEPTH:-0} + 1 ))
-    return 0
-  fi
-  [ -z "${FM_TASK_INBOX_CONTROL_LOCK:-}" ] || return 1
-  if [ "$mode" = wait ]; then
-    fm_lock_acquire_wait_max "$lock" "$FM_TASK_INBOX_LOCK_WAIT_DEFAULT"
-  else
-    fm_lock_try_acquire "$lock"
-  fi || return 1
-  FM_TASK_INBOX_CONTROL_LOCK=$lock
-  FM_TASK_INBOX_CONTROL_LOCK_DEPTH=1
-  return 0
-}
-
-fm_task_inbox_control_lock_release() {
-  if [ "${FM_TASK_INBOX_CONTROL_LOCK_DEPTH:-0}" -gt 1 ]; then
-    FM_TASK_INBOX_CONTROL_LOCK_DEPTH=$((FM_TASK_INBOX_CONTROL_LOCK_DEPTH - 1))
-  elif [ "${FM_TASK_INBOX_CONTROL_LOCK_DEPTH:-0}" -eq 1 ]; then
-    fm_lock_release "$FM_TASK_INBOX_CONTROL_LOCK" || true
-    FM_TASK_INBOX_CONTROL_LOCK=
-    FM_TASK_INBOX_CONTROL_LOCK_DEPTH=0
-  fi
-}
 
 fm_task_inbox_grace_secs() {
   local g=${FM_TASK_INBOX_GRACE_SECS:-$FM_TASK_INBOX_GRACE_DEFAULT}
@@ -220,20 +190,12 @@ _fm_task_inbox_write_record_locked() {  # <inbox-dir> <text> [delivery-mode]
 # sequence slot. Prints the record path. Fails without a partial record.
 fm_task_inbox_write() {  # <state-dir> <task-id> <text> [delivery-mode]
   local state=$1 task=$2 text=$3 delivery_mode=${4:-} dir lock rec status=0
-  fm_task_inbox_control_lock_acquire "$state" "$task" wait || return 1
   dir=$(fm_task_inbox_dir "$state" "$task")
-  mkdir -p "$dir/handled" || {
-    fm_task_inbox_control_lock_release
-    return 1
-  }
+  mkdir -p "$dir/handled" || return 1
   lock="$dir/.seq.lock"
-  if fm_task_inbox_lock_acquire "$lock"; then
-    rec=$(_fm_task_inbox_write_record_locked "$dir" "$text" "$delivery_mode") || status=1
-    fm_lock_release "$lock"
-  else
-    status=1
-  fi
-  fm_task_inbox_control_lock_release
+  fm_task_inbox_lock_acquire "$lock" || return 1
+  rec=$(_fm_task_inbox_write_record_locked "$dir" "$text" "$delivery_mode") || status=1
+  fm_lock_release "$lock"
   [ "$status" -eq 0 ] || return 1
   printf '%s' "$rec"
 }
@@ -251,17 +213,10 @@ fm_task_inbox_write() {  # <state-dir> <task-id> <text> [delivery-mode]
 # a repeated identical local steer is a deliberate new instruction.
 fm_task_inbox_write_idempotent() {  # <state-dir> <task-id> <text> [delivery-mode]
   local state=$1 task=$2 text=$3 delivery_mode=${4:-} dir lock want have f rec='' status=0
-  fm_task_inbox_control_lock_acquire "$state" "$task" wait || return 1
   dir=$(fm_task_inbox_dir "$state" "$task")
-  mkdir -p "$dir/handled" || {
-    fm_task_inbox_control_lock_release
-    return 1
-  }
+  mkdir -p "$dir/handled" || return 1
   lock="$dir/.seq.lock"
-  if ! fm_task_inbox_lock_acquire "$lock"; then
-    fm_task_inbox_control_lock_release
-    return 1
-  fi
+  fm_task_inbox_lock_acquire "$lock" || return 1
   if want=$(mktemp "$dir/.dedup.XXXXXX") && have=$(mktemp "$dir/.dedup.XXXXXX"); then
     if printf '%s' "$text" > "$want"; then
       for f in "$dir"/*.msg "$dir/handled"/*.msg; do
@@ -305,7 +260,6 @@ fm_task_inbox_write_idempotent() {  # <state-dir> <task-id> <text> [delivery-mod
     rec=$(_fm_task_inbox_write_record_locked "$dir" "$text" "$delivery_mode") || status=1
   fi
   fm_lock_release "$lock"
-  fm_task_inbox_control_lock_release
   [ "$status" -eq 0 ] || return 1
   printf '%s' "$rec"
 }

@@ -500,9 +500,7 @@ Legacy tmux metadata remains cleanup-compatible when its exact window name is `f
 ### Task-owned feedback at teardown
 
 A non-secondmate task cannot be cleaned up while it owns a process-event source, has unread steering-inbox messages, or has an unhandled task-routed process-event capture.
-For a forced secondmate retirement, the same gate is applied to every descendant task in every nested secondmate home before child endpoints, worktrees, homes, or task records are mutated.
-`fm-teardown.sh` inventories these under the task lifecycle lock before closing the endpoint or deleting state, names each source, inbox message, and capture in its refusal, and task-owned inbox writers serialize with that lock so a late publication is refused rather than appearing after inventory.
-Malformed or unreadable ownership evidence is a refusal condition, not evidence that no feedback is attached, and `--force` never bypasses this gate.
+`fm-teardown.sh` inventories these under the task lifecycle lock before closing the endpoint or deleting state, names each source, inbox message, and capture in its refusal, and does not let `--force` bypass this gate.
 
 ### Herdr homes and presentation
 
@@ -1875,9 +1873,6 @@ Never run the registered blocking source command directly in a conversational tu
 
 A long-polling external process is registered as a *source* through its adapter, whose header and `--help` own the commands and flags.
 `bin/fm-procevent.sh` owns the generic contract; built-in adapters retain their tracked `bin/fm-procevent-<adapter>.sh` commands, while an explicitly bound external adapter routes through the trusted host contract above.
-A source header is strict through the exact `argv:` delimiter: before it, keys use exact lowercase `key=value` syntax, are recognized and unique, and carry valid values; missing required fields, malformed or unknown lines, duplicates, or invalid ownership metadata make the source unparseable.
-Task-owned headers require `kind=task-owned` and a valid `owner_task=...`; lines after `argv:` are command arguments and cannot change ownership classification.
-Teardown treats an unparseable or unreadable source as a refusal condition rather than as an ordinary source.
 
 `bin/fm-procevent-lavish.sh` is the first built-in adapter and wraps the published `lavish-axi poll` interface plus `lavish-axi reply` when the installed version supports synchronous reply acceptance.
 

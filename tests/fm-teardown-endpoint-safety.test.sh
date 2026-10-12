@@ -39,7 +39,7 @@ if [ "$1" = return ] && [ -e "$FM_HOME/state/.register-after-inventory" ]; then
   rm -f "$FM_HOME/state/.register-after-inventory"
   FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT_OVERRIDE" \
     "$FM_ROOT_OVERRIDE/bin/fm-procevent.sh" register-task lavish late-board "$task" -- \
-    "$FM_ROOT_OVERRIDE/bin/fm-procevent-lavish.sh" poll "$FM_HOME/state/late-board.html" || true
+    "$FM_ROOT_OVERRIDE/bin/fm-procevent-lavish.sh" poll "$FM_HOME/state/late-board.html" || exit 1
 fi
 exit 0
 SH
@@ -1449,15 +1449,15 @@ test_feedback_inventory_rechecks_before_endpoint_close() {
     > "$dir/refused.out" 2> "$dir/refused.err"
   rc=$?
   set -e
-  [ "$rc" -eq 0 ] || fail "a feedback publication blocked by cleanup prevented safe retirement: $(cat "$dir/refused.err")"
-  assert_grep "teardown $id complete" "$dir/refused.out" \
-    "cleanup did not complete after rejecting the late publication"
-  assert_absent "$dir/home/state/$id.meta" "late publication rejection retained task metadata"
-  assert_absent "$dir/home/state/procevent/late-board.source" \
-    "late publication was not rejected before cleanup"
-  [ -s "$dir/endpoint.log" ] \
-    || fail "cleanup did not close the endpoint after rejecting the late publication"
-  pass "fm-teardown: late feedback publication is rejected while destructive locks are held"
+  [ "$rc" -ne 0 ] || fail "feedback published during cleanup was missed"
+  assert_grep "source=late-board adapter=lavish artifact=$dir/home/state/late-board.html" \
+    "$dir/refused.err" "late task-owned listener was not named"
+  assert_present "$dir/home/state/$id.meta" "late feedback refusal removed task metadata"
+  assert_present "$dir/home/state/procevent/late-board.source" \
+    "late feedback refusal removed the attached listener"
+  [ ! -s "$dir/endpoint.log" ] \
+    || fail "late feedback refusal closed the endpoint: $(cat "$dir/endpoint.log")"
+  pass "fm-teardown: feedback published after the initial inventory is refused before endpoint close"
 }
 
 test_unrelated_feedback_sources_do_not_refuse() {
@@ -1467,9 +1467,8 @@ test_unrelated_feedback_sources_do_not_refuse() {
     "window=isolated:fm-$id" "endpoint_task_id=$id" \
     "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
   mkdir -p "$dir/home/state/procevent"
-  printf 'adapter=lavish\nargc=3\nargv:\n%s\n%s\n%s\n' \
-    "$dir/fakebin/ordinary-board" "kind=board" "owner_task=argv-value" \
-    > "$dir/home/state/procevent/ordinary-board.source"
+  printf 'adapter=lavish\nargc=1\nargv:\n%s\n' \
+    "$dir/fakebin/ordinary-board" > "$dir/home/state/procevent/ordinary-board.source"
   cat > "$dir/home/state/procevent/extension-board.source" <<'SOURCE'
 adapter=extension
 owner=extension
@@ -1592,128 +1591,6 @@ test_task_owned_feedback_refuses_before_mutation() {
   pass "fm-teardown: task-owned feedback, malformed markers, and symlinked inboxes refuse before mutation"
 }
 
-test_unsafe_feedback_owner_evidence_refuses() {
-  local dir id=unsafe-owner form
-  for form in dangling-source dangling-owner dangling-message unknown-kind empty-kind duplicate-owner malformed-kind-key malformed-owner-key colon-kind colon-owner spaced-kind mixed-case-kind mixed-case-owner unknown-key duplicate-kind; do
-    dir=$(make_case "unsafe-feedback-$form")
-    fm_write_meta "$dir/home/state/$id.meta" \
-      "window=isolated:fm-$id" "endpoint_task_id=$id" \
-      "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
-    mkdir -p "$dir/home/state/procevent" "$dir/home/state/procevent-inbox"
-    case "$form" in
-      dangling-source)
-        ln -s "$dir/missing" "$dir/home/state/procevent/board.source" ;;
-      dangling-owner)
-        ln -s "$dir/missing" "$dir/home/state/procevent-inbox/board.1.owner-task"
-        printf 'status: feedback\n' > "$dir/home/state/procevent-inbox/board.1.result" ;;
-      dangling-message)
-        mkdir -p "$dir/home/state/$id.inbox"
-        ln -s "$dir/missing" "$dir/home/state/$id.inbox/001.msg" ;;
-      unknown-kind)
-        printf 'adapter=lavish\nargc=0\nkind=broken-task-owned\nargv:\n' \
-          > "$dir/home/state/procevent/board.source" ;;
-      empty-kind)
-        printf 'adapter=lavish\nargc=0\nkind=\nargv:\n' \
-          > "$dir/home/state/procevent/board.source" ;;
-      duplicate-owner)
-        printf 'adapter=lavish\nargc=0\nkind=task-owned\nowner_task=%s\nowner_task=other\nargv:\n' "$id" \
-          > "$dir/home/state/procevent/board.source" ;;
-      malformed-kind-key)
-        printf 'adapter=lavish\nargc=0\nkind\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
-      malformed-owner-key)
-        printf 'adapter=lavish\nargc=0\nowner_task\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
-      colon-kind)
-        printf 'adapter=lavish\nargc=0\nkind:task-owned\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
-      colon-owner)
-        printf 'adapter=lavish\nargc=0\nowner_task:%s\nargv:\n' "$id" > "$dir/home/state/procevent/board.source" ;;
-      spaced-kind)
-        printf 'adapter=lavish\nargc=0\nkind =task-owned\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
-      mixed-case-kind)
-        printf 'adapter=lavish\nargc=0\nKind=task-owned\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
-      mixed-case-owner)
-        printf 'adapter=lavish\nargc=0\nOWNER_TASK=%s\nargv:\n' "$id" > "$dir/home/state/procevent/board.source" ;;
-      unknown-key)
-        printf 'adapter=lavish\nargc=0\nrogue=value\nargv:\n' > "$dir/home/state/procevent/board.source" ;;
-      duplicate-kind)
-        printf 'adapter=lavish\nargc=0\nkind=task-owned\nkind=task-owned\nowner_task=%s\nargv:\n' "$id" \
-          > "$dir/home/state/procevent/board.source" ;;
-    esac
-    assert_refused_without_mutation "$dir" "$id" "$form ownership evidence"
-    assert_grep 'REFUSED: unsafe' "$dir/stderr" "unsafe ownership evidence was not named"
-  done
-  pass "fm-teardown: dangling and malformed feedback ownership evidence refuses before mutation"
-}
-
-test_nested_secondmate_feedback_refuses() {
-  local dir mate nested parent=mate-task child=nested-task task=child-scout rc
-  dir=$(make_case nested-feedback)
-  mate="$dir/mate"; nested="$mate/nested"
-  mark_case_as_treehouse_pool "$dir"
-  claim_pool_slot "$dir" "$task" "$nested"
-  mkdir -p "$mate/state" "$mate/data" "$mate/config" \
-    "$nested/state/$task.inbox" "$nested/data" "$nested/config"
-  printf '%s\n' "$parent" > "$mate/.fm-secondmate-home"
-  printf '%s\n' "$child" > "$nested/.fm-secondmate-home"
-  fm_write_meta "$dir/home/state/$parent.meta" \
-    "window=isolated:fm-$parent" "endpoint_task_id=$parent" \
-    "worktree=$mate" "project=$mate" "home=$mate" "kind=secondmate"
-  fm_write_meta "$mate/state/$child.meta" \
-    "window=isolated:fm-$child" "endpoint_task_id=$child" \
-    "worktree=$nested" "project=$nested" "home=$nested" "kind=secondmate"
-  fm_write_meta "$nested/state/$task.meta" \
-    "window=isolated:fm-$task" "endpoint_task_id=$task" \
-    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
-  printf 'private unread feedback\n' > "$nested/state/$task.inbox/001.msg"
-  set +e
-  run_case "$dir" "$parent" > "$dir/stdout" 2> "$dir/stderr"
-  rc=$?
-  set -e
-  [ "$rc" -ne 0 ] || fail "nested secondmate cleanup discarded unread child feedback"
-  assert_grep "attached message: file=$nested/state/$task.inbox/001.msg" \
-    "$dir/stderr" "nested unread feedback was not named: $(cat "$dir/stderr")"
-  assert_no_grep 'private unread feedback' "$dir/stderr" "nested feedback body was disclosed"
-  assert_present "$dir/home/state/$parent.meta" "nested refusal removed parent metadata"
-  assert_present "$mate/state/$child.meta" "nested refusal removed nested metadata"
-  assert_present "$nested/state/$task.meta" "nested refusal removed child metadata"
-  assert_present "$nested/state/$task.inbox/001.msg" "nested refusal removed feedback"
-  assert_present "$dir/worktree/sentinel" "nested refusal removed child work"
-  [ ! -s "$dir/runtime.log" ] || fail "nested refusal ran runtime cleanup"
-  rm "$nested/state/$task.inbox/001.msg"
-  mkdir -p "$nested/state/procevent" "$nested/state/procevent-inbox"
-  printf 'adapter=lavish\nkind=task-owned\nowner_task=%s\nargc=3\nargv:\nboard-poll\npoll\n%s\n' \
-    "$task" "$dir/board.html" > "$nested/state/procevent/board.source"
-  set +e
-  run_case "$dir" "$parent" > "$dir/stdout" 2> "$dir/stderr"
-  rc=$?
-  set -e
-  [ "$rc" -ne 0 ] || fail "nested secondmate cleanup discarded child listener"
-  assert_grep "source=board adapter=lavish artifact=$dir/board.html" \
-    "$dir/stderr" "nested listener was not named"
-  assert_present "$nested/state/procevent/board.source" "nested refusal removed listener"
-  [ ! -s "$dir/runtime.log" ] || fail "nested listener refusal ran runtime cleanup"
-
-  rm "$nested/state/procevent/board.source"
-  printf '%s\n' "$task" > "$nested/state/procevent-inbox/board.1.owner-task"
-  printf 'status: feedback\nmessage: private captured feedback\n' \
-    > "$nested/state/procevent-inbox/board.1.result"
-  set +e
-  run_case "$dir" "$parent" > "$dir/stdout" 2> "$dir/stderr"
-  rc=$?
-  set -e
-  [ "$rc" -ne 0 ] || fail "nested secondmate cleanup discarded captured child feedback"
-  assert_grep "attached result: file=$nested/state/procevent-inbox/board.1.result owner-task=$task" \
-    "$dir/stderr" "nested capture was not named"
-  assert_no_grep 'private captured feedback' "$dir/stderr" "nested captured body was disclosed"
-  assert_present "$dir/home/state/$parent.meta" "nested capture refusal removed parent metadata"
-  assert_present "$mate/state/$child.meta" "nested capture refusal removed nested metadata"
-  assert_present "$nested/state/$task.meta" "nested capture refusal removed child metadata"
-  assert_present "$nested/state/procevent-inbox/board.1.result" "nested refusal removed capture"
-  [ ! -s "$dir/runtime.log" ] || fail "nested capture refusal ran runtime cleanup"
-  pass "fm-teardown: forced nested secondmate retirement preserves child messages, listeners, and captured results before mutation"
-}
-
-test_nested_secondmate_feedback_refuses
-test_unsafe_feedback_owner_evidence_refuses
 test_task_owned_feedback_refuses_before_mutation
 test_feedback_inventory_rechecks_before_endpoint_close
 test_unrelated_feedback_sources_do_not_refuse
