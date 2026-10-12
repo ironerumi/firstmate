@@ -1,0 +1,8 @@
+Phase 1 targeted suites (serial, --jobs 1, --per-script-timeout-secs 300)
+
+Ran:
+- tests/fm-teardown-endpoint-safety.test.sh — PASSED (exit 0, 76.5s). Covered forced nested secondmate feedback preservation and dangling/malformed ownership evidence refusal.
+- tests/fm-procevent.test.sh — FAILED (exit 1, 105.1s). Assertion failure: `second worker-owned round was not acknowledged by re-arm`; product emitted `error: cannot publish task-owned process-event feedback while task worker-1 is in a lifecycle action`.
+- tests/fm-teardown.test.sh — HIT PER-SCRIPT TIME BOUND (terminated at 300s, exit 124). Per runbook, reported untested due to time bound, not as a failure and not rerun.
+
+Phase 2 skipped because a phase 1 suite failed. No live scenarios were started.

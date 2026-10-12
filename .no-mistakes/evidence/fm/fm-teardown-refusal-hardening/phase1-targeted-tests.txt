@@ -1,0 +1,19 @@
+Phase 1 targeted live product validation (branch fm/fm-teardown-refusal-hardening)
+
+Narrowed scripts:
+- tests/fm-teardown-endpoint-safety.test.sh (changed test file)
+- tests/fm-teardown.test.sh (matching changed bin/fm-teardown.sh)
+- tests/fm-procevent.test.sh (matching changed bin/fm-procevent.sh)
+
+Commands, in serial order:
+1. bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-teardown-endpoint-safety.test.sh
+   PASS, exit=0, duration_ms=80431.
+   Changed-behavior assertions passed, including nested secondmate child messages/listeners/captured results refusal, dangling/malformed ownership evidence refusal, argv ownership-like values remaining unrelated, and late publication handling.
+2. bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-teardown.test.sh
+   Hit the required 300-second per-script bound and was terminated with exit=124 after many assertions passed. No assertion failure was reported; classified as untested (time bound), not failure, and not rerun.
+3. bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-procevent.test.sh
+   Hit the required 300-second per-script bound and was terminated with exit=124 after many assertions passed. No assertion failure was reported; classified as untested (time bound), not failure, and not rerun.
+4. bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-task-inbox.test.sh
+   PASS, exit=0, duration_ms=55089. This was added because it plainly exercises the changed shared inbox library; durable enqueue, idempotent deduplication, lock serialization, and watcher delivery assertions passed.
+
+No phase-1 suite had an assertion failure. The two timeout-bound suites are covered by CI per the runbook.
