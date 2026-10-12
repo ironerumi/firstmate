@@ -753,7 +753,7 @@ cmd_register_task() {
   done
   [ -f "$(adapter_script "$adapter")" ] || die "no installed adapter for: $adapter"
   state_root_bind create || die "cannot safely prepare the process-event state root"
-  fm_task_inbox_control_lock_acquire "$STATE" "$task" \
+  fm_task_inbox_control_lock_acquire "$STATE" "$task" wait \
     || die "cannot publish task-owned process-event feedback while task $task is in a lifecycle action"
   trap fm_task_inbox_control_lock_release EXIT
   fm_backend_validate_task_endpoint "$STATE/$task.meta" "$task" >/dev/null \
