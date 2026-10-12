@@ -292,6 +292,8 @@ task_feedback_source_owner_validate() {
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       argv:) break ;;
+      kind) return 1 ;;
+      owner_task) return 1 ;;
       kind=*)
         [ "$kind_seen" -eq 0 ] || return 1
         kind=${line#kind=}
@@ -522,7 +524,13 @@ adapter_self_announcing() {  # <adapter>
 
 source_file()  { printf '%s/%s.source\n' "$REG" "$1"; }
 source_field() {  # <source-id> <field>
-  sed -n "s/^$2=//p" "$(source_file "$1")" | head -1
+  awk -v field="$2" '
+    $0 == "argv:" { exit }
+    index($0, field "=") == 1 {
+      print substr($0, length(field) + 2)
+      exit
+    }
+  ' "$(source_file "$1")"
 }
 source_kind() { source_field "$1" kind; }
 source_owner_task() { source_field "$1" owner_task; }
@@ -681,6 +689,9 @@ cmd_register_task() {
   done
   [ -f "$(adapter_script "$adapter")" ] || die "no installed adapter for: $adapter"
   state_root_bind create || die "cannot safely prepare the process-event state root"
+  fm_task_inbox_control_lock_acquire "$STATE" "$task" \
+    || die "cannot publish task-owned process-event feedback while task $task is in a lifecycle action"
+  trap fm_task_inbox_control_lock_release EXIT
   fm_backend_validate_task_endpoint "$STATE/$task.meta" "$task" >/dev/null \
     || die "cannot own a board for task $task; its captured feedback would reach no endpoint"
   (umask 077; mkdir -p "$REG") || die "cannot prepare the process-event registry"
@@ -920,6 +931,22 @@ cmd_register_extension() {
 # publication, so a result stays eligible for re-announcement across restarts
 # and drains until `fm_procevent_mark_handled` records it.
 publish_result() {  # <result-file>
+  local result=$1 owner_task lock status
+  owner_task=$(fm_procevent_result_owner_task "$result" 2>/dev/null || true)
+  if [ -n "$owner_task" ]; then
+    lock="$STATE/.control-$owner_task.lock"
+    if [ "${FM_TASK_INBOX_CONTROL_LOCK:-}" != "$lock" ]; then
+      fm_task_inbox_control_lock_acquire "$STATE" "$owner_task" || return 1
+      publish_result_locked "$result"
+      status=$?
+      fm_task_inbox_control_lock_release
+      return "$status"
+    fi
+  fi
+  publish_result_locked "$result"
+}
+
+publish_result_locked() {  # <result-file>
   local result=$1 id seq adapter line status=1 owner_task='' message='' record=''
   local ring_backend ring_target ring_meta inbox_dir handled_dir pre_existing existing new_record
   id=$(fm_procevent_result_source_id "$result")
@@ -1127,6 +1154,13 @@ cmd_start() {
   fi
   if [ "$(source_kind "$id" 2>/dev/null || true)" = task-owned ]; then
     task_owner=$(source_owner_task "$id" 2>/dev/null || true)
+    if [ -n "$task_owner" ]; then
+      fm_task_inbox_control_lock_acquire "$STATE" "$task_owner" || {
+        fm_procevent_source_lock_release "$id"
+        die "cannot run task-owned process-event source while task $task_owner is in a lifecycle action"
+      }
+      trap fm_task_inbox_control_lock_release EXIT
+    fi
     task_pending=$(source_pending "$id" | head -1)
     if [ -n "$task_pending" ]; then
       fm_procevent_source_lock_release "$id"
@@ -1199,17 +1233,22 @@ cmd_start() {
   release_start_claim() {
     extension_lifecycle_lock_release 2>/dev/null || true
     [ -z "$STAGED_OUTPUT" ] || rm -f -- "$STAGED_OUTPUT"
-    fm_procevent_source_lock_try_acquire "$CLAIM_ID" 2>/dev/null || return 0
+    if ! fm_procevent_source_lock_try_acquire "$CLAIM_ID" 2>/dev/null; then
+      fm_task_inbox_control_lock_release
+      return 0
+    fi
     if fm_procevent_claim_load_locked "$CLAIM_ID" 2>/dev/null \
       && [ "$FM_PROCEVENT_CLAIM_HOME" = "$CLAIM_HOME" ] \
       && [ "$FM_PROCEVENT_CLAIM_PID" = "$CLAIM_PID" ] \
       && [ "$FM_PROCEVENT_CLAIM_TOKEN" = "$CLAIM_TOKEN" ] \
       && [ "$FM_PROCEVENT_CLAIM_TERMINAL" = terminal ]; then
       fm_procevent_source_lock_release "$CLAIM_ID" 2>/dev/null || true
+      fm_task_inbox_control_lock_release
       return 0
     fi
     fm_procevent_claim_release_locked "$CLAIM_ID" "$CLAIM_HOME" "$CLAIM_PID" "$CLAIM_TOKEN" 2>/dev/null || true
     fm_procevent_source_lock_release "$CLAIM_ID" 2>/dev/null || true
+    fm_task_inbox_control_lock_release
   }
   trap release_start_claim EXIT
   # 0 when this runner should poll again. The adapter's relisten command is the

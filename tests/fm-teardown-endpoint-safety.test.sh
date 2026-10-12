@@ -39,7 +39,7 @@ if [ "$1" = return ] && [ -e "$FM_HOME/state/.register-after-inventory" ]; then
   rm -f "$FM_HOME/state/.register-after-inventory"
   FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT_OVERRIDE" \
     "$FM_ROOT_OVERRIDE/bin/fm-procevent.sh" register-task lavish late-board "$task" -- \
-    "$FM_ROOT_OVERRIDE/bin/fm-procevent-lavish.sh" poll "$FM_HOME/state/late-board.html" || exit 1
+    "$FM_ROOT_OVERRIDE/bin/fm-procevent-lavish.sh" poll "$FM_HOME/state/late-board.html" || true
 fi
 exit 0
 SH
@@ -1449,15 +1449,15 @@ test_feedback_inventory_rechecks_before_endpoint_close() {
     > "$dir/refused.out" 2> "$dir/refused.err"
   rc=$?
   set -e
-  [ "$rc" -ne 0 ] || fail "feedback published during cleanup was missed"
-  assert_grep "source=late-board adapter=lavish artifact=$dir/home/state/late-board.html" \
-    "$dir/refused.err" "late task-owned listener was not named"
-  assert_present "$dir/home/state/$id.meta" "late feedback refusal removed task metadata"
-  assert_present "$dir/home/state/procevent/late-board.source" \
-    "late feedback refusal removed the attached listener"
-  [ ! -s "$dir/endpoint.log" ] \
-    || fail "late feedback refusal closed the endpoint: $(cat "$dir/endpoint.log")"
-  pass "fm-teardown: feedback published after the initial inventory is refused before endpoint close"
+  [ "$rc" -eq 0 ] || fail "a feedback publication blocked by cleanup prevented safe retirement: $(cat "$dir/refused.err")"
+  assert_grep "teardown $id complete" "$dir/refused.out" \
+    "cleanup did not complete after rejecting the late publication"
+  assert_absent "$dir/home/state/$id.meta" "late publication rejection retained task metadata"
+  assert_absent "$dir/home/state/procevent/late-board.source" \
+    "late publication was not rejected before cleanup"
+  [ -s "$dir/endpoint.log" ] \
+    || fail "cleanup did not close the endpoint after rejecting the late publication"
+  pass "fm-teardown: late feedback publication is rejected while destructive locks are held"
 }
 
 test_unrelated_feedback_sources_do_not_refuse() {
@@ -1594,7 +1594,7 @@ test_task_owned_feedback_refuses_before_mutation() {
 
 test_unsafe_feedback_owner_evidence_refuses() {
   local dir id=unsafe-owner form
-  for form in dangling-source dangling-owner dangling-message unknown-kind empty-kind duplicate-owner; do
+  for form in dangling-source dangling-owner dangling-message unknown-kind empty-kind duplicate-owner malformed-kind-key malformed-owner-key; do
     dir=$(make_case "unsafe-feedback-$form")
     fm_write_meta "$dir/home/state/$id.meta" \
       "window=isolated:fm-$id" "endpoint_task_id=$id" \
@@ -1616,6 +1616,10 @@ test_unsafe_feedback_owner_evidence_refuses() {
       duplicate-owner)
         printf 'kind=task-owned\nowner_task=%s\nowner_task=other\n' "$id" \
           > "$dir/home/state/procevent/board.source" ;;
+      malformed-kind-key)
+        printf 'kind\nadapter=lavish\n' > "$dir/home/state/procevent/board.source" ;;
+      malformed-owner-key)
+        printf 'owner_task\nadapter=lavish\n' > "$dir/home/state/procevent/board.source" ;;
     esac
     assert_refused_without_mutation "$dir" "$id" "$form ownership evidence"
     assert_grep 'REFUSED: unsafe' "$dir/stderr" "unsafe ownership evidence was not named"
