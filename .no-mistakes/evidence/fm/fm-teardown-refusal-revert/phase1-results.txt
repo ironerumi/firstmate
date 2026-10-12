@@ -1,0 +1,8 @@
+Phase 1 targeted validation (branch fm/fm-teardown-refusal-revert)
+
+Ran serially with `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300`:
+- `tests/fm-gotmp.test.sh`: passed; 3 assertions, exit 0.
+- `tests/fm-procevent.test.sh`: reached the 300s per-script bound and was terminated (exit 124). Assertions printed before timeout were passing; reported as untested due to time bound, not as an assertion failure.
+- `tests/fm-teardown.test.sh`: reached the 300s per-script bound and was terminated (exit 124). Assertions printed before timeout were passing; reported as untested due to time bound, not as an assertion failure.
+
+The changed test file `tests/fm-teardown.test.sh` and `tests/fm-gotmp.test.sh` were selected from the diff; `tests/fm-procevent.test.sh` was included because `bin/fm-procevent.sh` changed. No assertion failure occurred before either timeout.

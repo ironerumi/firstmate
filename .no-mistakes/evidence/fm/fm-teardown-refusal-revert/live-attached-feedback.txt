@@ -1,0 +1,13 @@
+Live validation against the real `bin/fm-teardown.sh` (disposable fixture; fake `treehouse`/`tmux` only at the external boundary):
+
+Command: `bash tests/.fm-live-attached-feedback.sh`
+
+Observed:
+```
+SCENARIO direct-attached-feedback: PASS
+SCENARIO nested-attached-feedback: PASS
+```
+
+The direct fixture attached a task-owned procevent listener, unread inbox feedback, and an unhandled captured result, then ran `fm-teardown.sh board-scout --force`. It completed, emitted `teardown board-scout complete`, removed the task metadata, and invoked the destructive runtime mock.
+
+The nested fixture attached unread feedback to a worker below a nested secondmate hierarchy, then ran forced parent teardown. It completed, emitted `teardown mate-task complete`, and removed parent, nested-secondmate, and worker metadata. This demonstrates that attached feedback no longer blocks forced recursive teardown.
