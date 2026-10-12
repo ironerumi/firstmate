@@ -651,7 +651,7 @@ bin/fm-teardown.sh <id>
 Retirement is executed on the configured host.
 It refuses while any of these holds:
 
-- The remote home has child work.
+- The remote home has child work, or forced retirement finds attached process-event feedback in a descendant task; the [task-owned feedback teardown gate](configuration.md#task-owned-feedback-at-teardown) owns that feedback contract.
 - The primary has an unfinished backlog outbox.
 - A routed reply remains unresolved.
 

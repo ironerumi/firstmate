@@ -274,11 +274,20 @@ cmd_send() {
   [ -z "$delivery_mode" ] || [ "$delivery_mode" = fire-and-forget ] || die "invalid send delivery mode"
   validate_home "$id"
   meta=$(meta_path "$id")
-  meta_lock=$(fm_meta_lock_path "$meta") || die "remote secondmate metadata lock path is invalid"
-  fm_task_inbox_lock_acquire "$meta_lock" \
-    || die "remote secondmate endpoint metadata could not be locked for final delivery validation"
+  if ! fm_task_inbox_control_lock_acquire "$CONTROL_STATE" "$id"; then
+    die "remote secondmate task lifecycle is changing"
+  fi
+  meta_lock=$(fm_meta_lock_path "$meta") || {
+    fm_task_inbox_control_lock_release
+    die "remote secondmate metadata lock path is invalid"
+  }
+  if ! fm_task_inbox_lock_acquire "$meta_lock"; then
+    fm_task_inbox_control_lock_release
+    die "remote secondmate endpoint metadata could not be locked for final delivery validation"
+  fi
   if ! remote_endpoint_load "$id"; then
     fm_lock_release "$meta_lock"
+    fm_task_inbox_control_lock_release
     die "$REMOTE_ENDPOINT_ERROR"
   fi
   # A remote steer is delivered by durable record, never by typing its payload
@@ -292,9 +301,11 @@ cmd_send() {
   # retry or reply-tracking policy from here.
   if ! rec=$(fm_task_inbox_write_idempotent "$CONTROL_STATE" "$id" "$message" "$delivery_mode"); then
     fm_lock_release "$meta_lock"
+    fm_task_inbox_control_lock_release
     die "steering-inbox record could not be written under $CONTROL_STATE/$id.inbox"
   fi
   fm_lock_release "$meta_lock"
+  fm_task_inbox_control_lock_release
   case "$rec" in
     */handled/*)
       # The dedup landed on a record the worker already acknowledged: the

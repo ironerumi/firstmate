@@ -261,9 +261,9 @@ Before either return or direct removal, teardown asks the target home's process-
 It refuses retirement while that cleanup is uncertain or unavailable, preserving the home and retirement records for a later retry.
 Raw deletion is unsupported because a blocking process-event child can outlive its home.
 
-With `--force`, teardown is the explicit discard path.
+With `--force`, teardown is the explicit discard path, subject to the [task-owned feedback teardown gate](../../../docs/configuration.md#task-owned-feedback-at-teardown).
 The worktree-slot ownership contract in `bin/fm-teardown.sh` still applies: `--force` never authorizes returning a descendant pool slot that another task may own.
-It kills child windows, discards child work and state inside the secondmate home, removes the route, and uses the same leased-slot return and scrub behavior above.
+When that path proceeds, it kills child windows, discards child work and state inside the secondmate home, removes the route, and uses the same leased-slot return and scrub behavior above.
 If forced teardown contends with a fresh task publication in any affected home, one command refuses without publishing or removing task state; treat that refusal as terminal and inspect the other operation before retrying.
 Relaunch and non-forced teardown remain outside that serialization.
 Never use `--force` unless the captain explicitly said to discard the work.
