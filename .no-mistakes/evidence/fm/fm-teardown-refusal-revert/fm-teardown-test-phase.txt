@@ -1,0 +1,21 @@
+Phase 1 targeted validation (serial, --jobs 1, per-script timeout 300s)
+
+Passed:
+- `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-gotmp.test.sh`
+- `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-send-inbox.test.sh`
+- `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-task-inbox.test.sh`
+
+Time bound (not rerun; covered by CI):
+- `tests/fm-procevent.test.sh` reached its 300s per-script bound and was terminated (exit 124).
+- `tests/fm-teardown.test.sh` reached its 300s per-script bound and was terminated (exit 124).
+
+The deleted `tests/fm-teardown-endpoint-safety.test.sh` is not present in the target checkout, so it was not runnable.
+
+Phase 2 live product scenario:
+- Created a disposable marked lab home with `bin/fm-lab-home.sh create`, a real task metadata record, task-owned process-event listener, unread steering message, and captured result.
+- Ran `fm-teardown.sh board-scout --force` against that lab with gate markers/overrides removed.
+- Observable result: exit 0; stdout reported `teardown board-scout complete`; task metadata and unread inbox record were removed; runtime log showed the real teardown path invoked treehouse return and endpoint kill. The task-owned listener and captured result remained as independent process-event records, but they did not refuse or block teardown.
+- Lab was removed in the same command.
+
+Nested-secondmate follow-up:
+- Attempted to drive a disposable nested-secondmate fixture using the removed endpoint-safety suite's executable fixture helpers, but the extracted helper could not load its repository-local helper graph from the temporary script location (`fm_test_tmproot`/`fm_write_meta` were unavailable). No product assertion was made from that failed setup, and the fixture was removed.
