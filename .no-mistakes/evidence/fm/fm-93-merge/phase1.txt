@@ -1,0 +1,15 @@
+Phase 1 targeted validation (2026-10-14)
+
+Ran serially with:
+`bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-brief.test.sh tests/fm-task-delivery.test.sh tests/fm-nm-guard.test.sh tests/fm-dod-lib.test.sh`
+
+Passed:
+- tests/fm-brief.test.sh
+- tests/fm-task-delivery.test.sh
+- tests/fm-nm-guard.test.sh
+- tests/fm-dod-lib.test.sh
+
+Failed: none.
+Time-bound suites: none.
+
+Coverage rationale: the changed behavior is the no-mistakes worker brief's third gate-driver selection rule and removal of the review-fix budget/guard refusal. fm-brief and fm-task-delivery exercise emitted worker/promotion contracts; fm-nm-guard exercises unlimited review-fix responses and guard behavior; fm-dod-lib exercises the shared delivery contract and gate behavior.
