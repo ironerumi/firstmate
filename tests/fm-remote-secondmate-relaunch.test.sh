@@ -165,11 +165,12 @@ pass "a local secondmate is refused by the remote relaunch tool"
 # fm-pr-check.sh now refuses to arm a poll on a kind=secondmate record, but a
 # record armed before that refusal can still carry the block until the
 # watcher retires it. fm-pr-check.sh wrote pr= (and, when a forge head was
-# readable, pr_head=) as the LAST lines of the record, and
-# fm_pr_metadata_identity_parse treats any other key appearing after pr= as
-# invalid, so this wrapper must not append its harness=/model=/effort= lines
-# after that identity block. The fixture is seeded the way such a record was
-# really written: pr= appended last to the meta, then the poll artifacts
+# readable, pr_head=), followed only by the allowed x_* fields; endpoint
+# retirement may append endpoint_retired=<epoch>. Other keys appearing after
+# pr= remain invalid, so this wrapper must not append its
+# harness=/model=/effort= lines after that identity block. The fixture is
+# seeded the way such a record was
+# really written: pr= was appended last before any retirement marker, then the poll artifacts
 # published through the same fm_pr_poll_prepare/fm_pr_poll_publish_prepared
 # pair fm-pr-check.sh uses, since the refused entry point cannot arm it.
 reset_meta
