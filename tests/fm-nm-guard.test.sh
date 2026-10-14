@@ -277,61 +277,18 @@ CODE=$?
 assert_allowed "the authorized escape"
 pass "FM_NM_GUARD_ALLOW=1 allows an authorized recovery"
 
-# --- 9. the review fix-round budget -----------------------------------------
+# --- 9. review fix responses are never budgeted -----------------------------
 
-# The count comes from the run's own review step log. Rounds 1-3 are allowed,
-# the fourth is refused with the batch-decision path, and every uncertainty
-# stays permissive.
+# The review loop's round budget belongs to no-mistakes (auto_fix.review), not
+# to this guard: a review fix response past any number of rounds reaches the
+# real tool, while the ownership refusals above still hold.
 set_run running 01LIVE '    review,fix_review,2,400'
-: > "$NM_FAKE_LOG"
-set_review_rounds 0
+set_review_rounds 5
 run_in_repo no-mistakes axi respond --action fix --findings 1
-assert_allowed "the first review fix response"
+assert_allowed "a review fix response after five rounds"
 nm_called_with "axi respond --action fix --findings 1" \
-  || fail "an allowed review fix response must reach the real binary"
-for rounds in 1 2; do
-  set_review_rounds "$rounds"
-  run_in_repo no-mistakes axi respond --action fix --findings 1
-  assert_allowed "review fix round $rounds under the budget"
-done
-pass "a review fix response before the budget is allowed"
-
-set_review_rounds 3
-: > "$NM_FAKE_LOG"
-run_in_repo no-mistakes axi respond --action fix --findings 1
-assert_refused nm-review-budget "a fourth review fix response"
-assert_contains "$OUT" "needs-decision" "the refusal must route the leftovers to firstmate"
-assert_contains "$OUT" "dismiss" "the refusal must name the dismissal disposition"
-assert_contains "$OUT" "attach" "the refusal must name the attach disposition"
-assert_contains "$OUT" "FM_NM_GUARD_REVIEW_UNLOCK=1" "the refusal must name the per-run unlock"
-nm_called_with "axi respond --action fix --findings 1" && fail "the refused response must never reach the real binary"
-pass "the fourth review fix response is refused with the batch-decision path"
-
-OUT=$( (cd "$REPO" && FM_NM_GUARD_REVIEW_UNLOCK=1 no-mistakes axi respond --action fix --findings 1) 2>&1 )
-CODE=$?
-assert_allowed "the per-run unlock"
-nm_called_with "axi respond --action fix --findings 1" || fail "the unlock must exec the real tool"
-pass "FM_NM_GUARD_REVIEW_UNLOCK=1 permits one authorized further round"
-
-# Only a review fix response is budgeted: another step's fix, and approve or
-# skip anywhere, are untouched.
-set_run running 01LIVE '    test,awaiting_approval,2,400'
-set_review_rounds 3
-run_in_repo no-mistakes axi respond --action fix --findings 1
-assert_allowed "a fix response at the test gate past the budget"
-set_run running 01LIVE '    review,fix_review,2,400'
-run_in_repo no-mistakes axi respond --action approve
-assert_allowed "approve at a review gate past the budget"
-run_in_repo no-mistakes axi respond --action skip
-assert_allowed "skip at a review gate past the budget"
-pass "the budget refuses only a review fix response"
-
-# An unreadable round count does not refuse; the shim reports the gap.
-: > "$NM_FAKE_REVIEW_LOG"
-run_in_repo no-mistakes axi respond --action fix --findings 1
-assert_allowed "a review fix response with no readable round count"
-assert_contains "$OUT" "was not applied" "the shim must report the unreadable round count"
-pass "an unreadable review round count fails open and is reported"
+  || fail "a review fix response must reach the real binary"
+pass "a review fix response is allowed however many rounds have run"
 
 # --- 10. classification and decision units ----------------------------------
 
@@ -351,9 +308,9 @@ check_action run no-mistakes --skip lint axi run
 check_action run no-mistakes rerun
 check_action abort no-mistakes axi abort
 check_action none no-mistakes axi status
-check_action review-fix no-mistakes axi respond --action fix
-check_action review-fix no-mistakes axi respond --action fix --findings 1,2
-check_action review-fix no-mistakes axi respond --action=fix
+check_action none no-mistakes axi respond --action fix
+check_action none no-mistakes axi respond --action fix --findings 1,2
+check_action none no-mistakes axi respond --action=fix
 check_action none no-mistakes axi respond --action approve
 check_action none no-mistakes axi respond --action skip
 check_action none no-mistakes axi respond
@@ -390,25 +347,6 @@ check_decision allow run none "a run with no attributed run allows"
 check_decision allow push terminal "a push after a terminal run allows"
 check_decision allow abort none "an abort with no attributed run allows"
 pass "the decision table matches the documented contract"
-
-check_review_decision() {  # <expected-prefix> <rounds> <label>
-  local out
-  out=$(fm_nm_guard_decide review-fix parked 01X review "" "$2")
-  case "$out" in
-    "$1"*) : ;;
-    *) fail "$3: expected $1, got $out" ;;
-  esac
-}
-
-check_review_decision allow 0 "a review fix with no completed rounds is allowed"
-check_review_decision allow 2 "the third review fix round is allowed"
-check_review_decision deny 3 "the fourth review fix round is refused"
-check_review_decision allow "" "an unreadable round count fails open"
-out=$(fm_nm_guard_decide review-fix parked 01X test "" 3)
-[ "$out" = allow ] || fail "the budget must not apply to a non-review step, got: $out"
-out=$(FM_NM_GUARD_REVIEW_UNLOCK=1 fm_nm_guard_decide review-fix parked 01X review "" 3)
-[ "$out" = allow ] || fail "the per-run unlock must allow a fourth round, got: $out"
-pass "the review fix-round budget decision matches the documented contract"
 
 # --- 10b. a refusal reports itself -------------------------------------------
 

@@ -397,6 +397,13 @@ test_no_mistakes_dod_wording() {
     "no-mistakes DOD must state the --yes ban as a prohibition"
   assert_grep "answering your own ask-user finding is a hard rule violation" "$brief" \
     "no-mistakes DOD must say why --yes is banned"
+
+  # The gate-driver selection rule is prose guidance for the review loop; no
+  # enforcement machinery backs it.
+  assert_grep "select for fixing only the findings that break the accepted intent or are a concrete defect in the change" "$brief" \
+    "no-mistakes DOD must carry the review-round selection rule"
+  assert_grep "Settle an intent or contract question in the first round it appears" "$brief" \
+    "no-mistakes DOD must tell the worker to settle intent questions in the first round"
   assert_no_grep "Avoid \`--yes\`" "$brief" \
     "no-mistakes DOD still states the --yes ban as a preference"
   assert_no_grep "no-mistakes refuses" "$brief" \
