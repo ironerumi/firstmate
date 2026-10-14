@@ -1,0 +1,16 @@
+Phase 1 targeted validation
+
+Command:
+T0=1792008483 bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-endpoint-retire.test.sh tests/fm-pr-check-security.test.sh
+
+Passed:
+- tests/fm-endpoint-retire.test.sh (10 assertions, exit 0, ~20s). This directly exercised arming a finished ship's merge poll, retiring its endpoint, validating the retained poll, and rejecting unrelated/malformed trailing metadata.
+
+Time bound / untested:
+- tests/fm-pr-check-security.test.sh reached the configured 300s per-script bound and was terminated (exit 124). It passed its assertions through the direct-flow section before termination; per runbook this is reported as untested due to time bound, not as a failure, and was not rerun.
+
+Failed assertions:
+- None.
+
+Phase 2:
+- Skipped: the directly changed behavior is covered by fm-endpoint-retire.test.sh; no additional live scenario was needed.
