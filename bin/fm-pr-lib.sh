@@ -388,6 +388,14 @@ fm_pr_metadata_identity_parse() {
           fm_pr_head_valid "$value" || post_pr_invalid=1
         fi
         ;;
+      endpoint_retired=*)
+        # Retirement appends this lifecycle marker after the PR identity.
+        # Allow only its epoch, not arbitrary trailing metadata/injected lines.
+        if [ "$seen_pr" -eq 1 ]; then
+          value=${line#endpoint_retired=}
+          case "$value" in ''|*[!0-9]*) post_pr_invalid=1 ;; esac
+        fi
+        ;;
       x_request=*|x_request_ts=*|x_followups=*|x_platform=*|x_reply_max_chars=*)
         ;;
       *)

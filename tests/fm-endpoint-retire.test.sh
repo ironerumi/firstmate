@@ -136,13 +136,17 @@ run_endpoint_retire() {  # <case-dir>
     FM_DATA_OVERRIDE="$dir/home/data" FM_CONFIG_OVERRIDE="$dir/home/config" \
     FM_FAKE_DIR="$dir" FM_ENDPOINT_RETIRE_CONTROL_BIN="$dir/fakebin/control" \
     PATH="$dir/fakebin:$PATH" \
-    bash -c ". \"\$0/bin/fm-wake-lib.sh\"; . \"\$0/bin/fm-endpoint-retire-lib.sh\"; fm_endpoint_retire \"\$FM_HOME\" \"\$FM_STATE_OVERRIDE\" t1" "$ROOT"
+    bash -c ". \"\$0/bin/fm-wake-lib.sh\"; . \"\$0/bin/fm-classify-lib.sh\"; . \"\$0/bin/fm-endpoint-retire-lib.sh\"; fm_endpoint_retire \"\$FM_HOME\" \"\$FM_STATE_OVERRIDE\" t1" "$ROOT"
 }
 
 crew_state() {  # <case-dir>
   env FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$1/home" FM_STATE_OVERRIDE="$1/state" \
     FM_DATA_OVERRIDE="$1/home/data" FM_CONFIG_OVERRIDE="$1/home/config" \
     FM_FAKE_DIR="$1" PATH="$1/fakebin:$PATH" "$CREW_STATE" t1 2>/dev/null
+}
+
+poll_valid() {  # <case-dir>
+  bash -c '. "$1/bin/fm-pr-lib.sh"; fm_pr_poll_artifacts_valid "$2/state" t1 "$1/bin/fm-pr-poll.sh"' _ "$ROOT" "$1"
 }
 
 meta_has() { grep -q "^$2=" "$1/state/t1.meta"; }
@@ -171,10 +175,33 @@ test_arming_retires_the_finished_workers_endpoint() {
   [ ! -e "$dir/pane-alive" ] || fail "the endpoint still stands"
   meta_has "$dir" endpoint_retired || fail "no retired marker was recorded"
   meta_has "$dir" pr || fail "the armed PR record was lost"
+  poll_valid "$dir" || fail "endpoint retirement invalidated the armed merge poll"
   # Only the endpoint went: the poll, status log, and local copy are intact.
   [ -x "$dir/state/t1.check.sh" ] || [ -f "$dir/state/t1.check.sh" ] || fail "the armed poll is gone"
   [ -f "$dir/state/t1.status" ] && [ -d "$dir/wt" ] || fail "retirement touched more than the endpoint"
   pass "arming a finished ship's merge poll exits its worker, closes its endpoint, and records it"
+}
+
+test_retirement_poll_still_refuses_unrelated_metadata() {
+  local dir value
+  dir=$(make_case retire-poll-strict tmux)
+  # Arm with retirement refused to prove the original poll is valid first.
+  : > "$dir/control-refuses"
+  run_pr_check "$dir" || fail "pr-check failed: $(cat "$dir/err")"
+  poll_valid "$dir" || fail "the original merge poll is invalid"
+  rm -f "$dir/control-refuses"
+  run_endpoint_retire "$dir" > "$dir/retire-out" || fail "endpoint retirement failed"
+  grep -q '^retired:' "$dir/retire-out" || fail "the endpoint was not retired"
+  poll_valid "$dir" || fail "retirement invalidated the previously valid poll"
+  cp "$dir/state/t1.meta" "$dir/retired.meta"
+  printf 'unrelated=value\n' >> "$dir/state/t1.meta"
+  ! poll_valid "$dir" || fail "an unrelated post-PR key was accepted"
+  for value in '' not-an-epoch; do
+    cp "$dir/retired.meta" "$dir/state/t1.meta"
+    printf 'endpoint_retired=%s\n' "$value" >> "$dir/state/t1.meta"
+    ! poll_valid "$dir" || fail "a malformed retirement epoch was accepted: $value"
+  done
+  pass "retirement preserves poll authentication while unrelated keys and malformed epochs remain refused"
 }
 
 test_tmux_retirement_closes_and_confirms_the_recorded_window() {
@@ -297,6 +324,7 @@ test_merge_time_rerecord_retires_nothing() {
 }
 
 test_arming_retires_the_finished_workers_endpoint
+test_retirement_poll_still_refuses_unrelated_metadata
 test_tmux_retirement_closes_and_confirms_the_recorded_window
 test_tmux_close_probe_failure_leaves_the_endpoint_unretired
 test_non_recovery_backend_is_left_under_existing_supervision
