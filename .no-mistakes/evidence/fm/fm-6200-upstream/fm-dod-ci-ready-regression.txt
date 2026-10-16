@@ -1,0 +1,17 @@
+Regression reproduction against base 4de02c06:
+ACCEPTED (bug): paused: PROD deploy watch, checks green on TEST
+ACCEPTED (bug): paused: checks green on TEST, PROPERTIES watch
+
+Target f206b23b behavior:
+REJECTED (correct): paused: PROD deploy watch, checks green on TEST
+REJECTED (correct): paused: checks green on TEST, PROPERTIES watch
+REJECTED (correct): PR checks green
+REJECTED (correct): PR #12 checks pending
+ACCEPTED (correct): PR https://github.com/o/r/pull/5 checks green
+ACCEPTED (correct): checks green: PR#12
+ACCEPTED (correct): https://gitlab.com/o/r/-/merge_requests/5 checks green
+ACCEPTED (correct): https://git.example.org/team/repo/pulls/12 checks green
+
+Downstream ship gate decisions for done reports:
+NOT GATED: done: implementation complete
+GATED: done: PR https://github.com/o/r/pull/5 checks green
