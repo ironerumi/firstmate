@@ -1,0 +1,11 @@
+Live validation command:
+HERDR_LAB_HELPER="$PWD/bin/fm-herdr-lab.sh" bash tests/fm-backend-herdr-presentation-e2e.test.sh
+
+Observed product-level results on Herdr 0.9.5:
+ok - real Herdr lab: concurrent cross-home recoveries replace exact husks under one session lock with no focus drift
+ok - real Herdr lab: default resumed identity refuses session lock contention
+ok - real Herdr lab: --herdr-resume-lock-wait waits out session lock contention instead of refusing
+ok - real Herdr lab: legacy projection labels and flat secondmate tabs are left unmigrated
+ok - real Herdr lab validation completed on Herdr 0.9.5 with the default-session tripwire intact
+
+The same run also exercised the unchanged projection, focus, cleanup, multi-home, and token-safety paths; all emitted ok lines. The guarded helper tore down the named lab session and verified the default-session tripwire. No worktree files changed.
