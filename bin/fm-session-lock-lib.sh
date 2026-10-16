@@ -65,7 +65,7 @@ _fm_windows_process_name() {  # <pid>
 # True when Windows PID $1 is a live verified harness. Sets FM_HARNESS_IS_CLAUDE.
 _fm_harness_pid_alive_windows() {  # <pid>
   local name
-  name=$(_fm_windows_process_name "$1") || return 1
+  name=$(_fm_windows_process_name "$1") || return 2
   FM_HARNESS_IS_CLAUDE=0
   case "$name" in *claude*) FM_HARNESS_IS_CLAUDE=1 ;; esac
   printf '%s' "$name" | grep -qE "$FM_HARNESS_RE"
@@ -458,10 +458,20 @@ fm_session_lock_inspect() {  # <state>
       # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
       FM_LOCK_INSPECT_LIVE_HARNESS=true
     else
-      # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
-      FM_LOCK_INSPECT_STATE=stale
-      # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
-      FM_LOCK_INSPECT_LIVE_HARNESS=false
+      case "$?" in
+        2)
+          # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
+          FM_LOCK_INSPECT_STATE=stale
+          # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
+          FM_LOCK_INSPECT_LIVE_HARNESS=false
+          ;;
+        *)
+          # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
+          FM_LOCK_INSPECT_STATE=unknown
+          # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
+          FM_LOCK_INSPECT_LIVE_HARNESS=false
+          ;;
+      esac
     fi
     return 0
   fi
