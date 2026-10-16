@@ -1,0 +1,14 @@
+Phase 1 targeted validation
+
+Command:
+  bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-session-lock-ancestry.test.sh
+
+Result: PASS (exit 0; duration 37.1s)
+
+The changed behavior was exercised by the real session-lock shell library through its executable test suite. Assertions passed for:
+- Windows/Cygwin fallback requiring native PowerShell parent ancestry rather than trusting inherited CLAUDE_PID alone (hand-started Pi case rejected).
+- Verified Claude native ancestry retaining ownership and anchor behavior.
+- Windows inspection distinguishing live non-harness processes (unknown) from unavailable PIDs (stale).
+- Existing session-lock ancestry, trusted-session, ownership, foreign-owner, and reclaim behavior.
+
+No targeted suite failed or hit its 300-second time bound. Phase 2 was skipped because this suite covers all changed behavior.
