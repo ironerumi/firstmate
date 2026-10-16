@@ -362,6 +362,7 @@ Once the exact pane is confirmed gone, teardown retires the task's own journal w
 
 Recovery is deliberately conservative and presentation-only.
 An existing journal suppresses another projected create.
+A Herdr reclaim deliberately uses the flat container shape rather than presentation projection: projection is presentation-only and never endpoint or ownership authority, and flat is the documented fallback for every recovery it cannot bind exactly.
 Before any recovery mutation, Firstmate holds both the task spawn lock and the named-session presentation lock.
 That presentation lock lives in a namespace private to the OS account, so another account on the same host running its own Firstmate on Herdr cannot block this account's spawn, recovery, or teardown.
 A namespace at this account's name that another account owns, or that is not mode 700, is still refused and is never adopted, chowned, or removed.
