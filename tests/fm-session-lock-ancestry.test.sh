@@ -273,6 +273,85 @@ SH
   pass "session-lock: a live version-named session holding the lock is not mistaken for a stale owner"
 }
 
+test_windows_fallback_requires_native_ancestry() {
+  local dir fakebin state got
+  dir="$TMP_ROOT/windows-native-ancestry"
+  fakebin=$(fm_fakebin "$dir")
+  state="$dir/state"
+  mkdir -p "$state"
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' Msys
+SH
+  cat > "$fakebin/cat" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  /proc/*/winpid) printf '%s\n' 500 ;;
+  *) exec /bin/cat "$@" ;;
+esac
+SH
+  cat > "$fakebin/powershell.exe" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "$*" in
+  *'Get-Process -Id 500'*) printf '%s\n' bash ;;
+  *'Get-Process -Id 600'*) printf '%s\n' pi ;;
+  *'Get-Process -Id 700'*) printf '%s\n' claude ;;
+  *'Get-Process -Id 800'*) printf '%s\n' claude ;;
+  *'Get-Process -Id 900'*) printf '%s\n' explorer ;;
+  *'Get-Process -Id 999'*) exit 1 ;;
+  *'ProcessId = 500'*)
+    if [ "${FM_TEST_WINDOWS_TREE:-pi}" = claude ]; then printf '%s\n' 700; else printf '%s\n' 600; fi
+    ;;
+  *'ProcessId = 600'*) printf '%s\n' 700 ;;
+  *'ProcessId = 700'*) printf '%s\n' 800 ;;
+  *'ProcessId = 800'*) printf '%s\n' 900 ;;
+  *) exit 1 ;;
+esac
+SH
+  chmod +x "$fakebin/uname" "$fakebin/cat" "$fakebin/powershell.exe"
+
+  # A Pi started from a Claude tool shell has Claude's environment but not its
+  # native ancestry: bash 500 -> pi 600 -> claude 700.
+  printf '700\n' > "$state/.lock"
+  got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
+    || fail "the native fallback did not find the hand-started Pi harness"
+  [ "$got" = 600 ] || fail "the fallback reported '$got', expected only the Pi ancestor 600"
+  if FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" "fm_session_lock_owned_by_self '$state'"; then
+    fail "a hand-started Pi inherited Claude identity and claimed Claude's lock"
+  fi
+  got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" "fm_session_lock_foreign_owner_live '$state' && printf '%s' \"\$FM_SESSION_LOCK_FOREIGN_OWNER_PID\"") \
+    || fail "the foreign Claude owner was not reported"
+  [ "$got" = 700 ] || fail "the foreign owner was '$got', expected 700"
+  got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" 'fm_session_lock_anchor_pid') \
+    || fail "the hand-started Pi did not anchor to its native harness"
+  [ "$got" = 600 ] || fail "the hand-started Pi anchored '$got', expected 600"
+
+  # A real Claude chain remains usable: bash 500 -> claude 700 -> claude 800.
+  got=$(FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
+    || fail "the native fallback did not walk the Claude chain"
+  [ "$got" = $'700\n800' ] || fail "the Claude chain was '$got', expected 700 and 800"
+  FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    lib_eval "$fakebin" "fm_session_lock_owned_by_self '$state'" \
+    || fail "the verified Claude ancestor did not own its lock"
+  got=$(FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    lib_eval "$fakebin" 'fm_session_lock_anchor_pid') \
+    || fail "the verified Claude chain did not anchor"
+  [ "$got" = 700 ] || fail "the verified Claude chain anchored '$got', expected 700"
+
+  # Inspection retains the live-ambiguous versus unavailable distinction.
+  printf '900\n' > "$state/.lock"
+  got=$(FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
+    "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
+  [ "$got" = 'unknown false' ] || fail "a live non-harness was inspected as '$got'"
+  printf '999\n' > "$state/.lock"
+  got=$(FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
+    "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
+  [ "$got" = 'stale false' ] || fail "an unavailable Windows PID was inspected as '$got'"
+  pass "session-lock: Windows ownership requires native ancestry and preserves inspection ambiguity"
+}
+
 # A background Claude session's process table. The hook fires inside
 # `claude bg-spare` (710), whose parent is `claude bg-pty-host` (720). With the
 # transient daemon gone the pty-host is reparented to launchd, so the contiguous
@@ -1104,6 +1183,7 @@ test_harness_at_namespace_pid1_is_examined
 test_ordinary_paths_are_never_harness_processes
 test_harness_beyond_a_gap_never_owns_the_lock
 test_competing_version_named_session_is_seen_as_live
+test_windows_fallback_requires_native_ancestry
 test_same_session_id_owns_a_recycled_background_chain
 test_anchor_pid_is_the_model_loop_process_only_for_a_trusted_id
 test_e2e_version_named_session_claims_the_home
