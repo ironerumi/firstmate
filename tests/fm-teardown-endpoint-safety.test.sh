@@ -29,6 +29,11 @@ SH
 printf 'treehouse' >> "${FM_RUNTIME_LOG:?}"
 printf ' <%s>' "$@" >> "${FM_RUNTIME_LOG:?}"
 printf '\n' >> "${FM_RUNTIME_LOG:?}"
+if [ "$1" = return ] && [ -f "$FM_HOME/state/.late-feedback-task" ]; then
+  task=$(cat "$FM_HOME/state/.late-feedback-task")
+  mkdir -p "$FM_HOME/state/$task.inbox"
+  printf 'late feedback\n' > "$FM_HOME/state/$task.inbox/002.msg"
+fi
 exit 0
 SH
   chmod +x "$TMP_ROOT/$dir/fakebin/tmux" "$TMP_ROOT/$dir/fakebin/treehouse"
@@ -1420,6 +1425,101 @@ test_already_gone_endpoint_still_completes_without_a_refusal() {
   pass "fm-teardown: an already-exited endpoint, and a server that is already gone, still complete cleanup silently"
 }
 
+make_feedback_case() {  # <name> <task>
+  local dir id=$2
+  dir=$(make_case "$1")
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/missing-worktree" "project=$dir/project" "kind=scout" \
+    "decisions_reviewed=1" "decision_keys="
+  mkdir -p "$dir/home/data/$id" "$dir/home/state/$id.inbox" \
+    "$dir/home/state/procevent" "$dir/home/state/procevent-inbox"
+  printf 'Report: no outstanding decisions.\n' > "$dir/home/data/$id/report.md"
+  printf '%s\n' "$dir"
+}
+
+run_feedback_case() {  # <case> <task> [flags]
+  local dir=$1 id=$2
+  shift 2
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
+    FM_RUNTIME_LOG="$dir/runtime.log" PATH="$dir/fakebin:$PATH" \
+    "$TEARDOWN" "$id" "$@"
+}
+
+test_task_feedback_refuses_ordinary_teardown() {
+  local kind dir id=feedback-task expected rc
+  for kind in message result listener; do
+    dir=$(make_feedback_case "feedback-$kind" "$id")
+    case "$kind" in
+      message)
+        expected="$dir/home/state/$id.inbox/001.msg"
+        printf 'private answer\n' > "$expected"
+        ;;
+      result)
+        expected="$dir/home/state/procevent-inbox/board.1.result"
+        printf '%s\n' "$id" > "$dir/home/state/procevent-inbox/board.1.owner-task"
+        printf 'private answer\n' > "$expected"
+        ;;
+      listener)
+        expected='source=board'
+        printf 'adapter=lavish\nkind=task-owned\nowner_task=%s\nargc=3\nargv:\npoller\npoll\nboard.html\n' \
+          "$id" > "$dir/home/state/procevent/board.source"
+        ;;
+    esac
+    cp "$dir/home/state/$id.meta" "$dir/original.meta"
+    rc=0
+    run_feedback_case "$dir" "$id" > "$dir/out" 2> "$dir/err" || rc=$?
+    [ "$rc" -ne 0 ] || fail "ordinary teardown discarded attached $kind"
+    assert_grep "$expected" "$dir/err" "attached $kind was not identified"
+    assert_no_grep 'private answer' "$dir/err" "feedback body was disclosed"
+    cmp -s "$dir/original.meta" "$dir/home/state/$id.meta" \
+      || fail "$kind refusal changed task metadata"
+    [ ! -s "$dir/runtime.log" ] || fail "$kind refusal mutated runtime"
+    pass "fm-teardown: attached $kind refuses ordinary teardown before mutation"
+    run_feedback_case "$dir" "$id" --force > "$dir/forced.out" 2> "$dir/forced.err" \
+      || fail "feedback inventory changed forced teardown for $kind: $(cat "$dir/forced.err")"
+    assert_absent "$dir/home/state/$id.meta" "forced $kind cleanup retained task"
+    pass "fm-teardown: explicit --force behavior is unchanged for attached $kind"
+  done
+}
+
+test_late_feedback_refuses_before_endpoint_close() {
+  local dir id=late-feedback rc=0
+  dir=$(make_feedback_case late-feedback "$id")
+  mark_case_as_treehouse_pool "$dir"
+  claim_pool_slot "$dir" "$id"
+  fm_write_meta "$dir/home/state/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout" \
+    "decisions_reviewed=1" "decision_keys="
+  printf '%s\n' "$id" > "$dir/home/state/.late-feedback-task"
+  run_feedback_case "$dir" "$id" > "$dir/out" 2> "$dir/err" || rc=$?
+  [ "$rc" -ne 0 ] || fail "feedback arriving during return was discarded"
+  assert_grep "$dir/home/state/$id.inbox/002.msg" "$dir/err" "late feedback was not identified"
+  assert_present "$dir/home/state/$id.meta" "late refusal removed task identity"
+  assert_present "$dir/home/state/$id.inbox/002.msg" "late refusal removed feedback"
+  assert_no_grep '<kill-window>' "$dir/runtime.log" "late refusal closed endpoint"
+  pass "fm-teardown: feedback arriving after initial inventory refuses before endpoint close"
+}
+
+test_unrelated_task_feedback_does_not_block() {
+  local dir id=unrelated-feedback
+  dir=$(make_feedback_case unrelated-feedback "$id")
+  printf 'adapter=lavish\nkind=task-owned\nowner_task=other-task\nargc=0\nargv:\n' \
+    > "$dir/home/state/procevent/other.source"
+  printf 'other-task\n' > "$dir/home/state/procevent-inbox/other.1.owner-task"
+  printf 'answer\n' > "$dir/home/state/procevent-inbox/other.1.result"
+  run_feedback_case "$dir" "$id" > "$dir/out" 2> "$dir/err" \
+    || fail "unrelated task feedback blocked teardown: $(cat "$dir/err")"
+  assert_absent "$dir/home/state/$id.meta" "unrelated-source cleanup retained task"
+  assert_present "$dir/home/state/procevent/other.source" "unrelated source was removed"
+  assert_present "$dir/home/state/procevent-inbox/other.1.result" "unrelated result was removed"
+  pass "fm-teardown: unrelated task listener and result do not block or get removed"
+}
+
+test_task_feedback_refuses_ordinary_teardown
+test_late_feedback_refuses_before_endpoint_close
+test_unrelated_task_feedback_does_not_block
 test_invalid_endpoint_records_refuse_before_mutation
 test_control_lock_contention_refuses_before_mutation
 test_non_pool_teardown_ignores_task_set_lock
