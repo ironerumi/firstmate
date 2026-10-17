@@ -109,6 +109,8 @@ The current session owns the lock when either of these holds:
 That second signal keeps a background Claude session owning its own lock after the transient helper chain between its hooks and its recorded owner is recycled.
 The library's header owns the trust gate (`CLAUDE_PID` must be a Claude-shaped member of the current run); on Windows/Cygwin, that membership is proven by walking the Cygwin parent chain from the calling shell, resolving each hop's Windows PID for PowerShell identity, then continuing along native Windows parents above the outermost Cygwin process, so inherited Claude identity variables alone never qualify.
 `bin/fm-lock.sh` owns the sidecar and the line-1 anchor it records for such a session.
+On Windows/Cygwin, it captures one PowerShell process-table snapshot after acquiring `.lock.acquire`, reuses that snapshot for the acquisition's liveness and ancestry decisions, and discards it when the claim is released.
+Taking the snapshot inside the claim prevents a waiter from using pre-claim process data to overwrite an owner published while it waited.
 
 A Claude session that does not own the lock cannot arm or repair the home without stealing the live owner's lock, so blocking it would create an unbounded loop.
 The lock-owning session remains responsible for restoring supervision.
