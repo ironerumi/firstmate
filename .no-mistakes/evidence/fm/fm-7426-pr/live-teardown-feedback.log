@@ -1,0 +1,46 @@
+tested_head=ad2649a8a5d3cc8a4c63529102281ed326cadfed
+lab_home=disposable marked lab; endpoint=private tmux primary:fm-live-task
+spawned: window=primary:fm-live-task
+endpoint_before=bash:@0;fm-live-task:@1;
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-lab.bObqi7
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M54WWVVTEA1FZ35NRDQFS3PV/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M54WWVVTEA1FZ35NRDQFS3PV/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+attached message: file=/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-lab.bObqi7/state/live-task.inbox/001.msg
+REFUSED: task live-task still has attached feedback; handle the attachments listed above before ordinary teardown.
+RC=1
+parent_unread: rc=1 meta=preserved endpoint=preserved
+RC=0
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-lab.bObqi7
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+attached listener: source=live-source adapter=lavish artifact=printf listener-ready
+REFUSED: task live-task still has attached feedback; handle the attachments listed above before ordinary teardown.
+RC=1
+listener: rc=1 meta=preserved endpoint=preserved
+RC=0
+captured_result=live-source.1.owner-task
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-lab.bObqi7
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+attached listener: source=live-source adapter=lavish artifact=printf listener-ready
+attached message: file=/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-lab.bObqi7/state/live-task.inbox/002.msg
+attached result: file=/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-lab.bObqi7/state/procevent-inbox/live-source.1.result owner-task=live-task
+REFUSED: task live-task still has attached feedback; handle the attachments listed above before ordinary teardown.
+RC=1
+result: rc=1 meta=preserved endpoint=preserved
+RC=0
+RC=0
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-lab.bObqi7
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+attached message: file=/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-child.15918/state/live-task.inbox/002.msg
+REFUSED: task live-task still has attached feedback; handle the attachments listed above before ordinary teardown.
+RC=1
+child_unread: rc=1 child_home=preserved endpoint=preserved
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-lab.bObqi7
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+teardown live-task complete (window primary:fm-live-task, worktree /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-child.15918)
+RC=0
+acknowledged_cleanup: rc=0 meta=absent child_home=absent endpoint=absent

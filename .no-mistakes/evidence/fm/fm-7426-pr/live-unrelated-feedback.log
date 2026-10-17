@@ -1,0 +1,13 @@
+tested_head=ad2649a8a5d3cc8a4c63529102281ed326cadfed
+RC=0
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-lab.vsuvJZ
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair a missing or failed watcher cycle with the Pi tool fm_watch_arm_pi, or restart Pi with -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M54WWVVTEA1FZ35NRDQFS3PV/.pi/extensions/fm-primary-turnend-guard.ts -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M54WWVVTEA1FZ35NRDQFS3PV/.pi/extensions/fm-primary-pi-watch.ts if the extensions are not loaded.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+teardown unrelated-task complete (window primary:fm-unrelated-task, worktree /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-child.288)
+RC=0
+unrelated_listener_cleanup: rc=0 meta=absent child_home=absent source_record=retained
