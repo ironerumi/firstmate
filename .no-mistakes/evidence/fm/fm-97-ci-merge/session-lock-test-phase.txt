@@ -1,0 +1,6 @@
+Phase 1 targeted validation
+Ran: bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-session-lock-ancestry.test.sh
+Passed: suite completed with exit=0; 17 assertions passed, including Windows ancestry, trusted ownership/anchor, same-session ownership, foreign-session refusal, inspection ambiguity, and non-Windows e2e.
+Failed: none.
+Time bound: none.
+Phase 2: skipped because the targeted suite covers every changed behavior and phase 1 passed.
