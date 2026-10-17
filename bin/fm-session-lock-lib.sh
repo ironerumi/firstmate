@@ -89,35 +89,38 @@ _fm_harness_pid_alive_windows() {  # <pid>
   fm_harness_process_matches "$comm" "$args"
 }
 
-# Read the Windows PID corresponding to the current Cygwin/MSYS process.
-_fm_windows_current_pid() {
-  local value
-  value=$(cat "/proc/$$/winpid" 2>/dev/null) || return 1
+# Read a numeric Cygwin process-table field. PowerShell identity lookups use
+# the Windows PID from winpid, while ancestry follows the Cygwin parent links.
+_fm_windows_proc_pid() {  # <cygwin-pid> <ppid|winpid>
+  local pid=$1 field=$2 value
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  case "$field" in ppid|winpid) ;; *) return 1 ;; esac
+  value=$(cat "/proc/$pid/$field" 2>/dev/null) || return 1
   value=${value%%$'\r'*}
   case "$value" in ''|*[!0-9]*) return 1 ;; esac
   printf '%s\n' "$value"
 }
 
-# Walk native Windows parentage and print contiguous verified harness pids,
+# Walk Cygwin parentage and print contiguous verified Windows harness pids,
 # innermost first.
 _fm_harness_ancestry_pids_windows() {
-  local pid comm parent info args extending=0 printed=0
-  pid=$(_fm_windows_current_pid) || return 1
+  local pid=$$ winpid comm parent info args extending=0 printed=0
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-    info=$(_fm_windows_process_info "$pid") || break
+    winpid=$(_fm_windows_proc_pid "$pid" winpid) || break
+    info=$(_fm_windows_process_info "$winpid") || break
     _fm_windows_process_fields "$info" || break
     comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
-    parent=$_FM_WINDOWS_PROCESS_PARENT
     args=$_FM_WINDOWS_PROCESS_PATH
     [ -n "$args" ] && args="$args $_FM_WINDOWS_PROCESS_ARGS"
     if fm_harness_process_matches "$comm" "$args"; then
-      printf '%s\n' "$pid"
+      printf '%s\n' "$winpid"
       printed=1
       [ "$FM_HARNESS_IS_CLAUDE" -eq 1 ] || break
       extending=1
     elif [ "$extending" -eq 1 ]; then
       break
     fi
+    parent=$(_fm_windows_proc_pid "$pid" ppid) || break
     [ "$parent" -ge 1 ] || break
     pid=$parent
   done
@@ -217,7 +220,7 @@ fm_harness_process_matches() {  # <comm> <args>
 # session cannot be read off the ancestry at all, so the whole contiguous run is
 # reported and the callers below decide what they need from it.
 fm_harness_ancestry_pids() {
-  # On Windows/Cygwin ps -o is unsupported. Use the native process walk.
+  # On Windows/Cygwin ps -o is unsupported. Use the Cygwin parent walk.
   if _fm_windows_ps_fallback_needed; then
     _fm_harness_ancestry_pids_windows
     return
