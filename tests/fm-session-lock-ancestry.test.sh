@@ -319,24 +319,25 @@ SH
   cat > "$fakebin/powershell.exe" <<'SH'
 #!/usr/bin/env bash
 set -u
+[ -z "${FM_TEST_PS_CALLS:-}" ] || printf 'call\n' >> "$FM_TEST_PS_CALLS"
 case "$*" in
-  *Win32_Process*'ProcessId = 500'*) printf 'bash.exe\t6676\tC:/Windows/bash.exe\tbash\n' ;;
-  *Win32_Process*'ProcessId = 550'*)
-    case "${FM_TEST_WINDOWS_TREE:-pi}" in
-      claude) parent=700 ;;
-      cursor) parent=610 ;;
-      missing) parent=6676 ;;
-      *) parent=600 ;;
-    esac
-    printf 'bash.exe\t%s\tC:/Windows/bash.exe\tbash\n' "$parent"
-    ;;
-  *Win32_Process*'ProcessId = 600'*) printf 'pi.exe\t700\tC:/Users/u/pi.exe\tpi\n' ;;
-  *Win32_Process*'ProcessId = 610'*) printf 'agent.exe\t900\tC:/Users/Jane Doe/.local/share/cursor-agent/versions/2026.08.11/cursor-agent.exe\tagent\n' ;;
-  *Win32_Process*'ProcessId = 700'*) printf 'claude.exe\t800\tC:/Users/u/claude.exe\tclaude\n' ;;
-  *Win32_Process*'ProcessId = 800'*) printf 'claude.exe\t900\tC:/Users/u/claude.exe\tclaude\n' ;;
-  *Win32_Process*'ProcessId = 900'*) printf 'explorer.exe\t0\tC:/Windows/explorer.exe\texplorer\n' ;;
+  *Win32_Process*'-Filter'*) exit 1 ;;
+  *Win32_Process*) ;;
   *) exit 1 ;;
 esac
+case "${FM_TEST_WINDOWS_TREE:-pi}" in
+  claude) parent=700 ;;
+  cursor) parent=610 ;;
+  missing) parent=6676 ;;
+  *) parent=600 ;;
+esac
+printf '500\tbash.exe\t6676\tC:/Windows/bash.exe\tbash\n'
+printf '550\tbash.exe\t%s\tC:/Windows/bash.exe\tbash\n' "$parent"
+printf '600\tpi.exe\t700\tC:/Users/u/pi.exe\tpi\n'
+printf '610\tagent.exe\t900\tC:/Users/Jane Doe/.local/share/cursor-agent/versions/2026.08.11/cursor-agent.exe\tagent\n'
+printf '700\tclaude.exe\t800\tC:/Users/u/claude.exe\tclaude\n'
+printf '800\tclaude.exe\t900\tC:/Users/u/claude.exe\tclaude\n'
+printf '900\texplorer.exe\t0\tC:/Windows/explorer.exe\texplorer\n'
 SH
   chmod +x "$fakebin/uname" "$fakebin/cat" "$fakebin/powershell.exe"
 
@@ -404,7 +405,28 @@ SH
   got=$(FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
     "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
   [ "$got" = 'stale false' ] || fail "an unavailable Windows PID was inspected as '$got'"
-  pass "session-lock: Windows ownership requires real process ancestry"
+  # Drive real acquisition, not just helper calls: repeated identity and
+  # trusted-session consumers must share one process-table query per command.
+  mkdir -p "$dir/home"
+  FM_HOME="$dir/home" FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    FM_TEST_PS_CALLS="$dir/calls" lib_eval "$fakebin" "bash '$ROOT/bin/fm-lock.sh'" >/dev/null \
+    || fail "Windows acquisition failed with a verified hybrid ancestry"
+  [ "$(wc -l < "$dir/calls" | tr -d ' ')" = 1 ] \
+    || fail "Windows acquisition made more than one PowerShell invocation"
+  : > "$dir/calls"
+  FM_HOME="$dir/home" FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    FM_TEST_PS_CALLS="$dir/calls" lib_eval "$fakebin" "bash '$ROOT/bin/fm-lock.sh'" >/dev/null \
+    || fail "Windows same-session confirmation failed"
+  [ "$(wc -l < "$dir/calls" | tr -d ' ')" = 1 ] \
+    || fail "Windows confirmation made more than one PowerShell invocation"
+  : > "$dir/calls"
+  if FM_HOME="$dir/home" FM_TEST_WINDOWS_TREE=pi FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    FM_TEST_PS_CALLS="$dir/calls" lib_eval "$fakebin" "bash '$ROOT/bin/fm-lock.sh'" >/dev/null 2>&1; then
+    fail "a real Pi acquisition claimed the existing Claude lock"
+  fi
+  [ "$(wc -l < "$dir/calls" | tr -d ' ')" = 1 ] \
+    || fail "Windows foreign-owner refusal made more than one PowerShell invocation"
+  pass "session-lock: Windows ownership requires real ancestry and one PowerShell query per acquisition"
 }
 
 # A background Claude session's process table. The hook fires inside
@@ -1245,12 +1267,31 @@ test_competing_version_named_session_is_seen_as_live
 test_windows_fallback_requires_native_ancestry
 test_same_session_id_owns_a_recycled_background_chain
 test_anchor_pid_is_the_model_loop_process_only_for_a_trusted_id
-test_e2e_version_named_session_claims_the_home
-test_e2e_daemon_parented_session_claims_the_home
-test_e2e_daemon_parented_version_named_session_keeps_its_lock
-test_e2e_background_session_keeps_its_lock_across_a_recycled_chain
-test_same_session_confirmation_refreshes_rekeyed_id_under_claim_lock
-test_same_session_confirmation_does_not_steal_after_wait
-test_failed_lock_write_restores_previous_sidecar
-test_failed_lock_write_removes_new_sidecar_when_none_existed
-test_verified_reclaim_keeps_new_sidecar
+# Windows without executable symlinks can copy bash to an extensionless name
+# that Cygwin cannot exec. Probe only the binaries each case actually needs;
+# never hide a real test failure after a fixture executable has started.
+run_executable_fixture_test() {  # <test-function> <fixture-binary>...
+  local test=$1 binary
+  shift
+  for binary in "$@"; do
+    if ! "$binary" -c 'exit 0' >/dev/null 2>&1; then
+      case "$(uname -s)" in
+        CYGWIN*|MSYS*|MINGW*)
+          printf 'skip - %s: platform cannot execute fixture %s (Windows executable-symlink capability required)\n' "$test" "$binary"
+          return 0
+          ;;
+        *) fail "$test: cannot execute fixture $binary" ;;
+      esac
+    fi
+  done
+  "$test"
+}
+run_executable_fixture_test test_e2e_version_named_session_claims_the_home "$VERSIONED_CLAUDE"
+run_executable_fixture_test test_e2e_daemon_parented_session_claims_the_home "$NAMED_CLAUDE"
+run_executable_fixture_test test_e2e_daemon_parented_version_named_session_keeps_its_lock "$VERSIONED_CLAUDE" "$NAMED_CLAUDE"
+run_executable_fixture_test test_e2e_background_session_keeps_its_lock_across_a_recycled_chain "$NAMED_CLAUDE"
+run_executable_fixture_test test_same_session_confirmation_refreshes_rekeyed_id_under_claim_lock "$NAMED_CLAUDE"
+run_executable_fixture_test test_same_session_confirmation_does_not_steal_after_wait "$NAMED_CLAUDE"
+run_executable_fixture_test test_failed_lock_write_restores_previous_sidecar "$NAMED_CLAUDE"
+run_executable_fixture_test test_failed_lock_write_removes_new_sidecar_when_none_existed "$NAMED_CLAUDE"
+run_executable_fixture_test test_verified_reclaim_keeps_new_sidecar "$NAMED_CLAUDE"

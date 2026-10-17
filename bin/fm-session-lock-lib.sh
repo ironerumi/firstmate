@@ -49,17 +49,32 @@ _fm_windows_ps_fallback_needed() {
   [ "$needed" = yes ]
 }
 
-# Print the Windows process name, parent PID, executable path, and command
-# line for $1, or return 1.
-_fm_windows_process_info() {  # <pid>
-  local pid=$1 info
-  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
-  info=$(powershell.exe -NoProfile -NonInteractive -Command \
-    "try { \$p = Get-CimInstance Win32_Process -Filter \"ProcessId = $pid\" -ErrorAction Stop; if (\$null -eq \$p) { exit 1 }; \"{0}\`t{1}\`t{2}\`t{3}\" -f \$p.Name,\$p.ParentProcessId,(\$p.ExecutablePath -replace '\\\\','/'),\$p.CommandLine } catch { exit 1 }" \
+# One snapshot per walk; fm-lock.sh primes it in the acquiring shell so all
+# command substitutions share it for that acquisition, not across commands.
+_FM_WINDOWS_PROCESS_TABLE=
+_fm_windows_prepare_process_snapshot() {
+  [ -z "$_FM_WINDOWS_PROCESS_TABLE" ] || return 0
+  _FM_WINDOWS_PROCESS_TABLE=$(powershell.exe -NoProfile -NonInteractive -Command \
+    "try { Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { \"{0}\`t{1}\`t{2}\`t{3}\`t{4}\" -f \$_.ProcessId,\$_.Name,\$_.ParentProcessId,(\$_.ExecutablePath -replace '\\\\','/'),\$_.CommandLine } } catch { exit 1 }" \
     2>/dev/null) || return 1
-  info=${info%%$'\r'}
-  case "$info" in *$'\t'*$'\t'*$'\t'*) ;; *) return 1 ;; esac
-  printf '%s\n' "$info"
+  [ -n "$_FM_WINDOWS_PROCESS_TABLE" ]
+}
+
+# Print the cached Windows process name, parent PID, executable path, and
+# command line for $1, or return 1.
+_fm_windows_process_info() {  # <pid>
+  local pid=$1 row
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  _fm_windows_prepare_process_snapshot || return 1
+  while IFS= read -r row; do
+    row=${row%$'\r'}
+    case "$row" in
+      "$pid"$'\t'*) printf '%s\n' "${row#*$'\t'}"; return 0 ;;
+    esac
+  done <<EOF
+$_FM_WINDOWS_PROCESS_TABLE
+EOF
+  return 1
 }
 
 _FM_WINDOWS_PROCESS_NAME=
@@ -80,7 +95,8 @@ _fm_windows_process_fields() {  # <process-info>
 
 # True when Windows PID $1 is a live verified harness. Sets FM_HARNESS_IS_CLAUDE.
 _fm_harness_pid_alive_windows() {  # <pid>
-  local info comm
+  local info comm _FM_WINDOWS_PROCESS_TABLE=$_FM_WINDOWS_PROCESS_TABLE
+  _fm_windows_prepare_process_snapshot || return 2
   info=$(_fm_windows_process_info "$1") || return 2
   _fm_windows_process_fields "$info" || return 2
   comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
@@ -105,6 +121,8 @@ _fm_windows_proc_pid() {  # <cygwin-pid> <ppid|winpid>
 # harness is absent from /proc. Bridge only at the Cygwin ppid 0/1 boundary.
 _fm_harness_ancestry_pids_windows() {
   local pid=$$ winpid comm parent info native=0 extending=0 printed=0
+  local _FM_WINDOWS_PROCESS_TABLE=$_FM_WINDOWS_PROCESS_TABLE
+  _fm_windows_prepare_process_snapshot || return 1
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     if [ "$native" -eq 0 ]; then
       winpid=$(_fm_windows_proc_pid "$pid" winpid) || break
@@ -323,9 +341,7 @@ fm_session_lock_trusted_session_id() {  # [<ancestry-pids>]
   [ -n "$id" ] || return 1
   case "$id" in *$'\n'*|*$'\r'*) return 1 ;; esac
   case "$claude_pid" in ''|*[!0-9]*) return 1 ;; esac
-  if _fm_windows_ps_fallback_needed; then
-    pids=$(fm_harness_ancestry_pids) || return 1
-  elif [ -z "$pids" ]; then
+  if [ -z "$pids" ]; then
     pids=$(fm_harness_ancestry_pids) || return 1
   fi
   while IFS= read -r pid; do

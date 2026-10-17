@@ -55,6 +55,14 @@ if [ "${1:-}" = "status" ]; then
   exit 0
 fi
 
+# Prime in this shell, before command substitutions, so Windows acquisition
+# makes just one PowerShell query shared by all identity and ancestry checks.
+if _fm_windows_ps_fallback_needed; then
+  _fm_windows_prepare_process_snapshot || {
+    echo "error: cannot read Windows process table; operate read-only until resolved" >&2
+    exit 1
+  }
+fi
 me=$(fm_session_lock_anchor_pid) || { echo "error: cannot locate harness process in ancestry" >&2; exit 1; }
 probe=$(mktemp "$STATE/.lock-write.XXXXXX" 2>/dev/null) || {
   echo "error: cannot write session lock; operate read-only until resolved" >&2
