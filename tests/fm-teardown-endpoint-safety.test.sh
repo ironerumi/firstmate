@@ -38,11 +38,6 @@ SH
 printf 'treehouse' >> "${FM_RUNTIME_LOG:?}"
 printf ' <%s>' "$@" >> "${FM_RUNTIME_LOG:?}"
 printf '\n' >> "${FM_RUNTIME_LOG:?}"
-if [ "$1" = return ] && [ -f "$FM_HOME/state/.late-feedback-task" ]; then
-  task=$(cat "$FM_HOME/state/.late-feedback-task")
-  mkdir -p "$FM_HOME/state/$task.inbox"
-  printf 'late feedback\n' > "$FM_HOME/state/$task.inbox/002.msg"
-fi
 exit 0
 SH
   chmod +x "$TMP_ROOT/$dir/fakebin/tmux" "$TMP_ROOT/$dir/fakebin/treehouse"
@@ -1460,6 +1455,7 @@ make_secondmate_feedback_case() {  # <case> <task>
   dir=$(make_case "$1")
   mate="$dir/mate"
   mkdir -p "$mate/state" "$mate/data" "$mate/config" "$mate/projects" \
+    "$mate/state/$id.inbox" "$mate/state/procevent" "$mate/state/procevent-inbox" \
     "$dir/home/state/parent-route/procevent" \
     "$dir/home/state/parent-route/procevent-inbox" \
     "$dir/home/state/parent-route/$id.inbox" \
@@ -1498,6 +1494,19 @@ test_secondmate_feedback_inventory_covers_unread_and_handled() {
   assert_present "$dir/mate/.fm-secondmate-home" \
     "unread secondmate refusal removed the secondmate home"
   [ ! -s "$dir/runtime.log" ] || fail "unread secondmate refusal mutated runtime"
+
+  dir=$(make_secondmate_feedback_case secondmate-child-unread "$id")
+  printf 'private child steer\n' > "$dir/mate/state/$id.inbox/001.msg"
+  rc=0
+  run_secondmate_feedback_case "$dir" "$id" > "$dir/out" 2> "$dir/err" || rc=$?
+  [ "$rc" -ne 0 ] || fail "ordinary secondmate teardown discarded child-home unread steer"
+  assert_grep "$dir/mate/state/$id.inbox/001.msg" "$dir/err" \
+    "child-home unread secondmate steer was not identified"
+  assert_present "$dir/home/state/parent-route/$id.meta" \
+    "child-home unread refusal removed task metadata"
+  assert_present "$dir/mate/.fm-secondmate-home" \
+    "child-home unread refusal removed the secondmate home"
+  [ ! -s "$dir/runtime.log" ] || fail "child-home unread refusal mutated runtime"
 
   dir=$(make_secondmate_feedback_case secondmate-handled "$id")
   mkdir -p "$dir/home/state/parent-route/$id.inbox/handled"
@@ -1563,15 +1572,29 @@ test_late_feedback_refuses_before_endpoint_close() {
   fm_write_meta "$dir/home/state/$id.meta" \
     "window=isolated:fm-$id" "endpoint_task_id=$id" \
     "worktree=$dir/worktree" "project=$dir/project" "kind=scout" \
-    "decisions_reviewed=1" "decision_keys="
-  printf '%s\n' "$id" > "$dir/home/state/.late-feedback-task"
+    "decisions_reviewed=1" "decision_keys=" "spawn_gen=s1.1.fixture"
+  fm_test_tasks_toml "$dir/home/.tasks.toml"
+  printf '%s\n' '# Backlog' '' '## In flight' '' '## Queued' '' '## Done' \
+    > "$dir/home/data/backlog.md"
+  tasks-axi add "$id" "late feedback fixture" --kind scout \
+    --file "$dir/home/data/backlog.md" >/dev/null
+  tasks-axi start "$id" --file "$dir/home/data/backlog.md" >/dev/null
+  (
+    while [ ! -e "$dir/home/state/$id.backlog-close" ]; do sleep 0.01; done
+    mkdir -p "$dir/home/state/$id.inbox"
+    printf 'late feedback\n' > "$dir/home/state/$id.inbox/002.msg"
+  ) &
+  late_writer=$!
   run_feedback_case "$dir" "$id" > "$dir/out" 2> "$dir/err" || rc=$?
-  [ "$rc" -ne 0 ] || fail "feedback arriving during return was discarded"
+  wait "$late_writer" 2>/dev/null || true
+  [ "$rc" -ne 0 ] || fail "feedback arriving during preparation was discarded"
   assert_grep "$dir/home/state/$id.inbox/002.msg" "$dir/err" "late feedback was not identified"
   assert_present "$dir/home/state/$id.meta" "late refusal removed task identity"
   assert_present "$dir/home/state/$id.inbox/002.msg" "late refusal removed feedback"
+  assert_present "$dir/worktree/sentinel" "late refusal retained the worktree before refusing"
   assert_no_grep '<kill-window>' "$dir/runtime.log" "late refusal closed endpoint"
-  pass "fm-teardown: feedback arriving after initial inventory refuses before endpoint close"
+  assert_no_grep 'treehouse <return>' "$dir/runtime.log" "late refusal returned the pool slot"
+  pass "fm-teardown: feedback arriving after initial inventory refuses before destructive cleanup"
 }
 
 test_post_check_feedback_writer_cannot_recreate_retired_inbox() {

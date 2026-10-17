@@ -3532,7 +3532,11 @@ fi
 task_feedback_inventory() {
   [ "$FORCE" = --force ] && return 0
   FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-procevent.sh" \
-    task-feedback inventory "$ID"
+    task-feedback inventory "$ID" || return 1
+  if [ "$KIND" = secondmate ]; then
+    FM_HOME="$HOME_PATH" FM_STATE_OVERRIDE="$HOME_PATH/state" "$SCRIPT_DIR/fm-procevent.sh" \
+      task-feedback inventory "$ID" || return 1
+  fi
 }
 task_feedback_inventory || exit 1
 
@@ -3648,6 +3652,8 @@ task_feedback_late_inventory() {
   return 1
 }
 
+task_feedback_late_inventory || exit 1
+
 # Every landed/discard-work refusal above has now passed (or --force skipped
 # them). Fix 1 and Fix 2 (see script header) run here, unconditionally on
 # --force, and before ANY destructive step below - a still-parked run or a
@@ -3688,7 +3694,6 @@ if [ "$BACKEND" = orca ] && [ "$KIND" != secondmate ]; then
       "$WT/.opencode/plugins/fm-busy-state.js" \
       "$WT/.fm-grok-turnend" "$WT/.fm-kimi-turnend"
   fi
-  task_feedback_late_inventory || exit 1
   if [ -n "$T_ORCA" ]; then
     fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
       || { endpoint_close_refusal "$ID" "$BACKEND" "$T" 0; exit 1; }
@@ -3768,9 +3773,6 @@ if [ "$BACKEND" = herdr ] \
   fi
 fi
 
-if [ "$BACKEND" != orca ]; then
-  task_feedback_late_inventory || exit 1
-fi
 if [ "$HERDR_PRESENTATION_RETIRE_CANDIDATE" = 1 ]; then
   # The presentation lock was acquired before the worktree return above; a
   # contended lock already refused this teardown while everything was intact.
