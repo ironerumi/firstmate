@@ -695,7 +695,7 @@ cmd_register_task() {
   }
   trap 'fm_task_feedback_lock_release' EXIT
   fm_backend_validate_task_endpoint "$STATE/$task.meta" "$task" >/dev/null \
-    || die "cannot own a board for task $task; its captured feedback would reach no endpoint"
+    || { fm_procevent_source_lock_release "$id"; die "cannot own a board for task $task; its captured feedback would reach no endpoint"; }
   if [ -e "$(source_file "$id")" ] || [ -L "$(source_file "$id")" ]; then
     if [ "$(source_kind "$id" 2>/dev/null || true)" != task-owned ]; then
       fm_procevent_source_lock_release "$id"
