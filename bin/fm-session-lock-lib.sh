@@ -24,6 +24,134 @@ _FM_SESSION_LOCK_LIB_DIR=${BASH_SOURCE[0]%/*}
 . "${_FM_SESSION_LOCK_LIB_DIR:-/}/fm-cursor-lib.sh"
 unset _FM_SESSION_LOCK_LIB_DIR
 
+# --- Windows/Cygwin ps compatibility -----------------------------------------
+# Windows Git Bash and Cygwin ship a ps command that does not accept POSIX -o
+# output format specifiers. These helpers detect that environment and use
+# PowerShell for native process identity and parentage.
+
+# Cached indicator: "yes" = ps -o unavailable (Windows/Cygwin), "no" = normal.
+_FM_WINDOWS_PS_FALLBACK_NEEDED=
+
+# Return 0 when this process runs under Windows Cygwin/MSYS2 where ps -o is
+# unavailable. Caches the result after the first call.
+_fm_windows_ps_fallback_needed() {
+  case "$_FM_WINDOWS_PS_FALLBACK_NEEDED" in
+    yes) return 0 ;;
+    no)  return 1 ;;
+  esac
+  local needed=no o
+  o=$(uname -o 2>/dev/null)
+  case "$o" in
+    Cygwin|Msys) needed=yes ;;
+    *) ps -o comm= -p $$ >/dev/null 2>&1 || needed=yes ;;
+  esac
+  _FM_WINDOWS_PS_FALLBACK_NEEDED=$needed
+  [ "$needed" = yes ]
+}
+
+# One snapshot per acquisition; fm-lock.sh retains it in the acquiring shell so
+# all command substitutions share it until the claim is released.
+_FM_WINDOWS_PROCESS_TABLE=
+_fm_windows_prepare_process_snapshot() {
+  [ -z "$_FM_WINDOWS_PROCESS_TABLE" ] || return 0
+  _FM_WINDOWS_PROCESS_TABLE=$(powershell.exe -NoProfile -NonInteractive -Command \
+    "try { Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { \"{0}\`t{1}\`t{2}\`t{3}\`t{4}\" -f \$_.ProcessId,\$_.Name,\$_.ParentProcessId,(\$_.ExecutablePath -replace '\\\\','/'),\$_.CommandLine } } catch { exit 1 }" \
+    2>/dev/null) || return 1
+  [ -n "$_FM_WINDOWS_PROCESS_TABLE" ]
+}
+
+# Print the cached Windows process name, parent PID, executable path, and
+# command line for $1, or return 1.
+_fm_windows_process_info() {  # <pid>
+  local pid=$1 row
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  _fm_windows_prepare_process_snapshot || return 1
+  while IFS= read -r row; do
+    row=${row%$'\r'}
+    case "$row" in
+      "$pid"$'\t'*) printf '%s\n' "${row#*$'\t'}"; return 0 ;;
+    esac
+  done <<EOF
+$_FM_WINDOWS_PROCESS_TABLE
+EOF
+  return 1
+}
+
+_FM_WINDOWS_PROCESS_NAME=
+_FM_WINDOWS_PROCESS_PARENT=
+_FM_WINDOWS_PROCESS_PATH=
+_FM_WINDOWS_PROCESS_ARGS=
+_fm_windows_process_fields() {  # <process-info>
+  local info=$1 rest
+  _FM_WINDOWS_PROCESS_NAME=${info%%$'\t'*}
+  rest=${info#*$'\t'}
+  _FM_WINDOWS_PROCESS_PARENT=${rest%%$'\t'*}
+  rest=${rest#*$'\t'}
+  _FM_WINDOWS_PROCESS_PATH=${rest%%$'\t'*}
+  _FM_WINDOWS_PROCESS_ARGS=${rest#*$'\t'}
+  [ -n "$_FM_WINDOWS_PROCESS_NAME" ] || return 1
+  case "$_FM_WINDOWS_PROCESS_PARENT" in ''|*[!0-9]*) return 1 ;; esac
+}
+
+# True when Windows PID $1 is a live verified harness. Sets FM_HARNESS_IS_CLAUDE.
+_fm_harness_pid_alive_windows() {  # <pid>
+  local info comm _FM_WINDOWS_PROCESS_TABLE=$_FM_WINDOWS_PROCESS_TABLE
+  _fm_windows_prepare_process_snapshot || return 2
+  info=$(_fm_windows_process_info "$1") || return 2
+  _fm_windows_process_fields "$info" || return 2
+  comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
+  fm_harness_process_matches "$comm" "$_FM_WINDOWS_PROCESS_ARGS" "$_FM_WINDOWS_PROCESS_PATH"
+}
+
+# Read a numeric Cygwin process-table field. PowerShell identity lookups use
+# the Windows PID from winpid, while ancestry follows the Cygwin parent links.
+_fm_windows_proc_pid() {  # <cygwin-pid> <ppid|winpid>
+  local pid=$1 field=$2 value
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  case "$field" in ppid|winpid) ;; *) return 1 ;; esac
+  value=$(cat "/proc/$pid/$field" 2>/dev/null) || return 1
+  value=${value%%$'\r'*}
+  case "$value" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$value"
+}
+
+# Walk Cygwin parentage, then native parentage above the outermost Cygwin
+# process; print contiguous verified Windows harness pids, innermost first.
+# Inner MSYS native parents may be exited fork intermediates, while the native
+# harness is absent from /proc. Bridge only at the Cygwin ppid 0/1 boundary.
+_fm_harness_ancestry_pids_windows() {
+  local pid=$$ winpid comm parent info native=0 extending=0 printed=0
+  local _FM_WINDOWS_PROCESS_TABLE=$_FM_WINDOWS_PROCESS_TABLE
+  _fm_windows_prepare_process_snapshot || return 1
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
+    if [ "$native" -eq 0 ]; then
+      winpid=$(_fm_windows_proc_pid "$pid" winpid) || break
+    fi
+    info=$(_fm_windows_process_info "$winpid") || break
+    _fm_windows_process_fields "$info" || break
+    comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
+    if fm_harness_process_matches "$comm" "$_FM_WINDOWS_PROCESS_ARGS" "$_FM_WINDOWS_PROCESS_PATH"; then
+      printf '%s\n' "$winpid"
+      printed=1
+      [ "$FM_HARNESS_IS_CLAUDE" -eq 1 ] || break
+      extending=1
+    elif [ "$extending" -eq 1 ]; then
+      break
+    fi
+    if [ "$native" -eq 0 ]; then
+      parent=$(_fm_windows_proc_pid "$pid" ppid) || break
+      if [ "$parent" -gt 1 ]; then
+        pid=$parent
+        continue
+      fi
+      native=1
+    fi
+    winpid=$_FM_WINDOWS_PROCESS_PARENT
+    [ "$winpid" -ge 1 ] || break
+  done
+  [ "$printed" -eq 1 ]
+}
+
 # Known harness command names; extend when a new adapter is verified. omp is
 # anchored exactly like pi: its process name is the bare word `omp` (verified,
 # omp 18.1.11), and a substring match would claim ompd or comp.
@@ -68,15 +196,15 @@ fm_harness_path_name() {  # <path>
 #   3. a bare interpreter (node, python) running a harness script path.
 #   4. Cursor's own structural identity, owned by bin/fm-cursor-lib.sh.
 FM_HARNESS_IS_CLAUDE=0
-fm_harness_process_matches() {  # <comm> <args>
-  local comm=$1 args=$2 base argv0 name
+fm_harness_process_matches() {  # <comm> <args> [argv0]
+  local comm=$1 args=$2 base argv0=${3:-} name
   FM_HARNESS_IS_CLAUDE=0
   base=$(basename -- "$comm")
   if printf '%s' "$base" | grep -qE "$FM_HARNESS_RE"; then
     case "$base" in *claude*) FM_HARNESS_IS_CLAUDE=1 ;; esac
     return 0
   fi
-  argv0=${args%% *}
+  [ -n "$argv0" ] || argv0=${args%% *}
   if name=$(fm_harness_path_name "$comm") || name=$(fm_harness_path_name "$argv0"); then
     case "$name" in claude) FM_HARNESS_IS_CLAUDE=1 ;; esac
     return 0
@@ -117,6 +245,11 @@ fm_harness_process_matches() {  # <comm> <args>
 # session cannot be read off the ancestry at all, so the whole contiguous run is
 # reported and the callers below decide what they need from it.
 fm_harness_ancestry_pids() {
+  # On Windows/Cygwin ps -o is unsupported. Use the Cygwin parent walk.
+  if _fm_windows_ps_fallback_needed; then
+    _fm_harness_ancestry_pids_windows
+    return
+  fi
   local pid=$$ comm args extending=0 printed=0
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
@@ -166,6 +299,11 @@ EOF
 # True if $1 is a live process that looks like a verified harness.
 fm_harness_pid_alive() {
   local pid=$1 comm args
+  # On Windows/Cygwin, kill -0 and ps -o both fail for Windows PIDs.
+  if _fm_windows_ps_fallback_needed; then
+    _fm_harness_pid_alive_windows "$pid"
+    return
+  fi
   kill -0 "$pid" 2>/dev/null || return 1
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
   args=$(ps -o args= -p "$pid" 2>/dev/null)
@@ -208,9 +346,14 @@ fm_session_lock_trusted_session_id() {  # [<ancestry-pids>]
   fi
   while IFS= read -r pid; do
     [ "$pid" = "$claude_pid" ] || continue
-    comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
-    args=$(ps -o args= -p "$pid" 2>/dev/null)
-    fm_harness_process_matches "$comm" "$args" || return 1
+    if _fm_windows_ps_fallback_needed; then
+      # On Windows, ps -o is unavailable; verify the PID via PowerShell.
+      _fm_harness_pid_alive_windows "$pid" || return 1
+    else
+      comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
+      args=$(ps -o args= -p "$pid" 2>/dev/null)
+      fm_harness_process_matches "$comm" "$args" || return 1
+    fi
     [ "$FM_HARNESS_IS_CLAUDE" -eq 1 ] || return 1
     printf '%s\n' "$id"
     return 0
@@ -366,6 +509,31 @@ fm_session_lock_inspect() {  # <state>
       return 0
       ;;
   esac
+  # Windows/Cygwin uses PowerShell process liveness.
+  if _fm_windows_ps_fallback_needed; then
+    if _fm_harness_pid_alive_windows "$pid"; then
+      # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
+      FM_LOCK_INSPECT_STATE=held
+      # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
+      FM_LOCK_INSPECT_LIVE_HARNESS=true
+    else
+      case "$?" in
+        2)
+          # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
+          FM_LOCK_INSPECT_STATE=stale
+          # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
+          FM_LOCK_INSPECT_LIVE_HARNESS=false
+          ;;
+        *)
+          # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
+          FM_LOCK_INSPECT_STATE=unknown
+          # shellcheck disable=SC2034 # Output globals, read by lock status and inbox ready.
+          FM_LOCK_INSPECT_LIVE_HARNESS=false
+          ;;
+      esac
+    fi
+    return 0
+  fi
   if kill -0 "$pid" 2>/dev/null; then
     if fm_harness_pid_alive "$pid"; then
       FM_LOCK_INSPECT_STATE=held

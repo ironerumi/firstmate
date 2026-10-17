@@ -316,9 +316,7 @@ Two reads stay synchronous because Pi's own API is synchronous there, not as an 
 - Pi types its bash spawn hook as a plain function, so the guard on the branch's own shell commands cannot await.
 - The watcher reads `offer.accepted` the moment its dispatch event returns, so a session that does not own the fleet lock must still refuse a wake without waiting.
 
-Both read the same uncached ownership authority.
-The lock's process ancestry is walked in full every time it is asked, never cached.
-Reparenting and pid reuse can invalidate a remembered chain, and this answer decides ownership rather than hinting at it.
+Both read the shared ownership authority described in [`turnend-guard.md`](turnend-guard.md#foreign-session-lock-owner).
 
 ## Lost-wake outcome backstop
 

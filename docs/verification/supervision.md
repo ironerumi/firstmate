@@ -345,6 +345,9 @@ A background Claude session whose transient helper chain is recycled loses that 
 For such a session `bin/fm-lock.sh` records `CLAUDE_PID` on lock line 1 instead of the outermost chain pid, so a shared daemon or front-end that outlives the session never keeps a dead session's lock alive, and a same-session confirmation never rewrites a live line 1.
 Harness identity is read from the executable path and `argv[0]` as well as the command basename, because Claude Code's native installer names the per-session executable by its version (`.../share/claude/versions/2.1.220`): `ps -o comm=` reports that path on macOS and the bare version string on Linux, and neither basename names a harness.
 `tests/fm-session-lock-ancestry.test.sh` pins both platforms' reporting semantics behind a deterministic process table and runs the real Stop auto-arm in version-named, daemon-parented, and combined real process trees.
+The same suite exercises the hybrid Windows/Cygwin parent chain from the shell's Cygwin PID, resolves each hop's Windows PID for native identity, and continues through native parents above the outermost Cygwin shell to reach native harnesses despite exited inner MSYS fork intermediates.
+It rejects a hand-started Pi with inherited Claude variables and distinguishes a live non-harness lock (`unknown`) from an unavailable Windows PID (`stale`) during inspection.
+Its acquisition-race fixture also verifies that one PowerShell snapshot is taken only after the claim is held and that a live owner published while the waiter was blocked is not overwritten.
 The same suite drives the ancestry and session-id signals apart in that table, asserting the divergence itself so no case is vacuous, and runs a real orphaned front-end, daemon, pty-host, and bg-spare tree whose daemon is ended mid-run: the same id keeps arming through the real `bin/fm-lock.sh`, `bin/fm-claude-stop-autoarm.sh`, and `bin/fm-turnend-guard.sh --claude` with lock line 1 and the sidecar untouched, a different id, an untrusted id, and no id each keep the live-owner refusal naming the recorded id, and the dead front-end is reclaimed onto the spare's pid rather than the outermost pty-host.
 `tests/fm-turnend-foreign-owner-repro.py` keeps the genuinely foreign live owner as the negative control and adds the same-id positive control.
 Both ran on 2026-09-18 on macOS with bash 3.2.57 as the fake harness interpreter:
@@ -360,6 +363,7 @@ Observed output, bounded to the lines the new coverage adds:
 ok - session-lock: a trusted same-session id keeps owning a recycled background chain, and nothing weaker does
 ok - session-lock: a trusted id anchors the lock on the model-loop process, anything else on the outermost pid
 ok - session-lock e2e: a background session keeps its lock and its supervision across a recycled helper chain
+ok - session-lock: Windows ownership requires real ancestry and one PowerShell query per acquisition
 same-session acquisition rc=0 stdout='lock acquired: harness pid 41994\nlock_rc=0\n' stderr=''
 other-session acquisition rc=0 stdout='lock_rc=1\n' stderr='error: another live firstmate session holds the lock (pid 41994, session synthetic-same); operate read-only until resolved\n'
 FIXED same-session id owns the lock; a different id is still foreign
