@@ -1,0 +1,31 @@
+Test phase evidence
+====================
+
+Elapsed at phase completion: approximately 2 minutes.
+
+Phase 1 command:
+  bin/fm-test-run.sh --list --changed
+
+Narrowed suites selected from the changed paths:
+  tests/fm-session-lock-ancestry.test.sh
+  tests/fm-turnend-guard.test.sh
+  tests/fm-documentation-audiences.test.sh
+
+Phase 1 execution:
+  bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 \
+    tests/fm-session-lock-ancestry.test.sh \
+    tests/fm-turnend-guard.test.sh \
+    tests/fm-documentation-audiences.test.sh
+
+Result: all three selected suites completed successfully; no suite failed and none hit the time bound.
+
+Behavior directly exercised by the targeted ancestry suite includes:
+- real Windows/Cygwin hybrid ancestry through a dead native intermediary;
+- rejection of inherited Claude identity for a hand-started Pi owner;
+- verified Claude and Cursor ancestry for ownership and lock anchoring;
+- ambiguous live-owner versus stale/unavailable Windows inspection;
+- one PowerShell process-table query per acquisition, same-session confirmation, and foreign-owner refusal;
+- snapshot-after-claim race protection; and
+- real POSIX session-lock and supervision acquisition/reclaim flows.
+
+The turn-end suite exercised the downstream lock/supervision guard contract, and the documentation-audiences suite verified maintained documentation links and owner contracts. Phase 2 was skipped because Phase 1 covers every changed behavior.
