@@ -429,6 +429,97 @@ SH
   pass "session-lock: Windows ownership requires real ancestry and one PowerShell query per acquisition"
 }
 
+test_windows_snapshot_is_taken_after_claim() {
+  local dir fakebin home state holder_pid acquire_pid rc i
+  dir="$TMP_ROOT/windows-snapshot-claim"
+  fakebin=$(fm_fakebin "$dir/bin")
+  home="$dir/home"
+  state="$home/state"
+  mkdir -p "$state"
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' Msys
+SH
+  cat > "$fakebin/cat" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  /proc/55/winpid) printf '%s\n' 550 ;;
+  /proc/55/ppid) printf '%s\n' 1 ;;
+  /proc/*/winpid) printf '%s\n' 500 ;;
+  /proc/*/ppid) printf '%s\n' 55 ;;
+  *) exec /bin/cat "$@" ;;
+esac
+SH
+  cat > "$fakebin/powershell.exe" <<'SH'
+#!/usr/bin/env bash
+set -u
+claim_pid=$(cat "$FM_TEST_RACE_STATE/.lock.acquire/pid" 2>/dev/null || true)
+if [ "$claim_pid" = "${FM_TEST_RACE_HOLDER_PID:-}" ]; then
+  : > "$FM_TEST_RACE_PRECLAIM"
+  while [ ! -e "$FM_TEST_RACE_RELEASE_SNAPSHOT" ]; do sleep 0.01; done
+fi
+printf '500\tbash.exe\t6676\tC:/Windows/bash.exe\tbash\n'
+printf '550\tbash.exe\t700\tC:/Windows/bash.exe\tbash\n'
+printf '700\tclaude.exe\t800\tC:/Users/u/claude.exe\tclaude\n'
+printf '800\tclaude.exe\t900\tC:/Users/u/claude.exe\tclaude\n'
+printf '900\texplorer.exe\t0\tC:/Windows/explorer.exe\texplorer\n'
+if [ "$claim_pid" != "${FM_TEST_RACE_HOLDER_PID:-}" ] && [ -n "$claim_pid" ]; then
+  printf '600\tpi.exe\t700\tC:/Users/u/pi.exe\tpi\n'
+fi
+SH
+  cat > "$dir/hold-claim.sh" <<'SH'
+#!/usr/bin/env bash
+set -u
+. "$FM_WAKE"
+fm_lock_try_acquire "$FM_HOME/state/.lock.acquire" || exit 1
+: > "$FM_HOME/state/holder-ready"
+while [ ! -e "$FM_HOME/state/release-holder" ]; do sleep 0.01; done
+printf '%s\n' 600 > "$FM_HOME/state/.lock"
+printf '%s\n' OTHER > "$FM_HOME/state/.lock-session"
+fm_lock_release "$FM_HOME/state/.lock.acquire"
+SH
+  cat > "$dir/acquire.sh" <<SH
+#!/usr/bin/env bash
+set -u
+: > "$dir/acquirer-started"
+CLAUDE_CODE_SESSION_ID=S1 CLAUDE_PID=700 FM_HOME="$home" \\
+  bash "$ROOT/bin/fm-lock.sh" > "$dir/acquire.out" 2>&1
+printf '%s\\n' "\$?" > "$dir/acquire.rc"
+SH
+  chmod +x "$fakebin/uname" "$fakebin/cat" "$fakebin/powershell.exe" "$dir/hold-claim.sh" "$dir/acquire.sh"
+  printf '%s\n' 999 > "$state/.lock"
+  env FM_HOME="$home" FM_WAKE="$ROOT/bin/fm-wake-lib.sh" "$dir/hold-claim.sh" &
+  holder_pid=$!
+  i=0
+  while [ "$i" -lt 400 ] && [ ! -e "$state/holder-ready" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  [ -e "$state/holder-ready" ] || fail "the claim-holder fixture never acquired the claim"
+  env PATH="$fakebin:$PATH" FM_TEST_RACE_STATE="$state" \
+    FM_TEST_RACE_HOLDER_PID="$holder_pid" \
+    FM_TEST_RACE_PRECLAIM="$dir/preclaim" \
+    FM_TEST_RACE_RELEASE_SNAPSHOT="$dir/release-snapshot" \
+    "$dir/acquire.sh" &
+  acquire_pid=$!
+  i=0
+  while [ "$i" -lt 40 ] && [ ! -e "$dir/preclaim" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  : > "$dir/release-snapshot"
+  : > "$state/release-holder"
+  wait "$holder_pid" || fail "the claim-holder fixture failed"
+  wait "$acquire_pid" || true
+  rc=$(tr -d '[:space:]' < "$dir/acquire.rc")
+  [ "$rc" != 0 ] || fail "the acquisition overwrote an owner published while it waited for the claim"
+  [ "$(tr -d '[:space:]' < "$state/.lock")" = 600 ] \
+    || fail "the acquisition changed the live owner's lock to $(cat "$state/.lock")"
+  [ "$(tr -d '[:space:]' < "$state/.lock-session")" = OTHER ] \
+    || fail "the acquisition changed the live owner's sidecar"
+  pass "session-lock: Windows ownership snapshots after claim acquisition"
+}
+
 # A background Claude session's process table. The hook fires inside
 # `claude bg-spare` (710), whose parent is `claude bg-pty-host` (720). With the
 # transient daemon gone the pty-host is reparented to launchd, so the contiguous
@@ -1265,6 +1356,7 @@ test_ordinary_paths_are_never_harness_processes
 test_harness_beyond_a_gap_never_owns_the_lock
 test_competing_version_named_session_is_seen_as_live
 test_windows_fallback_requires_native_ancestry
+test_windows_snapshot_is_taken_after_claim
 test_same_session_id_owns_a_recycled_background_chain
 test_anchor_pid_is_the_model_loop_process_only_for_a_trusted_id
 # Windows without executable symlinks can copy bash to an extensionless name

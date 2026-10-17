@@ -49,8 +49,8 @@ _fm_windows_ps_fallback_needed() {
   [ "$needed" = yes ]
 }
 
-# One snapshot per walk; fm-lock.sh primes it in the acquiring shell so all
-# command substitutions share it for that acquisition, not across commands.
+# One snapshot per acquisition; fm-lock.sh retains it in the acquiring shell so
+# all command substitutions share it until the claim is released.
 _FM_WINDOWS_PROCESS_TABLE=
 _fm_windows_prepare_process_snapshot() {
   [ -z "$_FM_WINDOWS_PROCESS_TABLE" ] || return 0
