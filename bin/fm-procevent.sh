@@ -680,13 +680,17 @@ cmd_register_task() {
   done
   [ -f "$(adapter_script "$adapter")" ] || die "no installed adapter for: $adapter"
   state_root_bind create || die "cannot safely prepare the process-event state root"
-  fm_task_feedback_lock_acquire "$STATE" "$task" required \
-    || die "cannot lock task feedback for $task"
-  trap 'fm_task_feedback_lock_release' EXIT
   fm_backend_validate_task_endpoint "$STATE/$task.meta" "$task" >/dev/null \
     || die "cannot own a board for task $task; its captured feedback would reach no endpoint"
   (umask 077; mkdir -p "$REG") || die "cannot prepare the process-event registry"
   fm_procevent_source_lock_acquire "$id" || die "cannot lock the source"
+  fm_task_feedback_lock_acquire "$STATE" "$task" required || {
+    fm_procevent_source_lock_release "$id" || true
+    die "cannot lock task feedback for $task"
+  }
+  trap 'fm_task_feedback_lock_release' EXIT
+  fm_backend_validate_task_endpoint "$STATE/$task.meta" "$task" >/dev/null \
+    || die "cannot own a board for task $task; its captured feedback would reach no endpoint"
   if [ -e "$(source_file "$id")" ] || [ -L "$(source_file "$id")" ]; then
     if [ "$(source_kind "$id" 2>/dev/null || true)" != task-owned ]; then
       fm_procevent_source_lock_release "$id"
@@ -962,7 +966,7 @@ publish_result() {  # <result-file>
       inbox_dir=$(fm_task_inbox_dir "$STATE" "$owner_task")
       handled_dir=$(fm_task_inbox_handled_dir "$STATE" "$owner_task")
       pre_existing=$(printf '%s\n' "$inbox_dir"/*.msg "$handled_dir"/*.msg 2>/dev/null)
-      record=$(fm_task_inbox_write_idempotent "$STATE" "$owner_task" "$message" 2>/dev/null || true)
+      record=$(fm_task_inbox_write_idempotent "$STATE" "$owner_task" "$message" '' required 2>/dev/null || true)
       [ -n "$record" ] && status=0
       new_record=0
       if [ "$status" -eq 0 ]; then

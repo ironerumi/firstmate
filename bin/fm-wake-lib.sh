@@ -1409,6 +1409,10 @@ fm_task_feedback_lock_acquire() {  # <state-dir> <task-id> [required]
   local state=$1 task=$2 required=${3:-} meta lock
   FM_TASK_FEEDBACK_LOCK_PATH=
   meta="$state/$task.meta"
+  if [ "$required" = held ]; then
+    [ -f "$meta" ] && [ ! -L "$meta" ] || return 1
+    return 0
+  fi
   if [ ! -e "$meta" ] && [ ! -L "$meta" ]; then
     [ "$required" = required ] && return 1
     return 0
