@@ -343,6 +343,8 @@ github_sole_allowed_merge_method() {
       merge=true) method=--merge; count=$((count + 1)) ;;
       squash=true) method=--squash; count=$((count + 1)) ;;
       rebase=true) method=--rebase; count=$((count + 1)) ;;
+      merge=false|squash=false|rebase=false) ;;
+      *) return 1 ;;
     esac
   done
   [ "$count" -eq 1 ] || return 1

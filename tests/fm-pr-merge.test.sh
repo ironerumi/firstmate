@@ -1974,6 +1974,8 @@ test_several_allowed_repo_merge_methods_keep_squash() {
   for setting in "merge=true squash=true rebase=false" \
     "merge=true squash=true rebase=true" \
     "merge=false squash=false rebase=false" \
+    "merge=true squash=null rebase=false" \
+    "merge=true rebase=false" \
     "merge=null squash=null rebase=null" \
     "unreadable" \
     "api-failure"; do
