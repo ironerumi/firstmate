@@ -298,18 +298,8 @@ SH
   cat > "$fakebin/cat" <<'SH'
 #!/usr/bin/env bash
 case "${1:-}" in
-  /proc/60/winpid) printf '%s\n' 600 ;;
-  /proc/70/winpid) printf '%s\n' 700 ;;
-  /proc/80/winpid) printf '%s\n' 800 ;;
-  /proc/90/winpid) printf '%s\n' 900 ;;
   /proc/*/winpid) printf '%s\n' 500 ;;
-  /proc/60/ppid) printf '%s\n' 70 ;;
-  /proc/70/ppid) printf '%s\n' 80 ;;
-  /proc/80/ppid) printf '%s\n' 90 ;;
-  /proc/90/ppid) printf '%s\n' 0 ;;
-  /proc/*/ppid)
-    if [ "${FM_TEST_WINDOWS_TREE:-pi}" = claude ]; then printf '%s\n' 70; else printf '%s\n' 60; fi
-    ;;
+  /proc/*/ppid) exit 1 ;;
   *) exec /bin/cat "$@" ;;
 esac
 SH
@@ -323,21 +313,20 @@ case "$*" in
   *'Get-Process -Id 800'*) printf '%s\n' claude ;;
   *'Get-Process -Id 900'*) printf '%s\n' explorer ;;
   *'Get-Process -Id 999'*) exit 1 ;;
-  # MSYS fork intermediate 6676 has already exited. Native CIM walking
-  # cannot reach the harness, but the Cygwin process chain still can.
-  *'ProcessId = 500'*) printf '%s\n' 6676 ;;
-  *'ProcessId = 6676'*) exit 1 ;;
-  *'ProcessId = 600'*) printf '%s\n' 700 ;;
-  *'ProcessId = 700'*) printf '%s\n' 800 ;;
-  *'ProcessId = 800'*) printf '%s\n' 900 ;;
+  *Win32_Process*'ProcessId = 500'*)
+    if [ "${FM_TEST_WINDOWS_TREE:-pi}" = claude ]; then printf 'bash.exe\t700\n'; else printf 'bash.exe\t600\n'; fi
+    ;;
+  *Win32_Process*'ProcessId = 600'*) printf 'pi.exe\t700\n' ;;
+  *Win32_Process*'ProcessId = 700'*) printf 'claude.exe\t800\n' ;;
+  *Win32_Process*'ProcessId = 800'*) printf 'claude.exe\t900\n' ;;
+  *Win32_Process*'ProcessId = 900'*) printf 'explorer.exe\t0\n' ;;
   *) exit 1 ;;
 esac
 SH
   chmod +x "$fakebin/uname" "$fakebin/cat" "$fakebin/powershell.exe"
 
   # A Pi started from a Claude tool shell inherits Claude's environment, but
-  # its own harness is Pi: Cygwin shell -> 60 -> 70, Windows 500 -> 600 -> 700.
-  # Native Windows ancestry instead ends at the dead fork intermediate 6676.
+  # its own native harness ancestor is Pi (500 -> 600 -> 700).
   printf '700\n' > "$state/.lock"
   got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
     || fail "the native fallback did not find the hand-started Pi harness"
@@ -374,7 +363,7 @@ SH
   got=$(FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
     "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
   [ "$got" = 'stale false' ] || fail "an unavailable Windows PID was inspected as '$got'"
-  pass "session-lock: Windows ownership survives dead native fork intermediates through real Cygwin ancestry"
+  pass "session-lock: Windows ownership requires native process ancestry"
 }
 
 # A background Claude session's process table. The hook fires inside
