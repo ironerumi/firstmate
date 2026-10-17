@@ -362,6 +362,7 @@ Observed output, bounded to the lines the new coverage adds:
 ok - session-lock: a trusted same-session id keeps owning a recycled background chain, and nothing weaker does
 ok - session-lock: a trusted id anchors the lock on the model-loop process, anything else on the outermost pid
 ok - session-lock e2e: a background session keeps its lock and its supervision across a recycled helper chain
+ok - session-lock: Windows ownership requires real process ancestry
 same-session acquisition rc=0 stdout='lock acquired: harness pid 41994\nlock_rc=0\n' stderr=''
 other-session acquisition rc=0 stdout='lock_rc=1\n' stderr='error: another live firstmate session holds the lock (pid 41994, session synthetic-same); operate read-only until resolved\n'
 FIXED same-session id owns the lock; a different id is still foreign
