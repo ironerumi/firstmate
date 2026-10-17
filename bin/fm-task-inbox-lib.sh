@@ -221,12 +221,20 @@ _fm_task_inbox_write_record_locked() {  # <inbox-dir> <text> [delivery-mode]
 # sequence slot. Prints the record path. Fails without a partial record.
 fm_task_inbox_write() {  # <state-dir> <task-id> <text> [delivery-mode]
   local state=$1 task=$2 text=$3 delivery_mode=${4:-} dir lock rec status=0
+  fm_task_feedback_lock_acquire "$state" "$task" || return 1
   dir=$(fm_task_inbox_dir "$state" "$task")
-  mkdir -p "$dir/handled" || return 1
+  mkdir -p "$dir/handled" || {
+    fm_task_feedback_lock_release || true
+    return 1
+  }
   lock="$dir/.seq.lock"
-  fm_task_inbox_lock_acquire "$lock" || return 1
+  fm_task_inbox_lock_acquire "$lock" || {
+    fm_task_feedback_lock_release || true
+    return 1
+  }
   rec=$(_fm_task_inbox_write_record_locked "$dir" "$text" "$delivery_mode") || status=1
   fm_lock_release "$lock"
+  fm_task_feedback_lock_release || status=1
   [ "$status" -eq 0 ] || return 1
   printf '%s' "$rec"
 }
@@ -244,10 +252,17 @@ fm_task_inbox_write() {  # <state-dir> <task-id> <text> [delivery-mode]
 # a repeated identical local steer is a deliberate new instruction.
 fm_task_inbox_write_idempotent() {  # <state-dir> <task-id> <text> [delivery-mode]
   local state=$1 task=$2 text=$3 delivery_mode=${4:-} dir lock want have f rec='' status=0
+  fm_task_feedback_lock_acquire "$state" "$task" || return 1
   dir=$(fm_task_inbox_dir "$state" "$task")
-  mkdir -p "$dir/handled" || return 1
+  mkdir -p "$dir/handled" || {
+    fm_task_feedback_lock_release || true
+    return 1
+  }
   lock="$dir/.seq.lock"
-  fm_task_inbox_lock_acquire "$lock" || return 1
+  fm_task_inbox_lock_acquire "$lock" || {
+    fm_task_feedback_lock_release || true
+    return 1
+  }
   if want=$(mktemp "$dir/.dedup.XXXXXX") && have=$(mktemp "$dir/.dedup.XXXXXX"); then
     if printf '%s' "$text" > "$want"; then
       for f in "$dir"/*.msg "$dir/handled"/*.msg; do
@@ -291,6 +306,7 @@ fm_task_inbox_write_idempotent() {  # <state-dir> <task-id> <text> [delivery-mod
     rec=$(_fm_task_inbox_write_record_locked "$dir" "$text" "$delivery_mode") || status=1
   fi
   fm_lock_release "$lock"
+  fm_task_feedback_lock_release || status=1
   [ "$status" -eq 0 ] || return 1
   printf '%s' "$rec"
 }

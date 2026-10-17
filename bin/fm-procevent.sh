@@ -680,6 +680,9 @@ cmd_register_task() {
   done
   [ -f "$(adapter_script "$adapter")" ] || die "no installed adapter for: $adapter"
   state_root_bind create || die "cannot safely prepare the process-event state root"
+  fm_task_feedback_lock_acquire "$STATE" "$task" required \
+    || die "cannot lock task feedback for $task"
+  trap 'fm_task_feedback_lock_release' EXIT
   fm_backend_validate_task_endpoint "$STATE/$task.meta" "$task" >/dev/null \
     || die "cannot own a board for task $task; its captured feedback would reach no endpoint"
   (umask 077; mkdir -p "$REG") || die "cannot prepare the process-event registry"
@@ -806,6 +809,8 @@ cmd_register_task() {
     rm -f -- "$stale"
   done
   fm_procevent_source_lock_release "$id"
+  fm_task_feedback_lock_release
+  trap - EXIT
   owner_lease_refresh
   printf 'registered: %s (%s, task=%s)\n' "$id" "$adapter" "$task"
 }

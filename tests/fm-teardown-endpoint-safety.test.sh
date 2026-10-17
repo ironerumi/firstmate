@@ -22,6 +22,15 @@ make_case() {  # <name>
 printf 'tmux' >> "${FM_RUNTIME_LOG:?}"
 printf ' <%s>' "$@" >> "${FM_RUNTIME_LOG:?}"
 printf '\n' >> "${FM_RUNTIME_LOG:?}"
+if [ "$1" = kill-window ] && [ -f "$FM_HOME/state/.post-feedback-task" ]; then
+  task=$(cat "$FM_HOME/state/.post-feedback-task")
+  (
+    . "$FM_ROOT_OVERRIDE/bin/fm-task-inbox-lib.sh"
+    status=0
+    fm_task_inbox_write "$FM_HOME/state" "$task" 'post-close feedback' >/dev/null || status=$?
+    printf '%s\n' "$status" > "$FM_HOME/state/.post-feedback-status"
+  ) &
+fi
 exit 0
 SH
   cat > "$TMP_ROOT/$dir/fakebin/treehouse" <<'SH'
@@ -1502,6 +1511,23 @@ test_late_feedback_refuses_before_endpoint_close() {
   pass "fm-teardown: feedback arriving after initial inventory refuses before endpoint close"
 }
 
+test_post_check_feedback_writer_cannot_recreate_retired_inbox() {
+  local dir id=post-check-feedback i=0 status
+  dir=$(make_feedback_case post-check-feedback "$id")
+  printf '%s\n' "$id" > "$dir/home/state/.post-feedback-task"
+  run_feedback_case "$dir" "$id" > "$dir/out" 2> "$dir/err" \
+    || fail "post-check feedback fixture teardown failed: $(cat "$dir/err")"
+  while [ ! -f "$dir/home/state/.post-feedback-status" ] && [ "$i" -lt 50 ]; do
+    sleep 0.1
+    i=$((i + 1))
+  done
+  assert_present "$dir/home/state/.post-feedback-status" "post-check writer did not complete"
+  status=$(cat "$dir/home/state/.post-feedback-status")
+  [ "$status" -ne 0 ] || fail "post-check feedback writer recreated an inbox after teardown"
+  assert_absent "$dir/home/state/$id.inbox" "post-check feedback recreated the retired inbox"
+  pass "fm-teardown: post-check feedback writer cannot recreate retired inbox"
+}
+
 test_unrelated_task_feedback_does_not_block() {
   local dir id=unrelated-feedback
   dir=$(make_feedback_case unrelated-feedback "$id")
@@ -1519,6 +1545,7 @@ test_unrelated_task_feedback_does_not_block() {
 
 test_task_feedback_refuses_ordinary_teardown
 test_late_feedback_refuses_before_endpoint_close
+test_post_check_feedback_writer_cannot_recreate_retired_inbox
 test_unrelated_task_feedback_does_not_block
 test_invalid_endpoint_records_refuse_before_mutation
 test_control_lock_contention_refuses_before_mutation
