@@ -34,6 +34,18 @@ NAMED_CLAUDE="$FAKEBIN/claude"
 
 # --- unit layer: identity behind a deterministic process table ---------------
 
+# Pin POSIX unit fixtures independently of the host's uname output.
+posix_fakebin() {
+  local fakebin
+  fakebin=$(fm_fakebin "$1")
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' Linux
+SH
+  chmod +x "$fakebin/uname"
+  printf '%s\n' "$fakebin"
+}
+
 # Run one library expression with <fakebin> shadowing ps. kill is stubbed so
 # liveness questions are decided by the process table alone (FM_TEST_KILL_RC=1
 # makes every pid dead). The suite itself may run inside a Claude session whose
@@ -55,7 +67,7 @@ lib_eval() {  # <fakebin> <expression>
 test_version_named_session_is_identified_on_both_platforms() {
   local dir fakebin shape got
   dir="$TMP_ROOT/version-named"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   mkdir -p "$dir/state"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -101,7 +113,7 @@ SH
 test_harness_at_namespace_pid1_is_examined() {
   local dir fakebin got
   dir="$TMP_ROOT/namespace-pid1"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   mkdir -p "$dir/state"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -143,7 +155,7 @@ SH
 test_ordinary_paths_are_never_harness_processes() {
   local dir fakebin shape
   dir="$TMP_ROOT/ordinary-paths"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   mkdir -p "$dir/state"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -190,7 +202,7 @@ SH
 test_harness_beyond_a_gap_never_owns_the_lock() {
   local dir fakebin got
   dir="$TMP_ROOT/gap"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   mkdir -p "$dir/state"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -235,7 +247,7 @@ SH
 test_competing_version_named_session_is_seen_as_live() {
   local dir fakebin
   dir="$TMP_ROOT/competing"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   mkdir -p "$dir/state"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -286,7 +298,18 @@ SH
   cat > "$fakebin/cat" <<'SH'
 #!/usr/bin/env bash
 case "${1:-}" in
+  /proc/60/winpid) printf '%s\n' 600 ;;
+  /proc/70/winpid) printf '%s\n' 700 ;;
+  /proc/80/winpid) printf '%s\n' 800 ;;
+  /proc/90/winpid) printf '%s\n' 900 ;;
   /proc/*/winpid) printf '%s\n' 500 ;;
+  /proc/60/ppid) printf '%s\n' 70 ;;
+  /proc/70/ppid) printf '%s\n' 80 ;;
+  /proc/80/ppid) printf '%s\n' 90 ;;
+  /proc/90/ppid) printf '%s\n' 0 ;;
+  /proc/*/ppid)
+    if [ "${FM_TEST_WINDOWS_TREE:-pi}" = claude ]; then printf '%s\n' 70; else printf '%s\n' 60; fi
+    ;;
   *) exec /bin/cat "$@" ;;
 esac
 SH
@@ -300,9 +323,10 @@ case "$*" in
   *'Get-Process -Id 800'*) printf '%s\n' claude ;;
   *'Get-Process -Id 900'*) printf '%s\n' explorer ;;
   *'Get-Process -Id 999'*) exit 1 ;;
-  *'ProcessId = 500'*)
-    if [ "${FM_TEST_WINDOWS_TREE:-pi}" = claude ]; then printf '%s\n' 700; else printf '%s\n' 600; fi
-    ;;
+  # MSYS fork intermediate 6676 has already exited. Native CIM walking
+  # cannot reach the harness, but the Cygwin process chain still can.
+  *'ProcessId = 500'*) printf '%s\n' 6676 ;;
+  *'ProcessId = 6676'*) exit 1 ;;
   *'ProcessId = 600'*) printf '%s\n' 700 ;;
   *'ProcessId = 700'*) printf '%s\n' 800 ;;
   *'ProcessId = 800'*) printf '%s\n' 900 ;;
@@ -311,8 +335,9 @@ esac
 SH
   chmod +x "$fakebin/uname" "$fakebin/cat" "$fakebin/powershell.exe"
 
-  # A Pi started from a Claude tool shell has Claude's environment but not its
-  # native ancestry: bash 500 -> pi 600 -> claude 700.
+  # A Pi started from a Claude tool shell inherits Claude's environment, but
+  # its own harness is Pi: Cygwin shell -> 60 -> 70, Windows 500 -> 600 -> 700.
+  # Native Windows ancestry instead ends at the dead fork intermediate 6676.
   printf '700\n' > "$state/.lock"
   got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
     || fail "the native fallback did not find the hand-started Pi harness"
@@ -349,7 +374,7 @@ SH
   got=$(FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
     "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
   [ "$got" = 'stale false' ] || fail "an unavailable Windows PID was inspected as '$got'"
-  pass "session-lock: Windows ownership requires native ancestry and preserves inspection ambiguity"
+  pass "session-lock: Windows ownership survives dead native fork intermediates through real Cygwin ancestry"
 }
 
 # A background Claude session's process table. The hook fires inside
@@ -403,7 +428,7 @@ foreign_owner() {  # <fakebin> <state>  -> prints the foreign pid
 test_same_session_id_owns_a_recycled_background_chain() {
   local dir fakebin state got
   dir="$TMP_ROOT/background-session"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   state="$dir/state"
   mkdir -p "$state"
   write_background_session_ps "$fakebin"
@@ -486,7 +511,7 @@ test_same_session_id_owns_a_recycled_background_chain() {
 test_anchor_pid_is_the_model_loop_process_only_for_a_trusted_id() {
   local dir fakebin got
   dir="$TMP_ROOT/background-anchor"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   write_background_session_ps "$fakebin"
 
   got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=710 lib_eval "$fakebin" 'fm_session_lock_anchor_pid') \

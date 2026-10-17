@@ -29,8 +29,8 @@ unset _FM_SESSION_LOCK_LIB_DIR
 # output format specifiers and cannot walk the Windows process ancestry from a
 # Cygwin tool shell to the harness (tool shells appear with PPID=1 in the
 # Cygwin process table regardless of their Windows parent). These helpers
-# detect that environment and use PowerShell for native process identity and
-# parent resolution.
+# detect that environment, walk Cygwin parent links, and use PowerShell for
+# native process identity.
 
 # Cached indicator: "yes" = ps -o unavailable (Windows/Cygwin), "no" = normal.
 _FM_WINDOWS_PS_FALLBACK_NEEDED=
@@ -72,42 +72,35 @@ _fm_harness_pid_alive_windows() {  # <pid>
   printf '%s' "$name" | grep -qE "$FM_HARNESS_RE"
 }
 
-_fm_windows_current_pid() {
-  local pid
-  pid=$(cat "/proc/$$/winpid" 2>/dev/null) || return 1
-  pid=${pid%%$'\r'*}
+# Read a numeric Cygwin process-table field. Keep Cygwin pids distinct from
+# Windows pids: PowerShell identity lookups require winpid, not the proc pid.
+_fm_windows_proc_pid() {  # <cygwin-pid> <ppid|winpid>
+  local pid=$1 field=$2 value
   case "$pid" in ''|*[!0-9]*) return 1 ;; esac
-  printf '%s\n' "$pid"
+  case "$field" in ppid|winpid) ;; *) return 1 ;; esac
+  value=$(cat "/proc/$pid/$field" 2>/dev/null) || return 1
+  value=${value%%$'\r'*}
+  case "$value" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$value"
 }
 
-_fm_windows_process_parent_pid() {  # <pid>
-  local pid=$1 parent
-  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
-  parent=$(powershell.exe -NoProfile -NonInteractive -Command \
-    "try { (Get-CimInstance -ClassName Win32_Process -Filter 'ProcessId = $pid' -ErrorAction Stop).ParentProcessId } catch { exit 1 }" \
-    2>/dev/null) || return 1
-  parent=${parent%%$'\r'*}
-  case "$parent" in ''|*[!0-9]*) return 1 ;; esac
-  printf '%s\n' "$parent"
-}
-
-# Walk the native Windows ancestry and print its contiguous verified-harness
-# ancestry, innermost pid first. The native chain is authoritative because the
-# Cygwin/MSYS process table does not preserve the Windows parent relationship.
+# Walk the real Cygwin ancestry and print contiguous verified Windows harness
+# pids, innermost first. Native Windows parents can be already-exited MSYS fork
+# intermediates; /proc ppid links retain the actual Cygwin parent instead.
 _fm_harness_ancestry_pids_windows() {
-  local pid comm parent extending=0 printed=0
-  pid=$(_fm_windows_current_pid) || return 1
+  local pid=$$ winpid comm parent extending=0 printed=0
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-    comm=$(_fm_windows_process_name "$pid") || break
+    winpid=$(_fm_windows_proc_pid "$pid" winpid) || break
+    comm=$(_fm_windows_process_name "$winpid") || break
     if fm_harness_process_matches "$comm" ''; then
-      printf '%s\n' "$pid"
+      printf '%s\n' "$winpid"
       printed=1
       [ "$FM_HARNESS_IS_CLAUDE" -eq 1 ] || break
       extending=1
     elif [ "$extending" -eq 1 ]; then
       break
     fi
-    parent=$(_fm_windows_process_parent_pid "$pid") || break
+    parent=$(_fm_windows_proc_pid "$pid" ppid) || break
     [ "$parent" -ge 1 ] || break
     pid=$parent
   done
