@@ -49,34 +49,44 @@ _fm_windows_ps_fallback_needed() {
   [ "$needed" = yes ]
 }
 
-# Print the ProcessName of Windows PID $1 via PowerShell, or return 1.
-# Strips the trailing carriage return that PowerShell adds on Windows.
-_fm_windows_process_name() {  # <pid>
-  local pid=$1 name
-  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
-  name=$(powershell.exe -NoProfile -NonInteractive -Command \
-    "try { (Get-Process -Id $pid -ErrorAction Stop).ProcessName } catch { exit 1 }" \
-    2>/dev/null) || return 1
-  printf '%s' "${name%%$'\r'}"
-}
-
-# True when Windows PID $1 is a live verified harness. Sets FM_HARNESS_IS_CLAUDE.
-_fm_harness_pid_alive_windows() {  # <pid>
-  local name
-  name=$(_fm_windows_process_name "$1") || return 2
-  fm_harness_process_matches "$name" ''
-}
-
-# Print the Windows process name and native parent PID for $1, or return 1.
+# Print the Windows process name, parent PID, executable path, and command
+# line for $1, or return 1.
 _fm_windows_process_info() {  # <pid>
   local pid=$1 info
   case "$pid" in ''|*[!0-9]*) return 1 ;; esac
   info=$(powershell.exe -NoProfile -NonInteractive -Command \
-    "try { \$p = Get-CimInstance Win32_Process -Filter \"ProcessId = $pid\" -ErrorAction Stop; if (\$null -eq \$p) { exit 1 }; \"{0}\`t{1}\" -f \$p.Name,\$p.ParentProcessId } catch { exit 1 }" \
+    "try { \$p = Get-CimInstance Win32_Process -Filter \"ProcessId = $pid\" -ErrorAction Stop; if (\$null -eq \$p) { exit 1 }; \"{0}\`t{1}\`t{2}\`t{3}\" -f \$p.Name,\$p.ParentProcessId,(\$p.ExecutablePath -replace '\\\\','/'),\$p.CommandLine } catch { exit 1 }" \
     2>/dev/null) || return 1
   info=${info%%$'\r'}
-  case "$info" in *$'\t'*) ;; *) return 1 ;; esac
+  case "$info" in *$'\t'*$'\t'*$'\t'*) ;; *) return 1 ;; esac
   printf '%s\n' "$info"
+}
+
+_FM_WINDOWS_PROCESS_NAME=
+_FM_WINDOWS_PROCESS_PARENT=
+_FM_WINDOWS_PROCESS_PATH=
+_FM_WINDOWS_PROCESS_ARGS=
+_fm_windows_process_fields() {  # <process-info>
+  local info=$1 rest
+  _FM_WINDOWS_PROCESS_NAME=${info%%$'\t'*}
+  rest=${info#*$'\t'}
+  _FM_WINDOWS_PROCESS_PARENT=${rest%%$'\t'*}
+  rest=${rest#*$'\t'}
+  _FM_WINDOWS_PROCESS_PATH=${rest%%$'\t'*}
+  _FM_WINDOWS_PROCESS_ARGS=${rest#*$'\t'}
+  [ -n "$_FM_WINDOWS_PROCESS_NAME" ] || return 1
+  case "$_FM_WINDOWS_PROCESS_PARENT" in ''|*[!0-9]*) return 1 ;; esac
+}
+
+# True when Windows PID $1 is a live verified harness. Sets FM_HARNESS_IS_CLAUDE.
+_fm_harness_pid_alive_windows() {  # <pid>
+  local info comm args
+  info=$(_fm_windows_process_info "$1") || return 2
+  _fm_windows_process_fields "$info" || return 2
+  comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
+  args=$_FM_WINDOWS_PROCESS_PATH
+  [ -n "$args" ] && args="$args $_FM_WINDOWS_PROCESS_ARGS"
+  fm_harness_process_matches "$comm" "$args"
 }
 
 # Read the Windows PID corresponding to the current Cygwin/MSYS process.
@@ -91,16 +101,16 @@ _fm_windows_current_pid() {
 # Walk native Windows parentage and print contiguous verified harness pids,
 # innermost first.
 _fm_harness_ancestry_pids_windows() {
-  local pid comm parent info extending=0 printed=0
+  local pid comm parent info args extending=0 printed=0
   pid=$(_fm_windows_current_pid) || return 1
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     info=$(_fm_windows_process_info "$pid") || break
-    comm=${info%%$'\t'*}
-    parent=${info#*$'\t'}
-    comm=${comm%.[Ee][Xx][Ee]}
-    [ -n "$comm" ] || break
-    case "$parent" in ''|*[!0-9]*) break ;; esac
-    if fm_harness_process_matches "$comm" ''; then
+    _fm_windows_process_fields "$info" || break
+    comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
+    parent=$_FM_WINDOWS_PROCESS_PARENT
+    args=$_FM_WINDOWS_PROCESS_PATH
+    [ -n "$args" ] && args="$args $_FM_WINDOWS_PROCESS_ARGS"
+    if fm_harness_process_matches "$comm" "$args"; then
       printf '%s\n' "$pid"
       printed=1
       [ "$FM_HARNESS_IS_CLAUDE" -eq 1 ] || break

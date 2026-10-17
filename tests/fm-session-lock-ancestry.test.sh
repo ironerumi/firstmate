@@ -311,15 +311,21 @@ case "$*" in
   *'Get-Process -Id 600'*) printf '%s\n' pi ;;
   *'Get-Process -Id 700'*) printf '%s\n' claude ;;
   *'Get-Process -Id 800'*) printf '%s\n' claude ;;
+  *'Get-Process -Id 610'*) printf '%s\n' agent ;;
   *'Get-Process -Id 900'*) printf '%s\n' explorer ;;
   *'Get-Process -Id 999'*) exit 1 ;;
   *Win32_Process*'ProcessId = 500'*)
-    if [ "${FM_TEST_WINDOWS_TREE:-pi}" = claude ]; then printf 'bash.exe\t700\n'; else printf 'bash.exe\t600\n'; fi
+    case "${FM_TEST_WINDOWS_TREE:-pi}" in
+      claude) printf 'bash.exe\t700\tC:/Windows/bash.exe\tbash\n' ;;
+      cursor) printf 'bash.exe\t610\tC:/Windows/bash.exe\tbash\n' ;;
+      *) printf 'bash.exe\t600\tC:/Windows/bash.exe\tbash\n' ;;
+    esac
     ;;
-  *Win32_Process*'ProcessId = 600'*) printf 'pi.exe\t700\n' ;;
-  *Win32_Process*'ProcessId = 700'*) printf 'claude.exe\t800\n' ;;
-  *Win32_Process*'ProcessId = 800'*) printf 'claude.exe\t900\n' ;;
-  *Win32_Process*'ProcessId = 900'*) printf 'explorer.exe\t0\n' ;;
+  *Win32_Process*'ProcessId = 600'*) printf 'pi.exe\t700\tC:/Users/u/pi.exe\tpi\n' ;;
+  *Win32_Process*'ProcessId = 610'*) printf 'agent.exe\t900\tC:/Users/u/.local/share/cursor-agent/versions/2026.08.11/cursor-agent.exe\tagent\n' ;;
+  *Win32_Process*'ProcessId = 700'*) printf 'claude.exe\t800\tC:/Users/u/claude.exe\tclaude\n' ;;
+  *Win32_Process*'ProcessId = 800'*) printf 'claude.exe\t900\tC:/Users/u/claude.exe\tclaude\n' ;;
+  *Win32_Process*'ProcessId = 900'*) printf 'explorer.exe\t0\tC:/Windows/explorer.exe\texplorer\n' ;;
   *) exit 1 ;;
 esac
 SH
@@ -353,6 +359,18 @@ SH
     lib_eval "$fakebin" 'fm_session_lock_anchor_pid') \
     || fail "the verified Claude chain did not anchor"
   [ "$got" = 700 ] || fail "the verified Claude chain anchored '$got', expected 700"
+
+  got=$(FM_TEST_WINDOWS_TREE=cursor lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
+    || fail "the native fallback did not identify Cursor's agent alias"
+  [ "$got" = 610 ] || fail "the Cursor alias ancestry was '$got', expected 610"
+  FM_TEST_WINDOWS_TREE=cursor lib_eval "$fakebin" 'fm_harness_pid_alive 610' \
+    || fail "Cursor's agent alias was not recognized as a live harness"
+  printf '610\n' > "$state/.lock"
+  FM_TEST_WINDOWS_TREE=cursor lib_eval "$fakebin" "fm_session_lock_owned_by_self '$state'" \
+    || fail "Cursor's agent alias did not own its lock"
+  got=$(FM_TEST_WINDOWS_TREE=cursor lib_eval "$fakebin" 'fm_session_lock_anchor_pid') \
+    || fail "Cursor's agent alias did not anchor"
+  [ "$got" = 610 ] || fail "the Cursor alias anchored '$got', expected 610"
 
   # Inspection retains the live-ambiguous versus unavailable distinction.
   printf '900\n' > "$state/.lock"
