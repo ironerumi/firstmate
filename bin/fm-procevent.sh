@@ -34,6 +34,11 @@
 #            staged `--agent-reply-file` is handed to the adapter's
 #            `deliver-reply` under the source lock once the task is eligible,
 #            so a refused arm never posts it and a failed post publishes no registration.
+# task-feedback
+#            Inventory one task's owned listener, unread inbox messages, and
+#            unhandled captured results for the ordinary teardown refusal.
+#            The ownership contract and --force boundary are documented in
+#            docs/configuration.md#process-to-event-sources-stateprocevent.
 # register-extension
 #            Resolve an explicitly enabled home-local process-event-adapter/1
 #            binding, verify its package and handshake, and record the source
