@@ -333,7 +333,7 @@ caller_merge_method() {
 # nothing and returns 1 so the caller keeps its default.
 github_sole_allowed_merge_method() {
   local settings pair method='' count=0
-  settings=$(gh api "repos/$PR_OWNER/$PR_REPO" --jq '"merge=\(.allow_merge_commit) squash=\(.allow_squash_merge) rebase=\(.allow_rebase_merge)"' 2>/dev/null) || return 1
+  settings=$(gh api "repos/$PR_OWNER/$PR_REPO" --jq 'if ((.allow_merge_commit | type) == "boolean") and ((.allow_squash_merge | type) == "boolean") and ((.allow_rebase_merge | type) == "boolean") then "merge=\(.allow_merge_commit) squash=\(.allow_squash_merge) rebase=\(.allow_rebase_merge)" else empty end' 2>/dev/null) || return 1
   case "$settings" in
     "merge="*" squash="*" rebase="*) ;;
     *) return 1 ;;

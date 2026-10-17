@@ -256,8 +256,8 @@ case "${1:-} ${2:-}" in
       repos/*/*/*) ;;
       repos/*/*)
         if [ -f "${FM_TEST_GH_REPO_SETTINGS:-}" ]; then
-          cat "$FM_TEST_GH_REPO_SETTINGS"
-          exit 0
+          jq -r "${4:-.}" "$FM_TEST_GH_REPO_SETTINGS"
+          exit $?
         fi
         exit 1
         ;;
@@ -1912,9 +1912,9 @@ test_explicit_merge_method_not_overridden() {
     mkdir -p "$case_dir/wt"
     add_gh_mocks "$case_dir" 5555555555555555555555555555555555555555
     : > "$case_dir/gh-axi.log"
-    printf '%s\n' 'merge=false squash=false rebase=true' > "$case_dir/github-repo-settings"
+    printf '%s\n' '{"allow_merge_commit":false,"allow_squash_merge":false,"allow_rebase_merge":true}' > "$case_dir/github-repo-settings"
     if [ "$method" = --rebase ]; then
-      printf '%s\n' 'merge=true squash=false rebase=false' > "$case_dir/github-repo-settings"
+      printf '%s\n' '{"allow_merge_commit":true,"allow_squash_merge":false,"allow_rebase_merge":false}' > "$case_dir/github-repo-settings"
     fi
     set -- "$method"
     [ "$method" != --method ] || set -- "$method" merge
@@ -1936,7 +1936,7 @@ test_method_equals_merge_method_not_overridden() {
   mkdir -p "$case_dir/wt"
   add_gh_mocks "$case_dir" 7777777777777777777777777777777777777777
   : > "$case_dir/gh-axi.log"
-  printf '%s\n' 'merge=false squash=false rebase=true' > "$case_dir/github-repo-settings"
+  printf '%s\n' '{"allow_merge_commit":false,"allow_squash_merge":false,"allow_rebase_merge":true}' > "$case_dir/github-repo-settings"
 
   run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/23 -- --method=merge \
     > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "method-equals-merge-method: fm-pr-merge failed"
@@ -1950,11 +1950,12 @@ test_method_equals_merge_method_not_overridden() {
 # configuration keeps --squash.
 test_sole_allowed_repo_merge_method_is_used() {
   local case_dir setting method want
-  for setting in "merge=true squash=false rebase=false:--merge" \
-    "merge=false squash=true rebase=false:--squash" \
-    "merge=false squash=false rebase=true:--rebase"; do
-    method=${setting%%:*}
-    want=${setting##*:}
+  for setting in \
+    '--merge|{"allow_merge_commit":true,"allow_squash_merge":false,"allow_rebase_merge":false}' \
+    '--squash|{"allow_merge_commit":false,"allow_squash_merge":true,"allow_rebase_merge":false}' \
+    '--rebase|{"allow_merge_commit":false,"allow_squash_merge":false,"allow_rebase_merge":true}'; do
+    want=${setting%%|*}
+    method=${setting#*|}
     case_dir=$(make_case "sole-method-${want#--}")
     mkdir -p "$case_dir/wt"
     add_gh_mocks "$case_dir" 8888888888888888888888888888888888888888
@@ -1971,14 +1972,16 @@ test_sole_allowed_repo_merge_method_is_used() {
 
 test_several_allowed_repo_merge_methods_keep_squash() {
   local case_dir setting n=0
-  for setting in "merge=true squash=true rebase=false" \
-    "merge=true squash=true rebase=true" \
-    "merge=false squash=false rebase=false" \
-    "merge=true squash=null rebase=false" \
-    "merge=true rebase=false" \
-    "merge=null squash=null rebase=null" \
-    "unreadable" \
-    "api-failure"; do
+  for setting in \
+    '{"allow_merge_commit":true,"allow_squash_merge":true,"allow_rebase_merge":false}' \
+    '{"allow_merge_commit":true,"allow_squash_merge":true,"allow_rebase_merge":true}' \
+    '{"allow_merge_commit":false,"allow_squash_merge":false,"allow_rebase_merge":false}' \
+    '{"allow_merge_commit":true,"allow_squash_merge":null,"allow_rebase_merge":false}' \
+    '{"allow_merge_commit":true,"allow_rebase_merge":false}' \
+    '{"allow_merge_commit":null,"allow_squash_merge":null,"allow_rebase_merge":null}' \
+    '{"allow_merge_commit":"true","allow_squash_merge":false,"allow_rebase_merge":false}' \
+    'unreadable' \
+    'api-failure'; do
     n=$((n + 1))
     case_dir=$(make_case "several-methods-$n")
     mkdir -p "$case_dir/wt"
