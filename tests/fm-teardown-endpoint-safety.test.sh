@@ -1455,6 +1455,69 @@ run_feedback_case() {  # <case> <task> [flags]
     "$TEARDOWN" "$id" "$@"
 }
 
+make_secondmate_feedback_case() {  # <case> <task>
+  local dir id=$2 mate
+  dir=$(make_case "$1")
+  mate="$dir/mate"
+  mkdir -p "$mate/state" "$mate/data" "$mate/config" "$mate/projects" \
+    "$dir/home/state/parent-route/procevent" \
+    "$dir/home/state/parent-route/procevent-inbox" \
+    "$dir/home/state/parent-route/$id.inbox" \
+    "$dir/home/data/.parent-route"
+  printf '%s\n' "$id" > "$mate/.fm-secondmate-home"
+  fm_write_meta "$dir/home/state/parent-route/$id.meta" \
+    "window=isolated:fm-$id" "endpoint_task_id=$id" \
+    "worktree=$mate" "project=$dir/project" "home=$mate" \
+    "kind=secondmate" "mode=secondmate" "harness=echo" "yolo=off" \
+    "projects=alpha"
+  printf '%s\n' "$dir"
+}
+
+run_secondmate_feedback_case() {  # <case> <task> [flags]
+  local dir=$1 id=$2
+  shift 2
+  FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" \
+    FM_STATE_OVERRIDE="$dir/home/state/parent-route" \
+    FM_DATA_OVERRIDE="$dir/home/data/.parent-route" \
+    FM_CONFIG_OVERRIDE="$dir/home/config" \
+    FM_RUNTIME_LOG="$dir/runtime.log" PATH="$dir/fakebin:$PATH" \
+    "$TEARDOWN" "$id" "$@"
+}
+
+test_secondmate_feedback_inventory_covers_unread_and_handled() {
+  local dir id=secondmate-feedback rc=0
+
+  dir=$(make_secondmate_feedback_case secondmate-unread "$id")
+  printf 'private steer\n' > "$dir/home/state/parent-route/$id.inbox/001.msg"
+  run_secondmate_feedback_case "$dir" "$id" > "$dir/out" 2> "$dir/err" || rc=$?
+  [ "$rc" -ne 0 ] || fail "ordinary secondmate teardown discarded unread steer"
+  assert_grep "$dir/home/state/parent-route/$id.inbox/001.msg" "$dir/err" \
+    "unread secondmate steer was not identified"
+  assert_present "$dir/home/state/parent-route/$id.meta" \
+    "unread secondmate refusal removed task metadata"
+  assert_present "$dir/mate/.fm-secondmate-home" \
+    "unread secondmate refusal removed the secondmate home"
+  [ ! -s "$dir/runtime.log" ] || fail "unread secondmate refusal mutated runtime"
+
+  dir=$(make_secondmate_feedback_case secondmate-handled "$id")
+  mkdir -p "$dir/home/state/parent-route/$id.inbox/handled"
+  printf 'already handled\n' > \
+    "$dir/home/state/parent-route/$id.inbox/handled/001.msg"
+  run_secondmate_feedback_case "$dir" "$id" > "$dir/out" 2> "$dir/err" \
+    || fail "handled secondmate feedback blocked ordinary teardown: $(cat "$dir/err")"
+  assert_absent "$dir/home/state/parent-route/$id.meta" \
+    "handled secondmate feedback retained task metadata"
+  assert_absent "$dir/mate" "handled secondmate feedback retained the secondmate home"
+
+  dir=$(make_secondmate_feedback_case secondmate-none "$id")
+  run_secondmate_feedback_case "$dir" "$id" > "$dir/out" 2> "$dir/err" \
+    || fail "secondmate teardown with no feedback refused: $(cat "$dir/err")"
+  assert_absent "$dir/home/state/parent-route/$id.meta" \
+    "feedback-free secondmate teardown retained task metadata"
+  assert_absent "$dir/mate" "feedback-free secondmate teardown retained the secondmate home"
+  pass "fm-teardown: secondmate inventory blocks unread but ignores handled or absent feedback"
+}
+
 test_task_feedback_refuses_ordinary_teardown() {
   local kind dir id=feedback-task expected rc
   for kind in message result listener; do
@@ -1543,6 +1606,7 @@ test_unrelated_task_feedback_does_not_block() {
   pass "fm-teardown: unrelated task listener and result do not block or get removed"
 }
 
+test_secondmate_feedback_inventory_covers_unread_and_handled
 test_task_feedback_refuses_ordinary_teardown
 test_late_feedback_refuses_before_endpoint_close
 test_post_check_feedback_writer_cannot_recreate_retired_inbox
