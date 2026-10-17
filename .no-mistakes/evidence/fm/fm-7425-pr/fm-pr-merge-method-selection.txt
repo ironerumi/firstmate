@@ -1,0 +1,12 @@
+Live product invocation: bin/fm-pr-merge.sh with disposable task state and a GitHub API boundary fixture.
+sole-merge	pr merge 24 --repo example/repo --match-head-commit 1212121212121212121212121212121212121212 --merge
+sole-squash	pr merge 24 --repo example/repo --match-head-commit 1212121212121212121212121212121212121212 --squash
+sole-rebase	pr merge 24 --repo example/repo --match-head-commit 1212121212121212121212121212121212121212 --rebase
+ambiguous	pr merge 24 --repo example/repo --match-head-commit 1212121212121212121212121212121212121212 --squash
+null-field	pr merge 24 --repo example/repo --match-head-commit 1212121212121212121212121212121212121212 --squash
+missing-field	pr merge 24 --repo example/repo --match-head-commit 1212121212121212121212121212121212121212 --squash
+string-field	pr merge 24 --repo example/repo --match-head-commit 1212121212121212121212121212121212121212 --squash
+api-failure	pr merge 24 --repo example/repo --match-head-commit 1212121212121212121212121212121212121212 --squash
+explicit-method	pr merge 24 --repo example/repo --match-head-commit 1212121212121212121212121212121212121212 --method=merge
+
+exit=0
