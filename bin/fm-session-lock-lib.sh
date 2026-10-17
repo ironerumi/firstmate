@@ -99,12 +99,16 @@ _fm_windows_proc_pid() {  # <cygwin-pid> <ppid|winpid>
   printf '%s\n' "$value"
 }
 
-# Walk Cygwin parentage and print contiguous verified Windows harness pids,
-# innermost first.
+# Walk Cygwin parentage, then native parentage above the outermost Cygwin
+# process; print contiguous verified Windows harness pids, innermost first.
+# Inner MSYS native parents may be exited fork intermediates, while the native
+# harness is absent from /proc. Bridge only at the Cygwin ppid 0/1 boundary.
 _fm_harness_ancestry_pids_windows() {
-  local pid=$$ winpid comm parent info extending=0 printed=0
+  local pid=$$ winpid comm parent info native=0 extending=0 printed=0
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-    winpid=$(_fm_windows_proc_pid "$pid" winpid) || break
+    if [ "$native" -eq 0 ]; then
+      winpid=$(_fm_windows_proc_pid "$pid" winpid) || break
+    fi
     info=$(_fm_windows_process_info "$winpid") || break
     _fm_windows_process_fields "$info" || break
     comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
@@ -116,9 +120,16 @@ _fm_harness_ancestry_pids_windows() {
     elif [ "$extending" -eq 1 ]; then
       break
     fi
-    parent=$(_fm_windows_proc_pid "$pid" ppid) || break
-    [ "$parent" -ge 1 ] || break
-    pid=$parent
+    if [ "$native" -eq 0 ]; then
+      parent=$(_fm_windows_proc_pid "$pid" ppid) || break
+      if [ "$parent" -gt 1 ]; then
+        pid=$parent
+        continue
+      fi
+      native=1
+    fi
+    winpid=$_FM_WINDOWS_PROCESS_PARENT
+    [ "$winpid" -ge 1 ] || break
   done
   [ "$printed" -eq 1 ]
 }

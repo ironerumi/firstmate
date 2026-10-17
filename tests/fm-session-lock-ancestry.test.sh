@@ -298,24 +298,21 @@ SH
   cat > "$fakebin/cat" <<'SH'
 #!/usr/bin/env bash
 case "${1:-}" in
+  /proc/1/winpid) exit 1 ;;
+  /proc/55/winpid) printf '%s\n' 550 ;;
   /proc/60/winpid) printf '%s\n' 600 ;;
   /proc/61/winpid) printf '%s\n' 610 ;;
   /proc/70/winpid) printf '%s\n' 700 ;;
   /proc/80/winpid) printf '%s\n' 800 ;;
   /proc/90/winpid) printf '%s\n' 900 ;;
   /proc/*/winpid) printf '%s\n' 500 ;;
+  /proc/55/ppid) printf '%s\n' 1 ;;
   /proc/60/ppid) printf '%s\n' 70 ;;
   /proc/61/ppid) printf '%s\n' 90 ;;
   /proc/70/ppid) printf '%s\n' 80 ;;
   /proc/80/ppid) printf '%s\n' 90 ;;
   /proc/90/ppid) printf '%s\n' 0 ;;
-  /proc/*/ppid)
-    case "${FM_TEST_WINDOWS_TREE:-pi}" in
-      claude) printf '%s\n' 70 ;;
-      cursor) printf '%s\n' 61 ;;
-      *) printf '%s\n' 60 ;;
-    esac
-    ;;
+  /proc/*/ppid) printf '%s\n' 55 ;;
   *) exec /bin/cat "$@" ;;
 esac
 SH
@@ -324,6 +321,15 @@ SH
 set -u
 case "$*" in
   *Win32_Process*'ProcessId = 500'*) printf 'bash.exe\t6676\tC:/Windows/bash.exe\tbash\n' ;;
+  *Win32_Process*'ProcessId = 550'*)
+    case "${FM_TEST_WINDOWS_TREE:-pi}" in
+      claude) parent=700 ;;
+      cursor) parent=610 ;;
+      missing) parent=6676 ;;
+      *) parent=600 ;;
+    esac
+    printf 'bash.exe\t%s\tC:/Windows/bash.exe\tbash\n' "$parent"
+    ;;
   *Win32_Process*'ProcessId = 600'*) printf 'pi.exe\t700\tC:/Users/u/pi.exe\tpi\n' ;;
   *Win32_Process*'ProcessId = 610'*) printf 'agent.exe\t900\tC:/Users/Jane Doe/.local/share/cursor-agent/versions/2026.08.11/cursor-agent.exe\tagent\n' ;;
   *Win32_Process*'ProcessId = 700'*) printf 'claude.exe\t800\tC:/Users/u/claude.exe\tclaude\n' ;;
@@ -334,8 +340,10 @@ esac
 SH
   chmod +x "$fakebin/uname" "$fakebin/cat" "$fakebin/powershell.exe"
 
-  # A Pi started from a Claude tool shell inherits Claude's environment, but
-  # its own harness ancestor is Pi (500 -> 600 -> 700).
+  # Exact live MSYS topology: inner bash WinPID 500 has dead native parent
+  # 6676, but its Cygwin parent 55 maps to outer bash WinPID 550. The outer
+  # Cygwin ppid is 1 (no /proc/1/winpid); only native parentage reaches Pi
+  # 600 or Claude 700. A Pi child must still reject inherited Claude identity.
   printf '700\n' > "$state/.lock"
   got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
     || fail "the native fallback did not find the hand-started Pi harness"
@@ -350,7 +358,19 @@ SH
     || fail "the hand-started Pi did not anchor to its native harness"
   [ "$got" = 600 ] || fail "the hand-started Pi anchored '$got', expected 600"
 
-  # A real Claude chain remains usable: bash 500 -> claude 700 -> claude 800.
+  # A live CLAUDE_PID cannot replace a missing native link above the outer
+  # shell. The two tables only join at a real parent relationship.
+  if FM_TEST_WINDOWS_TREE=missing FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    lib_eval "$fakebin" 'fm_harness_ancestry_pids' >/dev/null; then
+    fail "an unavailable outer native parent was replaced by inherited Claude identity"
+  fi
+  if FM_TEST_WINDOWS_TREE=missing FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    lib_eval "$fakebin" "fm_session_lock_owned_by_self '$state'"; then
+    fail "a missing native ancestry proof still claimed Claude's lock"
+  fi
+
+  # A real hybrid chain remains usable: Cygwin inner -> outer shell, then
+  # native WinPID 550 -> claude 700 -> claude 800.
   got=$(FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
     lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
     || fail "the native fallback did not walk the Claude chain"
@@ -506,9 +526,13 @@ test_same_session_id_owns_a_recycled_background_chain() {
     fail "a lock with no recorded session id was owned through the environment id"
   fi
   printf 'S1\n' > "$dir/elsewhere"
-  ln -s "$dir/elsewhere" "$state/.lock-session"
-  if FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=710 owned "$fakebin" "$state"; then
-    fail "a symlinked sidecar was trusted"
+  ln -s "$dir/elsewhere" "$state/.lock-session" 2>/dev/null || true
+  if [ -L "$state/.lock-session" ]; then
+    if FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=710 owned "$fakebin" "$state"; then
+      fail "a symlinked sidecar was trusted"
+    fi
+  else
+    printf '%s\n' 'skip - symlinked sidecar rejection: ln -s did not create a symlink (Windows may require Developer Mode)'
   fi
   rm -f "$state/.lock-session"
   printf 'S1\n' > "$state/.lock-session"
