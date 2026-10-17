@@ -325,7 +325,7 @@ set -u
 case "$*" in
   *Win32_Process*'ProcessId = 500'*) printf 'bash.exe\t6676\tC:/Windows/bash.exe\tbash\n' ;;
   *Win32_Process*'ProcessId = 600'*) printf 'pi.exe\t700\tC:/Users/u/pi.exe\tpi\n' ;;
-  *Win32_Process*'ProcessId = 610'*) printf 'agent.exe\t900\tC:/Users/u/.local/share/cursor-agent/versions/2026.08.11/cursor-agent.exe\tagent\n' ;;
+  *Win32_Process*'ProcessId = 610'*) printf 'agent.exe\t900\tC:/Users/Jane Doe/.local/share/cursor-agent/versions/2026.08.11/cursor-agent.exe\tagent\n' ;;
   *Win32_Process*'ProcessId = 700'*) printf 'claude.exe\t800\tC:/Users/u/claude.exe\tclaude\n' ;;
   *Win32_Process*'ProcessId = 800'*) printf 'claude.exe\t900\tC:/Users/u/claude.exe\tclaude\n' ;;
   *Win32_Process*'ProcessId = 900'*) printf 'explorer.exe\t0\tC:/Windows/explorer.exe\texplorer\n' ;;

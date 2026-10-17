@@ -80,13 +80,11 @@ _fm_windows_process_fields() {  # <process-info>
 
 # True when Windows PID $1 is a live verified harness. Sets FM_HARNESS_IS_CLAUDE.
 _fm_harness_pid_alive_windows() {  # <pid>
-  local info comm args
+  local info comm
   info=$(_fm_windows_process_info "$1") || return 2
   _fm_windows_process_fields "$info" || return 2
   comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
-  args=$_FM_WINDOWS_PROCESS_PATH
-  [ -n "$args" ] && args="$args $_FM_WINDOWS_PROCESS_ARGS"
-  fm_harness_process_matches "$comm" "$args"
+  fm_harness_process_matches "$comm" "$_FM_WINDOWS_PROCESS_ARGS" "$_FM_WINDOWS_PROCESS_PATH"
 }
 
 # Read a numeric Cygwin process-table field. PowerShell identity lookups use
@@ -104,15 +102,13 @@ _fm_windows_proc_pid() {  # <cygwin-pid> <ppid|winpid>
 # Walk Cygwin parentage and print contiguous verified Windows harness pids,
 # innermost first.
 _fm_harness_ancestry_pids_windows() {
-  local pid=$$ winpid comm parent info args extending=0 printed=0
+  local pid=$$ winpid comm parent info extending=0 printed=0
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     winpid=$(_fm_windows_proc_pid "$pid" winpid) || break
     info=$(_fm_windows_process_info "$winpid") || break
     _fm_windows_process_fields "$info" || break
     comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
-    args=$_FM_WINDOWS_PROCESS_PATH
-    [ -n "$args" ] && args="$args $_FM_WINDOWS_PROCESS_ARGS"
-    if fm_harness_process_matches "$comm" "$args"; then
+    if fm_harness_process_matches "$comm" "$_FM_WINDOWS_PROCESS_ARGS" "$_FM_WINDOWS_PROCESS_PATH"; then
       printf '%s\n' "$winpid"
       printed=1
       [ "$FM_HARNESS_IS_CLAUDE" -eq 1 ] || break
@@ -171,15 +167,15 @@ fm_harness_path_name() {  # <path>
 #   3. a bare interpreter (node, python) running a harness script path.
 #   4. Cursor's own structural identity, owned by bin/fm-cursor-lib.sh.
 FM_HARNESS_IS_CLAUDE=0
-fm_harness_process_matches() {  # <comm> <args>
-  local comm=$1 args=$2 base argv0 name
+fm_harness_process_matches() {  # <comm> <args> [argv0]
+  local comm=$1 args=$2 base argv0=${3:-} name
   FM_HARNESS_IS_CLAUDE=0
   base=$(basename -- "$comm")
   if printf '%s' "$base" | grep -qE "$FM_HARNESS_RE"; then
     case "$base" in *claude*) FM_HARNESS_IS_CLAUDE=1 ;; esac
     return 0
   fi
-  argv0=${args%% *}
+  [ -n "$argv0" ] || argv0=${args%% *}
   if name=$(fm_harness_path_name "$comm") || name=$(fm_harness_path_name "$argv0"); then
     case "$name" in claude) FM_HARNESS_IS_CLAUDE=1 ;; esac
     return 0
