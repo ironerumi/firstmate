@@ -228,7 +228,7 @@ test_undeclared_capacity_keeps_dispatch_uncapped() {
   home="$case_dir/home"
   write_live "$home" live-a "$case_dir/project"
   write_live "$home" live-b "$case_dir/project"
-  out=$(spawn_ship "$case_dir" task-c) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-c) || rc=$?
   expect_code 0 "$rc" "an undeclared project refused a spawn: $out"
   assert_contains "$out" "spawned task-c" "an undeclared project did not launch the worker"
   assert_present "$home/state/task-c.meta" "an undeclared project's spawn published no record"
@@ -241,7 +241,7 @@ test_available_capacity_admits_the_worker() {
   home="$case_dir/home"
   declare_capacity "$home" "# heavy suite serves two workers" "project 2" "other-project 1"
   write_live "$home" live-a "$case_dir/project"
-  out=$(spawn_ship "$case_dir" task-c) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-c) || rc=$?
   expect_code 0 "$rc" "a spawn with a free place was refused: $out"
   assert_contains "$out" "spawned task-c" "a spawn with a free place did not launch"
   assert_not_contains "$out" "deferred:" "a spawn with a free place reported a deferral"
@@ -260,7 +260,7 @@ test_exhausted_capacity_defers_without_leaving_anything_behind() {
   write_live "$home" live-b "$case_dir/project"
   before=$(call_count "$case_dir")
   worktrees=$(worktree_list "$case_dir")
-  out=$(spawn_ship "$case_dir" task-c "$case_dir/unused") || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-c "$case_dir/unused") || rc=$?
   expect_code "$DEFER_EXIT" "$rc" "a spawn beyond capacity was not deferred: $out"
   assert_contains "$out" "deferred: project project admits 2 worker(s) at once on this machine ($home/config/project-capacity) and 2 already hold a place (live-a, live-b)" \
     "the deferral did not name the capacity and its holders"
@@ -280,7 +280,7 @@ test_spaced_project_name_is_declared() {
   git clone -q "$(git -C "$case_dir/project" remote get-url origin)" "$spaced"
   declare_capacity "$home" "   # my  heavy project 9" "my  heavy project 1" "project 5"
   write_live "$home" live-a "$spaced"
-  out=$(run_spawn "$case_dir" "$home" "$case_dir/unused" task-c "$spaced" --mode no-mistakes --yolo off) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 run_spawn "$case_dir" "$home" "$case_dir/unused" task-c "$spaced" --mode no-mistakes --yolo off) || rc=$?
   expect_code "$DEFER_EXIT" "$rc" "a project whose name holds spaces was not capped by its declaration: $out"
   assert_contains "$out" "deferred: project my  heavy project admits 1 worker(s) at once" \
     "the deferral did not use the spaced project's declared capacity"
@@ -302,7 +302,7 @@ test_hash_prefixed_project_name_is_declared() {
   git clone -q "$(git -C "$case_dir/other-project" remote get-url origin)" "$spaced"
   declare_capacity "$home" "# serves 2" "#not-a-capacity" "#hash-project 1"
   write_live "$home" live-a "$hashed"
-  out=$(run_spawn "$case_dir" "$home" "$case_dir/unused" task-c "$hashed" --mode no-mistakes --yolo off) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 run_spawn "$case_dir" "$home" "$case_dir/unused" task-c "$hashed" --mode no-mistakes --yolo off) || rc=$?
   expect_code "$DEFER_EXIT" "$rc" "a project whose name begins with # was not capped by its declaration: $out"
   assert_contains "$out" "deferred: project #hash-project admits 1 worker(s) at once" \
     "the deferral did not use the hash-prefixed project's declared capacity"
@@ -313,7 +313,7 @@ test_hash_prefixed_project_name_is_declared() {
   git -C "$spaced" worktree add --quiet -b wt-d "$case_dir/wt-d"
   wt="$case_dir/wt-d"
   rc=0
-  out=$(run_spawn "$case_dir" "$home" "$wt" task-d "$spaced" --mode no-mistakes --yolo off) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 run_spawn "$case_dir" "$home" "$wt" task-d "$spaced" --mode no-mistakes --yolo off) || rc=$?
   expect_code 0 "$rc" "a '#' comment that ends with a number was read as a capacity: $out"
   assert_contains "$out" "spawned task-d" "a project whose declaration line is a comment did not stay uncapped"
   pass "a project name beginning with # is declared, and a # comment stays a comment"
@@ -328,7 +328,7 @@ test_symlinked_home_counts_each_worker_once() {
   ln -s "$home" "$case_dir/home-link"
   declare_capacity "$home" "project 2"
   write_live "$home" live-a "$case_dir/project"
-  out=$(run_spawn "$case_dir" "$case_dir/home-link" "$(new_worktree "$case_dir" task-c)" \
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 run_spawn "$case_dir" "$case_dir/home-link" "$(new_worktree "$case_dir" task-c)" \
     task-c "$case_dir/project" --mode no-mistakes --yolo off) || rc=$?
   expect_code 0 "$rc" "a spawn through a symlinked home counted its own worker twice: $out"
   assert_contains "$out" "spawned task-c" "a spawn through a symlinked home did not launch"
@@ -366,16 +366,16 @@ test_release_frees_a_place() {
   declare_capacity "$home" "project 2"
   write_live "$home" live-a "$case_dir/project"
   write_live "$home" live-b "$case_dir/project"
-  out=$(spawn_ship "$case_dir" task-c "$case_dir/unused") || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-c "$case_dir/unused") || rc=$?
   expect_code "$DEFER_EXIT" "$rc" "the full project admitted a worker: $out"
 
   # PR handoff: the line bin/fm-pr-check.sh records for a ready PR.
   printf 'pr=%s\n' "https://github.com/o/r/pull/7" >> "$home/state/live-a.meta"
   rc=0
-  out=$(spawn_ship "$case_dir" task-c) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-c) || rc=$?
   expect_code 0 "$rc" "a recorded PR handoff did not free a place: $out"
   rc=0
-  out=$(spawn_ship "$case_dir" task-d "$case_dir/unused") || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-d "$case_dir/unused") || rc=$?
   expect_code "$DEFER_EXIT" "$rc" "one freed place admitted two workers: $out"
   assert_contains "$out" "2 already hold a place (live-b, task-c)" "the new worker did not take the freed place"
 
@@ -387,7 +387,7 @@ test_release_frees_a_place() {
   expect_code 0 "$rc" "cleanup of a live worker failed: $out"
   assert_absent "$home/state/live-b.meta" "cleanup left the worker's record"
   rc=0
-  out=$(spawn_ship "$case_dir" task-d) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-d) || rc=$?
   expect_code 0 "$rc" "cleanup did not free a place: $out"
   pass "a recorded PR handoff or a cleanup each frees exactly one place"
 }
@@ -405,12 +405,12 @@ test_occupancy_counts_only_this_projects_workers() {
   fm_write_meta "$home/state/legacy-b.meta" "window=firstmate:fm-legacy-b" "project=$case_dir/project"
   write_live "$home" other-c "$case_dir/other-project"
   fm_write_meta "$home/state/mate-d.meta" "window=remote:mate-d" "project=$case_dir/project" "kind=secondmate"
-  out=$(spawn_ship "$case_dir" task-c) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-c) || rc=$?
   expect_code 0 "$rc" "records outside this project's workers took a place: $out"
   rc=0
   write_brief "$home" task-e
   add_item "$home" task-e
-  out=$(spawn_ship "$case_dir" task-e "$case_dir/unused") || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-e "$case_dir/unused") || rc=$?
   expect_code "$DEFER_EXIT" "$rc" "the third worker on the project was not counted: $out"
   assert_contains "$out" "3 already hold a place (legacy-b, scout-a, task-c)" \
     "occupancy counted the wrong records"
@@ -438,7 +438,7 @@ test_capacity_is_shared_by_every_local_home() {
   declare_capacity "$root" "project 1"
   write_live "$root" live-a "$case_dir/project"
   git -C "$mate_project" worktree add --quiet -b wt-m "$case_dir/wt-m"
-  out=$(run_spawn "$case_dir" "$mate" "$case_dir/wt-m" task-m "$mate_project" --mode no-mistakes --yolo off) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 run_spawn "$case_dir" "$mate" "$case_dir/wt-m" task-m "$mate_project" --mode no-mistakes --yolo off) || rc=$?
   expect_code "$DEFER_EXIT" "$rc" "a local secondmate launched past the machine's capacity: $out"
   assert_contains "$out" "admits 1 worker(s) at once on this machine ($root/config/project-capacity) and 1 already hold a place (live-a in $root)" \
     "the secondmate did not count the root home's worker against the root's declaration"
@@ -486,7 +486,7 @@ test_unreadable_holders_refuse_admission() {
   assert_absent "$root/state/task-c.meta" "a spawn published past an unreadable state directory"
 
   rc=0
-  out=$(spawn_ship "$case_dir" task-c) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-c) || rc=$?
   expect_code 0 "$rc" "a readable machine did not admit the worker: $out"
   pass "an unreadable state directory or task record refuses admission rather than undercounting"
 }
@@ -507,14 +507,14 @@ test_concurrent_spawns_cannot_both_take_the_last_place() {
     [ "$i" -lt 400 ] || fail "the first spawn never reached its launch: $(cat "$case_dir/a.out")"
     sleep 0.05
   done
-  out=$(spawn_ship "$case_dir" task-b "$case_dir/unused") || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-b "$case_dir/unused") || rc=$?
   [ "$rc" -ne 0 ] || fail "a concurrent spawn launched while the last place was being taken: $out"
   assert_absent "$home/state/task-b.meta" "a concurrent spawn published past the last place"
   : > "$hold.release"
   wait || true
   assert_contains "$(cat "$case_dir/a.out")" "spawned task-a" "the lock-holding spawn did not finish"
   rc=0
-  out=$(spawn_ship "$case_dir" task-b "$case_dir/unused") || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 spawn_ship "$case_dir" task-b "$case_dir/unused") || rc=$?
   expect_code "$DEFER_EXIT" "$rc" "the retried spawn was not deferred once the place was taken: $out"
   assert_absent "$home/state/task-b.meta" "the retried spawn published past capacity"
   pass "concurrent spawns can never both take the last place"
@@ -573,7 +573,7 @@ test_batch_reports_a_deferred_pair() {
   home="$case_dir/home"
   declare_capacity "$home" "project 1"
   write_live "$home" live-a "$case_dir/project"
-  out=$(run_spawn "$case_dir" "$home" "$case_dir/unused" "task-c=$case_dir/project" --mode no-mistakes --yolo off) || rc=$?
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 run_spawn "$case_dir" "$home" "$case_dir/unused" "task-c=$case_dir/project" --mode no-mistakes --yolo off) || rc=$?
   expect_code "$DEFER_EXIT" "$rc" "a batch whose only pair was deferred did not exit with the deferral status: $out"
   assert_contains "$out" "batch: DEFERRED task-c ($case_dir/project) - its project is at capacity, so it stays queued" \
     "the batch did not report the deferral"
@@ -641,7 +641,7 @@ SH
 
   write_live "$home" live-a "$case_dir/project"
   rc=0
-  out=$(run_spawn "$case_dir" "$home" "$case_dir/unused" task-o "$case_dir/project" \
+  out=$(FM_TEST_IMPL_GUARD_OFF=1 run_spawn "$case_dir" "$home" "$case_dir/unused" task-o "$case_dir/project" \
     --backend orca --mode no-mistakes --yolo off) || rc=$?
   expect_code "$DEFER_EXIT" "$rc" "an Orca spawn beyond capacity was not deferred: $out"
   assert_absent "$home/state/task-o.meta" "the deferred Orca spawn published a record"
