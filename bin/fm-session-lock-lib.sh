@@ -61,11 +61,11 @@ _fm_windows_prepare_process_snapshot() {
 }
 
 # Print the cached Windows process name, parent PID, executable path, and
-# command line for $1, or return 1.
+# command line for $1, or return nonzero.
 _fm_windows_process_info() {  # <pid>
   local pid=$1 row
   case "$pid" in ''|*[!0-9]*) return 1 ;; esac
-  _fm_windows_prepare_process_snapshot || return 1
+  _fm_windows_prepare_process_snapshot || return 3
   while IFS= read -r row; do
     row=${row%$'\r'}
     case "$row" in
@@ -74,7 +74,7 @@ _fm_windows_process_info() {  # <pid>
   done <<EOF
 $_FM_WINDOWS_PROCESS_TABLE
 EOF
-  return 1
+  return 2
 }
 
 _FM_WINDOWS_PROCESS_NAME=
@@ -96,9 +96,14 @@ _fm_windows_process_fields() {  # <process-info>
 # True when Windows PID $1 is a live verified harness. Sets FM_HARNESS_IS_CLAUDE.
 _fm_harness_pid_alive_windows() {  # <pid>
   local info comm _FM_WINDOWS_PROCESS_TABLE=$_FM_WINDOWS_PROCESS_TABLE
-  _fm_windows_prepare_process_snapshot || return 2
-  info=$(_fm_windows_process_info "$1") || return 2
-  _fm_windows_process_fields "$info" || return 2
+  _fm_windows_prepare_process_snapshot || return 3
+  info=$(_fm_windows_process_info "$1")
+  case "$?" in
+    0) ;;
+    2) return 2 ;;
+    *) return 3 ;;
+  esac
+  _fm_windows_process_fields "$info" || return 3
   comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
   fm_harness_process_matches "$comm" "$_FM_WINDOWS_PROCESS_ARGS" "$_FM_WINDOWS_PROCESS_PATH"
 }

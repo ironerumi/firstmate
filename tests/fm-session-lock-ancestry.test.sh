@@ -319,6 +319,7 @@ SH
   cat > "$fakebin/powershell.exe" <<'SH'
 #!/usr/bin/env bash
 set -u
+[ "${FM_TEST_WINDOWS_PROCESS_FAILURE:-}" = 1 ] && exit 1
 [ -z "${FM_TEST_PS_CALLS:-}" ] || printf 'call\n' >> "$FM_TEST_PS_CALLS"
 case "$*" in
   *Win32_Process*'-Filter'*) exit 1 ;;
@@ -404,7 +405,10 @@ SH
   printf '999\n' > "$state/.lock"
   got=$(FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
     "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
-  [ "$got" = 'stale false' ] || fail "an unavailable Windows PID was inspected as '$got'"
+  [ "$got" = 'stale false' ] || fail "an absent Windows PID was inspected as '$got'"
+  got=$(FM_TEST_WINDOWS_PROCESS_FAILURE=1 FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
+    "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
+  [ "$got" = 'unknown false' ] || fail "a failed Windows process snapshot was inspected as '$got'"
   # Drive real acquisition, not just helper calls: repeated identity and
   # trusted-session consumers must share one process-table query per command.
   mkdir -p "$dir/home"

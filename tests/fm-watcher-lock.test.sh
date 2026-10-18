@@ -761,6 +761,29 @@ lock_portability_scenario() {
   ' _ "$LIB" "$expected"
 }
 
+test_direct_directory_lock_release_and_reap() {
+  local dir state lock dead
+  dir=$(make_case direct-directory-lock)
+  state="$dir/state"
+  lock="$state/.direct.lock"
+  dead=$(dead_pid)
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_current_pid me || exit 1
+    mkdir "$2" || exit 2
+    printf "%s\n" "$me" > "$2/pid" || exit 3
+    fm_lock_release "$2"
+    [ ! -e "$2" ] || exit 4
+    mkdir "$2" || exit 5
+    printf "%s\n" "$3" > "$2/pid" || exit 6
+    fm_lock_try_acquire_steal_mutex "$2" || exit 7
+    [ -e "$2" ] || exit 8
+    fm_lock_release "$2"
+    [ ! -e "$2" ] || exit 9
+  ' _ "$LIB" "$lock" "$dead" || fail "direct directory lock was not releasable and reclaimable"
+  pass "direct directory locks release and recover through the shared paths"
+}
+
 test_lock_without_real_symlinks() {
   local native copied native_out copied_out real_ln
   native=$(make_case lock-native-parity)
@@ -1804,6 +1827,7 @@ test_lock_reclaims_self_held_steal_mutex
 test_lock_resumes_own_interrupted_steal_reap
 test_lock_live_steal_mutex_is_not_reclaimed
 test_lock_does_not_steal_live_lock
+test_direct_directory_lock_release_and_reap
 test_lock_without_real_symlinks
 test_directory_lock_single_winner_under_load
 test_directory_lock_paused_publication_cannot_be_stolen

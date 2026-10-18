@@ -1138,8 +1138,15 @@ fm_recovery_marker_reopen_announced() {
 fm_lock_reap_dead_link() {
   local lockdir=$1 owner pid token tomb current
   owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null) || return 1
-  [ "$owner" != "$lockdir" ] || return 1
   fm_current_pid current || return 1
+  if [ "$owner" = "$lockdir" ]; then
+    pid=$(cat "$lockdir/pid" 2>/dev/null || true)
+    fm_lock_recheck_stale_owner "$lockdir" "$owner" "$pid" || return 1
+    tomb="$owner.reaped.$current"
+    mv -- "$lockdir" "$tomb" 2>/dev/null || return 1
+    fm_lock_remove_path "$tomb" || true
+    return 0
+  fi
   if [ -d "$owner" ]; then
     pid=$(cat "$lockdir/pid" 2>/dev/null || true)
     fm_lock_recheck_stale_owner "$lockdir" "$owner" "$pid" || return 1
