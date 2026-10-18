@@ -124,7 +124,7 @@ worker_heartbeat_loop() { # <account-home> <owner-pid>
     if [ ! -e "$ready" ] && [ ! -L "$ready" ]; then
       worker_write_heartbeat "$owner" || exit 1
     else
-      touch -c -- "$ready" || exit 1
+      touch -c "$ready" || exit 1
     fi
     /bin/sleep 1
   done

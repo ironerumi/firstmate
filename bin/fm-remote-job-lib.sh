@@ -861,14 +861,18 @@ fm_remote_job_reap_stale() { # <account-home>
     fi
     if [ -n "$stamp" ]; then
       tmp=$(umask 077; mktemp "$FM_REMOTE_JOB_STATE/.seqreap.XXXXXX") || tmp=
-      if [ -n "$tmp" ] && printf '%s\n' "$now" > "$tmp" && chmod 600 "$tmp" \
-        && mv -f -- "$tmp" "$marker"; then
-        # One directory walk: ! -newer matches whole-second mtime <= cutoff
-        # (the former >= age check). Batched rmdir tolerates concurrent mkdir/rmdir races
-        # and non-empty dirs the same way the old per-claim rmdir || true did.
-        find "$FM_REMOTE_JOB_SEQ_CLAIMS" -mindepth 1 -maxdepth 1 -type d \
-          -name '[0-9]*' ! -name '*[!0-9]*' ! -name 0 \
-          ! -newer "$ref" -exec rmdir {} + 2>/dev/null || true
+      if [ -n "$tmp" ] && printf '%s\n' "$now" > "$tmp" && chmod 600 "$tmp"; then
+        if find "$FM_REMOTE_JOB_SEQ_CLAIMS" \
+          \( -path "$FM_REMOTE_JOB_SEQ_CLAIMS" -o \
+            \( ! -path "$FM_REMOTE_JOB_SEQ_CLAIMS" -prune -type d \
+              -name '[0-9]*' ! -name '*[!0-9]*' ! -name 0 \
+              ! -newer "$ref" -exec rmdir {} + \) \) 2>/dev/null; then
+          if ! mv -f -- "$tmp" "$marker"; then
+            rm -f -- "$tmp"
+          fi
+        else
+          rm -f -- "$tmp"
+        fi
       else
         [ -z "$tmp" ] || rm -f -- "$tmp"
       fi
