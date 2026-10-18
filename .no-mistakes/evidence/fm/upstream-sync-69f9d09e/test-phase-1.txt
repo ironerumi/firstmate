@@ -1,0 +1,17 @@
+Phase 1 targeted validation
+
+Selection:
+- `bin/fm-test-run.sh --list --changed --base HEAD^`
+- Selected: tests/fm-remote-job-claim-reap.test.sh
+- Selected: tests/fm-remote-job-claim-retention.test.sh
+
+Execution:
+`bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-remote-job-claim-retention.test.sh tests/fm-remote-job-claim-reap.test.sh`
+
+Results:
+- tests/fm-remote-job-claim-retention.test.sh: PASS (321 ms); claim sweep preserves numeric-name eligibility and whole-second expiry.
+- tests/fm-remote-job-claim-reap.test.sh: PASS (5805 ms); due claim sweep over ~17460 dirs does not starve job serving.
+- Total: 2 passed, 0 failed, 0 gate-skipped.
+- No suite hit the 300-second per-script time bound.
+
+The initial required `bin/fm-test-run.sh --list --changed` invocation exceeded the 120-second command limit without producing output; the explicit HEAD^-scoped changed selection completed and yielded the two suites above.
