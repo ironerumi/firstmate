@@ -1,0 +1,10 @@
+Test phase 1 targeted suites (serial, --jobs 1, per-script-timeout-secs 300):
+
+- PASS tests/fm-session-lock-ancestry.test.sh (45.998s): Windows hybrid ancestry, inherited identity rejection, Cursor identity, snapshot timing, lock acquisition and POSIX regressions.
+- PASS tests/fm-watcher-lock.test.sh (96.483s): symlink/directory lock parity, recovery, contention, publication boundaries, successor safety.
+- FAIL tests/fm-extension-binding.test.sh (7.199s): local host EACCES renaming read-only temporary package directories in unchanged installPackage setup; the suite consequently reported missing binding identity. This is the known host limitation from the verification plan, not treated as a pass.
+- PASS tests/fm-remote-reply.test.sh (230.452s): changed remote-reply lifecycle lock consumer and reply behavior.
+- PASS tests/fm-wake-queue.test.sh (218.093s): changed wake-lock implementation and queue lifecycle behavior.
+- PASS tests/fm-afk-return.test.sh (104.840s): changed AFK/branch-outcome lock consumers and return behavior.
+
+No suite hit the 300-second per-script bound. Phase 2 is skipped because phase 1 had a failed suite, per the runbook.
