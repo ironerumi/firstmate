@@ -21,18 +21,11 @@ NOW=$(command date +%s)
 date() {
   if [ "$*" = '+%s' ]; then printf '%s\n' "$NOW"; else command date "$@"; fi
 }
-touch_frac() { # <epoch> <fraction> <path>
-  local stamp
-  stamp=$(TZ=UTC0 command date -d "@$1" +%Y-%m-%dT%H:%M:%S 2>/dev/null) \
-    || stamp=$(TZ=UTC0 command date -r "$1" +%Y-%m-%dT%H:%M:%S 2>/dev/null) \
-    || fail "touch_frac: date(1) accepted neither -d @<epoch> nor -r <epoch>"
-  touch -d "$stamp.$2Z" "$3" || fail "touch_frac: touch -d $stamp.$2Z failed"
-}
 CUTOFF=$((NOW - FM_REMOTE_JOB_SEQ_CLAIM_REAP_SECONDS))
-for spec in 3:$CUTOFF:0 4:$CUTOFF:5 5:$((CUTOFF + 1)):0 6:$((CUTOFF + 1)):5; do
-  IFS=: read -r name epoch frac <<< "$spec"
+for spec in 3:$CUTOFF 4:$CUTOFF 5:$((CUTOFF + 1)) 6:$((CUTOFF + 1)); do
+  IFS=: read -r name epoch <<< "$spec"
   mkdir "$FM_REMOTE_JOB_SEQ_CLAIMS/$name"
-  touch_frac "$epoch" "$frac" "$FM_REMOTE_JOB_SEQ_CLAIMS/$name"
+  fm_touch_epoch "$epoch" "$FM_REMOTE_JOB_SEQ_CLAIMS/$name"
 done
 fm_remote_job_reap_stale "$TMP_ROOT/account" || fail "claim sweep failed"
 for name in 0 notes 1x .private 2 5 6; do
