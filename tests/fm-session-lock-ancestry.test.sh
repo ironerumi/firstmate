@@ -419,6 +419,13 @@ SH
     || fail "repeated Windows liveness checks failed outside acquisition"
   [ "$(wc -l < "$dir/calls" | tr -d ' ')" = 2 ] \
     || fail "Windows liveness reused a process snapshot outside acquisition"
+  FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" '
+    fm_harness_pid_alive 700 || exit 1
+    export FM_TEST_WINDOWS_PROCESS_FAILURE=1
+    rc=0
+    fm_harness_pid_alive 700 || rc=$?
+    [ "$rc" -eq 3 ]
+  ' || fail "a later snapshot failure reused an earlier live-harness verdict"
   : > "$dir/calls"
   # Drive real acquisition, not just helper calls: repeated identity and
   # trusted-session consumers must share one process-table query per command.

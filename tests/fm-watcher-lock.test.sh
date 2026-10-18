@@ -761,6 +761,62 @@ lock_portability_scenario() {
   ' _ "$LIB" "$expected"
 }
 
+# The safe implementation must leave raw directories to main's existing
+# steal-serialized recovery, rather than rename a mutable path in the reaper.
+# Preserve the failing FIFO interleaving if that raw reaper is reintroduced.
+test_direct_directory_reaper_cannot_remove_live_successor() {
+  local dir state lock dead reaper successor event rc preserved
+  dir=$(make_case direct-directory-successor-race)
+  state="$dir/state"
+  lock="$state/.raw.lock"
+  dead=$(dead_pid)
+  mkdir "$lock"
+  printf '%s\n' "$dead" > "$lock/pid"
+  mkfifo "$dir/events" "$dir/a-resume" "$dir/b-ready" "$dir/b-resume"
+  exec 6<> "$dir/events" 7<> "$dir/a-resume" 8<> "$dir/b-ready" 9<> "$dir/b-resume"
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    lock=$2
+    trap '\''printf "exited:%s\n" "$?" >&6'\'' EXIT
+    mv() {
+      if [ "$1" = -- ] && [ "$2" = "$lock" ]; then
+        printf "moving\n" >&6
+        IFS= read -r resume <&7
+      fi
+      command mv "$@"
+    }
+    fm_lock_reap_dead_link "$lock"
+  ' _ "$LIB" "$lock" &
+  reaper=$!
+  IFS= read -r event <&6
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_lock_try_acquire "$2" || exit 20
+    printf "ready\n" >&8
+    IFS= read -r release <&9
+    fm_lock_release "$2"
+  ' _ "$LIB" "$lock" &
+  successor=$!
+  IFS= read -r rc <&8
+  [ "$rc" = ready ] && [ "$(cat "$lock/pid")" = "$successor" ] \
+    || fail "main recovery did not publish its successor identity"
+  kill -0 "$successor" || fail "successor exited before reaper resumed"
+  if [ "$event" = moving ]; then
+    printf 'resume\n' >&7
+    IFS= read -r rc <&6
+  fi
+  rc=0
+  wait "$reaper" || rc=$?
+  preserved=false
+  if [ -e "$lock" ] && kill -0 "$successor" 2>/dev/null; then preserved=true; fi
+  printf 'release\n' >&9
+  wait "$successor" || fail "successor could not release its own lock"
+  exec 6>&- 7>&- 8>&- 9>&-
+  [ "$event" = exited:1 ] && [ "$rc" -eq 1 ] && [ "$preserved" = true ] \
+    || fail "direct-directory reaper reached rename or removed a live successor"
+  pass "raw-directory reaper leaves main recovery and its live successor untouched"
+}
+
 test_direct_directory_lock_release_and_reap() {
   local dir state lock dead
   dir=$(make_case direct-directory-lock)
@@ -776,7 +832,7 @@ test_direct_directory_lock_release_and_reap() {
     [ ! -e "$2" ] || exit 4
     mkdir "$2" || exit 5
     printf "%s\n" "$3" > "$2/pid" || exit 6
-    fm_lock_try_acquire_steal_mutex "$2" || exit 7
+    fm_lock_try_acquire "$2" || exit 7
     [ -e "$2" ] || exit 8
     fm_lock_release "$2"
     [ ! -e "$2" ] || exit 9
@@ -1827,6 +1883,7 @@ test_lock_reclaims_self_held_steal_mutex
 test_lock_resumes_own_interrupted_steal_reap
 test_lock_live_steal_mutex_is_not_reclaimed
 test_lock_does_not_steal_live_lock
+test_direct_directory_reaper_cannot_remove_live_successor
 test_direct_directory_lock_release_and_reap
 test_lock_without_real_symlinks
 test_directory_lock_single_winner_under_load
