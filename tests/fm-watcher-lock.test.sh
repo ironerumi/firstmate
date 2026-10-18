@@ -1014,8 +1014,9 @@ SH
   ' _ "$LIB" "$lock" "$owner_file" "$resume" &
   unrelated=$!
   IFS= read -r owner < "$owner_file"
-  [ -n "$owner" ] && kill -0 "$unrelated" 2>/dev/null \
-    || fail "unrelated publisher token did not remain live"
+  if [ -z "$owner" ] || ! kill -0 "$unrelated" 2>/dev/null; then
+    fail "unrelated publisher token did not remain live"
+  fi
   PATH="$dir/fakebin:$PATH" FM_TEST_REAL_MKDIR="$real_mkdir" \
     FM_TEST_PUBLICATION_LOCK="$lock" FM_TEST_PUBLICATION_CREATED="$dir/created" \
     FM_STATE_OVERRIDE="$state" \
