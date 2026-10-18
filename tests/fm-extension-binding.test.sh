@@ -672,6 +672,31 @@ case "$package_root" in "$H_GOOD"/data/extensions/packages/*) ;; *) fail "bindin
   || fail "managed package root is not read-only"
 pass "bind computes a content-addressed package, negotiates v1, and publishes an inspectable binding"
 
+# The host inherits a lock from the shell wrapper. A copied-link capability
+# result must preserve that ownership across exec and release both directories.
+H_DIRECTORY_LOCK="$HOMES/directory-lock"
+new_home "$H_DIRECTORY_LOCK"
+mkdir -p "$TMP_ROOT/copy-ln-bin"
+cat > "$TMP_ROOT/copy-ln-bin/ln" <<'SH'
+#!/usr/bin/env bash
+printf 'copied\n' >> "$FM_TEST_COPY_LOG"
+exec cp -R "$2" "$3"
+SH
+chmod +x "$TMP_ROOT/copy-ln-bin/ln"
+# Enter through the public shell wrapper: the Node convenience wrapper
+# intentionally sanitizes PATH before invoking it and would drop this shim.
+out=$(PATH="$TMP_ROOT/copy-ln-bin:$PATH" FM_TEST_COPY_LOG="$TMP_ROOT/copied-ln.log" \
+  FM_HOME="$H_DIRECTORY_LOCK" "$PROCEVENT" extension-bind bind "$P_GOOD" \
+  --adapter ext-good --trust-same-user-code --timeout-ms 1000) \
+  || fail "extension binding rejected an inherited directory lifecycle lock"
+assert_present "$TMP_ROOT/copied-ln.log" "copying ln shim must actually force directory acquisition"
+assert_contains "$out" "verified: process-event-adapter/1" "directory lifecycle lock must authorize a real binding"
+assert_contains "$(FM_HOME="$H_DIRECTORY_LOCK" "$HOST" list)" "org.example.good" "directory lifecycle lock must publish the binding"
+assert_absent "$H_DIRECTORY_LOCK/state/procevent/.extension-binding-lifecycle.lock" "host did not release its directory lifecycle lock"
+[ -z "$(find "$H_DIRECTORY_LOCK/state/procevent" -name '*.owner.*' -print)" ] \
+  || fail "host did not release its directory lock owner token"
+pass "extension binding inherits, validates and releases a copied-link directory lock"
+
 P_CONCURRENT_ONE="$PACKAGES/concurrent-one"
 P_CONCURRENT_TWO="$PACKAGES/concurrent-two"
 concurrent_marker="$TMP_ROOT/concurrent.entered"

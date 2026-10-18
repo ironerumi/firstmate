@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # Shared durable wake queue and portable lock helpers.
+# Locks use symlinks when a private capability probe produces a real link;
+# otherwise mkdir atomically claims a directory with a .owner identity file.
+# Both expose metadata at <lock>/pid; fm_lock_link_owner owns identity reads.
+# A directory publisher prepares its live pid before mkdir, so even the
+# pre-publication window remains protected independently of directory age.
 # docs/watcher-continuity.md owns the recovery-episode state contract.
 
 FM_WAKE_LIB_DIR="$(d=${BASH_SOURCE[0]%/*}; [ "$d" != "${BASH_SOURCE[0]}" ] || d=.; cd "${d:-/}" && pwd)"
@@ -515,8 +520,23 @@ fm_lock_prepare_owner() {
 }
 
 fm_lock_link_owner() {
-  local lockdir=$1 owner
-  owner=$(readlink "$lockdir" 2>/dev/null) || return 1
+  local lockdir=$1 owner lock_abs
+  if [ -L "$lockdir" ]; then
+    owner=$(readlink "$lockdir" 2>/dev/null) || return 1
+  elif [ -d "$lockdir" ]; then
+    if [ -e "$lockdir/.owner" ] || [ -L "$lockdir/.owner" ]; then
+      [ -f "$lockdir/.owner" ] && [ ! -L "$lockdir/.owner" ] || return 1
+      owner=$(cat "$lockdir/.owner" 2>/dev/null) || return 1
+      lock_abs=$(fm_lock_abs_path "$lockdir") || return 1
+      case "$owner" in "$lock_abs".owner.*) ;; *) return 1 ;; esac
+    else
+      # Existing directory locks have no separate identity directory.
+      printf '%s\n' "$lockdir"
+      return 0
+    fi
+  else
+    return 1
+  fi
   [ -n "$owner" ] || return 1
   case "$owner" in
     /*) printf '%s\n' "$owner" ;;
@@ -526,21 +546,38 @@ fm_lock_link_owner() {
 
 fm_lock_points_to_owner() {
   local lockdir=$1 ownerdir=$2 actual
-  actual=$(readlink "$lockdir" 2>/dev/null) || return 1
+  actual=$(fm_lock_link_owner "$lockdir" 2>/dev/null) || return 1
   [ "$actual" = "$ownerdir" ]
+}
+
+# Cache only for this shell and parent directory, not across filesystems.
+_fm_lock_symlinks_supported() {
+  local ownerdir=$1 parent probe
+  parent=${ownerdir%/*}
+  if [ "${_FM_LOCK_PROBE_PARENT:-}" != "$parent" ]; then
+    probe="$ownerdir/.symlink-probe"
+    _FM_LOCK_PROBE_SUPPORTED=false
+    if ln -s "$ownerdir/pid" "$probe" 2>/dev/null && [ -L "$probe" ]; then
+      _FM_LOCK_PROBE_SUPPORTED=true
+    fi
+    rm -f "$probe" 2>/dev/null || return 1
+    _FM_LOCK_PROBE_PARENT=$parent
+  fi
+  [ "${_FM_LOCK_PROBE_SUPPORTED:-false}" = true ]
 }
 
 fm_lock_discard_owner() {
   local ownerdir=$1
   [ -n "$ownerdir" ] || return 0
   fm_lock_clean_known_files "$ownerdir"
+  rm -f "$ownerdir/.published-pid" "$ownerdir/.owner" "$ownerdir/.symlink-probe" 2>/dev/null || true
   rmdir "$ownerdir" 2>/dev/null || true
 }
 
 fm_lock_remove_stray_owner_link() {
   local lockdir=$1 ownerdir=$2 stray
   stray="$lockdir/$(basename "$ownerdir")"
-  if [ -L "$stray" ] && [ "$(readlink "$stray" 2>/dev/null || true)" = "$ownerdir" ]; then
+  if [ -L "$stray" ] && fm_lock_points_to_owner "$stray" "$ownerdir"; then
     rm -f "$stray" 2>/dev/null || true
   fi
 }
@@ -573,7 +610,7 @@ fm_lock_claim() {
   fi
   if fm_lock_claim_blocked_by_steal "$lockdir" "$allowed_steal_owner"; then
     if fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
-      rm -f "$lockdir" 2>/dev/null || true
+      fm_lock_remove_path "$lockdir" || true
     fi
     fm_lock_discard_owner "$ownerdir"
     return 1
@@ -593,13 +630,43 @@ fm_lock_try_create() {
     fm_lock_discard_owner "$ownerdir"
     return 1
   fi
-  if ln -s "$ownerdir" "$lockdir" 2>/dev/null && fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
+  if _fm_lock_symlinks_supported "$ownerdir"; then
+    if ! ln -s "$ownerdir" "$lockdir" 2>/dev/null; then
+      fm_lock_remove_stray_owner_link "$lockdir" "$ownerdir"
+      fm_lock_discard_owner "$ownerdir"
+      return 1
+    fi
+  else
+    # Stage complete records privately. mkdir is the only acquisition point;
+    # the prepared owner pid protects a publisher paused before either rename.
+    if ! cp "$ownerdir/pid" "$ownerdir/.published-pid" \
+      || ! printf '%s\n' "$ownerdir" > "$ownerdir/.owner"; then
+      rm -f "$ownerdir/.published-pid" "$ownerdir/.owner"
+      fm_lock_discard_owner "$ownerdir"
+      return 1
+    fi
+    if ! mkdir "$lockdir" 2>/dev/null; then
+      rm -f "$ownerdir/.published-pid" "$ownerdir/.owner"
+      fm_lock_discard_owner "$ownerdir"
+      return 1
+    fi
+    # Publish identity before pid. Readers also check prepared owner pids until
+    # both records are in place; no partial pid can look like a dead holder.
+    if ! mv "$ownerdir/.owner" "$lockdir/.owner" \
+      || ! mv "$ownerdir/.published-pid" "$lockdir/pid"; then
+      rm -f "$ownerdir/.published-pid" "$ownerdir/.owner"
+      fm_lock_remove_path "$lockdir" || true
+      fm_lock_discard_owner "$ownerdir"
+      return 1
+    fi
+  fi
+  if fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
     if fm_lock_claim "$lockdir" "$ownerdir" "$allowed_steal_owner"; then
       FM_LOCK_OWNER_DIR=$ownerdir
       return 0
     fi
     if fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
-      rm -f "$lockdir" 2>/dev/null || true
+      fm_lock_remove_path "$lockdir" || true
     fi
   else
     fm_lock_remove_stray_owner_link "$lockdir" "$ownerdir"
@@ -610,18 +677,44 @@ fm_lock_try_create() {
 
 fm_lock_remove_path() {
   local lockdir=$1 ownerdir
+  ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
   if [ -L "$lockdir" ]; then
-    ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
     rm -f "$lockdir" 2>/dev/null || return 1
-    [ -n "$ownerdir" ] && fm_lock_discard_owner "$ownerdir"
-    return 0
+  else
+    fm_lock_clean_known_files "$lockdir"
+    rm -f "$lockdir/.owner" 2>/dev/null || return 1
+    rmdir "$lockdir" 2>/dev/null || return 1
   fi
-  fm_lock_clean_known_files "$lockdir"
-  rmdir "$lockdir" 2>/dev/null
+  if [ -n "$ownerdir" ] && [ "$ownerdir" != "$lockdir" ]; then
+    fm_lock_discard_owner "$ownerdir"
+  fi
+  return 0
+}
+
+fm_lock_directory_publisher_alive() {
+  local lockdir=$1 lock_abs owner pid
+  lock_abs=$(fm_lock_abs_path "$lockdir") || return 1
+  for owner in "$lock_abs".owner.*; do
+    [ -d "$owner" ] && [ ! -L "$owner" ] || continue
+    pid=$(cat "$owner/pid" 2>/dev/null || true)
+    fm_pid_alive "$pid" && return 0
+  done
+  return 1
 }
 
 fm_lock_mid_acquire_is_fresh() {
   local lockdir=$1 pid=$2 mid_acquire_stale
+  case "$pid" in
+    '')
+      # Before mkdir every publisher already has a live pid in its private
+      # owner directory. Check those tokens before applying the existing age
+      # grace, so a stopped publisher is protected while dead ones can recover.
+      if [ -d "$lockdir" ] && [ ! -L "$lockdir" ] \
+        && fm_lock_directory_publisher_alive "$lockdir"; then
+        return 0
+      fi
+      ;;
+  esac
   case "$pid" in
     ''|*[!0-9]*)
       mid_acquire_stale=$FM_LOCK_STALE_AFTER
@@ -1044,11 +1137,11 @@ fm_recovery_marker_reopen_announced() {
 # reaper whose own election a trap interrupted resumes it from its tombstone.
 fm_lock_reap_dead_link() {
   local lockdir=$1 owner pid token tomb current
-  [ -L "$lockdir" ] || return 1
   owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null) || return 1
+  [ "$owner" != "$lockdir" ] || return 1
   fm_current_pid current || return 1
   if [ -d "$owner" ]; then
-    pid=$(cat "$owner/pid" 2>/dev/null || true)
+    pid=$(cat "$lockdir/pid" 2>/dev/null || true)
     fm_lock_recheck_stale_owner "$lockdir" "$owner" "$pid" || return 1
     token=$owner
   else
@@ -1067,7 +1160,7 @@ fm_lock_reap_dead_link() {
     mv -- "$token" "$tomb" 2>/dev/null || return 1
   fi
   if fm_lock_points_to_owner "$lockdir" "$owner"; then
-    rm -f "$lockdir" 2>/dev/null || true
+    fm_lock_remove_path "$lockdir" || true
   fi
   fm_lock_discard_owner "$tomb"
 }
@@ -1156,10 +1249,7 @@ fm_lock_try_acquire() {
     return 1
   fi
 
-  primary_owner=
-  if [ -L "$lockdir" ]; then
-    primary_owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
-  fi
+  primary_owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
   cur=$(cat "$lockdir/pid" 2>/dev/null || true)
   if ! fm_lock_recheck_stale_owner "$lockdir" "$primary_owner" "$cur"; then
     fm_lock_release "$steal"
@@ -1216,24 +1306,17 @@ fm_lock_acquire_wait_max() {  # <lockdir> <max-seconds>
 # every interruption safe: before transfer the helper is the owner; after
 # transfer the still-live caller is the owner.
 _fm_lock_acquire_wait_handoff() {  # <lockdir> <caller-pid>
-  local lockdir=$1 caller_pid=$2 ownerdir current back
+  local lockdir=$1 caller_pid=$2 current back
   case "$caller_pid" in ''|*[!0-9]*) return 1 ;; esac
   fm_pid_alive "$caller_pid" || return 1
   trap 'fm_lock_release "$lockdir"; exit 143' TERM INT
   fm_lock_acquire_wait "$lockdir" || return 1
-  if [ -L "$lockdir" ]; then
-    ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null) || {
-      fm_lock_release "$lockdir"
-      return 1
-    }
-  else
-    ownerdir=$lockdir
-  fi
+  fm_lock_link_owner "$lockdir" >/dev/null || { fm_lock_release "$lockdir"; return 1; }
   fm_current_pid current || { fm_lock_release "$lockdir"; return 1; }
-  back=$(cat "$ownerdir/pid" 2>/dev/null || true)
+  back=$(cat "$lockdir/pid" 2>/dev/null || true)
   if [ "$back" != "$current" ] \
-    || ! printf '%s\n' "$caller_pid" > "$ownerdir/pid" 2>/dev/null \
-    || [ "$(cat "$ownerdir/pid" 2>/dev/null || true)" != "$caller_pid" ]; then
+    || ! printf '%s\n' "$caller_pid" > "$lockdir/pid" 2>/dev/null \
+    || [ "$(cat "$lockdir/pid" 2>/dev/null || true)" != "$caller_pid" ]; then
     fm_lock_release "$lockdir"
     return 1
   fi
@@ -1303,20 +1386,12 @@ fm_lock_acquire_wait_bounded() {
 fm_lock_release() {
   local lockdir=$1 pid current ownerdir
   fm_current_pid current || return 1
-  if [ -L "$lockdir" ]; then
-    ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
-    [ -n "$ownerdir" ] || return 0
-    pid=$(cat "$ownerdir/pid" 2>/dev/null || true)
-    [ "$pid" = "$current" ] || return 0
-    fm_lock_points_to_owner "$lockdir" "$ownerdir" || return 0
-    rm -f "$lockdir" 2>/dev/null || return 0
-    fm_lock_discard_owner "$ownerdir"
-    return 0
-  fi
+  ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
+  [ -n "$ownerdir" ] || return 0
   pid=$(cat "$lockdir/pid" 2>/dev/null || true)
   [ "$pid" = "$current" ] || return 0
-  fm_lock_clean_known_files "$lockdir"
-  rmdir "$lockdir" 2>/dev/null || true
+  fm_lock_points_to_owner "$lockdir" "$ownerdir" || return 0
+  fm_lock_remove_path "$lockdir" || true
 }
 
 fm_meta_lock_path() {

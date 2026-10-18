@@ -465,15 +465,9 @@ processed_init_locked() {
 held_lock_owned_by_ancestor() {
   local owner owner_pid pid parent depth=0
   case "$PPID" in ''|*[!0-9]*|0|1) return 1 ;; esac
-  if [ -L "$LOCK" ]; then
-    owner=$(fm_lock_link_owner "$LOCK" 2>/dev/null) || return 1
-    fm_lock_points_to_owner "$LOCK" "$owner" || return 1
-  elif [ -d "$LOCK" ]; then
-    owner=$LOCK
-  else
-    return 1
-  fi
-  owner_pid=$(cat "$owner/pid" 2>/dev/null) || return 1
+  owner=$(fm_lock_link_owner "$LOCK" 2>/dev/null) || return 1
+  fm_lock_points_to_owner "$LOCK" "$owner" || return 1
+  owner_pid=$(cat "$LOCK/pid" 2>/dev/null) || return 1
   fm_pid_alive "$owner_pid" || return 1
 
   # Bash 3.2 keeps $$ unchanged in a redirected subshell while that subshell's

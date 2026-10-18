@@ -2019,21 +2019,34 @@ async function assertLifecycleLockOwned() {
   if (!activeLifecycleLock) fail("lifecycle-lock-invalid", "retirement has no lifecycle lock ownership");
   const { lockPath, ownerPath, delegatedOwnerPid } = activeLifecycleLock;
   const lockInfo = await maybeLstat(lockPath);
-  if (!lockInfo?.isSymbolicLink()) fail("lifecycle-lock-lost", "retirement lifecycle lock is no longer held");
-  const target = await readlink(lockPath).catch(() => fail("lifecycle-lock-lost", "retirement lifecycle lock cannot be read"));
+  if (!lockInfo?.isSymbolicLink() && !lockInfo?.isDirectory()) fail("lifecycle-lock-lost", "retirement lifecycle lock is no longer held");
+  let target;
+  if (lockInfo.isSymbolicLink()) {
+    target = await readlink(lockPath).catch(() => fail("lifecycle-lock-lost", "retirement lifecycle lock cannot be read"));
+  } else {
+    // fm_lock_link_owner in fm-wake-lib.sh owns the .owner identity contract.
+    const identityPath = path.join(lockPath, ".owner");
+    const identityInfo = await maybeLstat(identityPath);
+    if (!identityInfo?.isFile() || identityInfo.isSymbolicLink() || identityInfo.nlink !== 1
+        || identityInfo.uid !== currentUid() || identityInfo.size > 4096 || lockInfo.uid !== currentUid()) {
+      fail("lifecycle-lock-invalid", "retirement lifecycle lock identity is unsafe");
+    }
+    target = (await readFile(identityPath, "utf8")).trim();
+  }
   const resolvedTarget = path.isAbsolute(target) ? target : path.resolve(path.dirname(lockPath), target);
   if (resolvedTarget !== ownerPath) fail("lifecycle-lock-lost", "retirement lifecycle lock owner changed");
   const ownerInfo = await maybeLstat(ownerPath);
   if (!ownerInfo?.isDirectory() || ownerInfo.isSymbolicLink() || ownerInfo.uid !== currentUid()) {
     fail("lifecycle-lock-invalid", "retirement lifecycle lock owner is unsafe");
   }
-  const pidPath = path.join(ownerPath, "pid");
+  const pidPath = path.join(lockPath, "pid");
   const pidInfo = await maybeLstat(pidPath);
   if (!pidInfo?.isFile() || pidInfo.isSymbolicLink() || pidInfo.nlink !== 1 || pidInfo.uid !== currentUid()) {
     fail("lifecycle-lock-invalid", "retirement lifecycle lock pid is unsafe");
   }
   const pid = (await readFile(pidPath, "utf8")).trim();
   if (pid !== String(delegatedOwnerPid || process.pid)) fail("lifecycle-lock-lost", "retirement process does not own the lifecycle lock");
+  return lockInfo.isSymbolicLink();
 }
 
 async function claimInheritedLifecycleLock(home) {
@@ -2055,9 +2068,15 @@ async function claimInheritedLifecycleLock(home) {
 }
 
 async function releaseLifecycleLock() {
-  await assertLifecycleLockOwned();
+  const symbolic = await assertLifecycleLockOwned();
   const { lockPath, ownerPath } = activeLifecycleLock;
-  await unlink(lockPath);
+  if (symbolic) {
+    await unlink(lockPath);
+  } else {
+    await unlink(path.join(lockPath, "pid"));
+    await unlink(path.join(lockPath, ".owner"));
+    await rmdir(lockPath);
+  }
   await unlink(path.join(ownerPath, "pid"));
   await rmdir(ownerPath);
   activeLifecycleLock = null;

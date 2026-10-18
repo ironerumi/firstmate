@@ -712,6 +712,192 @@ test_lock_does_not_steal_live_lock() {
   pass "live-held lock is not stolen"
 }
 
+# The oracle is the public lock contract, not the representation: one live
+# owner, same-owner recovery, dead-owner recovery and complete release must
+# produce identical results with real links and with MSYS-style copied links.
+lock_portability_scenario() {
+  local state=$1 expected=$2
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    lock="$STATE/.portable.lock"
+    fm_lock_try_acquire "$lock" || exit 10
+    if [ "$2" = directory ]; then
+      [ -d "$lock" ] && [ ! -L "$lock" ] || exit 11
+    else
+      [ -L "$lock" ] || exit 12
+    fi
+    owner=$(fm_lock_link_owner "$lock") || exit 13
+    fm_lock_points_to_owner "$lock" "$owner" || exit 14
+    printf "acquired\n"
+    fm_lock_try_acquire "$lock" || exit 15
+    printf "reentered\n"
+    ( fm_lock_try_acquire "$lock" && exit 16
+      fm_lock_release "$lock"
+      [ -d "$lock" ] || exit 17
+    ) || exit $?
+    printf "refused foreign owner\n"
+    fm_lock_release "$lock"
+    [ ! -e "$lock" ] && [ ! -L "$lock" ] || exit 18
+    printf "released\n"
+    # wait is the proof that both the primary and steal holders have exited.
+    bash -c '\''. "$1"; fm_lock_try_create "$2" && fm_lock_try_create "$2.steal"'\'' _ "$1" "$lock" &
+    dead=$!
+    wait "$dead" || exit 19
+    fm_lock_try_acquire "$lock" || exit 20
+    printf "reclaimed dead owner and steal mutex\n"
+    fm_lock_release "$lock"
+    [ ! -e "$lock" ] && [ ! -e "$lock.steal" ] || exit 21
+    [ -z "$(find "$STATE" -name "*.owner.*" -print)" ] || exit 22
+    printf "released reclaimed lock\n"
+    fm_current_pid caller || exit 23
+    bash -c '\''. "$1"; _fm_lock_acquire_wait_handoff "$2" "$3"'\'' _ "$1" "$lock" "$caller" &
+    helper=$!
+    wait "$helper" || exit 24
+    [ "$(cat "$lock/pid")" = "$caller" ] || exit 25
+    fm_lock_release "$lock"
+    [ ! -e "$lock" ] || exit 26
+    [ -z "$(find "$STATE" -name "*.owner.*" -print)" ] || exit 27
+    printf "handed off and released\n"
+  ' _ "$LIB" "$expected"
+}
+
+test_lock_without_real_symlinks() {
+  local native copied native_out copied_out real_ln
+  native=$(make_case lock-native-parity)
+  copied=$(make_case lock-copy-parity)
+  real_ln=$(fm_real_tool ln)
+  cat > "$copied/fakebin/ln" <<'SH'
+#!/usr/bin/env bash
+if [ "$1" = -s ]; then
+  exec cp -R "$2" "$3"
+fi
+exec "$FM_TEST_REAL_LN" "$@"
+SH
+  chmod +x "$copied/fakebin/ln"
+  native_out=$(lock_portability_scenario "$native/state" symlink) \
+    || fail "native symlink lock contract failed"
+  copied_out=$(PATH="$copied/fakebin:$PATH" FM_TEST_REAL_LN="$real_ln" \
+    lock_portability_scenario "$copied/state" directory) \
+    || fail "MSYS copied-link lock contract failed"
+  [ "$native_out" = "$copied_out" ] \
+    || fail "directory fallback changed the native lock contract: $copied_out"
+  pass "copied-link fallback matches native acquire, re-entry, refusal, dead-owner recovery and release"
+}
+
+test_directory_lock_single_winner_under_load() {
+  local dir state round i pids pid winners result
+  dir=$(make_case directory-lock-contention)
+  state="$dir/state"
+  cat > "$dir/fakebin/ln" <<'SH'
+#!/usr/bin/env bash
+exec cp -R "$2" "$3"
+SH
+  chmod +x "$dir/fakebin/ln"
+  mkfifo "$dir/ready" "$dir/start" "$dir/result" "$dir/release"
+  exec 6<> "$dir/ready" 7<> "$dir/start" 8<> "$dir/result" 9<> "$dir/release"
+  for round in {1..10}; do
+    pids=''
+    winners=0
+    for i in {1..8}; do
+      PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$state" bash -c '
+        . "$1"
+        printf "ready\n" >&6
+        IFS= read -r go <&7
+        if fm_lock_try_acquire "$2"; then
+          [ -d "$2" ] && [ ! -L "$2" ] || exit 10
+          printf "won\n" >&8
+          IFS= read -r release <&9
+          fm_lock_release "$2"
+        else
+          printf "lost\n" >&8
+        fi
+      ' _ "$LIB" "$state/.contend.lock" &
+      pids="$pids $!"
+    done
+    for i in {1..8}; do IFS= read -r result <&6; done
+    for i in {1..8}; do printf 'go\n' >&7; done
+    for i in {1..8}; do
+      IFS= read -r result <&8
+      [ "$result" != won ] || winners=$((winners + 1))
+    done
+    [ "$winners" -eq 1 ] || fail "directory contention round $round had $winners winners"
+    printf 'release\n' >&9
+    for pid in $pids; do wait "$pid" || fail "directory contender failed in round $round"; done
+    [ ! -e "$state/.contend.lock" ] || fail "directory winner did not release in round $round"
+  done
+  exec 6>&- 7>&- 8>&- 9>&-
+  pass "directory lock has exactly one winner in 10 event-synchronized rounds of 8 contenders"
+}
+
+test_directory_lock_paused_publication_cannot_be_stolen() {
+  local dir state lock publisher real_mkdir real_mv line stage
+  dir=$(make_case directory-lock-publication)
+  state="$dir/state"
+  lock="$state/.publish.lock"
+  real_mkdir=$(fm_real_tool mkdir)
+  real_mv=$(fm_real_tool mv)
+  mkfifo "$dir/created" "$dir/resume"
+  cat > "$dir/fakebin/ln" <<'SH'
+#!/usr/bin/env bash
+exec cp -R "$2" "$3"
+SH
+  cat > "$dir/fakebin/mkdir" <<'SH'
+#!/usr/bin/env bash
+"$FM_TEST_REAL_MKDIR" "$@" || exit $?
+if [ "$*" = "$FM_TEST_PUBLICATION_LOCK" ] && [ "$FM_TEST_PAUSE_STAGE" = mkdir ]; then
+  printf 'created\n' > "$FM_TEST_PUBLICATION_CREATED"
+  IFS= read -r resume < "$FM_TEST_PUBLICATION_RESUME"
+fi
+SH
+  cat > "$dir/fakebin/mv" <<'SH'
+#!/usr/bin/env bash
+if [ "${!#}" = "$FM_TEST_PUBLICATION_LOCK/pid" ] && [ "$FM_TEST_PAUSE_STAGE" = pid ]; then
+  printf 'created\n' > "$FM_TEST_PUBLICATION_CREATED"
+  IFS= read -r resume < "$FM_TEST_PUBLICATION_RESUME"
+fi
+exec "$FM_TEST_REAL_MV" "$@"
+SH
+  chmod +x "$dir/fakebin/ln" "$dir/fakebin/mkdir" "$dir/fakebin/mv"
+  for stage in mkdir pid; do
+    PATH="$dir/fakebin:$PATH" FM_TEST_REAL_MKDIR="$real_mkdir" FM_TEST_REAL_MV="$real_mv" \
+      FM_TEST_PAUSE_STAGE="$stage" FM_TEST_PUBLICATION_LOCK="$lock" \
+      FM_TEST_PUBLICATION_CREATED="$dir/created" FM_TEST_PUBLICATION_RESUME="$dir/resume" \
+      FM_STATE_OVERRIDE="$state" bash -c '
+        . "$1"
+        fm_lock_try_acquire "$2" || exit 10
+        fm_lock_release "$2"
+      ' _ "$LIB" "$lock" &
+    publisher=$!
+    IFS= read -r line < "$dir/created"
+    [ "$line" = created ] || fail "publisher did not reach $stage barrier"
+    # Disprove age-based stealing without waiting for an elapsed grace period.
+    touch -t 200001010000 "$lock"
+    FM_STATE_OVERRIDE="$state" FM_LOCK_STALE_AFTER=0 bash -c '
+      . "$1"
+      fm_lock_try_acquire "$2" && exit 10
+      [ -d "$2" ] && [ ! -e "$2/pid" ] || exit 11
+      if [ "$3" = mkdir ]; then [ ! -e "$2/.owner" ]; else [ -f "$2/.owner" ]; fi
+    ' _ "$LIB" "$lock" "$stage" || fail "$stage directory stolen from paused publisher"
+    printf 'resume\n' > "$dir/resume"
+    wait "$publisher" || fail "publisher could not claim and release after $stage barrier"
+    [ ! -e "$lock" ] || fail "resumed directory publication left its lock"
+  done
+  # A publisher that really exited cannot resume, so an abandoned empty
+  # directory must still recover through the existing stale-directory path.
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    owner=$(fm_lock_owner_dir "$2") || exit 12
+    fm_lock_prepare_owner "$owner" && mkdir "$2"
+  ' _ "$LIB" "$lock" || fail "could not prepare abandoned publication"
+  touch -t 200001010000 "$lock"
+  FM_STATE_OVERRIDE="$state" FM_LOCK_STALE_AFTER=0 bash -c '
+    . "$1"
+    fm_lock_try_acquire "$2" || exit 13
+    fm_lock_release "$2"
+  ' _ "$LIB" "$lock" || fail "dead unpublished owner prevented recovery"
+  pass "directory publication is protected at both boundaries; truly dead publishers recover"
+}
+
 test_lock_empty_pid_uses_minimum_grace() {
   local dir state lockdir out
   dir=$(make_case lock-empty-grace)
@@ -1618,6 +1804,9 @@ test_lock_reclaims_self_held_steal_mutex
 test_lock_resumes_own_interrupted_steal_reap
 test_lock_live_steal_mutex_is_not_reclaimed
 test_lock_does_not_steal_live_lock
+test_lock_without_real_symlinks
+test_directory_lock_single_winner_under_load
+test_directory_lock_paused_publication_cannot_be_stolen
 test_lock_empty_pid_uses_minimum_grace
 test_lock_late_claim_loses_after_recreate
 test_lock_paused_mid_acquire_claim_fails_during_steal

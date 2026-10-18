@@ -68,17 +68,8 @@ fm_afk_clear_stale_artifacts() {  # <state-dir>
 }
 
 daemon_lock_owner() {
-  local owner
-  if [ -L "$FM_AFK_LOCK" ]; then
-    owner=$(readlink "$FM_AFK_LOCK" 2>/dev/null) || return 1
-    [ -n "$owner" ] || return 1
-    case "$owner" in
-      /*) printf '%s\n' "$owner" ;;
-      *) printf '%s/%s\n' "$(dirname "$FM_AFK_LOCK")" "$owner" ;;
-    esac
-    return 0
-  fi
-  [ -d "$FM_AFK_LOCK" ] || return 1
+  fm_lock_link_owner "$FM_AFK_LOCK" >/dev/null || return 1
+  # Metadata is reachable through the public path for either lock form.
   printf '%s\n' "$FM_AFK_LOCK"
 }
 
