@@ -409,6 +409,17 @@ SH
   got=$(FM_TEST_WINDOWS_PROCESS_FAILURE=1 FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
     "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
   [ "$got" = 'unknown false' ] || fail "a failed Windows process snapshot was inspected as '$got'"
+  got=$(FM_TEST_WINDOWS_PROCESS_FAILURE=1 PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" \
+    bash "$ROOT/bin/fm-lock.sh" status 2>/dev/null)
+  [ "$got" = 'lock: unknown (owner liveness could not be verified)' ] \
+    || fail "the status CLI reported '$got' for an unavailable process snapshot"
+  : > "$dir/calls"
+  FM_TEST_WINDOWS_TREE=claude FM_TEST_PS_CALLS="$dir/calls" \
+    lib_eval "$fakebin" 'fm_harness_pid_alive 700; fm_harness_pid_alive 700' >/dev/null \
+    || fail "repeated Windows liveness checks failed outside acquisition"
+  [ "$(wc -l < "$dir/calls" | tr -d ' ')" = 2 ] \
+    || fail "Windows liveness reused a process snapshot outside acquisition"
+  : > "$dir/calls"
   # Drive real acquisition, not just helper calls: repeated identity and
   # trusted-session consumers must share one process-table query per command.
   mkdir -p "$dir/home"

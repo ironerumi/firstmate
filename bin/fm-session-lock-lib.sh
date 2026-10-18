@@ -52,12 +52,22 @@ _fm_windows_ps_fallback_needed() {
 # One snapshot per acquisition; fm-lock.sh retains it in the acquiring shell so
 # all command substitutions share it until the claim is released.
 _FM_WINDOWS_PROCESS_TABLE=
+_FM_WINDOWS_PROCESS_SCOPE=0
 _fm_windows_prepare_process_snapshot() {
-  [ -z "$_FM_WINDOWS_PROCESS_TABLE" ] || return 0
+  if [ "${_FM_WINDOWS_PROCESS_SCOPE:-0}" = 1 ] && [ -n "$_FM_WINDOWS_PROCESS_TABLE" ]; then
+    return 0
+  fi
   _FM_WINDOWS_PROCESS_TABLE=$(powershell.exe -NoProfile -NonInteractive -Command \
     "try { Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { \"{0}\`t{1}\`t{2}\`t{3}\`t{4}\" -f \$_.ProcessId,\$_.Name,\$_.ParentProcessId,(\$_.ExecutablePath -replace '\\\\','/'),\$_.CommandLine } } catch { exit 1 }" \
     2>/dev/null) || return 1
   [ -n "$_FM_WINDOWS_PROCESS_TABLE" ]
+}
+
+_fm_windows_snapshot_scope_end() {
+  if [ "${1:-0}" = 1 ]; then
+    _FM_WINDOWS_PROCESS_TABLE=
+    _FM_WINDOWS_PROCESS_SCOPE=0
+  fi
 }
 
 # Print the cached Windows process name, parent PID, executable path, and
@@ -95,17 +105,32 @@ _fm_windows_process_fields() {  # <process-info>
 
 # True when Windows PID $1 is a live verified harness. Sets FM_HARNESS_IS_CLAUDE.
 _fm_harness_pid_alive_windows() {  # <pid>
-  local info comm _FM_WINDOWS_PROCESS_TABLE=$_FM_WINDOWS_PROCESS_TABLE
-  _fm_windows_prepare_process_snapshot || return 3
+  local info comm scope_owner=0 rc
+  if [ "${_FM_WINDOWS_PROCESS_SCOPE:-0}" != 1 ]; then
+    _FM_WINDOWS_PROCESS_TABLE=
+    _FM_WINDOWS_PROCESS_SCOPE=1
+    scope_owner=1
+  fi
+  if ! _fm_windows_prepare_process_snapshot; then
+    _fm_windows_snapshot_scope_end "$scope_owner"
+    return 3
+  fi
   info=$(_fm_windows_process_info "$1")
-  case "$?" in
+  rc=$?
+  case "$rc" in
     0) ;;
-    2) return 2 ;;
-    *) return 3 ;;
+    2) _fm_windows_snapshot_scope_end "$scope_owner"; return 2 ;;
+    *) _fm_windows_snapshot_scope_end "$scope_owner"; return 3 ;;
   esac
-  _fm_windows_process_fields "$info" || return 3
+  if ! _fm_windows_process_fields "$info"; then
+    _fm_windows_snapshot_scope_end "$scope_owner"
+    return 3
+  fi
   comm=${_FM_WINDOWS_PROCESS_NAME%.[Ee][Xx][Ee]}
   fm_harness_process_matches "$comm" "$_FM_WINDOWS_PROCESS_ARGS" "$_FM_WINDOWS_PROCESS_PATH"
+  rc=$?
+  _fm_windows_snapshot_scope_end "$scope_owner"
+  return "$rc"
 }
 
 # Read a numeric Cygwin process-table field. PowerShell identity lookups use
@@ -125,9 +150,16 @@ _fm_windows_proc_pid() {  # <cygwin-pid> <ppid|winpid>
 # Inner MSYS native parents may be exited fork intermediates, while the native
 # harness is absent from /proc. Bridge only at the Cygwin ppid 0/1 boundary.
 _fm_harness_ancestry_pids_windows() {
-  local pid=$$ winpid comm parent info native=0 extending=0 printed=0
-  local _FM_WINDOWS_PROCESS_TABLE=$_FM_WINDOWS_PROCESS_TABLE
-  _fm_windows_prepare_process_snapshot || return 1
+  local pid=$$ winpid comm parent info native=0 extending=0 printed=0 scope_owner=0 rc
+  if [ "${_FM_WINDOWS_PROCESS_SCOPE:-0}" != 1 ]; then
+    _FM_WINDOWS_PROCESS_TABLE=
+    _FM_WINDOWS_PROCESS_SCOPE=1
+    scope_owner=1
+  fi
+  if ! _fm_windows_prepare_process_snapshot; then
+    _fm_windows_snapshot_scope_end "$scope_owner"
+    return 1
+  fi
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     if [ "$native" -eq 0 ]; then
       winpid=$(_fm_windows_proc_pid "$pid" winpid) || break
@@ -154,7 +186,10 @@ _fm_harness_ancestry_pids_windows() {
     winpid=$_FM_WINDOWS_PROCESS_PARENT
     [ "$winpid" -ge 1 ] || break
   done
-  [ "$printed" -eq 1 ]
+  rc=1
+  [ "$printed" -eq 1 ] && rc=0
+  _fm_windows_snapshot_scope_end "$scope_owner"
+  return "$rc"
 }
 
 # Known harness command names; extend when a new adapter is verified. omp is

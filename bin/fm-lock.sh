@@ -50,7 +50,8 @@ if [ "${1:-}" = "status" ]; then
     free) echo "lock: free" ;;
     unreadable) echo "lock: unreadable" ;;
     held) echo "lock: held by live harness pid $FM_LOCK_INSPECT_PID" ;;
-    *) echo "lock: stale (pid $FM_LOCK_INSPECT_PID dead or not a harness)" ;;
+    stale) echo "lock: stale (pid $FM_LOCK_INSPECT_PID dead or not a harness)" ;;
+    *) echo "lock: unknown (owner liveness could not be verified)" ;;
   esac
   exit 0
 fi
@@ -79,6 +80,7 @@ release_claim_lock() {
     CLAIM_LOCK_HELD=0
   fi
   _FM_WINDOWS_PROCESS_TABLE=
+  _FM_WINDOWS_PROCESS_SCOPE=0
 }
 restore_uncommitted_lock_session() {
   case "$LOCK_SESSION_PHASE" in
@@ -190,6 +192,7 @@ if ! fm_lock_try_acquire "$CLAIM_LOCK"; then
   fm_lock_acquire_wait "$CLAIM_LOCK"
 fi
 CLAIM_LOCK_HELD=1
+_FM_WINDOWS_PROCESS_SCOPE=1
 
 if _fm_windows_ps_fallback_needed; then
   _fm_windows_prepare_process_snapshot || {
