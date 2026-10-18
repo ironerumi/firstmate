@@ -51,7 +51,13 @@ if [ "${1:-}" = "status" ]; then
     unreadable) echo "lock: unreadable" ;;
     held) echo "lock: held by live harness pid $FM_LOCK_INSPECT_PID" ;;
     stale) echo "lock: stale (pid $FM_LOCK_INSPECT_PID dead or not a harness)" ;;
-    *) echo "lock: unknown (owner liveness could not be verified)" ;;
+    *)
+      if _fm_windows_ps_fallback_needed; then
+        echo "lock: unknown (owner liveness could not be verified)"
+      else
+        echo "lock: stale (pid $FM_LOCK_INSPECT_PID dead or not a harness)"
+      fi
+      ;;
   esac
   exit 0
 fi
