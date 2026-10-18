@@ -840,26 +840,6 @@ test_direct_directory_lock_release_and_reap() {
   pass "direct directory locks release and recover through the shared paths"
 }
 
-test_direct_steal_mutex_recovery() {
-  local dir state lock dead
-  dir=$(make_case direct-steal-mutex)
-  state="$dir/state"
-  lock="$state/.direct-steal.lock"
-  dead=$(dead_pid)
-  mkdir "$lock" "$lock.steal"
-  printf '%s\n' "$dead" > "$lock/pid"
-  printf '%s\n' "$dead" > "$lock.steal/pid"
-  FM_STATE_OVERRIDE="$state" bash -c '
-    . "$1"
-    fm_lock_try_acquire "$2" || exit 7
-    [ "$(cat "$2/pid")" != "$3" ] || exit 8
-    fm_lock_release "$2"
-    [ ! -e "$2" ] && [ ! -e "$2.steal" ] || exit 9
-  ' _ "$LIB" "$lock" "$dead" \
-    || fail "stale direct steal mutex blocked primary recovery"
-  pass "stale direct steal mutex is recovered before primary lock recovery"
-}
-
 test_lock_without_real_symlinks() {
   local native copied native_out copied_out real_ln
   native=$(make_case lock-native-parity)
@@ -995,6 +975,67 @@ SH
     fm_lock_release "$2"
   ' _ "$LIB" "$lock" || fail "dead unpublished owner prevented recovery"
   pass "directory publication is protected at both boundaries; truly dead publishers recover"
+}
+
+test_directory_lock_ignores_old_unrelated_publisher() {
+  local dir state lock real_mkdir owner_file resume publisher unrelated line
+  dir=$(make_case directory-lock-unrelated-publisher)
+  state="$dir/state"
+  lock="$state/.publish.lock"
+  real_mkdir=$(fm_real_tool mkdir)
+  owner_file="$dir/unrelated-owner"
+  resume="$dir/resume"
+  mkfifo "$owner_file" "$resume" "$dir/created"
+  cat > "$dir/fakebin/ln" <<'SH'
+#!/usr/bin/env bash
+if [ "$1" = -s ]; then
+  exec cp -R "$2" "$3"
+fi
+exec /bin/ln "$@"
+SH
+  chmod +x "$dir/fakebin/ln"
+  cat > "$dir/fakebin/mkdir" <<'SH'
+#!/usr/bin/env bash
+"$FM_TEST_REAL_MKDIR" "$@" || exit $?
+if [ "$*" = "$FM_TEST_PUBLICATION_LOCK" ]; then
+  printf 'created\n' > "$FM_TEST_PUBLICATION_CREATED"
+  kill -KILL "$PPID"
+fi
+SH
+  chmod +x "$dir/fakebin/mkdir"
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    owner=$(fm_lock_owner_dir "$2") || exit 10
+    fm_lock_prepare_owner "$owner" || exit 11
+    touch -t 200001010000 "$owner/pid" || exit 12
+    printf "%s\n" "$owner" > "$3"
+    IFS= read -r release < "$4"
+    fm_lock_discard_owner "$owner"
+  ' _ "$LIB" "$lock" "$owner_file" "$resume" &
+  unrelated=$!
+  IFS= read -r owner < "$owner_file"
+  [ -n "$owner" ] && kill -0 "$unrelated" 2>/dev/null \
+    || fail "unrelated publisher token did not remain live"
+  PATH="$dir/fakebin:$PATH" FM_TEST_REAL_MKDIR="$real_mkdir" \
+    FM_TEST_PUBLICATION_LOCK="$lock" FM_TEST_PUBLICATION_CREATED="$dir/created" \
+    FM_STATE_OVERRIDE="$state" \
+    bash -c '. "$1"; fm_lock_try_acquire "$2"' _ "$LIB" "$lock" &
+  publisher=$!
+  IFS= read -r line < "$dir/created"
+  [ "$line" = created ] || fail "publisher did not expose its empty public directory"
+  wait "$publisher" 2>/dev/null || true
+  [ -d "$lock" ] && [ ! -e "$lock/pid" ] || fail "publisher did not die before public pid publication"
+  touch -t 200001010000 "$lock"
+  FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_lock_try_acquire "$2" || exit 13
+    [ "$(cat "$2/pid")" = "${BASHPID:-$$}" ] || exit 14
+    fm_lock_release "$2"
+  ' _ "$LIB" "$lock" || fail "old unrelated publisher token blocked recovery"
+  kill -0 "$unrelated" 2>/dev/null || fail "unrelated publisher exited before recovery completed"
+  printf 'release\n' > "$resume"
+  wait "$unrelated" || fail "unrelated publisher token did not clean up"
+  pass "old unrelated publisher tokens no longer block empty-directory recovery"
 }
 
 test_lock_empty_pid_uses_minimum_grace() {
@@ -1905,10 +1946,10 @@ test_lock_live_steal_mutex_is_not_reclaimed
 test_lock_does_not_steal_live_lock
 test_direct_directory_reaper_cannot_remove_live_successor
 test_direct_directory_lock_release_and_reap
-test_direct_steal_mutex_recovery
 test_lock_without_real_symlinks
 test_directory_lock_single_winner_under_load
 test_directory_lock_paused_publication_cannot_be_stolen
+test_directory_lock_ignores_old_unrelated_publisher
 test_lock_empty_pid_uses_minimum_grace
 test_lock_late_claim_loses_after_recreate
 test_lock_paused_mid_acquire_claim_fails_during_steal

@@ -15,6 +15,7 @@ STATE="${FM_STATE_OVERRIDE:-${STATE:-$FM_HOME/state}}"
 FM_WAKE_QUEUE="${FM_WAKE_QUEUE:-$STATE/.wake-queue}"
 FM_WAKE_QUEUE_LOCK="${FM_WAKE_QUEUE_LOCK:-$STATE/.wake-queue.lock}"
 FM_LOCK_STALE_AFTER="${FM_LOCK_STALE_AFTER:-2}"
+FM_LOCK_PREPUBLICATION_GRACE=2
 # shellcheck source=bin/fm-path-lib.sh
 . "$FM_WAKE_LIB_DIR/fm-path-lib.sh"
 # Resolved once at source time: fm_pid_identity and fm_path_mtime run inside 0.2s
@@ -697,6 +698,7 @@ fm_lock_directory_publisher_alive() {
   for owner in "$lock_abs".owner.*; do
     [ -d "$owner" ] && [ ! -L "$owner" ] || continue
     pid=$(cat "$owner/pid" 2>/dev/null || true)
+    [ "$(fm_path_age "$owner/pid")" -lt "$FM_LOCK_PREPUBLICATION_GRACE" ] || continue
     fm_pid_alive "$pid" && return 0
   done
   return 1
@@ -1173,7 +1175,7 @@ fm_lock_reap_dead_link() {
 # hold abandoned by this very process (a trap interrupted its critical section)
 # is reclaimed like fm_lock_try_acquire's self-held branch.
 fm_lock_try_acquire_steal_mutex() {  # <steal-lock>
-  local lockdir=$1 current owner pid
+  local lockdir=$1 current
   FM_LOCK_OWNER_DIR=
   fm_lock_try_create "$lockdir" && return 0
   fm_current_pid current || return 1
@@ -1181,14 +1183,7 @@ fm_lock_try_acquire_steal_mutex() {  # <steal-lock>
   if [ "$(cat "$lockdir/pid" 2>/dev/null || true)" = "$current" ]; then
     fm_lock_remove_path "$lockdir" || true
   elif [ -e "$lockdir" ] || [ -L "$lockdir" ]; then
-    owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
-    if [ -d "$lockdir" ] && [ ! -L "$lockdir" ] && [ "$owner" = "$lockdir" ]; then
-      pid=$(cat "$lockdir/pid" 2>/dev/null || true)
-      fm_lock_recheck_stale_owner "$lockdir" "$lockdir" "$pid" || return 1
-      fm_lock_remove_path "$lockdir" || return 1
-    else
-      fm_lock_reap_dead_link "$lockdir" || return 1
-    fi
+    fm_lock_reap_dead_link "$lockdir" || return 1
   fi
   fm_lock_try_create "$lockdir"
 }
