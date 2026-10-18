@@ -1,0 +1,21 @@
+Phase 1 targeted live product validation
+
+Elapsed at completion: under 5 minutes.
+
+Command:
+`bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-remote-job-claim-reap.test.sh tests/fm-remote-job-claim-retention.test.sh tests/fm-remote-job-orphan-reap.test.sh tests/fm-remote-job.test.sh`
+
+The required discovery command was also run first:
+`bin/fm-test-run.sh --list --changed`
+It exited 2 because the changed tree includes `tests/fm-turnend-foreign-owner-repro.py`, for which the runner reported no changed-test mapping. The narrowed remote-job suites were then selected from the target commit's two changed production files.
+
+Ran and passed:
+- tests/fm-remote-job-claim-reap.test.sh
+- tests/fm-remote-job-claim-retention.test.sh
+- tests/fm-remote-job-orphan-reap.test.sh
+- tests/fm-remote-job.test.sh
+
+Failed: none.
+Time-bound: none.
+
+No additional phase-2 live scenario was started because the targeted suites cover the restored remote-job claim-reaping and worker-heartbeat behavior, and all phase-1 suites passed.
