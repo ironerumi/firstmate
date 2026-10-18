@@ -27,9 +27,10 @@
 #   <task>.inbox/handled/      the worker's `mv` here IS the acknowledgement
 #   <task>.inbox/.seq.lock     serializes sequence allocation across writers
 #                              (the session and the away daemon)
-#   <task>.inbox/.ring-state   the one per-message ladder record (state, attempts,
-#                              last ring, last busy sighting); format and
-#                              transitions are owned by bin/fm-task-inbox-ladder.sh
+#   <task>.inbox/.ring-state   watcher re-ring ladder: "<msg>\t<count>\t<epoch>"
+#   <task>.inbox/.busy-state   consecutive busy deferrals: "<msg>\t<count>"
+#   <task>.inbox/.escalated    oldest-message name already surfaced as stale,
+#                              so later polls suppress another escalation
 #   <task>.inbox/.retry-ring   name of a fire-and-forget record still owed its
 #                              one retry ring (fm_task_inbox_mark_retry)
 #
@@ -47,28 +48,24 @@
 # lifetime even if every doorbell is duplicated. Concurrent writers serialize
 # on .seq.lock; the worst racing outcome is ordering, never loss.
 #
-# Re-ring ladder (fm_task_inbox_due_action): a pure function of the oldest
-# unhandled message and its one ladder record (bin/fm-task-inbox-ladder.sh), so
-# it rings on state transitions. A message with no record is `delivered`: once
-# older than FM_TASK_INBOX_GRACE_SECS it is due its first delivery attempt. A
-# `ringing` message is due the next attempt one grace after its last
-# presentation, where a busy sighting after the ring counts as that
-# presentation: a handling turn in flight (the ring waits in the composer or
-# the worker is mid-turn) is not rung again at the first idle poll. A turn that
-# died leaves no further sightings, so lost handling re-rings at the re-armed
-# deadline. After FM_TASK_INBOX_RING_MAX attempts without an acknowledgement it
-# escalates, after the same in-flight wait; an `escalated` message stays quiet
-# for recovery. A different oldest message never inherits another message's
-# record. An attempt may ring or be skipped to protect another draft in a proven
-# pending composer; an unsubmitted copy of this doorbell is retried. The caller
-# owns the busy and recovery-grade endpoint checks: a busy pane waits, while a
-# positively dead or missing endpoint skips delivery and the ladder and
-# escalates directly. If the record cannot be persisted while the message
-# remains unhandled, the caller surfaces that failure instead of retrying
-# silently; a concurrently removed inbox is a quiet no-op. Escalation
-# deliberately queues the wake before writing its record: normal polls surface a
-# message once, while a crash or write failure may produce a rare duplicate
-# rather than silently lose a wake.
+# Re-ring ladder (fm_task_inbox_due_action): an unhandled message older than
+# FM_TASK_INBOX_GRACE_SECS is due one delivery attempt per grace period; an
+# attempt may ring or be skipped to protect another draft in a proven pending
+# composer; an unsubmitted copy of this doorbell is retried. After
+# FM_TASK_INBOX_RING_MAX attempts without an acknowledgement it escalates. The
+# caller owns the busy and recovery-grade endpoint checks: due actions deferred
+# by a busy pane consume a separate durable consecutive-poll budget,
+# FM_TASK_INBOX_BUSY_MAX. At that bound the same escalation path surfaces a
+# stuck-busy reason without typing. A non-busy due check or acknowledgement resets
+# this budget. Fire-and-forget retries remain outside escalation. A positively
+# dead or missing endpoint skips delivery and the ladder and escalates directly.
+# This library owns the schedule, durable budgets, and escalation marker.
+# If delivery-attempt or busy-deferral bookkeeping fails while the record remains unhandled,
+# the caller surfaces that failure instead of retrying silently; a concurrently
+# removed inbox is a quiet no-op. Escalation deliberately queues the wake before
+# writing the deduplication marker: normal polls surface a message once, while a
+# crash or marker failure may produce a rare duplicate rather than silently lose
+# a wake.
 #
 # Retry ring (fm_task_inbox_mark_retry): only while config/wait-no-turns is
 # present. A fire-and-forget record never enters the ladder, but when
@@ -93,6 +90,7 @@
 # Tunables (env):
 #   FM_TASK_INBOX_GRACE_SECS   default 90; delivery-attempt grace and spacing
 #   FM_TASK_INBOX_RING_MAX     default 3; delivery attempts before escalation
+#   FM_TASK_INBOX_BUSY_MAX     default 2; consecutive busy-deferred due polls before escalation
 
 _FM_TASK_INBOX_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Both dependencies are canonical lint roots in their own right. Keep them as
@@ -102,12 +100,11 @@ _FM_TASK_INBOX_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$_FM_TASK_INBOX_LIB_DIR/fm-wake-lib.sh"
 # shellcheck source=/dev/null
 . "$_FM_TASK_INBOX_LIB_DIR/fm-backend.sh"
-# shellcheck source=bin/fm-task-inbox-ladder.sh
-. "$_FM_TASK_INBOX_LIB_DIR/fm-task-inbox-ladder.sh"
 
 FM_TASK_INBOX_SCHEMA='fm-task-inbox.v1'
 FM_TASK_INBOX_GRACE_DEFAULT=90
 FM_TASK_INBOX_RING_MAX_DEFAULT=3
+FM_TASK_INBOX_BUSY_MAX_DEFAULT=2
 FM_TASK_INBOX_LOCK_WAIT_DEFAULT=5
 
 fm_task_inbox_grace_secs() {
@@ -120,6 +117,40 @@ fm_task_inbox_ring_max() {
   local m=${FM_TASK_INBOX_RING_MAX:-$FM_TASK_INBOX_RING_MAX_DEFAULT}
   case "$m" in ''|*[!0-9]*) m=$FM_TASK_INBOX_RING_MAX_DEFAULT ;; esac
   printf '%s' "$m"
+}
+
+fm_task_inbox_busy_max() {
+  local m=${FM_TASK_INBOX_BUSY_MAX:-$FM_TASK_INBOX_BUSY_MAX_DEFAULT}
+  case "$m" in ''|*[!0-9]*) m=$FM_TASK_INBOX_BUSY_MAX_DEFAULT ;; esac
+  # Check the length before numeric comparison so oversized input cannot overflow.
+  if [ "${#m}" -gt 9 ] || [ "$m" -eq 0 ]; then
+    m=$FM_TASK_INBOX_BUSY_MAX_DEFAULT
+  fi
+  printf '%s' "$m"
+}
+
+# Persist before returning the new count, so a fresh watcher continues the same
+# bounded wait. A removed or acknowledged record is a quiet no-op.
+fm_task_inbox_record_busy() {  # <state-dir> <task-id> <record-path>
+  local dir base previous count
+  dir=$(fm_task_inbox_dir "$1" "$2")
+  base=${3##*/}
+  { IFS=$(printf '\t') read -r previous count < "$dir/.busy-state"; } 2>/dev/null || true
+  [ "${previous:-}" = "$base" ] || count=0
+  case "${count:-}" in ''|*[!0-9]*) count=0 ;; esac
+  [ -f "$3" ] || { printf '0'; return 0; }
+  count=$((count + 1))
+  if ! { printf '%s\t%s\n' "$base" "$count" > "$dir/.busy-state"; } 2>/dev/null; then
+    [ -f "$3" ] || { printf '0'; return 0; }
+    return 1
+  fi
+  printf '%s' "$count"
+}
+
+fm_task_inbox_clear_busy() {  # <state-dir> <task-id>
+  local dir
+  dir=$(fm_task_inbox_dir "$1" "$2")
+  rm -f "$dir/.busy-state" 2>/dev/null
 }
 
 fm_task_inbox_dir() {  # <state-dir> <task-id>
@@ -415,16 +446,17 @@ fm_task_inbox_clear_retry() {  # <state-dir> <task-id> <record-path>
 
 # The re-ring ladder decision for one task. Prints exactly one of:
 #   quiet                     nothing due (healthy, within grace or spacing,
-#                             handling seen in flight, or already escalated)
+#                             or already escalated for the current oldest)
 #   ring <record-path>        one doorbell re-ring is due
 #   escalate <record-path> <count>   attempt budget spent; surface as stale
 #   retry <record-path>       a fire-and-forget record's one retry ring is due
-# An empty inbox also drops the ladder record so the next message starts fresh.
+# An empty inbox also resets the ladder bookkeeping so the next message starts
+# a fresh ladder.
 fm_task_inbox_due_action() {  # <state-dir> <task-id>
-  local dir oldest base now grace max state count ring_at seen_at last
+  local dir oldest base now grace max ladder rec_base count last
   dir=$(fm_task_inbox_dir "$1" "$2")
   if ! oldest=$(fm_task_inbox_oldest_unhandled "$1" "$2"); then
-    fm_task_inbox_ladder_drop "$1" "$2"
+    rm -f "$dir/.ring-state" "$dir/.escalated" "$dir/.busy-state" 2>/dev/null || true
     # The one retry ring exists only while config/wait-no-turns is present.
     # Absent, a mark is left untouched and the inbox stays quiet, as before.
     if [ -e "${FM_CONFIG_OVERRIDE:-${FM_HOME:-}/config}/wait-no-turns" ]; then
@@ -441,34 +473,32 @@ fm_task_inbox_due_action() {  # <state-dir> <task-id>
   fi
   base=${oldest##*/}
   grace=$(fm_task_inbox_grace_secs)
-  # fm-send's first prompt is the delivery doorbell; this age gate governs
-  # only watcher re-rings after that first attempt, so a fresh row is not
-  # delayed when fm-send is the writer.
   if [ "$(fm_path_age "$oldest")" -lt "$grace" ]; then
     printf 'quiet'
     return 0
   fi
-  IFS=" " read -r state count ring_at seen_at <<EOF
-$(fm_task_inbox_ladder_read "$1" "$2" "$base")
+  count=0
+  last=0
+  ladder=$(cat "$dir/.ring-state" 2>/dev/null || true)
+  IFS=$(printf '\t') read -r rec_base count last <<EOF
+$ladder
 EOF
-  if [ "$state" = escalated ]; then
+  if [ -n "$rec_base" ] && [ "$rec_base" != "$base" ]; then
+    count=0
+    last=0
+  fi
+  case "$count" in ''|*[!0-9]*) count=0 ;; esac
+  case "$last" in ''|*[!0-9]*) last=0 ;; esac
+  if [ "$(cat "$dir/.escalated" 2>/dev/null || true)" = "$base" ]; then
     printf 'quiet'
     return 0
   fi
-  now=$(date +%s)
   max=$(fm_task_inbox_ring_max)
   if [ "$count" -ge "$max" ]; then
-    # A spent budget escalates at once, unless handling was seen after the last
-    # ring and has not been seen for a full grace.
-    if [ "$seen_at" -gt "$ring_at" ] && [ "$((now - seen_at))" -lt "$grace" ]; then
-      printf 'quiet'
-      return 0
-    fi
     printf 'escalate %s %s' "$oldest" "$count"
     return 0
   fi
-  last=$ring_at
-  [ "$seen_at" -le "$last" ] || last=$seen_at
+  now=$(date +%s)
   if [ "$((now - last))" -lt "$grace" ]; then
     printf 'quiet'
     return 0
@@ -476,34 +506,41 @@ EOF
   printf 'ring %s' "$oldest"
 }
 
-# Whether a busy sighting would change the schedule: the oldest unhandled
-# message is ringing (see fm_task_inbox_ladder_probe_due).
-fm_task_inbox_inflight_probe_due() {  # <state-dir> <task-id>
-  local oldest grace
-  oldest=$(fm_task_inbox_oldest_unhandled "$1" "$2") || return 1
-  grace=$(fm_task_inbox_grace_secs)
-  fm_task_inbox_ladder_probe_due "$1" "$2" "${oldest##*/}" "$grace"
-}
-
-# Record that the worker was busy while the oldest unhandled message is
-# ringing, so the next ring waits a full grace from this sighting.
-fm_task_inbox_note_inflight() {  # <state-dir> <task-id>
-  local oldest grace
-  oldest=$(fm_task_inbox_oldest_unhandled "$1" "$2") || return 0
-  grace=$(fm_task_inbox_grace_secs)
-  fm_task_inbox_ladder_note_inflight "$1" "$2" "${oldest##*/}" "$grace"
-}
-
-# Advance the ladder after a delivery attempt. A positively dead or missing
-# endpoint never enters the ladder: the watcher escalates it directly. Failure
-# means the caller must surface the unwritable record while the message remains
+# Advance the ladder after a delivery attempt. A failed ring or a composer-
+# protected skip still consumes budget so neither an unreadable pane nor a
+# permanently blocked composer can retry silently forever. A positively dead or
+# missing endpoint never enters the ladder: the watcher escalates it directly.
+# A concurrently removed inbox is a successful no-op; otherwise failure means
+# the caller must surface the unwritable ladder while the record remains
 # unhandled.
 fm_task_inbox_record_ring() {  # <state-dir> <task-id> <record-path>
-  fm_task_inbox_ladder_record_ring "$@"
+  local dir base ladder rec_base count last
+  dir=$(fm_task_inbox_dir "$1" "$2")
+  base=${3##*/}
+  count=0
+  ladder=$(cat "$dir/.ring-state" 2>/dev/null || true)
+  IFS=$(printf '\t') read -r rec_base count last <<EOF
+$ladder
+EOF
+  [ "$rec_base" = "$base" ] || count=0
+  case "$count" in ''|*[!0-9]*) count=0 ;; esac
+  [ -d "$dir" ] || return 0
+  if ! { printf '%s\t%s\t%s\n' "$base" "$((count + 1))" "$(date +%s)" > "$dir/.ring-state"; } 2>/dev/null; then
+    [ -d "$dir" ] || return 0
+    return 1
+  fi
 }
 
 # Mark the current oldest as escalated after its stale wake is durably queued,
-# suppressing another wake on later polls.
+# suppressing another wake on later polls. Wake-before-marker ordering favors
+# at-least-once recovery: a crash or marker failure can cause a rare duplicate;
+# stuck-crewmate-recovery owns the message from here.
 fm_task_inbox_record_escalated() {  # <state-dir> <task-id> <record-path>
-  fm_task_inbox_ladder_record_escalated "$@"
+  local dir
+  dir=$(fm_task_inbox_dir "$1" "$2")
+  [ -d "$dir" ] || return 0
+  if ! { printf '%s\n' "${3##*/}" > "$dir/.escalated"; } 2>/dev/null; then
+    [ -d "$dir" ] || return 0
+    return 1
+  fi
 }
