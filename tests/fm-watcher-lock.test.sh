@@ -840,6 +840,26 @@ test_direct_directory_lock_release_and_reap() {
   pass "direct directory locks release and recover through the shared paths"
 }
 
+test_direct_steal_mutex_recovery() {
+  local dir state lock dead
+  dir=$(make_case direct-steal-mutex)
+  state="$dir/state"
+  lock="$state/.direct-steal.lock"
+  dead=$(dead_pid)
+  mkdir "$lock" "$lock.steal"
+  printf '%s\n' "$dead" > "$lock/pid"
+  printf '%s\n' "$dead" > "$lock.steal/pid"
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_lock_try_acquire "$2" || exit 7
+    [ "$(cat "$2/pid")" != "$3" ] || exit 8
+    fm_lock_release "$2"
+    [ ! -e "$2" ] && [ ! -e "$2.steal" ] || exit 9
+  ' _ "$LIB" "$lock" "$dead" \
+    || fail "stale direct steal mutex blocked primary recovery"
+  pass "stale direct steal mutex is recovered before primary lock recovery"
+}
+
 test_lock_without_real_symlinks() {
   local native copied native_out copied_out real_ln
   native=$(make_case lock-native-parity)
@@ -1885,6 +1905,7 @@ test_lock_live_steal_mutex_is_not_reclaimed
 test_lock_does_not_steal_live_lock
 test_direct_directory_reaper_cannot_remove_live_successor
 test_direct_directory_lock_release_and_reap
+test_direct_steal_mutex_recovery
 test_lock_without_real_symlinks
 test_directory_lock_single_winner_under_load
 test_directory_lock_paused_publication_cannot_be_stolen
