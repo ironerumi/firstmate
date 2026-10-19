@@ -276,6 +276,49 @@ test_check_fork_lineage_reaches_the_gate() {
   pass "fm-role.sh check: repository lineage, not remotes, identifies firstmate across forks"
 }
 
+# A fetch-only parent remote must not override gh's explicitly selected fork.
+# Without the selection marker the existing upstream/github/origin order holds.
+test_check_gh_resolved_base_selects_fork() {
+  local fork user_home fork_home out rc
+  fork=$(make_lineage_root resolved-fork https://github.com/someone/firstmate-fork)
+  git -C "$fork" remote add upstream https://github.com/kunchenguid/firstmate
+  user_home=$(make_role_home resolved-user)
+  fork_home=$(make_role_home resolved-maint 'maintainer github.com/someone/firstmate-fork')
+
+  out=$(check_as "$fork" "$fork_home" "$fork"); rc=$?
+  expect_code 1 "$rc" "without a marker the fork scope must not cover upstream (got: $out)"
+  assert_contains "$out" "no publication authority for github.com/kunchenguid/firstmate" \
+    "without a marker upstream must remain the publication target"
+  out=$(check_as "$fork" "$user_home" "$fork" upstream-consent github.com/kunchenguid/firstmate); rc=$?
+  expect_code 0 "$rc" "without a marker consent for upstream must authorize (got: $out)"
+
+  git -C "$fork" config remote.origin.gh-resolved base
+  out=$(check_as "$fork" "$fork_home" "$fork"); rc=$?
+  expect_code 0 "$rc" "the selected fork maintainer scope must authorize (got: $out)"
+  out=$(check_as "$fork" "$user_home" "$fork" upstream-consent github.com/someone/firstmate-fork); rc=$?
+  expect_code 0 "$rc" "consent for the selected fork must authorize (got: $out)"
+  out=$(check_as "$fork" "$user_home" "$fork" upstream-consent github.com/kunchenguid/firstmate); rc=$?
+  expect_code 1 "$rc" "parent consent must not cover the selected fork (got: $out)"
+
+  git -C "$fork" remote rename origin publishing
+  out=$(check_as "$fork" "$fork_home" "$fork"); rc=$?
+  expect_code 0 "$rc" "the base marker must work on a custom remote name (got: $out)"
+  git -C "$fork" config remote.publishing.gh-resolved head
+  out=$(check_as "$fork" "$fork_home" "$fork"); rc=$?
+  expect_code 1 "$rc" "a non-base marker must not select the fork (got: $out)"
+  assert_contains "$out" "no publication authority for github.com/kunchenguid/firstmate" \
+    "a non-base marker must preserve upstream precedence"
+
+  git -C "$fork" config remote.publishing.gh-resolved base
+  git -C "$fork" remote set-url publishing "$TMP_ROOT/unreadable-target"
+  out=$(check_as "$fork" "$user_home" "$fork" upstream-consent github.com/kunchenguid/firstmate); rc=$?
+  expect_code 1 "$rc" "an unreadable selected target must not fall back to authorized upstream (got: $out)"
+  git -C "$fork" config --unset remote.publishing.url
+  out=$(check_as "$fork" "$user_home" "$fork" upstream-consent github.com/kunchenguid/firstmate); rc=$?
+  expect_code 1 "$rc" "a selected remote without a URL must not fall back to authorized upstream (got: $out)"
+  pass "fm-role.sh check: gh-resolved base selects the exact fork target, otherwise legacy precedence holds"
+}
+
 # Lineage that cannot be determined refuses, and a firstmate-lineage project
 # with no determinable publication target is refused even under consent.
 test_check_undeterminable_lineage_and_target_refuse() {
@@ -681,6 +724,7 @@ test_check_maintainer_scope_authorizes
 test_check_wrong_scope_and_remote_presence_do_not_authorize
 test_check_equivalent_remote_spellings_are_one_repo
 test_check_fork_lineage_reaches_the_gate
+test_check_gh_resolved_base_selects_fork
 test_check_undeterminable_lineage_and_target_refuse
 test_check_task_consent_authorizes_one_task
 test_secondmate_cannot_self_grant
