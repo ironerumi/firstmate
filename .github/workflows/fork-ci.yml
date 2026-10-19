@@ -1,25 +1,54 @@
-name: Fork full CI
+name: Linux early-bind proof
 
-# Fork-only. ci.yml gates its heavy jobs to kunchenguid/firstmate, so a fork PR
-# runs only the seconds-long guards. Every fork change already passed
-# bin/fm-lint.sh and targeted tests in no-mistakes before the push; what that
-# cannot prove is the full regression suite, clean-runner setup, and stock macOS
-# Bash on the merged upstream result. Dispatch this run by hand when that proof
-# is wanted, for example after merging upstream.
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: fork-ci-full
-  cancel-in-progress: true
-
 jobs:
-  full:
-    name: Full CI
-    if: github.repository != 'kunchenguid/firstmate'
-    uses: ./.github/workflows/ci.yml
-    with:
-      full: true
+  early-bind:
+    name: Copied-link extension binding on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 2efb049235e06c09b37a658ddb51036caa8b8ca5
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Prove the pinned clean Linux checkout and early-bind segment
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'HEAD=%s\n' "$(git rev-parse HEAD)"
+            git status --short --branch
+            uname -s
+            node --version
+            python3 --version
+          } | tee "$RUNNER_TEMP/early-bind-context.txt"
+          test "$(uname -s)" = Linux
+          test "$(git rev-parse HEAD)" = 2efb049235e06c09b37a658ddb51036caa8b8ca5
+          test -z "$(git status --porcelain=v1 --untracked-files=normal)"
+          env -u FM_HOME -u FM_ROOT_OVERRIDE -u FM_STATE_OVERRIDE \
+            -u FM_DATA_OVERRIDE -u FM_CONFIG_OVERRIDE -u FM_PROJECTS_OVERRIDE \
+            FM_EXTENSION_BINDING_SEGMENT=early-bind \
+            bash tests/fm-extension-binding.test.sh 2>&1 | tee "$RUNNER_TEMP/early-bind.log"
+          if grep -Fq 'not ok' "$RUNNER_TEMP/early-bind.log"; then
+            printf '%s\n' 'early-bind: TAP failure despite process exit zero' >&2
+            exit 1
+          fi
+          grep -Fxq 'ok - extension binding inherits, validates and releases a copied-link directory lock' "$RUNNER_TEMP/early-bind.log"
+          grep -Fxq 'all extension-binding tests passed' "$RUNNER_TEMP/early-bind.log"
+          test "$(git rev-parse HEAD)" = 2efb049235e06c09b37a658ddb51036caa8b8ca5
+          test -z "$(git status --porcelain=v1 --untracked-files=normal)"
+      - name: Preserve the exact output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-early-bind-2efb0492
+          path: |
+            ${{ runner.temp }}/early-bind-context.txt
+            ${{ runner.temp }}/early-bind.log
+          if-no-files-found: error
