@@ -486,6 +486,7 @@ printf '700\tclaude.exe\t800\tC:/Users/u/claude.exe\tclaude\n'
 printf '800\tclaude.exe\t900\tC:/Users/u/claude.exe\tclaude\n'
 printf '900\texplorer.exe\t0\tC:/Windows/explorer.exe\texplorer\n'
 if [ "$claim_pid" != "${FM_TEST_RACE_HOLDER_PID:-}" ] && [ -n "$claim_pid" ]; then
+  : > "$FM_TEST_RACE_POSTCLAIM"
   printf '600\tpi.exe\t700\tC:/Users/u/pi.exe\tpi\n'
 fi
 SH
@@ -521,18 +522,39 @@ SH
   env PATH="$fakebin:$PATH" FM_TEST_RACE_STATE="$state" \
     FM_TEST_RACE_HOLDER_PID="$holder_pid" \
     FM_TEST_RACE_PRECLAIM="$dir/preclaim" \
+    FM_TEST_RACE_POSTCLAIM="$dir/postclaim" \
     FM_TEST_RACE_RELEASE_SNAPSHOT="$dir/release-snapshot" \
     "$dir/acquire.sh" &
   acquire_pid=$!
+  i=0
+  while [ "$i" -lt 40 ] && [ ! -e "$dir/acquirer-started" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  if [ ! -e "$dir/acquirer-started" ]; then
+    : > "$dir/release-snapshot"
+    kill "$acquire_pid" "$holder_pid" 2>/dev/null || true
+    wait "$acquire_pid" 2>/dev/null || true
+    wait "$holder_pid" 2>/dev/null || true
+    fail "the acquisition fixture never started"
+  fi
   i=0
   while [ "$i" -lt 40 ] && [ ! -e "$dir/preclaim" ]; do
     sleep 0.05
     i=$((i + 1))
   done
+  if [ -e "$dir/preclaim" ]; then
+    : > "$dir/release-snapshot"
+    kill "$acquire_pid" "$holder_pid" 2>/dev/null || true
+    wait "$acquire_pid" 2>/dev/null || true
+    wait "$holder_pid" 2>/dev/null || true
+    fail "the process snapshot was taken before the claim was acquired"
+  fi
   : > "$dir/release-snapshot"
   : > "$state/release-holder"
   wait "$holder_pid" || fail "the claim-holder fixture failed"
   wait "$acquire_pid" || true
+  [ -e "$dir/postclaim" ] || fail "the process snapshot was not taken after the claim was acquired"
   rc=$(tr -d '[:space:]' < "$dir/acquire.rc")
   [ "$rc" != 0 ] || fail "the acquisition overwrote an owner published while it waited for the claim"
   [ "$(tr -d '[:space:]' < "$state/.lock")" = 600 ] \
