@@ -58,7 +58,7 @@ _fm_windows_prepare_process_snapshot() {
     return 0
   fi
   _FM_WINDOWS_PROCESS_TABLE=$(powershell.exe -NoProfile -NonInteractive -Command \
-    "try { Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { \"{0}\`t{1}\`t{2}\`t{3}\`t{4}\`t{5}\" -f \$_.ProcessId,\$_.Name,\$_.ParentProcessId,(\$_.ExecutablePath -replace '\\\\','/'),\$_.CommandLine,\$_.CreationDate.Ticks } } catch { exit 1 }" \
+    "try { Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { \"{0}\`t{1}\`t{2}\`t{3}\`t{4}\" -f \$_.ProcessId,\$_.Name,\$_.ParentProcessId,(\$_.ExecutablePath -replace '\\\\','/'),\$_.CommandLine } } catch { exit 1 }" \
     2>/dev/null) || return 1
   [ -n "$_FM_WINDOWS_PROCESS_TABLE" ]
 }
@@ -91,22 +91,14 @@ _FM_WINDOWS_PROCESS_NAME=
 _FM_WINDOWS_PROCESS_PARENT=
 _FM_WINDOWS_PROCESS_PATH=
 _FM_WINDOWS_PROCESS_ARGS=
-_FM_WINDOWS_PROCESS_CREATION=
 _fm_windows_process_fields() {  # <process-info>
-  local info=$1 rest args
+  local info=$1 rest
   _FM_WINDOWS_PROCESS_NAME=${info%%$'\t'*}
   rest=${info#*$'\t'}
   _FM_WINDOWS_PROCESS_PARENT=${rest%%$'\t'*}
   rest=${rest#*$'\t'}
   _FM_WINDOWS_PROCESS_PATH=${rest%%$'\t'*}
-  args=${rest#*$'\t'}
-  if [ "$args" = "$rest" ]; then
-    _FM_WINDOWS_PROCESS_ARGS=$rest
-    _FM_WINDOWS_PROCESS_CREATION=
-  else
-    _FM_WINDOWS_PROCESS_ARGS=${args%%$'\t'*}
-    _FM_WINDOWS_PROCESS_CREATION=${args#*$'\t'}
-  fi
+  _FM_WINDOWS_PROCESS_ARGS=${rest#*$'\t'}
   [ -n "$_FM_WINDOWS_PROCESS_NAME" ] || return 1
   case "$_FM_WINDOWS_PROCESS_PARENT" in ''|*[!0-9]*) return 1 ;; esac
 }
@@ -330,111 +322,6 @@ fm_harness_ancestry_pid() {
   local pids
   pids=$(fm_harness_ancestry_pids) || return 1
   _fm_harness_outermost_pid "$pids"
-}
-
-fm_session_lock_pid_alive() {  # <pid>
-  local pid=$1 scope_owner=0 rc
-  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
-  if _fm_windows_ps_fallback_needed; then
-    if [ "${_FM_WINDOWS_PROCESS_SCOPE:-0}" != 1 ]; then
-      _FM_WINDOWS_PROCESS_TABLE=
-      _FM_WINDOWS_PROCESS_SCOPE=1
-      scope_owner=1
-    fi
-    if _fm_windows_process_info "$pid" >/dev/null; then
-      rc=0
-    else
-      rc=$?
-    fi
-    _fm_windows_snapshot_scope_end "$scope_owner"
-    case "$rc" in
-      0) return 0 ;;
-      2) return 1 ;;
-      *) return 3 ;;
-    esac
-  fi
-  kill -0 "$pid" 2>/dev/null
-}
-
-fm_session_lock_pid_identity() {  # <pid>
-  local pid=$1 scope_owner=0 info rc
-  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
-  if _fm_windows_ps_fallback_needed; then
-    if [ "${_FM_WINDOWS_PROCESS_SCOPE:-0}" != 1 ]; then
-      _FM_WINDOWS_PROCESS_TABLE=
-      _FM_WINDOWS_PROCESS_SCOPE=1
-      scope_owner=1
-    fi
-    info=$(_fm_windows_process_info "$pid")
-    rc=$?
-    if [ "$rc" -ne 0 ]; then
-      _fm_windows_snapshot_scope_end "$scope_owner"
-      return 1
-    fi
-    _fm_windows_process_fields "$info" || {
-      _fm_windows_snapshot_scope_end "$scope_owner"
-      return 1
-    }
-    _fm_windows_snapshot_scope_end "$scope_owner"
-    case "$_FM_WINDOWS_PROCESS_CREATION" in
-      ''|*[!0-9]*)
-        printf 'windows-process name=%s path=%s args=%s\n' \
-          "$_FM_WINDOWS_PROCESS_NAME" "$_FM_WINDOWS_PROCESS_PATH" "$_FM_WINDOWS_PROCESS_ARGS"
-        ;;
-      *)
-        printf 'windows-creation=%s name=%s path=%s args=%s\n' \
-          "$_FM_WINDOWS_PROCESS_CREATION" "$_FM_WINDOWS_PROCESS_NAME" \
-          "$_FM_WINDOWS_PROCESS_PATH" "$_FM_WINDOWS_PROCESS_ARGS"
-        ;;
-    esac
-    return 0
-  fi
-  command -v fm_pid_identity >/dev/null 2>&1 || return 1
-  fm_pid_identity "$pid"
-}
-
-fm_session_lock_pid_descends_from() {  # <child-pid> <session-lock-pid>
-  local child=$1 ancestor=$2 child_native info parent native=0 scope_owner=0 pid
-  case "$child" in ''|*[!0-9]*) return 1 ;; esac
-  case "$ancestor" in ''|*[!0-9]*|0|1) return 1 ;; esac
-  if _fm_windows_ps_fallback_needed; then
-    if [ "${_FM_WINDOWS_PROCESS_SCOPE:-0}" != 1 ]; then
-      _FM_WINDOWS_PROCESS_TABLE=
-      _FM_WINDOWS_PROCESS_SCOPE=1
-      scope_owner=1
-    fi
-    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-      if [ "$native" -eq 0 ]; then
-        child_native=$(_fm_windows_proc_pid "$child" winpid) || break
-      fi
-      [ "$child_native" = "$ancestor" ] && {
-        _fm_windows_snapshot_scope_end "$scope_owner"
-        return 0
-      }
-      info=$(_fm_windows_process_info "$child_native") || break
-      _fm_windows_process_fields "$info" || break
-      if [ "$native" -eq 0 ]; then
-        parent=$(_fm_windows_proc_pid "$child" ppid) || break
-        if [ "$parent" -gt 1 ]; then
-          child=$parent
-          continue
-        fi
-        native=1
-      fi
-      child_native=$_FM_WINDOWS_PROCESS_PARENT
-      [ "$child_native" -ge 1 ] || break
-    done
-    _fm_windows_snapshot_scope_end "$scope_owner"
-    return 1
-  fi
-  pid=$child
-  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-    [ "$pid" = "$ancestor" ] && return 0
-    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
-    case "$pid" in ''|*[!0-9]*) return 1 ;; esac
-    [ "$pid" -ge 1 ] || return 1
-  done
-  return 1
 }
 
 # Print the last (outermost) pid of ancestry list $1, or return 1 when empty.

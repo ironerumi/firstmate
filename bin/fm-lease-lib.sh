@@ -107,12 +107,6 @@ FM_LEASE_REFUSE_EXIT=6
 FM_LEASE_LIB_DIR="$(d=${BASH_SOURCE[0]%/*}; [ "$d" != "${BASH_SOURCE[0]}" ] || d=.; cd "${d:-/}" && pwd)"
 FM_LEASE_GUARD_LOCK=
 
-_fm_lease_require_session_lock() {
-  command -v fm_session_lock_pid_alive >/dev/null 2>&1 && return 0
-  # shellcheck source=bin/fm-session-lock-lib.sh
-  . "$FM_LEASE_LIB_DIR/fm-session-lock-lib.sh"
-}
-
 fm_lease_lock_helpers() {
   command -v fm_lock_acquire_wait >/dev/null 2>&1 && return 0
   # fm-wake-lib.sh is a canonical lint root in its own right and is already
@@ -193,8 +187,7 @@ fm_lease_live() {
   fm_lease_read "$1" || return 1
   [ -n "$FM_LEASE_ACTOR" ] || return 1
   [ -n "$FM_LEASE_PID" ] || return 1
-  _fm_lease_require_session_lock
-  fm_session_lock_pid_alive "$FM_LEASE_PID" || return 1
+  kill -0 "$FM_LEASE_PID" 2>/dev/null || return 1
   lock_pid=$(head -n 1 "$STATE/.lock" 2>/dev/null || true)
   case "$lock_pid" in ''|0|1|*[!0-9]*) return 1 ;; esac
   [ "$FM_LEASE_PID" = "$lock_pid" ]
