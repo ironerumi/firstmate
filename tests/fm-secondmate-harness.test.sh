@@ -259,16 +259,17 @@ while [ "$#" -gt 0 ]; do
     *) shift ;;
   esac
 done
+[ -n "${FM_TEST_PS_LOG:-}" ] && printf '%s:%s\n' "$pid" "$field" >> "$FM_TEST_PS_LOG"
 case "$pid:$field" in
   4242:comm=) printf '%s\n' '/opt/test/bin/codex' ;;
   4242:args=) printf '%s\n' 'codex' ;;
   4242:ppid=) printf '%s\n' 1 ;;
-  5252:comm=) if [ "${FM_TEST_EXPLICIT_PID:-}" = 5252 ]; then printf '%s\n' '-codex'; else printf '%s\n' '-zsh'; fi ;;
-  5252:args=) if [ "${FM_TEST_EXPLICIT_PID:-}" = 5252 ]; then printf '%s\n' '-codex'; else printf '%s\n' '-zsh'; fi ;;
-  5252:ppid=) if [ "${FM_TEST_EXPLICIT_PID:-}" = 5252 ]; then printf '%s\n' 1; else printf '%s\n' 4242; fi ;;
+  5252:comm=) if [ -n "${FM_TEST_PS_LIVENESS_PROBE:-}" ]; then printf '%s\n' '-codex'; else printf '%s\n' '-zsh'; fi ;;
+  5252:args=) if [ -n "${FM_TEST_PS_LIVENESS_PROBE:-}" ]; then printf '%s\n' '-codex'; else printf '%s\n' '-zsh'; fi ;;
+  5252:ppid=) printf '%s\n' 4242 ;;
   *:comm=) printf '%s\n' '-zsh' ;;
   *:args=) printf '%s\n' '-zsh' ;;
-  *:ppid=) if [ "${FM_TEST_FORCE_5252:-}" = 1 ]; then printf '%s\n' 5252; else printf '%s\n' 4242; fi ;;
+  *:ppid=) printf '%s\n' "${FM_TEST_PS_PARENT:-4242}" ;;
 esac
 SH
   chmod +x "$fakebin/ps"
@@ -284,14 +285,20 @@ SH
     '. "$0/bin/fm-session-lock-lib.sh"; fm_harness_ancestry_pid' "$ROOT" 2>"$err")
   [ "$got" = 4242 ] || fail "session-lock dash-leading ancestry selected '$got', expected pid 4242"
   [ ! -s "$err" ] || fail "session-lock ancestry wrote basename option noise for literal -zsh: $(cat "$err")"
-  # Force the scheduler collision: a shell ancestor has PID 5252, which the
-  # separate liveness fixture labels -codex only for its explicit probe.
-  got=$(FM_TEST_FORCE_5252=1 PATH="$fakebin:$BASE_PATH" bash -c \
-    '. "$0/bin/fm-session-lock-lib.sh"; fm_harness_ancestry_pid' "$ROOT")
-  [ "$got" = 4242 ] || fail "session-lock forced 5252 ancestry selected '$got', expected pid 4242"
+  # Force the collision: pid 5252 is a real ancestor of the caller. Its
+  # -codex label belongs to the liveness probe only, so the walk must pass
+  # through it as an ordinary shell and still select 4242.
+  err="$dir/fm-session-lock-ancestry-collision.err"
+  collision_log="$dir/fm-session-lock-ancestry-collision.log"
+  got=$(FM_TEST_PS_PARENT=5252 FM_TEST_PS_LOG="$collision_log" PATH="$fakebin:$BASE_PATH" bash -c \
+    '. "$0/bin/fm-session-lock-lib.sh"; fm_harness_ancestry_pid' "$ROOT" 2>"$err")
+  [ "$got" = 4242 ] || fail "session-lock ancestry with pid 5252 as a real ancestor selected '$got', expected pid 4242"
+  assert_contains "$(cat "$collision_log")" "5252:" \
+    "session-lock collision ancestry did not query pid 5252"
+  [ ! -s "$err" ] || fail "session-lock collision ancestry wrote noise: $(cat "$err")"
 
   err="$dir/fm-session-lock-alive.err"
-  FM_TEST_EXPLICIT_PID=5252 PATH="$fakebin:$BASE_PATH" bash -c \
+  FM_TEST_PS_LIVENESS_PROBE=1 PATH="$fakebin:$BASE_PATH" bash -c \
     '. "$0/bin/fm-session-lock-lib.sh"; kill() { return 0; }; fm_harness_pid_alive 5252' \
     "$ROOT" 2>"$err"; status=$?
   expect_code 0 "$status" "session-lock liveness should accept literal -codex as a harness process name"
@@ -469,6 +476,21 @@ make_noop_tmux() {
   mkdir -p "$fakebin"
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
+window_file="$(dirname "$0")/.spawn-window"
+case "${1:-}" in
+  display-message) printf 'firstmate\n' ;;
+  list-windows) [ ! -s "$window_file" ] || cat "$window_file" ;;
+  new-window)
+    name=
+    previous=
+    for arg in "$@"; do
+      [ "$previous" = -n ] && name=$arg
+      previous=$arg
+    done
+    printf '%s\n' "$name" > "$window_file"
+    ;;
+  kill-window) : > "$window_file" ;;
+esac
 exit 0
 SH
   chmod +x "$fakebin/tmux"
@@ -698,10 +720,21 @@ set -u
 case "$*" in
   *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
 esac
+window_file="$(dirname "$0")/.spawn-window"
 case "${1:-}" in
   display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|kill-window) exit 0 ;;
+  list-windows) [ ! -s "$window_file" ] || cat "$window_file"; exit 0 ;;
+  new-window)
+    name=
+    previous=
+    for arg in "$@"; do
+      [ "$previous" = -n ] && name=$arg
+      previous=$arg
+    done
+    printf '%s\n' "$name" > "$window_file"
+    exit 0 ;;
+  kill-window) : > "$window_file"; exit 0 ;;
+  has-session|new-session) exit 0 ;;
   send-keys)
     if [ -n "${FM_FAKE_LAUNCH_LOG:-}" ]; then
       prev=
@@ -738,6 +771,13 @@ sm_claude_add_dir() {  # <world> <id>
   local real
   real=$(cd "$1/home/state" && pwd -P)
   printf "%s " "--add-dir '$real/$2.inbox'"
+}
+
+# The parent-state settings file a Claude secondmate launch passes to --settings.
+sm_claude_settings() {  # <world> <id>
+  local real
+  real=$(cd "$1/home/state" && pwd -P)
+  printf '%s' "$real/$2.claude-settings.json"
 }
 
 # spawn_secondmate_capture <world> <id> <home> <launchlog> [extra fm-spawn.sh args...]
@@ -845,8 +885,11 @@ test_spawn_secondmate_harness_model_token() {
   [ "$(meta_field "$meta" model)" = opus ] || fail "model-token: meta model not opus (got '$(meta_field "$meta" model)')"
   [ "$(meta_field "$meta" effort)" = default ] || fail "model-token: meta effort not default (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --dangerously-skip-permissions $(sm_claude_add_dir "$w" sm)--settings '{\"feedbackDrafts\":\"off\",\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' --model 'opus'" \
+  assert_contains "$launch" "claude --dangerously-skip-permissions $(sm_claude_add_dir "$w" sm)--settings '$(sm_claude_settings "$w" sm)' --model 'opus'" \
     "model-token: launch did not carry --model opus"
+  jq -e '.feedbackDrafts == "off" and .attribution.commit == "" and .attribution.pr == "" and .attribution.sessionUrl == false and .hooks.UserPromptSubmit' \
+    "$(sm_claude_settings "$w" sm)" >/dev/null \
+    || fail "model-token: the --settings file did not carry the session keys and busy hooks"
   assert_not_contains "$launch" "--effort" "model-token: launch must not carry an --effort flag"
   pass "C3 spawn: config/secondmate-harness's model token threads --model into the launch and meta"
 }
@@ -867,7 +910,7 @@ test_spawn_secondmate_harness_model_and_effort_tokens() {
   [ "$(meta_field "$meta" model)" = opus ] || fail "model-effort-tokens: meta model not opus"
   [ "$(meta_field "$meta" effort)" = high ] || fail "model-effort-tokens: meta effort not high (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --dangerously-skip-permissions $(sm_claude_add_dir "$w" sm)--settings '{\"feedbackDrafts\":\"off\",\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' --model 'opus' --effort 'high'" \
+  assert_contains "$launch" "claude --dangerously-skip-permissions $(sm_claude_add_dir "$w" sm)--settings '$(sm_claude_settings "$w" sm)' --model 'opus' --effort 'high'" \
     "model-effort-tokens: launch did not carry both --model opus and --effort high"
   pass "C4 spawn: config/secondmate-harness's model+effort tokens thread into the launch and meta"
 }
@@ -1486,7 +1529,7 @@ test_spawn_secondmate_claude_permission_mode_auto() {
   meta="$w/home/state/sm.meta"
   [ "$(meta_field "$meta" harness)" = claude ] || fail "permmode: meta harness not claude"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --permission-mode auto $(sm_claude_add_dir "$w" sm)--settings '{\"feedbackDrafts\":\"off\",\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' --model 'opus'" \
+  assert_contains "$launch" "claude --permission-mode auto $(sm_claude_add_dir "$w" sm)--settings '$(sm_claude_settings "$w" sm)' --model 'opus'" \
     "permmode: secondmate launch did not swap the permission flag while keeping --model"
   assert_not_contains "$launch" "--dangerously-skip-permissions" "permmode: secondmate launch must not request bypass mode"
   pass "C2b spawn: config/claude-permission-mode=auto reaches a Claude secondmate launch"

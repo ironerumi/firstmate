@@ -31,6 +31,7 @@ make_fakebin() {
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
 set -u
+window_file="$FM_FAKE_TMUX_LOG.windows"
 case "$*" in
   *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:?FM_FAKE_PANE_PATH unset}"; exit 0 ;;
   *"#{pane_current_command}"*) printf 'bash\n'; exit 0 ;;
@@ -39,10 +40,31 @@ esac
 case "${1:-}" in
   display-message) printf 'firstmate\n'; exit 0 ;;
   list-windows)
-    [ "${FM_FAKE_RELAUNCH:-0}" != 1 ] || printf '%s\n' "${FM_FAKE_WINDOW_ID:?FM_FAKE_WINDOW_ID unset}"
+    if [[ "$*" == *"#{window_id}"* ]]; then
+      [ ! -s "$window_file" ] || sed 's/^/@/' "$window_file"
+      if [ ! -s "$window_file" ] && [ "${FM_FAKE_RELAUNCH:-0}" = 1 ]; then
+        printf '@%s\n' "${FM_FAKE_WINDOW_ID:?FM_FAKE_WINDOW_ID unset}"
+      fi
+    else
+      [ ! -s "$window_file" ] || cat "$window_file"
+      if [ ! -s "$window_file" ] && [ "${FM_FAKE_RELAUNCH:-0}" = 1 ]; then
+        printf '%s\n' "${FM_FAKE_WINDOW_ID:?FM_FAKE_WINDOW_ID unset}"
+      fi
+    fi
     exit 0
     ;;
-  has-session|new-session|new-window|kill-window) exit 0 ;;
+  has-session|new-session|kill-window) exit 0 ;;
+  new-window)
+    previous=
+    name=
+    for arg in "$@"; do
+      [ "$previous" = -n ] && name=$arg
+      previous=$arg
+    done
+    printf '%s\n' "$name" >> "$window_file"
+    printf '@%s\n' "$name"
+    exit 0
+    ;;
   send-keys)
     # Every text line and literal the spawn sends into the pane lands here, so a
     # test can assert the pane environment fm-spawn.sh builds.
@@ -129,7 +151,7 @@ test_claude_spawn_settings_carry_hooks_without_attribution() {
 
   out=$(run_spawn "$id" claude)
   status=$?
-  expect_code 0 "$status" "claude spawn should succeed against the fake tmux"
+  expect_code 0 "$status" "claude spawn should succeed against the fake tmux"$'\n'"--- output ---"$'\n'"$out"
   assert_contains "$out" "spawned $id" "spawn did not report success"
   assert_grep "worktree=$WT_DIR" "$HOME_DIR/state/$id.meta" \
     "meta did not record the spawned worktree"
@@ -156,7 +178,7 @@ test_non_claude_spawn_has_no_claude_settings_file() {
 
   out=$(run_spawn "$id" codex)
   status=$?
-  expect_code 0 "$status" "codex spawn should succeed against the fake tmux"
+  expect_code 0 "$status" "codex spawn should succeed against the fake tmux"$'\n'"--- output ---"$'\n'"$out"
   assert_contains "$out" "spawned $id" "spawn did not report success"
   [ ! -e "$WT_DIR/.claude/settings.local.json" ] \
     || fail "codex worktree must not carry a claude settings file"

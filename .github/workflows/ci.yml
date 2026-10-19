@@ -35,11 +35,14 @@ concurrency:
 # Fork slimming: outside kunchenguid/firstmate only the seconds-long guards
 # (test-coverage, invariants) run on push and PR; fork-ci.yml passes full=true
 # to run every job on manual dispatch. Rationale: CONTRIBUTING.md "Fork CI".
+# The upstream FM_CI_SKIP_PUSH and FM_CI_SKIP_MACOS opt-outs remain job-level
+# conditions: a skipped job reports success instead of leaving a required
+# workflow pending. CONTRIBUTING.md documents the variables.
 jobs:
   lint:
     name: Lint ${{ matrix.partition }}
-    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: ubuntu-latest
+    if: ${{ (github.repository == 'kunchenguid/firstmate' || inputs.full) && !(github.event_name == 'push' && vars.FM_CI_SKIP_PUSH == '1') }}
     # Normal tier (see the timeout policy above).
     timeout-minutes: 30
     strategy:
@@ -89,6 +92,7 @@ jobs:
   test-coverage:
     name: Test coverage guard
     runs-on: ubuntu-latest
+    if: ${{ !(github.event_name == 'push' && vars.FM_CI_SKIP_PUSH == '1') }}
     # Fast tier: the coverage guard is a seconds-long local computation.
     timeout-minutes: 5
     steps:
@@ -100,8 +104,8 @@ jobs:
   # set only. Composition owner: bin/fm-test-run.sh (docs/fm-test-portable-shards.md).
   tests-portable-parallel-1:
     name: Behavior portable parallel 1
-    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: ubuntu-latest
+    if: ${{ (github.repository == 'kunchenguid/firstmate' || inputs.full) && !(github.event_name == 'push' && vars.FM_CI_SKIP_PUSH == '1') }}
     # Normal tier (see the timeout policy above).
     timeout-minutes: 30
     steps:
@@ -146,8 +150,8 @@ jobs:
 
   tests-portable-parallel-2:
     name: Behavior portable parallel 2
-    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: ubuntu-latest
+    if: ${{ (github.repository == 'kunchenguid/firstmate' || inputs.full) && !(github.event_name == 'push' && vars.FM_CI_SKIP_PUSH == '1') }}
     # Normal tier (see the timeout policy above).
     timeout-minutes: 30
     steps:
@@ -191,8 +195,8 @@ jobs:
   # whose "ofN" disagrees with it (docs/fm-test-portable-shards.md).
   tests-portable-serial:
     name: Behavior portable serial ${{ matrix.shard }}
-    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: ubuntu-latest
+    if: ${{ (github.repository == 'kunchenguid/firstmate' || inputs.full) && !(github.event_name == 'push' && vars.FM_CI_SKIP_PUSH == '1') }}
     # Normal tier (see the timeout policy above).
     timeout-minutes: 30
     strategy:
@@ -227,9 +231,9 @@ jobs:
           set -eu
           npm install -g tasks-axi
           tasks-axi --version
-      # The Pi extension tests read the installed Pi package's own types and
-      # runtime, so without it they gate-skip and pass silently. It is a public
-      # npm package and needs no credential, so CI can hold the real thing.
+      # Runtime-facing Pi extension probes need the installed public package
+      # to avoid capability skips. tests/fm-pi-primary-types.test.sh owns its
+      # separate compiler dependencies.
       # Pi is pinned to 0.87.1 deliberately (main's last green CI); raising it is tracked separately.
       - name: Install the Pi package for the Pi extension tests
         run: |
@@ -246,8 +250,6 @@ jobs:
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/fm-test"
-          # The Pi package is installed above and CI provides npm and tsc, so
-          # any missing typecheck prerequisite is a broken lane, not a valid skip.
           bin/fm-test-run.sh --lane "$FM_SERIAL_LANE" \
             --fail-on-gate-skip 'Pi extension typecheck prerequisite not found' \
             --json "$RUNNER_TEMP/fm-test/fm-test-timing-portable-serial-${FM_SERIAL_SHARD}.json"
@@ -265,8 +267,8 @@ jobs:
   # the failure evidence and move the job to macOS rather than skip assertions.
   tests-herdr:
     name: Behavior tests (Herdr)
-    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: ubuntu-latest
+    if: ${{ (github.repository == 'kunchenguid/firstmate' || inputs.full) && !(github.event_name == 'push' && vars.FM_CI_SKIP_PUSH == '1') }}
     # Heavy tier (see the timeout policy above): the last-resort job backstop.
     # The family-run step below owns the hang tripwire, so a wedged suite fails
     # there with the always() cleanup and timing upload still running.
@@ -395,7 +397,7 @@ jobs:
       - tests-portable-parallel-2
       - tests-portable-serial
       - tests-herdr
-    if: always() && (github.repository == 'kunchenguid/firstmate' || inputs.full)
+    if: ${{ always() && (github.repository == 'kunchenguid/firstmate' || inputs.full) && !(github.event_name == 'push' && vars.FM_CI_SKIP_PUSH == '1') }}
     steps:
       - uses: actions/checkout@v6
       - name: Download lane timing artifacts
@@ -427,8 +429,8 @@ jobs:
 
   macos-stock-bash:
     name: Stock macOS Bash snapshot compatibility
-    if: github.repository == 'kunchenguid/firstmate' || inputs.full
     runs-on: macos-latest
+    if: ${{ (github.repository == 'kunchenguid/firstmate' || inputs.full) && !(github.event_name == 'push' && vars.FM_CI_SKIP_PUSH == '1') && vars.FM_CI_SKIP_MACOS != '1' }}
     # Normal tier (see the timeout policy above).
     timeout-minutes: 30
     steps:
@@ -523,6 +525,7 @@ jobs:
   invariants:
     name: Repo invariants
     runs-on: ubuntu-latest
+    if: ${{ !(github.event_name == 'push' && vars.FM_CI_SKIP_PUSH == '1') }}
     # Fast tier: the invariant checks are seconds-long file comparisons.
     timeout-minutes: 5
     steps:
