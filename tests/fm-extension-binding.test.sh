@@ -646,6 +646,47 @@ fi
 
 # --- permanently inert absent-registry path ---------------------------------
 if section_enabled early-bind; then
+# Exercise the executable boundary without requiring Windows: this Bash payload
+# deliberately has neither a shebang nor execute permission. Direct OS spawning
+# must fail; an explicitly selected Bash must preserve argv and failure mapping.
+SHELL_ROOT="$TMP_ROOT/lifecycle shell root"
+mkdir -p "$SHELL_ROOT/bin"
+cp "$HOST" "$SHELL_ROOT/bin/fm-extension.mjs"
+cat > "$SHELL_ROOT/bin/fm-procevent.sh" <<'SH'
+[[ -n "$BASH_VERSION" ]] || exit 98
+if [[ "${*: -1}" = reject ]]; then
+  printf 'fixture refused\n' >&2
+  exit 23
+fi
+printf '%s\n' "$@"
+SH
+chmod 600 "$SHELL_ROOT/bin/fm-procevent.sh"
+H_SHELL="$HOMES/shell"; new_home "$H_SHELL"
+# The command substitution is intentionally literal to detect shell evaluation.
+# shellcheck disable=SC2016
+literal_arg='space ; $(exit 97) *'
+for shell_command in bind retire-binding retire-transfer process-event; do
+  case "$shell_command" in
+    bind) expected=$(printf '%s\n' extension-bind bind "$literal_arg"); error_code=binding-failed ;;
+    retire-binding) expected=$(printf '%s\n' extension-retirement binding "$literal_arg"); error_code=retirement-failed ;;
+    retire-transfer) expected=$(printf '%s\n' extension-retirement transfer "$literal_arg"); error_code=retirement-failed ;;
+    process-event) expected=$(printf '%s\n' extension-process-event "$literal_arg"); error_code=process-event-failed ;;
+  esac
+  out=$(FM_HOME="$H_SHELL" node "$SHELL_ROOT/bin/fm-extension.mjs" "$shell_command" "$literal_arg") \
+    || fail "$shell_command did not launch the non-executable Bash payload"
+  [ "$out" = "$expected" ] || fail "$shell_command changed literal lifecycle argv: $out"
+  shell_rc=0
+  out=$(FM_HOME="$H_SHELL" node "$SHELL_ROOT/bin/fm-extension.mjs" "$shell_command" reject 2>&1) || shell_rc=$?
+  if [ "$shell_command" = process-event ]; then
+    [ "$shell_rc" -eq 23 ] && [ "$out" = 'fixture refused' ] \
+      || fail "process-event changed the lifecycle exit status or stderr: $shell_rc $out"
+  else
+    [ "$shell_rc" -eq 1 ] && [ "$out" = "error[$error_code]: fixture refused" ] \
+      || fail "$shell_command changed the lifecycle failure mapping: $shell_rc $out"
+  fi
+done
+pass "lifecycle wrappers use Bash without shell interpolation and preserve failure mapping"
+
 H_ABSENT="$HOMES/absent"
 new_home "$H_ABSENT"
 before=$(find "$H_ABSENT" -mindepth 1 -print | LC_ALL=C sort)
