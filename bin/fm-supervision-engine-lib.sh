@@ -180,6 +180,12 @@ fm_supervision_host_outcomes_drained() {
   fm_supervision_host_enabled "$1" "$primary"
 }
 
+_fm_supervision_require_session_lock() {
+  command -v fm_session_lock_pid_identity >/dev/null 2>&1 && return 0
+  # shellcheck source=bin/fm-session-lock-lib.sh
+  . "${BASH_SOURCE[0]%/*}/fm-session-lock-lib.sh"
+}
+
 # fm_supervision_host_main_key <state-dir>: print the key of the current main
 # session, which changes at every main session start: the session-lock holder,
 # a checksum of its process identity (bin/fm-wake-lib.sh fm_pid_identity), and
@@ -192,8 +198,9 @@ fm_supervision_host_outcomes_drained() {
 # Needs bin/fm-wake-lib.sh sourced first.
 fm_supervision_host_main_key() {
   local pid identity
+  _fm_supervision_require_session_lock
   pid=$(sed -n '1p' "$1/.lock" 2>/dev/null)
-  identity=$(fm_pid_identity "$pid" 2>/dev/null) && [ -n "$identity" ] || return 1
+  identity=$(fm_session_lock_pid_identity "$pid" 2>/dev/null) && [ -n "$identity" ] || return 1
   printf '%s:%s:%s\n' "$pid" "$(printf '%s\n' "$identity" | cksum | awk '{ print $1 }')" \
     "$(sed -n '1p' "$1/.lock-session" 2>/dev/null | cksum | awk '{ print $1 }')"
 }
