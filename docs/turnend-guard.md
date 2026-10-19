@@ -147,7 +147,7 @@ That hand-off is benign because `.pi/extensions/fm-primary-pi-watch.ts` and `.om
 
 A lock is genuinely unheld only in one of these cases:
 
-- The lock directory or its symlinked owner directory is absent.
+- The lock path is absent.
 - The existing lock records no pid at all.
 
 Any lock with a recorded pid remains down when its pid, home, watcher path, or process identity fails the strict watcher health check.

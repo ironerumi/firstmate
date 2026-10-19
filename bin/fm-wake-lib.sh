@@ -169,9 +169,9 @@ fm_watcher_stall_bound() {
 }
 
 # fm_watcher_lock_unheld <state>
-# True when the watcher lock or its symlinked owner directory is absent, or when
-# the existing lock records no pid at all. Any non-empty pid remains held here;
-# its syntax, liveness, ownership metadata, and identity are health concerns.
+# True when the watcher lock path is absent, or when the existing lock records
+# no pid at all. Any non-empty pid remains held here; its syntax, liveness,
+# ownership metadata, and identity are health concerns.
 fm_watcher_lock_unheld() {
   local state=$1 lockdir pid
   lockdir="$state/.watch.lock"
