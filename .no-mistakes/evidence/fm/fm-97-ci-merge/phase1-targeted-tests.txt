@@ -1,0 +1,11 @@
+Phase 1 targeted validation (branch fm/fm-97-ci-merge, target 2efb049235e06c09b37a658ddb51036caa8b8ca5)
+
+Changed-suite discovery:
+`bin/fm-test-run.sh --list --changed`
+
+Narrowed suites run serially with `--jobs 1 --per-script-timeout-secs 300`:
+- `tests/fm-session-lock-ancestry.test.sh` — PASS, exit 0, duration 49.782s. Covered ancestry/ownership, Windows process verification and snapshot timing, trusted session IDs, lock claims/reclaims, and re-anchor lifecycle behavior.
+- `tests/fm-watcher-lock.test.sh` — PASS, exit 0, duration 96.000s. Covered native and copied-link directory lock behavior, stale/dead recovery, publication grace, unrelated publisher-token recovery, serialization, interrupted reclaim, and watcher lifecycle.
+- `tests/fm-extension-binding.test.sh` — FAILED, exit 1, duration 7.412s. The macOS host hit EACCES renaming read-only installed-package directories during setup, before the binding lifecycle assertions; the suite also surfaced the resulting incomplete remote fixture. This is the known host limitation requiring Linux CI/GuBot Windows proof, not a timeout.
+
+No phase-2 live scenarios were started because phase 1 had a failed suite, per the runbook. No suite hit the 300-second per-script time bound. Evidence captured from the real test runner on this run.
