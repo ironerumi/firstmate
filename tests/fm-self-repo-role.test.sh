@@ -35,8 +35,9 @@ export FM_BACKEND=tmux
 
 # The code root under test is this checkout, so self-repo detection reaches it
 # through the shared git common dir. Its publication target is derived, never
-# assumed: a checkout without an upstream/github/origin remote resolves to the
-# undeterminable path and the scope-bound cases adapt.
+# assumed: a checkout with neither a gh-resolved=base remote nor an
+# upstream/github/origin remote resolves to the undeterminable path and the
+# scope-bound cases adapt.
 PUB_TARGET=$(fm_role_publication_target "$ROOT")
 ORIGIN_URL=$(git -C "$ROOT" remote get-url upstream 2>/dev/null) \
   || ORIGIN_URL=$(git -C "$ROOT" remote get-url github 2>/dev/null) \

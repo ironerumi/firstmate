@@ -37,9 +37,9 @@
 # of the code root's history covers any fork, the parent, and any clone of
 # either. Lineage that cannot be determined (no code root history, or a shallow
 # side sharing no root) refuses rather than permits. The publication target is
-# compared only against a maintainer scope or task consent: the remote marked
-# gh-resolved=base, otherwise the first remote named upstream, github, or origin,
-# reduced to lowercase host/owner/repo; a local-path remote
+# compared only against a maintainer scope or task consent: the first remote
+# whose remote.<name>.gh-resolved is base, otherwise the first remote named
+# upstream, github, or origin, reduced to lowercase host/owner/repo; a local-path remote
 # is resolved one hop through that repository's own origin, and left as
 # path:<abs> when unreadable. An unknown target never permits.
 #
@@ -222,10 +222,11 @@ fm_role_git_common_dir() {
 }
 
 # fm_role_publication_target <git-dir> - the repository a default publication
-# (gh pr/issue, a no-mistakes PR) would reach: the remote marked gh-resolved=base,
-# otherwise the first configured upstream, github, or origin, normalized to
-# host/owner/repo or path:<abs>. Empty when the selected remote is unreadable
-# or the repo has no such remote. Resolution is entirely offline.
+# (gh pr/issue, a no-mistakes PR) would reach: the first remote whose
+# remote.<name>.gh-resolved is base, otherwise the first configured upstream,
+# github, or origin, normalized to host/owner/repo or path:<abs>. Empty when
+# the selected remote is unreadable or the repo has no such remote. Resolution
+# is entirely offline.
 fm_role_publication_target() {
   local dir=$1 remote remotes url=
   remotes=$(git -C "$dir" remote 2>/dev/null) || return 0
