@@ -814,13 +814,9 @@ cmd_retire() {
 require_parent_lifecycle_lock() {
   local id=$1 lock owner pid
   lock=$(secondmate_reply_lifecycle_lock_path "$STATE" "$id")
-  if [ -L "$lock" ]; then
-    owner=$(fm_lock_link_owner "$lock" 2>/dev/null || true)
-    [ -n "$owner" ] || die "remote reply lifecycle lock ownership is invalid"
-  else
-    owner=$lock
-  fi
-  pid=$(cat "$owner/pid" 2>/dev/null || true)
+  owner=$(fm_lock_link_owner "$lock" 2>/dev/null || true)
+  [ -n "$owner" ] || die "remote reply lifecycle lock ownership is invalid"
+  pid=$(cat "$lock/pid" 2>/dev/null || true)
   [ "$pid" = "$PPID" ] || die "remote reply lifecycle lock is not held by the caller"
 }
 

@@ -34,6 +34,18 @@ NAMED_CLAUDE="$FAKEBIN/claude"
 
 # --- unit layer: identity behind a deterministic process table ---------------
 
+# Pin POSIX unit fixtures independently of the host's uname output.
+posix_fakebin() {
+  local fakebin
+  fakebin=$(fm_fakebin "$1")
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' Linux
+SH
+  chmod +x "$fakebin/uname"
+  printf '%s\n' "$fakebin"
+}
+
 # Run one library expression with <fakebin> shadowing ps. kill is stubbed so
 # liveness questions are decided by the process table alone (FM_TEST_KILL_RC=1
 # makes every pid dead). The suite itself may run inside a Claude session whose
@@ -55,7 +67,7 @@ lib_eval() {  # <fakebin> <expression>
 test_version_named_session_is_identified_on_both_platforms() {
   local dir fakebin shape got
   dir="$TMP_ROOT/version-named"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   mkdir -p "$dir/state"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -101,7 +113,7 @@ SH
 test_harness_at_namespace_pid1_is_examined() {
   local dir fakebin got
   dir="$TMP_ROOT/namespace-pid1"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   mkdir -p "$dir/state"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -143,7 +155,7 @@ SH
 test_ordinary_paths_are_never_harness_processes() {
   local dir fakebin shape
   dir="$TMP_ROOT/ordinary-paths"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   mkdir -p "$dir/state"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -190,7 +202,7 @@ SH
 test_harness_beyond_a_gap_never_owns_the_lock() {
   local dir fakebin got
   dir="$TMP_ROOT/gap"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   mkdir -p "$dir/state"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -235,7 +247,7 @@ SH
 test_competing_version_named_session_is_seen_as_live() {
   local dir fakebin
   dir="$TMP_ROOT/competing"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   mkdir -p "$dir/state"
   cat > "$fakebin/ps" <<'SH'
 #!/usr/bin/env bash
@@ -271,6 +283,285 @@ SH
   lib_eval "$fakebin" 'fm_harness_pid_alive 600' \
     || fail "a live competing version-named session was classified as a dead lock owner"
   pass "session-lock: a live version-named session holding the lock is not mistaken for a stale owner"
+}
+
+test_windows_fallback_requires_native_ancestry() {
+  local dir fakebin state got
+  dir="$TMP_ROOT/windows-native-ancestry"
+  fakebin=$(fm_fakebin "$dir")
+  state="$dir/state"
+  mkdir -p "$state"
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' Msys
+SH
+  cat > "$fakebin/cat" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  /proc/1/winpid) exit 1 ;;
+  /proc/55/winpid) printf '%s\n' 550 ;;
+  /proc/60/winpid) printf '%s\n' 600 ;;
+  /proc/61/winpid) printf '%s\n' 610 ;;
+  /proc/70/winpid) printf '%s\n' 700 ;;
+  /proc/80/winpid) printf '%s\n' 800 ;;
+  /proc/90/winpid) printf '%s\n' 900 ;;
+  /proc/*/winpid) printf '%s\n' 500 ;;
+  /proc/55/ppid) printf '%s\n' 1 ;;
+  /proc/60/ppid) printf '%s\n' 70 ;;
+  /proc/61/ppid) printf '%s\n' 90 ;;
+  /proc/70/ppid) printf '%s\n' 80 ;;
+  /proc/80/ppid) printf '%s\n' 90 ;;
+  /proc/90/ppid) printf '%s\n' 0 ;;
+  /proc/*/ppid) printf '%s\n' 55 ;;
+  *) exec /bin/cat "$@" ;;
+esac
+SH
+  cat > "$fakebin/powershell.exe" <<'SH'
+#!/usr/bin/env bash
+set -u
+[ "${FM_TEST_WINDOWS_PROCESS_FAILURE:-}" = 1 ] && exit 1
+[ -z "${FM_TEST_PS_CALLS:-}" ] || printf 'call\n' >> "$FM_TEST_PS_CALLS"
+case "$*" in
+  *Win32_Process*'-Filter'*) exit 1 ;;
+  *Win32_Process*) ;;
+  *) exit 1 ;;
+esac
+case "${FM_TEST_WINDOWS_TREE:-pi}" in
+  claude) parent=700 ;;
+  cursor) parent=610 ;;
+  missing) parent=6676 ;;
+  *) parent=600 ;;
+esac
+printf '500\tbash.exe\t6676\tC:/Windows/bash.exe\tbash\n'
+printf '550\tbash.exe\t%s\tC:/Windows/bash.exe\tbash\n' "$parent"
+printf '600\tpi.exe\t700\tC:/Users/u/pi.exe\tpi\n'
+printf '610\tagent.exe\t900\tC:/Users/Jane Doe/.local/share/cursor-agent/versions/2026.08.11/cursor-agent.exe\tagent\n'
+printf '700\tclaude.exe\t800\tC:/Users/u/claude.exe\tclaude\n'
+printf '800\tclaude.exe\t900\tC:/Users/u/claude.exe\tclaude\n'
+printf '900\texplorer.exe\t0\tC:/Windows/explorer.exe\texplorer\n'
+SH
+  chmod +x "$fakebin/uname" "$fakebin/cat" "$fakebin/powershell.exe"
+
+  # Exact live MSYS topology: inner bash WinPID 500 has dead native parent
+  # 6676, but its Cygwin parent 55 maps to outer bash WinPID 550. The outer
+  # Cygwin ppid is 1 (no /proc/1/winpid); only native parentage reaches Pi
+  # 600 or Claude 700. A Pi child must still reject inherited Claude identity.
+  printf '700\n' > "$state/.lock"
+  got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
+    || fail "the native fallback did not find the hand-started Pi harness"
+  [ "$got" = 600 ] || fail "the fallback reported '$got', expected only the Pi ancestor 600"
+  if FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" "fm_session_lock_owned_by_self '$state'"; then
+    fail "a hand-started Pi inherited Claude identity and claimed Claude's lock"
+  fi
+  got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" "fm_session_lock_foreign_owner_live '$state' && printf '%s' \"\$FM_SESSION_LOCK_FOREIGN_OWNER_PID\"") \
+    || fail "the foreign Claude owner was not reported"
+  [ "$got" = 700 ] || fail "the foreign owner was '$got', expected 700"
+  got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 lib_eval "$fakebin" 'fm_session_lock_anchor_pid') \
+    || fail "the hand-started Pi did not anchor to its native harness"
+  [ "$got" = 600 ] || fail "the hand-started Pi anchored '$got', expected 600"
+
+  # A live CLAUDE_PID cannot replace a missing native link above the outer
+  # shell. The two tables only join at a real parent relationship.
+  if FM_TEST_WINDOWS_TREE=missing FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    lib_eval "$fakebin" 'fm_harness_ancestry_pids' >/dev/null; then
+    fail "an unavailable outer native parent was replaced by inherited Claude identity"
+  fi
+  if FM_TEST_WINDOWS_TREE=missing FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    lib_eval "$fakebin" "fm_session_lock_owned_by_self '$state'"; then
+    fail "a missing native ancestry proof still claimed Claude's lock"
+  fi
+
+  # A real hybrid chain remains usable: Cygwin inner -> outer shell, then
+  # native WinPID 550 -> claude 700 -> claude 800.
+  got=$(FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
+    || fail "the native fallback did not walk the Claude chain"
+  [ "$got" = $'700\n800' ] || fail "the Claude chain was '$got', expected 700 and 800"
+  FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    lib_eval "$fakebin" "fm_session_lock_owned_by_self '$state'" \
+    || fail "the verified Claude ancestor did not own its lock"
+  got=$(FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    lib_eval "$fakebin" 'fm_session_lock_anchor_pid') \
+    || fail "the verified Claude chain did not anchor"
+  [ "$got" = 700 ] || fail "the verified Claude chain anchored '$got', expected 700"
+
+  got=$(FM_TEST_WINDOWS_TREE=cursor lib_eval "$fakebin" 'fm_harness_ancestry_pids') \
+    || fail "the native fallback did not identify Cursor's agent alias"
+  [ "$got" = 610 ] || fail "the Cursor alias ancestry was '$got', expected 610"
+  FM_TEST_WINDOWS_TREE=cursor lib_eval "$fakebin" 'fm_harness_pid_alive 610' \
+    || fail "Cursor's agent alias was not recognized as a live harness"
+  printf '610\n' > "$state/.lock"
+  FM_TEST_WINDOWS_TREE=cursor lib_eval "$fakebin" "fm_session_lock_owned_by_self '$state'" \
+    || fail "Cursor's agent alias did not own its lock"
+  got=$(FM_TEST_WINDOWS_TREE=cursor lib_eval "$fakebin" 'fm_session_lock_anchor_pid') \
+    || fail "Cursor's agent alias did not anchor"
+  [ "$got" = 610 ] || fail "the Cursor alias anchored '$got', expected 610"
+
+  # Inspection retains the live-ambiguous versus unavailable distinction.
+  printf '900\n' > "$state/.lock"
+  got=$(FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
+    "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
+  [ "$got" = 'unknown false' ] || fail "a live non-harness was inspected as '$got'"
+  printf '999\n' > "$state/.lock"
+  got=$(FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
+    "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
+  [ "$got" = 'stale false' ] || fail "an absent Windows PID was inspected as '$got'"
+  got=$(FM_TEST_WINDOWS_PROCESS_FAILURE=1 FM_TEST_KILL_RC=1 FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" \
+    "fm_session_lock_inspect '$state'; printf '%s %s' \"\$FM_LOCK_INSPECT_STATE\" \"\$FM_LOCK_INSPECT_LIVE_HARNESS\"")
+  [ "$got" = 'unknown false' ] || fail "a failed Windows process snapshot was inspected as '$got'"
+  got=$(FM_TEST_WINDOWS_PROCESS_FAILURE=1 PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" \
+    bash "$ROOT/bin/fm-lock.sh" status 2>/dev/null)
+  [ "$got" = 'lock: unknown (owner liveness could not be verified)' ] \
+    || fail "the status CLI reported '$got' for an unavailable process snapshot"
+  : > "$dir/calls"
+  FM_TEST_WINDOWS_TREE=claude FM_TEST_PS_CALLS="$dir/calls" \
+    lib_eval "$fakebin" 'fm_harness_pid_alive 700; fm_harness_pid_alive 700' >/dev/null \
+    || fail "repeated Windows liveness checks failed outside acquisition"
+  [ "$(wc -l < "$dir/calls" | tr -d ' ')" = 2 ] \
+    || fail "Windows liveness reused a process snapshot outside acquisition"
+  FM_TEST_WINDOWS_TREE=claude lib_eval "$fakebin" '
+    fm_harness_pid_alive 700 || exit 1
+    export FM_TEST_WINDOWS_PROCESS_FAILURE=1
+    rc=0
+    fm_harness_pid_alive 700 || rc=$?
+    [ "$rc" -eq 3 ]
+  ' || fail "a later snapshot failure reused an earlier live-harness verdict"
+  : > "$dir/calls"
+  # Drive real acquisition, not just helper calls: repeated identity and
+  # trusted-session consumers must share one process-table query per command.
+  mkdir -p "$dir/home"
+  FM_HOME="$dir/home" FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    FM_TEST_PS_CALLS="$dir/calls" lib_eval "$fakebin" "bash '$ROOT/bin/fm-lock.sh'" >/dev/null \
+    || fail "Windows acquisition failed with a verified hybrid ancestry"
+  [ "$(wc -l < "$dir/calls" | tr -d ' ')" = 1 ] \
+    || fail "Windows acquisition made more than one PowerShell invocation"
+  : > "$dir/calls"
+  FM_HOME="$dir/home" FM_TEST_WINDOWS_TREE=claude FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    FM_TEST_PS_CALLS="$dir/calls" lib_eval "$fakebin" "bash '$ROOT/bin/fm-lock.sh'" >/dev/null \
+    || fail "Windows same-session confirmation failed"
+  [ "$(wc -l < "$dir/calls" | tr -d ' ')" = 1 ] \
+    || fail "Windows confirmation made more than one PowerShell invocation"
+  : > "$dir/calls"
+  if FM_HOME="$dir/home" FM_TEST_WINDOWS_TREE=pi FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=700 \
+    FM_TEST_PS_CALLS="$dir/calls" lib_eval "$fakebin" "bash '$ROOT/bin/fm-lock.sh'" >/dev/null 2>&1; then
+    fail "a real Pi acquisition claimed the existing Claude lock"
+  fi
+  [ "$(wc -l < "$dir/calls" | tr -d ' ')" = 1 ] \
+    || fail "Windows foreign-owner refusal made more than one PowerShell invocation"
+  pass "session-lock: Windows ownership requires real ancestry and one PowerShell query per acquisition"
+}
+
+test_windows_snapshot_is_taken_after_claim() {
+  local dir fakebin home state holder_pid acquire_pid rc i
+  dir="$TMP_ROOT/windows-snapshot-claim"
+  fakebin=$(fm_fakebin "$dir/bin")
+  home="$dir/home"
+  state="$home/state"
+  mkdir -p "$state"
+  cat > "$fakebin/uname" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' Msys
+SH
+  cat > "$fakebin/cat" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  /proc/55/winpid) printf '%s\n' 550 ;;
+  /proc/55/ppid) printf '%s\n' 1 ;;
+  /proc/*/winpid) printf '%s\n' 500 ;;
+  /proc/*/ppid) printf '%s\n' 55 ;;
+  *) exec /bin/cat "$@" ;;
+esac
+SH
+  cat > "$fakebin/powershell.exe" <<'SH'
+#!/usr/bin/env bash
+set -u
+claim_pid=$(cat "$FM_TEST_RACE_STATE/.lock.acquire/pid" 2>/dev/null || true)
+if [ "$claim_pid" = "${FM_TEST_RACE_HOLDER_PID:-}" ]; then
+  : > "$FM_TEST_RACE_PRECLAIM"
+  while [ ! -e "$FM_TEST_RACE_RELEASE_SNAPSHOT" ]; do sleep 0.01; done
+fi
+printf '500\tbash.exe\t6676\tC:/Windows/bash.exe\tbash\n'
+printf '550\tbash.exe\t700\tC:/Windows/bash.exe\tbash\n'
+printf '700\tclaude.exe\t800\tC:/Users/u/claude.exe\tclaude\n'
+printf '800\tclaude.exe\t900\tC:/Users/u/claude.exe\tclaude\n'
+printf '900\texplorer.exe\t0\tC:/Windows/explorer.exe\texplorer\n'
+if [ "$claim_pid" != "${FM_TEST_RACE_HOLDER_PID:-}" ] && [ -n "$claim_pid" ]; then
+  : > "$FM_TEST_RACE_POSTCLAIM"
+  printf '600\tpi.exe\t700\tC:/Users/u/pi.exe\tpi\n'
+fi
+SH
+  cat > "$dir/hold-claim.sh" <<'SH'
+#!/usr/bin/env bash
+set -u
+. "$FM_WAKE"
+fm_lock_try_acquire "$FM_HOME/state/.lock.acquire" || exit 1
+: > "$FM_HOME/state/holder-ready"
+while [ ! -e "$FM_HOME/state/release-holder" ]; do sleep 0.01; done
+printf '%s\n' 600 > "$FM_HOME/state/.lock"
+printf '%s\n' OTHER > "$FM_HOME/state/.lock-session"
+fm_lock_release "$FM_HOME/state/.lock.acquire"
+SH
+  cat > "$dir/acquire.sh" <<SH
+#!/usr/bin/env bash
+set -u
+: > "$dir/acquirer-started"
+CLAUDE_CODE_SESSION_ID=S1 CLAUDE_PID=700 FM_HOME="$home" \\
+  bash "$ROOT/bin/fm-lock.sh" > "$dir/acquire.out" 2>&1
+printf '%s\\n' "\$?" > "$dir/acquire.rc"
+SH
+  chmod +x "$fakebin/uname" "$fakebin/cat" "$fakebin/powershell.exe" "$dir/hold-claim.sh" "$dir/acquire.sh"
+  printf '%s\n' 999 > "$state/.lock"
+  env FM_HOME="$home" FM_WAKE="$ROOT/bin/fm-wake-lib.sh" "$dir/hold-claim.sh" &
+  holder_pid=$!
+  i=0
+  while [ "$i" -lt 400 ] && [ ! -e "$state/holder-ready" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  [ -e "$state/holder-ready" ] || fail "the claim-holder fixture never acquired the claim"
+  env PATH="$fakebin:$PATH" FM_TEST_RACE_STATE="$state" \
+    FM_TEST_RACE_HOLDER_PID="$holder_pid" \
+    FM_TEST_RACE_PRECLAIM="$dir/preclaim" \
+    FM_TEST_RACE_POSTCLAIM="$dir/postclaim" \
+    FM_TEST_RACE_RELEASE_SNAPSHOT="$dir/release-snapshot" \
+    "$dir/acquire.sh" &
+  acquire_pid=$!
+  i=0
+  while [ "$i" -lt 40 ] && [ ! -e "$dir/acquirer-started" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  if [ ! -e "$dir/acquirer-started" ]; then
+    : > "$dir/release-snapshot"
+    kill "$acquire_pid" "$holder_pid" 2>/dev/null || true
+    wait "$acquire_pid" 2>/dev/null || true
+    wait "$holder_pid" 2>/dev/null || true
+    fail "the acquisition fixture never started"
+  fi
+  i=0
+  while [ "$i" -lt 40 ] && [ ! -e "$dir/preclaim" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  if [ -e "$dir/preclaim" ]; then
+    : > "$dir/release-snapshot"
+    kill "$acquire_pid" "$holder_pid" 2>/dev/null || true
+    wait "$acquire_pid" 2>/dev/null || true
+    wait "$holder_pid" 2>/dev/null || true
+    fail "the process snapshot was taken before the claim was acquired"
+  fi
+  : > "$dir/release-snapshot"
+  : > "$state/release-holder"
+  wait "$holder_pid" || fail "the claim-holder fixture failed"
+  wait "$acquire_pid" || true
+  [ -e "$dir/postclaim" ] || fail "the process snapshot was not taken after the claim was acquired"
+  rc=$(tr -d '[:space:]' < "$dir/acquire.rc")
+  [ "$rc" != 0 ] || fail "the acquisition overwrote an owner published while it waited for the claim"
+  [ "$(tr -d '[:space:]' < "$state/.lock")" = 600 ] \
+    || fail "the acquisition changed the live owner's lock to $(cat "$state/.lock")"
+  [ "$(tr -d '[:space:]' < "$state/.lock-session")" = OTHER ] \
+    || fail "the acquisition changed the live owner's sidecar"
+  pass "session-lock: Windows ownership snapshots after claim acquisition"
 }
 
 # A background Claude session's process table. The hook fires inside
@@ -324,7 +615,7 @@ foreign_owner() {  # <fakebin> <state>  -> prints the foreign pid
 test_same_session_id_owns_a_recycled_background_chain() {
   local dir fakebin state got
   dir="$TMP_ROOT/background-session"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   state="$dir/state"
   mkdir -p "$state"
   write_background_session_ps "$fakebin"
@@ -392,9 +683,13 @@ test_same_session_id_owns_a_recycled_background_chain() {
     fail "a lock with no recorded session id was owned through the environment id"
   fi
   printf 'S1\n' > "$dir/elsewhere"
-  ln -s "$dir/elsewhere" "$state/.lock-session"
-  if FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=710 owned "$fakebin" "$state"; then
-    fail "a symlinked sidecar was trusted"
+  ln -s "$dir/elsewhere" "$state/.lock-session" 2>/dev/null || true
+  if [ -L "$state/.lock-session" ]; then
+    if FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=710 owned "$fakebin" "$state"; then
+      fail "a symlinked sidecar was trusted"
+    fi
+  else
+    printf '%s\n' 'skip - symlinked sidecar rejection: ln -s did not create a symlink (Windows may require Developer Mode)'
   fi
   rm -f "$state/.lock-session"
   printf 'S1\n' > "$state/.lock-session"
@@ -407,7 +702,7 @@ test_same_session_id_owns_a_recycled_background_chain() {
 test_anchor_pid_is_the_model_loop_process_only_for_a_trusted_id() {
   local dir fakebin got
   dir="$TMP_ROOT/background-anchor"
-  fakebin=$(fm_fakebin "$dir")
+  fakebin=$(posix_fakebin "$dir")
   write_background_session_ps "$fakebin"
 
   got=$(FM_TEST_SESSION_ID=S1 FM_TEST_CLAUDE_PID=710 lib_eval "$fakebin" 'fm_session_lock_anchor_pid') \
@@ -1220,16 +1515,37 @@ test_harness_at_namespace_pid1_is_examined
 test_ordinary_paths_are_never_harness_processes
 test_harness_beyond_a_gap_never_owns_the_lock
 test_competing_version_named_session_is_seen_as_live
+test_windows_fallback_requires_native_ancestry
+test_windows_snapshot_is_taken_after_claim
 test_same_session_id_owns_a_recycled_background_chain
 test_anchor_pid_is_the_model_loop_process_only_for_a_trusted_id
-test_e2e_version_named_session_claims_the_home
-test_e2e_daemon_parented_session_claims_the_home
-test_e2e_daemon_parented_version_named_session_keeps_its_lock
-test_e2e_background_session_keeps_its_lock_across_a_recycled_chain
-test_same_session_confirmation_refreshes_rekeyed_id_under_claim_lock
-test_same_session_confirmation_does_not_steal_after_wait
-test_failed_lock_write_restores_previous_sidecar
-test_failed_lock_write_removes_new_sidecar_when_none_existed
-test_verified_reclaim_keeps_new_sidecar
-test_reanchor_keeps_task_leases_live
-test_reanchor_keeps_autoarm_midturn_healthy
+# Windows without executable symlinks can copy bash to an extensionless name
+# that Cygwin cannot exec. Probe only the binaries each case actually needs;
+# never hide a real test failure after a fixture executable has started.
+run_executable_fixture_test() {  # <test-function> <fixture-binary>...
+  local test=$1 binary
+  shift
+  for binary in "$@"; do
+    if ! "$binary" -c 'exit 0' >/dev/null 2>&1; then
+      case "$(uname -s)" in
+        CYGWIN*|MSYS*|MINGW*)
+          printf 'skip - %s: platform cannot execute fixture %s (Windows executable-symlink capability required)\n' "$test" "$binary"
+          return 0
+          ;;
+        *) fail "$test: cannot execute fixture $binary" ;;
+      esac
+    fi
+  done
+  "$test"
+}
+run_executable_fixture_test test_e2e_version_named_session_claims_the_home "$VERSIONED_CLAUDE"
+run_executable_fixture_test test_e2e_daemon_parented_session_claims_the_home "$NAMED_CLAUDE"
+run_executable_fixture_test test_e2e_daemon_parented_version_named_session_keeps_its_lock "$VERSIONED_CLAUDE" "$NAMED_CLAUDE"
+run_executable_fixture_test test_e2e_background_session_keeps_its_lock_across_a_recycled_chain "$NAMED_CLAUDE"
+run_executable_fixture_test test_same_session_confirmation_refreshes_rekeyed_id_under_claim_lock "$NAMED_CLAUDE"
+run_executable_fixture_test test_same_session_confirmation_does_not_steal_after_wait "$NAMED_CLAUDE"
+run_executable_fixture_test test_failed_lock_write_restores_previous_sidecar "$NAMED_CLAUDE"
+run_executable_fixture_test test_failed_lock_write_removes_new_sidecar_when_none_existed "$NAMED_CLAUDE"
+run_executable_fixture_test test_verified_reclaim_keeps_new_sidecar "$NAMED_CLAUDE"
+run_executable_fixture_test test_reanchor_keeps_task_leases_live "$NAMED_CLAUDE"
+run_executable_fixture_test test_reanchor_keeps_autoarm_midturn_healthy "$NAMED_CLAUDE"

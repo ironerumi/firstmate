@@ -64,12 +64,18 @@ if [ "${1:-}" = "status" ]; then
     free) echo "lock: free" ;;
     unreadable) echo "lock: unreadable" ;;
     held) echo "lock: held by live harness pid $FM_LOCK_INSPECT_PID" ;;
-    *) echo "lock: stale (pid $FM_LOCK_INSPECT_PID dead or not a harness)" ;;
+    stale) echo "lock: stale (pid $FM_LOCK_INSPECT_PID dead or not a harness)" ;;
+    *)
+      if _fm_windows_ps_fallback_needed; then
+        echo "lock: unknown (owner liveness could not be verified)"
+      else
+        echo "lock: stale (pid $FM_LOCK_INSPECT_PID dead or not a harness)"
+      fi
+      ;;
   esac
   exit 0
 fi
 
-me=$(fm_session_lock_anchor_pid) || { echo "error: cannot locate harness process in ancestry" >&2; exit 1; }
 probe=$(mktemp "$STATE/.lock-write.XXXXXX" 2>/dev/null) || {
   echo "error: cannot write session lock; operate read-only until resolved" >&2
   exit 1
@@ -114,6 +120,8 @@ release_claim_lock() {
     fm_lock_release "$CLAIM_LOCK"
     CLAIM_LOCK_HELD=0
   fi
+  _FM_WINDOWS_PROCESS_TABLE=
+  _FM_WINDOWS_PROCESS_SCOPE=0
 }
 restore_uncommitted_lock_session() {
   case "$LOCK_SESSION_PHASE" in
@@ -199,12 +207,7 @@ publish_lock_session_or_die() {
 # prior-session-sweep-is-finishing refusal is a takeover rule and does not
 # apply here.
 confirm_own_lock() {  # <recorded-pid>
-  local recorded pids waited=0
-  if [ "$CLAIM_LOCK_HELD" -ne 1 ]; then
-    fm_lock_acquire_wait "$CLAIM_LOCK"
-    CLAIM_LOCK_HELD=1
-    waited=1
-  fi
+  local recorded pids
   recorded=$(cat "$LOCK" 2>/dev/null || true)
   if [ "$recorded" = "$me" ] || fm_session_lock_owned_by_self "$STATE"; then
     if [ "$recorded" != "$me" ] && pids=$(fm_harness_ancestry_pids) \
@@ -220,9 +223,6 @@ confirm_own_lock() {  # <recorded-pid>
     echo "lock acquired: harness pid $recorded"
     exit 0
   fi
-  if [ "$waited" -eq 1 ]; then
-    release_claim_lock
-  fi
   return 1
 }
 
@@ -236,6 +236,25 @@ refuse_live_owner() {  # <recorded-pid>
   exit 1
 }
 
+if ! fm_lock_try_acquire "$CLAIM_LOCK"; then
+  sweep_pid=$(sed -n 's/^pid=//p' "$STATE/.startup-network.status" 2>/dev/null | tail -1)
+  if [ -n "${FM_LOCK_HELD_PID:-}" ] && [ "$FM_LOCK_HELD_PID" = "$sweep_pid" ]; then
+    echo "error: the prior session's bounded startup sweep is finishing; operate read-only until it releases the fleet lock" >&2
+    exit 1
+  fi
+  fm_lock_acquire_wait "$CLAIM_LOCK"
+fi
+CLAIM_LOCK_HELD=1
+_FM_WINDOWS_PROCESS_SCOPE=1
+
+if _fm_windows_ps_fallback_needed; then
+  _fm_windows_prepare_process_snapshot || {
+    echo "error: cannot read Windows process table; operate read-only until resolved" >&2
+    exit 1
+  }
+fi
+me=$(fm_session_lock_anchor_pid) || { echo "error: cannot locate harness process in ancestry" >&2; exit 1; }
+
 if [ -f "$LOCK" ] && [ ! -L "$LOCK" ]; then
   old=$(cat "$LOCK" 2>/dev/null || true)
   if [ "$old" = "$me" ] || fm_session_lock_owned_by_self "$STATE"; then
@@ -245,18 +264,6 @@ if [ -f "$LOCK" ] && [ ! -L "$LOCK" ]; then
   if [ -z "$REANCHOR" ] && fm_harness_pid_alive "$old"; then
     refuse_live_owner "$old"
   fi
-fi
-
-if [ "$CLAIM_LOCK_HELD" -ne 1 ]; then
-  if ! fm_lock_try_acquire "$CLAIM_LOCK"; then
-    sweep_pid=$(sed -n 's/^pid=//p' "$STATE/.startup-network.status" 2>/dev/null | tail -1)
-    if [ -n "${FM_LOCK_HELD_PID:-}" ] && [ "$FM_LOCK_HELD_PID" = "$sweep_pid" ]; then
-      echo "error: the prior session's bounded startup sweep is finishing; operate read-only until it releases the fleet lock" >&2
-      exit 1
-    fi
-    fm_lock_acquire_wait "$CLAIM_LOCK"
-  fi
-  CLAIM_LOCK_HELD=1
 fi
 
 if [ -e "$LOCK" ] || [ -L "$LOCK" ]; then

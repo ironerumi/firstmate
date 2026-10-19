@@ -54,9 +54,10 @@
 // merge, decision, destination, force, discard, cleanup, credential-use, task
 // mutation, or stronger-operation capability.
 
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { constants as fsConstants, fstat, read } from "node:fs";
 import {
+  access,
   chmod,
   copyFile,
   link,
@@ -836,6 +837,37 @@ function selectAdapter(bindings, adapter) {
 function sanitizedPath() {
   const candidates = [path.dirname(process.execPath), "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
   return [...new Set(candidates)].join(path.delimiter);
+}
+
+// Node on Windows cannot execute a shell script via its shebang. Resolve and
+// verify the interpreter, keeping the lifecycle child's sanitized environment.
+async function lifecycleBash(code, message) {
+  const searchPath = process.platform === "win32" ? process.env.PATH || "" : sanitizedPath();
+  const candidates = [
+    ...(process.env.BASH ? [process.env.BASH] : []),
+    ...searchPath.split(path.delimiter).filter(Boolean).map((directory) =>
+      path.join(directory, process.platform === "win32" ? "bash.exe" : "bash")),
+  ];
+  for (const candidate of new Set(candidates)) {
+    if (!path.isAbsolute(candidate)) continue;
+    try {
+      const executable = await realpath(candidate);
+      await access(executable, fsConstants.X_OK);
+      const probe = process.platform === "win32"
+        ? 'test -n "$BASH_VERSION" && case "$OSTYPE" in msys*|cygwin*) exit 0;; *) exit 1;; esac'
+        : 'test -n "$BASH_VERSION"';
+      await promisify(execFile)(executable, ["--noprofile", "--norc", "-c", probe], { timeout: 5000 });
+      return executable;
+    } catch {
+      // A PATH entry may be absent or a different shell (e.g. WSL bash.exe).
+    }
+  }
+  fail(code, message);
+}
+
+function lifecycleScript() {
+  const script = path.join(CODE_ROOT, "bin", "fm-procevent.sh");
+  return process.platform === "win32" ? script.replaceAll("\\", "/") : script;
 }
 
 function effectiveStateRoot(home) {
@@ -2019,21 +2051,34 @@ async function assertLifecycleLockOwned() {
   if (!activeLifecycleLock) fail("lifecycle-lock-invalid", "retirement has no lifecycle lock ownership");
   const { lockPath, ownerPath, delegatedOwnerPid } = activeLifecycleLock;
   const lockInfo = await maybeLstat(lockPath);
-  if (!lockInfo?.isSymbolicLink()) fail("lifecycle-lock-lost", "retirement lifecycle lock is no longer held");
-  const target = await readlink(lockPath).catch(() => fail("lifecycle-lock-lost", "retirement lifecycle lock cannot be read"));
+  if (!lockInfo?.isSymbolicLink() && !lockInfo?.isDirectory()) fail("lifecycle-lock-lost", "retirement lifecycle lock is no longer held");
+  let target;
+  if (lockInfo.isSymbolicLink()) {
+    target = await readlink(lockPath).catch(() => fail("lifecycle-lock-lost", "retirement lifecycle lock cannot be read"));
+  } else {
+    // fm_lock_link_owner in fm-wake-lib.sh owns the .owner identity contract.
+    const identityPath = path.join(lockPath, ".owner");
+    const identityInfo = await maybeLstat(identityPath);
+    if (!identityInfo?.isFile() || identityInfo.isSymbolicLink() || identityInfo.nlink !== 1
+        || identityInfo.uid !== currentUid() || identityInfo.size > 4096 || lockInfo.uid !== currentUid()) {
+      fail("lifecycle-lock-invalid", "retirement lifecycle lock identity is unsafe");
+    }
+    target = (await readFile(identityPath, "utf8")).trim();
+  }
   const resolvedTarget = path.isAbsolute(target) ? target : path.resolve(path.dirname(lockPath), target);
   if (resolvedTarget !== ownerPath) fail("lifecycle-lock-lost", "retirement lifecycle lock owner changed");
   const ownerInfo = await maybeLstat(ownerPath);
   if (!ownerInfo?.isDirectory() || ownerInfo.isSymbolicLink() || ownerInfo.uid !== currentUid()) {
     fail("lifecycle-lock-invalid", "retirement lifecycle lock owner is unsafe");
   }
-  const pidPath = path.join(ownerPath, "pid");
+  const pidPath = path.join(lockPath, "pid");
   const pidInfo = await maybeLstat(pidPath);
   if (!pidInfo?.isFile() || pidInfo.isSymbolicLink() || pidInfo.nlink !== 1 || pidInfo.uid !== currentUid()) {
     fail("lifecycle-lock-invalid", "retirement lifecycle lock pid is unsafe");
   }
   const pid = (await readFile(pidPath, "utf8")).trim();
   if (pid !== String(delegatedOwnerPid || process.pid)) fail("lifecycle-lock-lost", "retirement process does not own the lifecycle lock");
+  return lockInfo.isSymbolicLink();
 }
 
 async function claimInheritedLifecycleLock(home) {
@@ -2055,9 +2100,15 @@ async function claimInheritedLifecycleLock(home) {
 }
 
 async function releaseLifecycleLock() {
-  await assertLifecycleLockOwned();
+  const symbolic = await assertLifecycleLockOwned();
   const { lockPath, ownerPath } = activeLifecycleLock;
-  await unlink(lockPath);
+  if (symbolic) {
+    await unlink(lockPath);
+  } else {
+    await unlink(path.join(lockPath, "pid"));
+    await unlink(path.join(lockPath, ".owner"));
+    await rmdir(lockPath);
+  }
   await unlink(path.join(ownerPath, "pid"));
   await rmdir(ownerPath);
   activeLifecycleLock = null;
@@ -2247,13 +2298,13 @@ async function cmdRetireBindingLocked(args) {
 }
 
 async function runLifecycleRetirement(mode, args) {
-  const command = path.join(CODE_ROOT, "bin", "fm-procevent.sh");
+  const command = await lifecycleBash("retirement-failed", "extension lifecycle retirement could not start");
   const home = await activeHome();
   const env = { PATH: sanitizedPath(), LANG: "C", LC_ALL: "C", HOME: process.env.HOME || home, FM_HOME: home, FM_ROOT_OVERRIDE: CODE_ROOT };
   if (process.env.FM_STATE_OVERRIDE) env.FM_STATE_OVERRIDE = process.env.FM_STATE_OVERRIDE;
   if (process.env.XDG_STATE_HOME) env.XDG_STATE_HOME = process.env.XDG_STATE_HOME;
   if (process.env.FM_PROCEVENT_CLAIM_ROOT) env.FM_PROCEVENT_CLAIM_ROOT = process.env.FM_PROCEVENT_CLAIM_ROOT;
-  const child = spawn(command, ["extension-retirement", mode, ...args], {
+  const child = spawn(command, [lifecycleScript(), "extension-retirement", mode, ...args], {
     cwd: CODE_ROOT,
     env,
     shell: false,
@@ -2283,13 +2334,13 @@ async function runLifecycleRetirement(mode, args) {
 }
 
 async function runLifecycleProcessEvent(args) {
-  const command = path.join(CODE_ROOT, "bin", "fm-procevent.sh");
+  const command = await lifecycleBash("process-event-failed", "extension lifecycle process-event could not start");
   const home = await activeHome();
   const env = { PATH: sanitizedPath(), LANG: "C", LC_ALL: "C", HOME: process.env.HOME || home, FM_HOME: home, FM_ROOT_OVERRIDE: CODE_ROOT };
   if (process.env.FM_STATE_OVERRIDE) env.FM_STATE_OVERRIDE = process.env.FM_STATE_OVERRIDE;
   if (process.env.XDG_STATE_HOME) env.XDG_STATE_HOME = process.env.XDG_STATE_HOME;
   if (process.env.FM_PROCEVENT_CAPTURE_SOURCE_LOCK_HELD === "1") env.FM_PROCEVENT_CAPTURE_SOURCE_LOCK_HELD = "1";
-  const child = spawn(command, ["extension-process-event", ...args], {
+  const child = spawn(command, [lifecycleScript(), "extension-process-event", ...args], {
     cwd: CODE_ROOT,
     env,
     shell: false,
@@ -2321,13 +2372,13 @@ async function runLifecycleProcessEvent(args) {
 }
 
 async function runLifecycleBinding(commandName, args) {
-  const command = path.join(CODE_ROOT, "bin", "fm-procevent.sh");
+  const command = await lifecycleBash("binding-failed", "extension lifecycle binding could not start");
   const home = await activeHome();
   const env = { PATH: sanitizedPath(), LANG: "C", LC_ALL: "C", HOME: process.env.HOME || home, FM_HOME: home, FM_ROOT_OVERRIDE: CODE_ROOT };
   if (process.env.FM_STATE_OVERRIDE) env.FM_STATE_OVERRIDE = process.env.FM_STATE_OVERRIDE;
   if (process.env.XDG_STATE_HOME) env.XDG_STATE_HOME = process.env.XDG_STATE_HOME;
   if (process.env.FM_PROCEVENT_CLAIM_ROOT) env.FM_PROCEVENT_CLAIM_ROOT = process.env.FM_PROCEVENT_CLAIM_ROOT;
-  const child = spawn(command, ["extension-bind", commandName, ...args], {
+  const child = spawn(command, [lifecycleScript(), "extension-bind", commandName, ...args], {
     cwd: CODE_ROOT,
     env,
     shell: false,
@@ -2388,12 +2439,12 @@ async function runInheritedLifecycleRetirement(args) {
 
 async function bindingRetirementPreflight(home, bindingDigest) {
   await cleanupRecordedInvocations(home, { bindingDigest });
-  const command = path.join(CODE_ROOT, "bin", "fm-procevent.sh");
+  const command = await lifecycleBash("retirement-preflight-failed", "process-event retirement preflight could not start");
   const env = { PATH: sanitizedPath(), LANG: "C", LC_ALL: "C", HOME: process.env.HOME || home, FM_HOME: home, FM_ROOT_OVERRIDE: CODE_ROOT };
   if (process.env.FM_STATE_OVERRIDE) env.FM_STATE_OVERRIDE = process.env.FM_STATE_OVERRIDE;
   if (process.env.XDG_STATE_HOME) env.XDG_STATE_HOME = process.env.XDG_STATE_HOME;
   if (process.env.FM_PROCEVENT_CLAIM_ROOT) env.FM_PROCEVENT_CLAIM_ROOT = process.env.FM_PROCEVENT_CLAIM_ROOT;
-  const child = spawn(command, ["binding-retirement-preflight", bindingDigest], {
+  const child = spawn(command, [lifecycleScript(), "binding-retirement-preflight", bindingDigest], {
     cwd: CODE_ROOT,
     env,
     shell: false,
