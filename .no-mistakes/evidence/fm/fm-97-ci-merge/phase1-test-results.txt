@@ -1,0 +1,15 @@
+Phase 1 targeted test validation
+
+Changed-test scope: tests/fm-extension-binding.test.sh, tests/fm-session-lock-ancestry.test.sh, tests/fm-watcher-lock.test.sh. No tests/<changed-bin>.test.sh suites existed for the other changed bin scripts.
+
+Ran serially with:
+bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 <script>
+
+Passed:
+- tests/fm-session-lock-ancestry.test.sh (exit 0, 44.0s)
+- tests/fm-watcher-lock.test.sh (exit 0, 90.8s)
+
+Failed during setup:
+- tests/fm-extension-binding.test.sh (exit 1, 5.6s). The suite reached the extension binding assertions but macOS Node package installation failed with EACCES while renaming read-only temporary package directories; dependent binding assertions then reported no binding. This is the known host limitation requiring Linux CI validation, not a timeout.
+
+No phase-2 live scenarios were started because phase 1 had a failed suite, per the runbook.
