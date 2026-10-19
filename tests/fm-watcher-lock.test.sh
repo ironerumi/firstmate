@@ -340,9 +340,7 @@ test_lock_single_winner_under_concurrency() {
         printf "%s\n" "$$" >> "$3"
         # Stay alive so the held lock names a live pid for the whole window;
         # otherwise a late contender could legitimately reclaim a dead-pid lock.
-        # The hold must outlast the time this loop takes to spawn its
-        # contenders, or the earliest winner exits before the last starts.
-        sleep 5
+        sleep 1
       fi
     ' _ "$LIB" "$lockdir" "$marker" &
     pids="$pids $!"
@@ -549,7 +547,6 @@ SH
     FM_TEST_RACE_ONCE="$dir/race-once" FM_TEST_RACE_OUT="$out" \
     FM_STATE_OVERRIDE="$state" bash -c '
       . "$1"
-      fm_lock_reap_dead_link "$2" || exit 1
       fm_lock_try_acquire_steal_mutex "$2" || exit 1
       [ "$(cat "$2/pid" 2>/dev/null)" = "${BASHPID:-$$}" ] || exit 2
     ' _ "$LIB" "$steal" || rc=$?
@@ -568,77 +565,51 @@ SH
 }
 
 test_lock_stale_steal_single_winner_under_concurrency() {
-  local dir state lockdir dead marker gate release ready_dir result_dir ready_count result_count ready result i pids pid wins
+  local dir state lockdir dead marker gate hold i pids pid waiter winner wins
   dir=$(make_case lock-stale-concurrency)
   state="$dir/state"
   lockdir="$state/.contend.lock"
   marker="$dir/wins"
   gate="$dir/first-winner"
-  release="$dir/release"
-  ready_dir="$dir/ready"
-  result_dir="$dir/results"
+  hold="$dir/winner-release"
   dead=$(dead_pid)
-  mkdir "$lockdir" "$ready_dir" "$result_dir"
+  mkdir "$lockdir"
   printf '%s\n' "$dead" > "$lockdir/pid"
   : > "$marker"
-  mkfifo "$gate"
+  mkfifo "$gate" "$hold"
+  # try_acquire is nonblocking: all one-shot candidates may lose to a transient
+  # steal mutex. A waiting contender guarantees eventual acquisition, and the
+  # FIFO keeps the winner alive until every other contender has finished.
+  FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    fm_lock_acquire_wait "$2" || exit 1
+    printf "%s\n" "${BASHPID:-$$}" >> "$3"
+    printf "%s\n" "${BASHPID:-$$}" > "$4"
+    IFS= read -r _ < "$5"
+  ' _ "$LIB" "$lockdir" "$marker" "$gate" "$hold" &
+  waiter=$!
   pids=
   i=1
-  while [ "$i" -le 40 ]; do
+  while [ "$i" -le 39 ]; do
     FM_STATE_OVERRIDE="$state" bash -c '
       . "$1"
-      : > "$3/$4.ready"
-      while [ ! -e "$5" ]; do sleep 0.01; done
       if fm_lock_try_acquire "$2"; then
-        printf "%s\n" "${BASHPID:-$$}" >> "$6"
-        printf "%s\n" winner > "$8/$4.result"
-        printf "%s\n" "${BASHPID:-$$}" > "$7"
-        exec sleep 30
+        printf "%s\n" "${BASHPID:-$$}" >> "$3"
+        printf "%s\n" "${BASHPID:-$$}" > "$4"
+        IFS= read -r _ < "$5"
       fi
-      printf "%s\n" lost > "$8/$4.result"
-    ' _ "$LIB" "$lockdir" "$ready_dir" "$i" "$release" "$marker" "$gate" "$result_dir" &
+    ' _ "$LIB" "$lockdir" "$marker" "$gate" "$hold" &
     pids="$pids $!"
     i=$((i + 1))
   done
-  ready_count=0
-  i=0
-  while [ "$i" -lt 1000 ] && [ "$ready_count" -lt 40 ]; do
-    ready_count=0
-    for ready in "$ready_dir"/*.ready; do
-      [ -e "$ready" ] && ready_count=$((ready_count + 1))
-    done
-    [ "$ready_count" -eq 40 ] || sleep 0.01
-    i=$((i + 1))
+  IFS= read -r winner < "$gate"
+  [ "$winner" = "$waiter" ] || { kill "$waiter" 2>/dev/null || true; wait "$waiter" 2>/dev/null || true; }
+  for pid in $pids; do
+    [ "$pid" = "$winner" ] || wait "$pid" 2>/dev/null || true
   done
-  if [ "$ready_count" -ne 40 ]; then
-    for pid in $pids; do kill "$pid" 2>/dev/null || true; done
-    for pid in $pids; do wait "$pid" 2>/dev/null || true; done
-    fail "stale-lock candidates did not reach the release barrier"
-  fi
-  : > "$release"
-  if ! IFS= read -r -t 10 < "$gate"; then
-    for pid in $pids; do kill "$pid" 2>/dev/null || true; done
-    for pid in $pids; do wait "$pid" 2>/dev/null || true; done
-    fail "one-shot stale-lock candidates produced no winner"
-  fi
-  result_count=0
-  i=0
-  while [ "$i" -lt 1000 ] && [ "$result_count" -lt 40 ]; do
-    result_count=0
-    for result in "$result_dir"/*.result; do
-      [ -e "$result" ] && result_count=$((result_count + 1))
-    done
-    [ "$result_count" -eq 40 ] || sleep 0.01
-    i=$((i + 1))
-  done
-  if [ "$result_count" -ne 40 ]; then
-    for pid in $pids; do kill "$pid" 2>/dev/null || true; done
-    for pid in $pids; do wait "$pid" 2>/dev/null || true; done
-    fail "stale-lock candidates did not complete their attempts"
-  fi
-  for pid in $pids; do kill "$pid" 2>/dev/null || true; done
-  for pid in $pids; do wait "$pid" 2>/dev/null || true; done
   wins=$(awk 'NF { c++ } END { print c + 0 }' "$marker")
+  printf 'release\n' > "$hold"
+  wait "$winner" 2>/dev/null || true
   [ "$wins" -eq 1 ] || fail "expected exactly one stale-lock stealer, got $wins"
   pass "concurrent stale-lock steal yields exactly one winner"
 }
