@@ -1237,6 +1237,55 @@ test_dirlock_d5b_stealer_retires_only_captured_generation() {
   pass "D5': a paused stealer's retirement is addressed only to the generation it validated"
 }
 
+test_dirlock_d5c_acquirer_retires_captured_generation() {
+  local dir lock stealer sleeper live_stage out
+  dir=$(dirlock_case dirlock-d5c)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" s
+  FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_try_acquire "$1"' "$LIB" "$lock" \
+    || fail "D5c: could not leave a dead-held record"
+  # shellcheck disable=SC2016
+  FM_LOCK_STALE_AFTER=0 dirlock_spawn "$dir" s "" '
+    target=$1
+    original=$(declare -f fm_lock_remove_path)
+    eval "${original/fm_lock_remove_path/_fm_original_remove_path}"
+    fm_lock_remove_path() {
+      if [ "$1" = "$target" ]; then
+        printf "%s remove:pre:%s\n" "$FM_TEST_SUBJECT" "$target" >> "$FM_TEST_EVENTS"
+        IFS= read -r _ < "$FM_TEST_RESUME"
+      fi
+      _fm_original_remove_path "$@"
+    }
+    if fm_lock_try_acquire "$1"; then
+      echo acquired > "$2"
+      fm_lock_release "$1"
+    else
+      echo "held=$FM_LOCK_HELD_PID" > "$2"
+    fi' "$lock" "$dir/s.out" &
+  stealer=$!
+  dirlock_expect "s remove:pre:$lock" "D5c: acquirer did not pause after its stale recheck"
+  FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_remove_path "$1"' "$LIB" "$lock" \
+    || fail "D5c: could not retire the captured dead generation"
+  [ ! -e "$lock" ] || fail "D5c: dead generation retirement left the lock"
+  sleep 300 &
+  sleeper=$!
+  live_stage="$dir/state/.d.lock.owner.live000"
+  mkdir -p "$live_stage/.owner.live000"
+  printf '%s\n' "$sleeper" > "$live_stage/pid"
+  printf '%s\n' "$sleeper" > "$live_stage/.owner.live000/pid"
+  mv "$live_stage" "$lock"
+  printf 'go\n' >&7
+  wait "$stealer" || fail "D5c: acquirer subject failed"
+  out=$(cat "$dir/s.out")
+  [ "$out" = "held=$sleeper" ] || fail "D5c: acquirer damaged or took the successor: $out"
+  [ "$(cat "$lock/pid" 2>/dev/null)" = "$sleeper" ] && [ -f "$lock/.owner.live000/pid" ] \
+    || fail "D5c: successor record changed: $(dirlock_tree "$dir")"
+  kill "$sleeper"
+  wait "$sleeper" 2>/dev/null
+  dirlock_close
+  pass "D5c: stale acquisition retires only its captured generation"
+}
+
 test_dirlock_d6_late_publication_is_ordinary_recovery() {
   local dir lock publisher orphan contender case_name out staging
   for case_name in held released; do
@@ -1478,6 +1527,26 @@ test_dirlock_d11_ambiguous_generation_is_refused() {
   wait "$holder" || fail "D11: holder subject failed"
   dirlock_close
   pass "D11: a record with more than one generation is invalid and never released or taken"
+}
+
+test_dirlock_d11b_dead_ambiguous_generation_is_refused() {
+  local dir lock dead before out
+  dir=$(dirlock_case dirlock-d11b)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir"
+  dead=$(dead_pid)
+  mkdir -p "$lock/.owner.first1" "$lock/.owner.secnd2"
+  printf '%s\n' "$dead" > "$lock/pid"
+  printf '%s\n' "$dead" > "$lock/.owner.first1/pid"
+  printf '%s\n' "$dead" > "$lock/.owner.secnd2/pid"
+  before=$(dirlock_tree "$dir")
+  out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '
+    . "$0"
+    if fm_lock_try_acquire "$1"; then echo acquired; else echo refused; fi' "$LIB" "$lock")
+  [ "$out" = refused ] || fail "D11b: contender acted on an invalid dead record: $out"
+  [ "$(dirlock_tree "$dir")" = "$before" ] || fail "D11b: invalid dead record was changed"
+  dirlock_close
+  pass "D11b: an invalid dead record fails closed before destructive cleanup"
 }
 
 test_dirlock_d12_staging_litter_is_never_consulted() {
@@ -2496,12 +2565,14 @@ test_dirlock_identity_cases_per_shell
 test_dirlock_d4_crashed_release_is_finished
 test_dirlock_d5_orphan_retirement_cannot_touch_successor
 test_dirlock_d5b_stealer_retires_only_captured_generation
+test_dirlock_d5c_acquirer_retires_captured_generation
 test_dirlock_d6_late_publication_is_ordinary_recovery
 test_dirlock_d7b_bounded_helper_killed_by_deadline
 test_dirlock_d8_dead_steal_mutex_observers_compose
 test_dirlock_d9_uncommitted_retirement_keeps_record
 test_dirlock_d10_committed_retirement_is_finished
 test_dirlock_d11_ambiguous_generation_is_refused
+test_dirlock_d11b_dead_ambiguous_generation_is_refused
 test_dirlock_d12_staging_litter_is_never_consulted
 test_dirlock_d16_pre_v2_record_recovers_as_raw
 test_lock_empty_pid_uses_minimum_grace

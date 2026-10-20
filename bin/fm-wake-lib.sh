@@ -585,6 +585,7 @@ _fm_lock_symlinks_supported() {
 fm_lock_discard_owner() {
   local ownerdir=$1
   [ -n "$ownerdir" ] || return 0
+  case "${ownerdir##*/}" in .owner.*) return 0 ;; esac
   rm -rf "$ownerdir" 2>/dev/null || true
 }
 
@@ -646,7 +647,7 @@ fm_lock_claim() {
   fi
   if fm_lock_claim_blocked_by_steal "$lockdir" "$allowed_steal_owner"; then
     if fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
-      fm_lock_remove_path "$lockdir" || true
+      fm_lock_remove_path "$lockdir" "$ownerdir" || true
     fi
     fm_lock_discard_owner "$ownerdir"
     return 1
@@ -678,7 +679,7 @@ fm_lock_try_create() {
       return 0
     fi
     if fm_lock_points_to_owner "$lockdir" "$published"; then
-      fm_lock_remove_path "$lockdir" || true
+      fm_lock_remove_path "$lockdir" "$published" || true
     fi
   else
     fm_lock_remove_stray_owner_link "$lockdir" "$ownerdir"
@@ -693,7 +694,9 @@ fm_lock_remove_path() {
     [ -L "$lockdir" ] || return 1
   fi
   if [ -L "$lockdir" ]; then
-    [ -z "$explicit" ] || return 1
+    if [ -n "$explicit" ] && ! fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
+      return 1
+    fi
     rm -f "$lockdir" 2>/dev/null || return 1
   elif [ -n "$ownerdir" ] && [ "$ownerdir" != "$lockdir" ]; then
     _fm_lock_retire_generation "$lockdir" "$ownerdir"
@@ -1152,7 +1155,7 @@ _fm_recovery_marker_handover_restore() {
 }
 
 fm_recovery_transition() {
-  local marker=$1 action=$2 target=${3:-} value=${4:-} bound=${5:-}
+  local marker=$1 action=$2 target=${3:-} value=${4:-} bound=${5:-} owner
   case "$action" in
     handover-restore)
       _fm_recovery_marker_handover_restore "$marker" "$target" "$value"
@@ -1192,7 +1195,8 @@ fm_recovery_transition() {
     clear-stale-lock)
       [ -n "$target" ] || return 1
       _fm_recovery_marker_publish "$marker" "${value:-downtime}" "$bound" || return 1
-      fm_lock_remove_path "$target"
+      owner=$(fm_lock_link_owner "$target" 2>/dev/null) || return 1
+      fm_lock_remove_path "$target" "$owner"
       ;;
     *) return 2 ;;
   esac
@@ -1270,7 +1274,7 @@ fm_lock_reap_dead_link() {
     mv -- "$token" "$tomb" 2>/dev/null || return 1
   fi
   if fm_lock_points_to_owner "$lockdir" "$owner"; then
-    fm_lock_remove_path "$lockdir" || true
+    fm_lock_remove_path "$lockdir" "$owner" || true
   fi
   fm_lock_discard_owner "$tomb"
 }
@@ -1281,13 +1285,14 @@ fm_lock_reap_dead_link() {
 # hold abandoned by this very process (a trap interrupted its critical section)
 # is reclaimed like fm_lock_try_acquire's self-held branch.
 fm_lock_try_acquire_steal_mutex() {  # <steal-lock>
-  local lockdir=$1 current
+  local lockdir=$1 current owner
   FM_LOCK_OWNER_DIR=
   fm_lock_try_create "$lockdir" && return 0
   fm_current_pid current || return 1
   fm_lock_reap_dead_link "$lockdir.steal" || true
   if [ "$(cat "$lockdir/pid" 2>/dev/null || true)" = "$current" ]; then
-    fm_lock_remove_path "$lockdir" || true
+    owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null) || return 1
+    fm_lock_remove_path "$lockdir" "$owner" || true
   elif [ -e "$lockdir" ] || [ -L "$lockdir" ]; then
     fm_lock_reap_dead_link "$lockdir" || return 1
   fi
@@ -1295,7 +1300,7 @@ fm_lock_try_acquire_steal_mutex() {  # <steal-lock>
 }
 
 fm_lock_try_acquire() {
-  local lockdir=$1 pid steal cur rc steal_owner primary_owner current recovered
+  local lockdir=$1 pid steal cur rc steal_owner primary_owner current recovered self_owner
   FM_LOCK_HELD_PID=
   FM_LOCK_OWNER_DIR=
   FM_LOCK_RECOVERED_PID=
@@ -1315,7 +1320,8 @@ fm_lock_try_acquire() {
     # interrupted frame. Spinning here deadlocks the exit path against itself
     # - the hang reproduced by the self-held reclaim regression in
     # tests/fm-wake-queue.test.sh - so reclaim the abandoned hold instead.
-    fm_lock_remove_path "$lockdir" || true
+    self_owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null) || return 1
+    fm_lock_remove_path "$lockdir" "$self_owner" || true
     if fm_lock_try_create "$lockdir"; then
       return 0
     fi
@@ -1375,8 +1381,8 @@ fm_lock_try_acquire() {
   recovered=$cur
   if [ -z "$recovered" ] && [ ! -L "$lockdir" ] && [ -n "$primary_owner" ] \
     && [ "$primary_owner" != "$lockdir" ]; then
-    recovered=$(cat "$primary_owner/pid" 2>/dev/null || true)
-    [ -n "$recovered" ] || recovered=$(cat "$primary_owner/pid.retired" 2>/dev/null || true)
+    recovered=$(cat "$primary_owner/pid.retired" 2>/dev/null || true)
+    [ -n "$recovered" ] || recovered=$(cat "$primary_owner/pid" 2>/dev/null || true)
   fi
 
   if [ "$lockdir" = "$STATE/.watch.lock" ] \
@@ -1386,11 +1392,7 @@ fm_lock_try_acquire() {
     FM_LOCK_OWNER_DIR=
     return 1
   fi
-  if [ -L "$lockdir" ]; then
-    fm_lock_remove_path "$lockdir" || true
-  else
-    fm_lock_remove_path "$lockdir" "$primary_owner" || true
-  fi
+  fm_lock_remove_path "$lockdir" "$primary_owner" || true
   rc=1
   if fm_lock_try_create "$lockdir" "$steal_owner"; then
     rc=0
@@ -1516,7 +1518,7 @@ fm_lock_release() {
   pid=$(cat "$lockdir/pid" 2>/dev/null || true)
   [ "$pid" = "$current" ] || return 0
   fm_lock_points_to_owner "$lockdir" "$ownerdir" || return 0
-  fm_lock_remove_path "$lockdir" || true
+  fm_lock_remove_path "$lockdir" "$ownerdir" || true
 }
 
 fm_meta_lock_path() {
@@ -2296,7 +2298,7 @@ fm_autoarm_claim_abandoned() {  # <state-dir> [grace]
 # TERM and the ledger graft below, keeping the documented bounded
 # upgrade-window residual instead of the deadlock.
 fm_autoarm_release_abandoned() {  # <state-dir> [grace]
-  local state=$1 grace=${2:-${FM_GUARD_GRACE:-300}} lock steal epoch lock_pid recorded current owner line1 tmp i
+  local state=$1 grace=${2:-${FM_GUARD_GRACE:-300}} lock steal epoch lock_pid recorded current owner_path owner line1 tmp i
   lock="$state/.claude-autoarm.lock"
   steal="$lock.steal"
   epoch="$state/.claude-autoarm-epoch"
@@ -2345,7 +2347,11 @@ fm_autoarm_release_abandoned() {  # <state-dir> [grace]
     fi
     rm -f "$tmp" 2>/dev/null || true
   fi
-  fm_lock_remove_path "$lock" || true
+  owner_path=$(fm_lock_link_owner "$lock" 2>/dev/null) || {
+    fm_lock_release "$steal"
+    return 1
+  }
+  fm_lock_remove_path "$lock" "$owner_path" || true
   fm_lock_release "$steal"
   [ -e "$lock" ] || [ -L "$lock" ] || return 0
   return 1
