@@ -1386,7 +1386,11 @@ fm_lock_try_acquire() {
     FM_LOCK_OWNER_DIR=
     return 1
   fi
-  fm_lock_remove_path "$lockdir" || true
+  if [ -L "$lockdir" ]; then
+    fm_lock_remove_path "$lockdir" || true
+  else
+    fm_lock_remove_path "$lockdir" "$primary_owner" || true
+  fi
   rc=1
   if fm_lock_try_create "$lockdir" "$steal_owner"; then
     rc=0
