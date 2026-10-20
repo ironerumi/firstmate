@@ -1,0 +1,11 @@
+bind literal argv: PASS
+bind failure mapping: PASS
+retire-binding literal argv: PASS
+retire-binding failure mapping: PASS
+retire-transfer literal argv: PASS
+retire-transfer failure mapping: PASS
+process-event literal argv: PASS
+process-event failure mapping: PASS
+POSIX ignores exported BASH: PASS
+EACCES
+direct non-executable shell spawn rejected by OS: PASS
