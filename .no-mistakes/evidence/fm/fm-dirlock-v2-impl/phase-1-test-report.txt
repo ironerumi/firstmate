@@ -1,0 +1,12 @@
+Phase 1 targeted validation
+
+Initial selection:
+`bin/fm-test-run.sh --list --changed`
+Result: exit 2; the changed-test mapper reported no mapping for `tests/fixtures/rename-barrier.cjs`. Narrowed selection was the three changed suites: tests/fm-extension-binding.test.sh, tests/fm-wake-queue.test.sh, tests/fm-watcher-lock.test.sh.
+
+Ran serially with `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300`:
+- `tests/fm-extension-binding.test.sh`: FAILED (exit 1, 8.1s). The executable-interface suite reported binding failures with EACCES while renaming package install directories, plus a missing remote-root helper fixture; it also reported `local bind returned no binding retirement identity` and an isolated-section failure.
+- `tests/fm-wake-queue.test.sh`: PASSED (219.1s). All wake queue and lock-related queue scenarios completed.
+- `tests/fm-watcher-lock.test.sh`: PASSED (115.1s). All directory-lock D*/N* scenarios, including recovery, captured-generation, ambiguity, staging-litter, raw-record, and Node lifecycle-lock cases, completed.
+
+Phase 2 was skipped because phase 1 had a failed suite, per runbook. No transient worktree artifacts were created.

@@ -1,0 +1,15 @@
+Phase 1 targeted validation (2026-10-20)
+
+Baseline selection:
+- `bin/fm-test-run.sh --list --changed` was run first and exited 2 because changed `tests/fixtures/rename-barrier.cjs` has no changed-test mapping.
+- Narrowed scripts were selected from changed test scripts and direct behavior coverage: `tests/fm-wake-queue.test.sh`, `tests/fm-watcher-lock.test.sh`, `tests/fm-extension-binding.test.sh`.
+
+Executed serially with `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300`:
+- `tests/fm-wake-queue.test.sh`: passed, exit 0, 213270 ms.
+- `tests/fm-watcher-lock.test.sh`: passed, exit 0, 113049 ms.
+- `tests/fm-extension-binding.test.sh`: passed, exit 0, 19611 ms.
+- `tests/fm-afk-launch.test.sh`: passed, exit 0, 26875 ms (added because it plainly exercises the changed `bin/fm-afk-start.sh` call site).
+- `tests/fm-wake-drain-unread-status.test.sh`: passed, exit 0, 25048 ms (added because it plainly exercises the changed `bin/fm-classify-lib.sh` call site).
+
+Failed: none.
+Time-bound: none.
