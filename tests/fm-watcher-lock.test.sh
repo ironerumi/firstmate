@@ -1561,13 +1561,16 @@ test_dirlock_d17_subshell_publisher_identity() {
 }
 
 # D17: the identity-sensitive cases also run under stock macOS Bash 3.2, whose
-# fm_current_pid has no BASHPID.
+# fm_current_pid has no BASHPID. A shell whose version already ran is skipped:
+# on Linux both names are the same Bash, and its rows would reuse the fixtures.
 test_dirlock_identity_cases_per_shell() {
-  local shell version
+  local shell version seen=" "
   for shell in bash /bin/bash; do
     command -v "$shell" >/dev/null 2>&1 || continue
     # shellcheck disable=SC2016 # Expanded by the probed shell.
     version=$("$shell" -c 'printf "%s.%s" "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}"')
+    case "$seen" in *" $version "*) continue ;; esac
+    seen="$seen$version "
     DIRLOCK_BASH=$shell DIRLOCK_TAG="-bash-$version"
     export DIRLOCK_BASH
     test_dirlock_d1_unpublished_staging_is_private
