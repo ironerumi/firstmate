@@ -1,0 +1,11 @@
+Phase 1 targeted validation (base e4bef45442bca2f7b5ce47a4d5ef3bc5de03b3a8 -> target c6cb0ead43002e3f756770d053c78fa41b8cb592)
+
+Suites selected from changed tests/scripts:
+- tests/fm-wake-queue.test.sh — started; hit the configured 300s per-script bound and was terminated (exit 124). Per runbook, untested/time bound; not rerun.
+- tests/fm-extension-binding.test.sh — failed on executable lifecycle setup assertions with EACCES during package install rename; no lifecycle-lock scenario passed in the full run.
+- FM_EXTENSION_BINDING_SEGMENT=lifecycle-lock tests/fm-extension-binding.test.sh — failed on registration race fixture setup (EACCES during package install rename); not rerun.
+- tests/fm-watcher-lock.test.sh — failed at the later ledger-cycle assertion (`first ledger cycle did not surface its actionable wake`, exit 1).
+
+The watcher-lock suite did execute and pass the changed copied-link directory-lock behavior rows D1/D2/D3/D4/D5/D5'/D6/D7/D7'/D8/D9/D10/D11/D12/D16/D17, including handoff, dead-owner recovery, interrupted retirement, staging isolation, raw pre-v2 fallback, and adversarial generation races, before its later unrelated ledger-cycle failure.
+
+Phase 2 was skipped because phase 1 contained failed suites, per the runbook. No source or test changes were made.
