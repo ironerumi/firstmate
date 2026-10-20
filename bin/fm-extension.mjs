@@ -841,10 +841,11 @@ function sanitizedPath() {
 
 // Node on Windows cannot execute a shell script via its shebang. Resolve and
 // verify the interpreter, keeping the lifecycle child's sanitized environment.
+// POSIX resolves Bash through the sanitized PATH only, as the shebang did.
 async function lifecycleBash(code, message) {
   const searchPath = process.platform === "win32" ? process.env.PATH || "" : sanitizedPath();
   const candidates = [
-    ...(process.env.BASH ? [process.env.BASH] : []),
+    ...(process.platform === "win32" && process.env.BASH ? [process.env.BASH] : []),
     ...searchPath.split(path.delimiter).filter(Boolean).map((directory) =>
       path.join(directory, process.platform === "win32" ? "bash.exe" : "bash")),
   ];
