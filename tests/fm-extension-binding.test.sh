@@ -785,7 +785,11 @@ for dirlock_spec in retire:pre retire:post discard:partial; do
         && [ ! -e "$DIRLOCK_NODE_LOCK/$dirlock_generation/pid.retired" ] \
         || fail "N3: host kill mid-delete is not a partly deleted generation: $(dirlock_node_tree "$H_DIRLOCK")" ;;
   esac
-  dirlock_node_recover "$H_DIRLOCK" "$dirlock_host_pid" "N2/N3 $dirlock_spec"
+  dirlock_expected_recovered=$dirlock_host_pid
+  case "$dirlock_spec" in
+    discard:partial) dirlock_expected_recovered="" ;;
+  esac
+  dirlock_node_recover "$H_DIRLOCK" "$dirlock_expected_recovered" "N2/N3 $dirlock_spec"
   exec 6>&-
 done
 pass "N2/N3: a host killed before, after or during its retirement leaves a lock the shell recovers"

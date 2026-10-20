@@ -536,8 +536,8 @@ fm_lock_link_owner() {
   elif [ ! -d "$lockdir" ]; then
     return 1
   else
-    # A directory record owns exactly one generation directory; none (and no
-    # pre-v2 .owner file) is a raw record; anything else is invalid.
+    # A directory record owns exactly one generation directory; zero is raw,
+    # and more than one is invalid.
     lock_abs=$(fm_lock_abs_path "$lockdir") || return 1
     owner=
     for generation in "$lock_abs"/.owner.*; do
@@ -546,7 +546,9 @@ fm_lock_link_owner() {
       owner=$generation
     done
     if [ -z "$owner" ]; then
-      [ ! -e "$lockdir/.owner" ] && [ ! -L "$lockdir/.owner" ] || return 1
+      if [ -e "$lockdir/.owner" ] || [ -L "$lockdir/.owner" ]; then
+        [ -f "$lockdir/.owner" ] && [ ! -L "$lockdir/.owner" ] || return 1
+      fi
       printf '%s\n' "$lockdir"
       return 0
     fi
@@ -583,9 +585,6 @@ _fm_lock_symlinks_supported() {
 fm_lock_discard_owner() {
   local ownerdir=$1
   [ -n "$ownerdir" ] || return 0
-  # Only the creator's staging directory is discarded here; a published
-  # generation directory is deleted only by its retirement.
-  case "${ownerdir##*/}" in .owner.*) return 0 ;; esac
   rm -rf "$ownerdir" 2>/dev/null || true
 }
 
@@ -689,9 +688,12 @@ fm_lock_try_create() {
 }
 
 fm_lock_remove_path() {
-  local lockdir=$1 ownerdir
-  ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
+  local lockdir=$1 ownerdir=${2:-} explicit=${2+x}
+  if [ -z "$ownerdir" ] && ! ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null); then
+    [ -L "$lockdir" ] || return 1
+  fi
   if [ -L "$lockdir" ]; then
+    [ -z "$explicit" ] || return 1
     rm -f "$lockdir" 2>/dev/null || return 1
   elif [ -n "$ownerdir" ] && [ "$ownerdir" != "$lockdir" ]; then
     _fm_lock_retire_generation "$lockdir" "$ownerdir"
@@ -1241,7 +1243,7 @@ fm_lock_reap_dead_link() {
       # an empty directory is reaped only after the bounded grace.
       return 1
     fi
-    fm_lock_remove_path "$lockdir"
+    fm_lock_remove_path "$lockdir" "$owner"
     return
   fi
   fm_current_pid current || return 1
@@ -1357,7 +1359,12 @@ fm_lock_try_acquire() {
     return 1
   fi
 
-  primary_owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
+  if ! primary_owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null); then
+    fm_lock_release "$steal"
+    FM_LOCK_HELD_PID=$(cat "$lockdir/pid" 2>/dev/null || true)
+    FM_LOCK_OWNER_DIR=
+    return 1
+  fi
   cur=$(cat "$lockdir/pid" 2>/dev/null || true)
   if ! fm_lock_recheck_stale_owner "$lockdir" "$primary_owner" "$cur"; then
     fm_lock_release "$steal"
@@ -1368,8 +1375,8 @@ fm_lock_try_acquire() {
   recovered=$cur
   if [ -z "$recovered" ] && [ ! -L "$lockdir" ] && [ -n "$primary_owner" ] \
     && [ "$primary_owner" != "$lockdir" ]; then
-    # A crashed directory-record release leaves the pid in its generation.
     recovered=$(cat "$primary_owner/pid" 2>/dev/null || true)
+    [ -n "$recovered" ] || recovered=$(cat "$primary_owner/pid.retired" 2>/dev/null || true)
   fi
 
   if [ "$lockdir" = "$STATE/.watch.lock" ] \
