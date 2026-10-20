@@ -1,0 +1,9 @@
+Phase 1 targeted validation (T0=1792527946)
+
+Commands:
+- bin/fm-test-run.sh --list --changed (returned no changed-test mapping for tests/fixtures/rename-barrier.cjs; narrowed manually per runbook)
+- bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-extension-binding.test.sh — FAILED in disposable package-install fixtures with EACCES during staged-package rename; resulting binding assertions were not reached. No timeout.
+- bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-wake-queue.test.sh — PASSED. No timeout.
+- bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-watcher-lock.test.sh — PASSED. No timeout.
+
+Phase 1 completed at approximately 6 minutes elapsed. Phase 2 is skipped because a phase-1 suite failed, per runbook.
