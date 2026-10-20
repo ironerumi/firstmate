@@ -1167,6 +1167,69 @@ test_dirlock_d4_crashed_release_is_finished() {
   pass "D4: a release killed after commit, mid-delete or before the final rmdir is finished by the next acquirer"
 }
 
+# D1b: a claim that fails after publication leaves its generation to
+# retirement. Its first retirement commits and then fails to delete the
+# generation; the claim's cleanup must not delete it outside retirement.
+test_dirlock_d1b_failed_claim_leaves_generation_to_retirement() {
+  local dir lock claimant
+  dir=$(dirlock_case dirlock-d1b)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" a
+  mkdir "$lock.steal"
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" a "discard:pre:fail:$lock" '
+    if fm_lock_try_create "$1"; then out=acquired; else out=refused; fi
+    printf "%s finished out=%s\n" "$FM_TEST_SUBJECT" "$out" >> "$FM_TEST_EVENTS"' "$lock" &
+  claimant=$!
+  dirlock_expect "a discard:pre:$lock" "D1b: the steal-blocked claim did not retire its generation"
+  dirlock_expect "a finished out=refused" "D1b: a claim blocked by a steal mutex did not refuse"
+  wait "$claimant" || fail "D1b: claimant subject failed"
+  rmdir "$lock.steal"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D1b: the generation was deleted outside retirement"
+  pass "D1b: a claim that fails after publication leaves its generation to retirement"
+}
+
+# D4b: after a bounded handoff only L/pid names the caller, so a release by
+# the caller killed after its commit is recovered as the caller, not as the
+# helper whose pid the generation still records.
+test_dirlock_d4b_handoff_release_recovers_caller() {
+  local dir lock caller generation out
+  dir=$(dirlock_case dirlock-d4b)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" c
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" c "retire:post:kill:$lock" '
+    printf "%s ready\n" "$FM_TEST_SUBJECT" >> "$FM_TEST_EVENTS"
+    IFS= read -r _ < "$FM_TEST_RESUME"
+    fm_lock_release "$1"
+    exit 11' "$lock" &
+  caller=$!
+  dirlock_expect "c ready" "D4b: caller did not start"
+  PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; _fm_lock_acquire_wait_handoff "$1" "$2"' \
+    "$LIB" "$lock" "$caller" || fail "D4b: helper could not hand the lock to the caller"
+  generation=$(dirlock_generation "$lock")
+  [ "$(cat "$lock/pid" 2>/dev/null)" = "$caller" ] && [ -f "$generation/pid" ] \
+    && [ "$(cat "$generation/pid")" != "$caller" ] \
+    || fail "D4b: handoff did not change only L/pid: $(dirlock_tree "$dir")"
+  printf 'go\n' >&7
+  dirlock_expect "c retire:post:$lock" "D4b: caller release did not reach its committed retirement"
+  wait "$caller" 2>/dev/null
+  ! kill -0 "$caller" 2>/dev/null || fail "D4b: caller survived its retire kill"
+  [ ! -e "$lock/pid" ] && [ "$(cat "$generation/pid.retired" 2>/dev/null)" = "$caller" ] \
+    || fail "D4b: caller release is not a committed retirement: $(dirlock_tree "$dir")"
+  # shellcheck disable=SC2016
+  out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '
+    . "$0"
+    fm_lock_try_acquire "$1" || { echo refused; exit 0; }
+    echo "recovered=$FM_LOCK_RECOVERED_PID"
+    fm_lock_release "$1"' "$LIB" "$lock")
+  [ "$out" = "recovered=$caller" ] || fail "D4b: handed-off release was not recovered as the caller: $out"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D4b: residue"
+  pass "D4b: a handed-off release killed after commit is recovered as the caller"
+}
+
 test_dirlock_d5_orphan_retirement_cannot_touch_successor() {
   local dir lock holder orphan contender generation
   dir=$(dirlock_case dirlock-d5)
@@ -1237,53 +1300,91 @@ test_dirlock_d5b_stealer_retires_only_captured_generation() {
   pass "D5': a paused stealer's retirement is addressed only to the generation it validated"
 }
 
+# A subject script that pauses its first fm_lock_remove_path of <lock> (the
+# mutation after its stale recheck), runs <call> on <lock>, and reports
+# "<subject> finished out=<result>" so a wrong outcome fails within the event
+# deadline instead of blocking on the pause.
+# shellcheck disable=SC2016 # Expanded by the subject shell.
+DIRLOCK_PAUSE_REMOVE='target=$1 paused=
+original=$(declare -f fm_lock_remove_path)
+eval "${original/fm_lock_remove_path/_fm_original_remove_path}"
+fm_lock_remove_path() {
+  if [ -z "$paused" ] && [ "$1" = "$target" ]; then
+    paused=1
+    printf "%s remove:pre:%s\n" "$FM_TEST_SUBJECT" "$target" >> "$FM_TEST_EVENTS"
+    IFS= read -r _ < "$FM_TEST_RESUME"
+  fi
+  _fm_original_remove_path "$@"
+}'
+
+# Replace the paused subject's dead record with a live successor held by this
+# test shell, retiring the dead generation the way a competing reaper does.
+dirlock_replace_with_live_successor() {  # <dir> <lock> <row>
+  local dir=$1 lock=$2 row=$3 live_stage
+  PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_remove_path "$1"' "$LIB" "$lock" \
+    || fail "$row: could not retire the captured dead generation"
+  [ ! -e "$lock" ] || fail "$row: dead generation retirement left the lock"
+  live_stage="$lock.owner.live000"
+  mkdir -p "$live_stage/.owner.live000"
+  printf '%s\n' "$$" > "$live_stage/pid"
+  printf '%s\n' "$$" > "$live_stage/.owner.live000/pid"
+  mv "$live_stage" "$lock"
+}
+
+dirlock_assert_live_successor() {  # <dir> <lock> <row>
+  [ "$(cat "$2/pid" 2>/dev/null)" = "$$" ] && [ -f "$2/.owner.live000/pid" ] \
+    || fail "$3: successor record changed: $(dirlock_tree "$1")"
+  rm -rf "$2"
+}
+
 test_dirlock_d5c_acquirer_retires_captured_generation() {
-  local dir lock stealer sleeper live_stage out
+  local dir lock stealer
   dir=$(dirlock_case dirlock-d5c)
   lock="$dir/state/.d.lock"
   dirlock_open "$dir" s
-  FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_try_acquire "$1"' "$LIB" "$lock" \
+  PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_try_acquire "$1"' "$LIB" "$lock" \
     || fail "D5c: could not leave a dead-held record"
   # shellcheck disable=SC2016
-  FM_LOCK_STALE_AFTER=0 dirlock_spawn "$dir" s "" '
-    target=$1
-    original=$(declare -f fm_lock_remove_path)
-    eval "${original/fm_lock_remove_path/_fm_original_remove_path}"
-    fm_lock_remove_path() {
-      if [ "$1" = "$target" ]; then
-        printf "%s remove:pre:%s\n" "$FM_TEST_SUBJECT" "$target" >> "$FM_TEST_EVENTS"
-        IFS= read -r _ < "$FM_TEST_RESUME"
-      fi
-      _fm_original_remove_path "$@"
-    }
-    if fm_lock_try_acquire "$1"; then
-      echo acquired > "$2"
-      fm_lock_release "$1"
-    else
-      echo "held=$FM_LOCK_HELD_PID" > "$2"
-    fi' "$lock" "$dir/s.out" &
+  FM_LOCK_STALE_AFTER=0 dirlock_spawn "$dir" s "" "$DIRLOCK_PAUSE_REMOVE"'
+    if fm_lock_try_acquire "$1"; then out=acquired; fm_lock_release "$1"; else out="held=$FM_LOCK_HELD_PID"; fi
+    printf "%s finished out=%s\n" "$FM_TEST_SUBJECT" "$out" >> "$FM_TEST_EVENTS"' "$lock" &
   stealer=$!
   dirlock_expect "s remove:pre:$lock" "D5c: acquirer did not pause after its stale recheck"
-  FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_remove_path "$1"' "$LIB" "$lock" \
-    || fail "D5c: could not retire the captured dead generation"
-  [ ! -e "$lock" ] || fail "D5c: dead generation retirement left the lock"
-  sleep 300 &
-  sleeper=$!
-  live_stage="$dir/state/.d.lock.owner.live000"
-  mkdir -p "$live_stage/.owner.live000"
-  printf '%s\n' "$sleeper" > "$live_stage/pid"
-  printf '%s\n' "$sleeper" > "$live_stage/.owner.live000/pid"
-  mv "$live_stage" "$lock"
+  dirlock_replace_with_live_successor "$dir" "$lock" D5c
   printf 'go\n' >&7
+  dirlock_expect "s finished out=" "D5c: acquirer did not finish"
   wait "$stealer" || fail "D5c: acquirer subject failed"
-  out=$(cat "$dir/s.out")
-  [ "$out" = "held=$sleeper" ] || fail "D5c: acquirer damaged or took the successor: $out"
-  [ "$(cat "$lock/pid" 2>/dev/null)" = "$sleeper" ] && [ -f "$lock/.owner.live000/pid" ] \
-    || fail "D5c: successor record changed: $(dirlock_tree "$dir")"
-  kill "$sleeper"
-  wait "$sleeper" 2>/dev/null
+  [ "$(dirlock_event_field out)" = "held=$$" ] \
+    || fail "D5c: acquirer damaged or took the successor: $DIRLOCK_EVENT"
+  dirlock_assert_live_successor "$dir" "$lock" D5c
   dirlock_close
+  dirlock_assert_clean "$dir" "D5c: residue"
   pass "D5c: stale acquisition retires only its captured generation"
+}
+
+# D8b: the direct reaper's mutation after its stale recheck is addressed to the
+# generation it rechecked, not to whatever record the lock path holds by then.
+test_dirlock_d8b_reaper_retires_captured_generation() {
+  local dir lock reaper
+  dir=$(dirlock_case dirlock-d8b)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" r
+  PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_try_acquire "$1"' "$LIB" "$lock" \
+    || fail "D8b: could not leave a dead-held record"
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" r "" "$DIRLOCK_PAUSE_REMOVE"'
+    if fm_lock_reap_dead_link "$1"; then out=reaped; else out=refused; fi
+    printf "%s finished out=%s\n" "$FM_TEST_SUBJECT" "$out" >> "$FM_TEST_EVENTS"' "$lock" &
+  reaper=$!
+  dirlock_expect "r remove:pre:$lock" "D8b: reaper did not pause after its stale recheck"
+  dirlock_replace_with_live_successor "$dir" "$lock" D8b
+  printf 'go\n' >&7
+  dirlock_expect "r finished out=" "D8b: reaper did not finish"
+  wait "$reaper" || fail "D8b: reaper subject failed"
+  dirlock_assert_live_successor "$dir" "$lock" D8b
+  dirlock_close
+  dirlock_assert_clean "$dir" "D8b: residue"
+  pass "D8b: a paused direct reaper retires only the generation it rechecked"
 }
 
 test_dirlock_d6_late_publication_is_ordinary_recovery() {
@@ -1529,24 +1630,30 @@ test_dirlock_d11_ambiguous_generation_is_refused() {
   pass "D11: a record with more than one generation is invalid and never released or taken"
 }
 
+# D11c runs D11b on the watcher lock, whose stale recovery first publishes
+# downtime evidence: an invalid record must be refused before that too.
 test_dirlock_d11b_dead_ambiguous_generation_is_refused() {
-  local dir lock dead before out
-  dir=$(dirlock_case dirlock-d11b)
-  lock="$dir/state/.d.lock"
-  dirlock_open "$dir"
-  dead=$(dead_pid)
-  mkdir -p "$lock/.owner.first1" "$lock/.owner.secnd2"
-  printf '%s\n' "$dead" > "$lock/pid"
-  printf '%s\n' "$dead" > "$lock/.owner.first1/pid"
-  printf '%s\n' "$dead" > "$lock/.owner.secnd2/pid"
-  before=$(dirlock_tree "$dir")
-  out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '
-    . "$0"
-    if fm_lock_try_acquire "$1"; then echo acquired; else echo refused; fi' "$LIB" "$lock")
-  [ "$out" = refused ] || fail "D11b: contender acted on an invalid dead record: $out"
-  [ "$(dirlock_tree "$dir")" = "$before" ] || fail "D11b: invalid dead record was changed"
-  dirlock_close
+  local dir lock dead before out row
+  for row in D11b:.d.lock D11c:.watch.lock; do
+    dir=$(dirlock_case "dirlock-${row%%:*}")
+    lock="$dir/state/${row#*:}"
+    row=${row%%:*}
+    dirlock_open "$dir"
+    dead=$(dead_pid)
+    mkdir -p "$lock/.owner.first1" "$lock/.owner.secnd2"
+    printf '%s\n' "$dead" > "$lock/pid"
+    printf '%s\n' "$dead" > "$lock/.owner.first1/pid"
+    printf '%s\n' "$dead" > "$lock/.owner.secnd2/pid"
+    before=$(dirlock_tree "$dir")
+    out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '
+      . "$0"
+      if fm_lock_try_acquire "$1"; then echo acquired; else echo refused; fi' "$LIB" "$lock")
+    [ "$out" = refused ] || fail "$row: contender acted on an invalid dead record: $out"
+    [ "$(dirlock_tree "$dir")" = "$before" ] || fail "$row: invalid dead record or its state was changed: $(dirlock_tree "$dir")"
+    dirlock_close
+  done
   pass "D11b: an invalid dead record fails closed before destructive cleanup"
+  pass "D11c: an invalid dead watcher record is refused before downtime evidence is published"
 }
 
 test_dirlock_d12_staging_litter_is_never_consulted() {
@@ -2562,13 +2669,16 @@ test_direct_directory_lock_release_and_reap
 test_lock_without_real_symlinks
 test_directory_lock_single_winner_under_load
 test_dirlock_identity_cases_per_shell
+test_dirlock_d1b_failed_claim_leaves_generation_to_retirement
 test_dirlock_d4_crashed_release_is_finished
+test_dirlock_d4b_handoff_release_recovers_caller
 test_dirlock_d5_orphan_retirement_cannot_touch_successor
 test_dirlock_d5b_stealer_retires_only_captured_generation
 test_dirlock_d5c_acquirer_retires_captured_generation
 test_dirlock_d6_late_publication_is_ordinary_recovery
 test_dirlock_d7b_bounded_helper_killed_by_deadline
 test_dirlock_d8_dead_steal_mutex_observers_compose
+test_dirlock_d8b_reaper_retires_captured_generation
 test_dirlock_d9_uncommitted_retirement_keeps_record
 test_dirlock_d10_committed_retirement_is_finished
 test_dirlock_d11_ambiguous_generation_is_refused
