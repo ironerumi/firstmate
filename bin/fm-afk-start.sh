@@ -148,7 +148,7 @@ fm_afk_start_main() {
     fm_afk_flag_write "$FM_AFK_STATE" || { echo "afk: failed to write away-mode flag" >&2; return 1; }
   fi
 
-  local pid
+  local pid owner_path
   pid=$(daemon_lock_pid 2>/dev/null || true)
   if daemon_lock_held_by_live_daemon; then
     echo "afk: daemon already running pid=$pid"
@@ -156,7 +156,8 @@ fm_afk_start_main() {
   fi
 
   if fm_pid_alive "$pid" && [ -n "$pid" ]; then
-    fm_lock_remove_path "$FM_AFK_LOCK" 2>/dev/null || true
+    owner_path=$(fm_lock_link_owner "$FM_AFK_LOCK" 2>/dev/null || true)
+    [ -n "$owner_path" ] && fm_lock_remove_path "$FM_AFK_LOCK" "$owner_path" 2>/dev/null || true
   fi
 
   # Fresh start: clear the previous away session's stale delivery artifacts

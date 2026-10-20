@@ -1707,7 +1707,7 @@ status_presentation_marker_commit() {
 
 status_retire_presentation_task() {  # <state> <task-id>
   local state=$1 task=$2 lock manifest tmp data row_task ident offset backstop extra rc=0 found=0
-  local signal_marker heartbeat_marker daemon_marker home_appends home_appends_lock
+  local signal_marker heartbeat_marker daemon_marker home_appends home_appends_lock home_appends_owner
   lock="$state/.status-presentation-lock"
   manifest="$state/.status-presentation-cursor"
   tmp="$manifest.tmp.$$"
@@ -1777,7 +1777,9 @@ EOF
   if [ "$rc" -eq 0 ]; then
     rm -f -- "$state/$task.status" "$state/.$task.open-decisions-cursor" \
       "$home_appends" "$signal_marker" "$heartbeat_marker" "$daemon_marker" || rc=1
-    fm_lock_remove_path "$home_appends_lock" 2>/dev/null || true
+    home_appends_owner=$(fm_lock_link_owner "$home_appends_lock" 2>/dev/null || true)
+    [ -n "$home_appends_owner" ] \
+      && fm_lock_remove_path "$home_appends_lock" "$home_appends_owner" 2>/dev/null || true
   fi
   fm_lock_release "$lock" || rc=1
   return "$rc"

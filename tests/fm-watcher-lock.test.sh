@@ -874,140 +874,888 @@ SH
     printf 'release\n' >&9
     for pid in $pids; do wait "$pid" || fail "directory contender failed in round $round"; done
     [ ! -e "$state/.contend.lock" ] || fail "directory winner did not release in round $round"
+    [ -z "$(find "$state" -name '*.owner.*' -print)" ] \
+      || fail "directory contention round $round left owner entries: $(find "$state" -name '*.owner.*' -print)"
   done
   exec 6>&- 7>&- 8>&- 9>&-
   pass "directory lock has exactly one winner in 10 event-synchronized rounds of 8 contenders"
 }
 
-test_directory_lock_paused_publication_cannot_be_stolen() {
-  local dir state lock publisher real_mkdir real_mv line stage
-  dir=$(make_case directory-lock-publication)
-  state="$dir/state"
-  lock="$state/.publish.lock"
-  real_mkdir=$(fm_real_tool mkdir)
-  real_mv=$(fm_real_tool mv)
-  mkfifo "$dir/created" "$dir/resume"
-  cat > "$dir/fakebin/ln" <<'SH'
-#!/usr/bin/env bash
-exec cp -R "$2" "$3"
-SH
-  cat > "$dir/fakebin/mkdir" <<'SH'
-#!/usr/bin/env bash
-"$FM_TEST_REAL_MKDIR" "$@" || exit $?
-if [ "$*" = "$FM_TEST_PUBLICATION_LOCK" ] && [ "$FM_TEST_PAUSE_STAGE" = mkdir ]; then
-  printf 'created\n' > "$FM_TEST_PUBLICATION_CREATED"
-  IFS= read -r resume < "$FM_TEST_PUBLICATION_RESUME"
-fi
-SH
-  cat > "$dir/fakebin/mv" <<'SH'
-#!/usr/bin/env bash
-if [ "${!#}" = "$FM_TEST_PUBLICATION_LOCK/pid" ] && [ "$FM_TEST_PAUSE_STAGE" = pid ]; then
-  printf 'created\n' > "$FM_TEST_PUBLICATION_CREATED"
-  IFS= read -r resume < "$FM_TEST_PUBLICATION_RESUME"
-fi
-exec "$FM_TEST_REAL_MV" "$@"
-SH
-  chmod +x "$dir/fakebin/ln" "$dir/fakebin/mkdir" "$dir/fakebin/mv"
-  for stage in mkdir pid; do
-    PATH="$dir/fakebin:$PATH" FM_TEST_REAL_MKDIR="$real_mkdir" FM_TEST_REAL_MV="$real_mv" \
-      FM_TEST_PAUSE_STAGE="$stage" FM_TEST_PUBLICATION_LOCK="$lock" \
-      FM_TEST_PUBLICATION_CREATED="$dir/created" FM_TEST_PUBLICATION_RESUME="$dir/resume" \
-      FM_STATE_OVERRIDE="$state" bash -c '
-        . "$1"
-        fm_lock_try_acquire "$2" || exit 10
-        fm_lock_release "$2"
-      ' _ "$LIB" "$lock" &
-    publisher=$!
-    IFS= read -r line < "$dir/created"
-    [ "$line" = created ] || fail "publisher did not reach $stage barrier"
-    # Disprove age-based stealing without waiting for an elapsed grace period.
-    touch -t 200001010000 "$lock"
-    FM_STATE_OVERRIDE="$state" FM_LOCK_STALE_AFTER=0 bash -c '
-      . "$1"
-      fm_lock_try_acquire "$2" && exit 10
-      [ -d "$2" ] && [ ! -e "$2/pid" ] || exit 11
-      if [ "$3" = mkdir ]; then [ ! -e "$2/.owner" ]; else [ -f "$2/.owner" ]; fi
-    ' _ "$LIB" "$lock" "$stage" || fail "$stage directory stolen from paused publisher"
-    printf 'resume\n' > "$dir/resume"
-    wait "$publisher" || fail "publisher could not claim and release after $stage barrier"
-    [ ! -e "$lock" ] || fail "resumed directory publication left its lock"
+# --- copied-link directory-record protocol -----------------------------------
+# These cases force directory mode with a copying ln and pause or kill the
+# protocol's external children through barrier shims. A subject sets
+# FM_TEST_BARRIERS to space-separated role:stage:action:lock specs; each spec
+# fires once per subject. A firing shim appends
+# "<subject> <role>:<stage>:<lock> pid=<shim> caller=<frame>" to FM_TEST_EVENTS,
+# then acts: wait (block on FM_TEST_RESUME), kill (SIGKILL the calling frame),
+# fail (skip the operation, exit 1) or none. A pre-stage shim reports
+# "<subject> done rc=<rc>" after the real operation, so an orphaned child's
+# outcome is observable after its frame died.
+# Roles: publish = perl rename onto <lock>; retire = perl rename of <lock>/pid;
+# discard = rm -rf <lock>/.owner.* (stage partial deletes pid.retired only);
+# husk = rmdir <lock>. Stage skip-role drops <lock>/role from a retire rename.
+dirlock_case() {  # <name>
+  local dir tool
+  dir=$(make_case "$1")
+  # shellcheck disable=SC2016 # The shim expands its own arguments.
+  printf '#!/usr/bin/env bash\nif [ "$1" = -s ]; then exec cp -R "$2" "$3"; fi\nexec %q "$@"\n' \
+    "$(fm_real_tool ln)" > "$dir/fakebin/ln"
+  chmod +x "$dir/fakebin/ln"
+  for tool in perl rm rmdir; do
+    { printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' "$tool" "$(fm_real_tool "$tool")"
+      cat <<'SH'
+set -u
+[ -n "${FM_TEST_BARRIERS:-}" ] || exec "$FM_TEST_REAL" "$@"
+barrier_match() {
+  local spec i=0 r s a l
+  for spec in $FM_TEST_BARRIERS; do
+    i=$((i + 1))
+    IFS=: read -r r s a l <<< "$spec"
+    case "$FM_TEST_TOOL:$r" in
+      perl:publish) [ "${!#}" = "$l" ] || continue ;;
+      perl:retire) case " $* " in *" $l/pid "*) ;; *) continue ;; esac ;;
+      rm:discard) [ "$#" -eq 2 ] && [ "$1" = -rf ] || continue
+        case "$2" in "$l"/.owner.*) ;; *) continue ;; esac ;;
+      rmdir:husk) [ "$#" -eq 1 ] && [ "$1" = "$l" ] || continue ;;
+      *) continue ;;
+    esac
+    mkdir "$FM_TEST_BARRIER_DIR/fired.$i" 2>/dev/null || continue
+    role=$r stage=$s action=$a lock=$l
+    return 0
   done
-  # A publisher that really exited cannot resume, so an abandoned empty
-  # directory must still recover through the existing stale-directory path.
-  FM_STATE_OVERRIDE="$state" bash -c '
-    . "$1"
-    owner=$(fm_lock_owner_dir "$2") || exit 12
-    fm_lock_prepare_owner "$owner" && mkdir "$2"
-  ' _ "$LIB" "$lock" || fail "could not prepare abandoned publication"
-  touch -t 200001010000 "$lock"
-  FM_STATE_OVERRIDE="$state" FM_LOCK_STALE_AFTER=0 bash -c '
-    . "$1"
-    fm_lock_try_acquire "$2" || exit 13
-    fm_lock_release "$2"
-  ' _ "$LIB" "$lock" || fail "dead unpublished owner prevented recovery"
-  pass "directory publication is protected at both boundaries; truly dead publishers recover"
+  return 1
+}
+barrier() {
+  printf '%s %s:%s:%s pid=%s caller=%s\n' "$FM_TEST_SUBJECT" "$role" "$stage" "$lock" "$$" "$PPID" >> "$FM_TEST_EVENTS"
+  case "$action" in
+    wait) IFS= read -r _ < "$FM_TEST_RESUME" ;;
+    kill) kill -KILL "$PPID"; exit 1 ;;
+    fail) exit 1 ;;
+  esac
+}
+barrier_match "$@" || exec "$FM_TEST_REAL" "$@"
+case "$stage" in
+  pre)
+    barrier
+    rc=0; "$FM_TEST_REAL" "$@" || rc=$?
+    printf '%s done rc=%s\n' "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"
+    exit "$rc" ;;
+  post) rc=0; "$FM_TEST_REAL" "$@" || rc=$?; barrier; exit "$rc" ;;
+  partial) "$FM_TEST_REAL" -f "$2/pid.retired"; barrier; exit 1 ;;
+  skip-role)
+    args=()
+    for arg in "$@"; do [ "$arg" = "$lock/role" ] || args+=("$arg"); done
+    barrier; exec "$FM_TEST_REAL" "${args[@]}" ;;
+esac
+SH
+    } > "$dir/fakebin/$tool"
+    chmod +x "$dir/fakebin/$tool"
+  done
+  mkfifo "$dir/events"
+  printf '%s\n' "$dir"
 }
 
-test_directory_lock_ignores_old_unrelated_publisher() {
-  local dir state lock real_mkdir owner_file resume publisher unrelated line
-  dir=$(make_case directory-lock-unrelated-publisher)
-  state="$dir/state"
-  lock="$state/.publish.lock"
-  real_mkdir=$(fm_real_tool mkdir)
-  owner_file="$dir/unrelated-owner"
-  resume="$dir/resume"
-  mkfifo "$owner_file" "$resume" "$dir/created"
-  cat > "$dir/fakebin/ln" <<'SH'
-#!/usr/bin/env bash
-if [ "$1" = -s ]; then
-  exec cp -R "$2" "$3"
-fi
-exec /bin/ln "$@"
-SH
-  chmod +x "$dir/fakebin/ln"
-  cat > "$dir/fakebin/mkdir" <<'SH'
-#!/usr/bin/env bash
-"$FM_TEST_REAL_MKDIR" "$@" || exit $?
-if [ "$*" = "$FM_TEST_PUBLICATION_LOCK" ]; then
-  printf 'created\n' > "$FM_TEST_PUBLICATION_CREATED"
-  kill -KILL "$PPID"
-fi
-SH
-  chmod +x "$dir/fakebin/mkdir"
-  FM_STATE_OVERRIDE="$state" bash -c '
-    . "$1"
-    owner=$(fm_lock_owner_dir "$2") || exit 10
-    fm_lock_prepare_owner "$owner" || exit 11
-    touch -t 200001010000 "$owner/pid" || exit 12
-    printf "%s\n" "$owner" > "$3"
-    IFS= read -r release < "$4"
-    fm_lock_discard_owner "$owner"
-  ' _ "$LIB" "$lock" "$owner_file" "$resume" &
-  unrelated=$!
-  IFS= read -r owner < "$owner_file"
-  if [ -z "$owner" ] || ! kill -0 "$unrelated" 2>/dev/null; then
-    fail "unrelated publisher token did not remain live"
-  fi
-  PATH="$dir/fakebin:$PATH" FM_TEST_REAL_MKDIR="$real_mkdir" \
-    FM_TEST_PUBLICATION_LOCK="$lock" FM_TEST_PUBLICATION_CREATED="$dir/created" \
-    FM_STATE_OVERRIDE="$state" \
-    bash -c '. "$1"; fm_lock_try_acquire "$2"' _ "$LIB" "$lock" &
+# dirlock_spawn <dir> <subject> <barriers> <script> [args...] - run with `&`:
+# it execs the subject so $! is the subject frame. The script sees the lock
+# library loaded and its own arguments as "$@". Output goes to the case's
+# <subject>.log so a subject left paused by a failed case holds no test pipe.
+dirlock_spawn() {
+  local dir=$1 subject=$2 barriers=$3 script=$4
+  shift 4
+  mkdir -p "$dir/barrier.$subject"
+  PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" FM_TEST_SUBJECT="$subject" \
+    FM_LOCK_STALE_AFTER="${FM_LOCK_STALE_AFTER:-2}" \
+    FM_TEST_BARRIERS="$barriers" FM_TEST_BARRIER_DIR="$dir/barrier.$subject" \
+    FM_TEST_EVENTS="$dir/events" FM_TEST_RESUME="$dir/resume.$subject" \
+    exec "${DIRLOCK_BASH:-bash}" -c ". \"\$0\"; $script" "$LIB" "$@" >> "$dir/$subject.log" 2>&1
+}
+
+# Open the shared event stream on fd 6 and one resume FIFO per named subject
+# on fds 7, 8, 9 in order.
+dirlock_open() {  # <dir> <subject>...
+  local dir=$1 fd=7 subject
+  shift
+  exec 6<> "$dir/events"
+  for subject in "$@"; do
+    mkfifo "$dir/resume.$subject"
+    eval "exec $fd<> \"\$dir/resume.\$subject\""
+    fd=$((fd + 1))
+  done
+}
+
+dirlock_close() {
+  exec 6>&- 7>&- 8>&- 9>&-
+}
+
+# Read the next event and require its prefix; leaves the line in DIRLOCK_EVENT.
+dirlock_expect() {  # <prefix> <failure>
+  DIRLOCK_EVENT=
+  IFS= read -r -t 30 DIRLOCK_EVENT <&6 || fail "$2 (no event, expected '$1')"
+  case "$DIRLOCK_EVENT" in
+    "$1"*) ;;
+    *) fail "$2 (event '$DIRLOCK_EVENT', expected '$1')" ;;
+  esac
+}
+
+dirlock_event_field() {  # <field>
+  local value=${DIRLOCK_EVENT##* "$1"=}
+  printf '%s\n' "${value%% *}"
+}
+
+# The lock's generation directory path (the glob itself when there is none).
+dirlock_generation() {  # <lock>
+  local generation
+  for generation in "$1"/.owner.*; do :; done
+  printf '%s\n' "$generation"
+}
+
+# Everything under the state directory.
+dirlock_tree() {  # <dir>
+  (cd "$1/state" && find . -mindepth 1 -print | LC_ALL=C sort)
+}
+
+dirlock_assert_clean() {  # <dir> <failure>
+  local left
+  left=$(dirlock_tree "$1")
+  [ -z "$left" ] || fail "$2: left $left"
+}
+
+# A holder script: acquire, publish identity and pid, wait for resume, release.
+# shellcheck disable=SC2016 # Expanded by the subject shell.
+DIRLOCK_HOLD='sh -c '\''printf "%s\n" "$PPID"'\'' > "$2" || exit 9
+fm_lock_try_acquire "$1" || exit 10
+printf "%s held pid=%s\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"
+IFS= read -r _ < "$FM_TEST_RESUME"
+fm_lock_release "$1"'
+
+test_dirlock_d1_unpublished_staging_is_private() {
+  local dir lock publisher contender staging rc
+  dir=$(dirlock_case "dirlock-d1${DIRLOCK_TAG:-}")
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" a b
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" a "publish:pre:wait:$lock" '
+    fm_lock_try_acquire "$1"; printf "%s\n" "$?" > "$2"' "$lock" "$dir/a.rc" &
   publisher=$!
-  IFS= read -r line < "$dir/created"
-  [ "$line" = created ] || fail "publisher did not expose its empty public directory"
-  wait "$publisher" 2>/dev/null || true
-  [ -d "$lock" ] && [ ! -e "$lock/pid" ] || fail "publisher did not die before public pid publication"
-  touch -t 200001010000 "$lock"
-  FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$state" bash -c '
-    . "$1"
-    fm_lock_try_acquire "$2" || exit 13
-    [ "$(cat "$2/pid")" = "${BASHPID:-$$}" ] || exit 14
-    fm_lock_release "$2"
-  ' _ "$LIB" "$lock" || fail "old unrelated publisher token blocked recovery"
-  kill -0 "$unrelated" 2>/dev/null || fail "unrelated publisher exited before recovery completed"
-  printf 'release\n' > "$resume"
-  wait "$unrelated" || fail "unrelated publisher token did not clean up"
-  pass "old unrelated publisher tokens no longer block empty-directory recovery"
+  dirlock_expect "a publish:pre:$lock" "D1: publisher did not reach its publication rename"
+  [ ! -e "$lock" ] && [ ! -L "$lock" ] || fail "D1: L absent at barrier"
+  for staging in "$lock".owner.*; do :; done
+  [ -f "$staging/pid" ] && [ -d "$staging/.owner.${staging##*.owner.}" ] \
+    || fail "D1: staged record is incomplete before publication: $(dirlock_tree "$dir")"
+  dirlock_spawn "$dir" b "" "$DIRLOCK_HOLD" "$lock" "$dir/b.id" &
+  contender=$!
+  dirlock_expect "b held pid=$contender" "D1: contender did not acquire while the publisher was staged"
+  printf 'go\n' >&7
+  dirlock_expect "a done rc=1" "D1: publication rename did not fail onto the held lock"
+  wait "$publisher" || fail "D1: publisher subject failed"
+  rc=$(cat "$dir/a.rc")
+  [ "$rc" = 1 ] || fail "D1: publisher acquired a held lock (rc=$rc)"
+  [ ! -e "$staging" ] || fail "D1: publisher left its staging directory after a refused publication"
+  [ "$(cat "$lock/pid")" = "$contender" ] || fail "D1: contender record changed"
+  printf 'go\n' >&8
+  wait "$contender" || fail "D1: contender could not release"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D1: lock residue"
+  pass "D1${DIRLOCK_TAG:-}: a staged directory record stays private and its creator discards it on refusal"
+}
+
+test_dirlock_d2_published_record_is_complete() {
+  local dir lock publisher out generations
+  dir=$(dirlock_case "dirlock-d2${DIRLOCK_TAG:-}")
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" a
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" a "publish:post:wait:$lock" '
+    sh -c '\''printf "%s\n" "$PPID"'\'' > "$2" || exit 9
+    fm_lock_try_acquire "$1" || exit 10
+    fm_lock_release "$1"' "$lock" "$dir/a.id" &
+  publisher=$!
+  dirlock_expect "a publish:post:$lock" "D2: publisher did not reach the end of its publication rename"
+  [ "$(cat "$dir/a.id")" = "$publisher" ] || fail "D2: publisher identity is not its frame pid"
+  # shellcheck disable=SC2016
+  out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" "${DIRLOCK_BASH:-bash}" -c '
+    . "$0"
+    if fm_lock_try_acquire "$1"; then echo stolen; else echo "held=$FM_LOCK_HELD_PID"; fi' "$LIB" "$lock")
+  [ "$out" = "held=$publisher" ] || fail "D2: contender did not see the publisher hold a complete record: $out"
+  [ "$(cat "$lock/pid")" = "$publisher" ] || fail "D2: L/pid is not the publisher"
+  generations=$(cd "$lock" && find . -mindepth 1 -maxdepth 1 -name '.owner.*' -type d | wc -l | tr -d ' ')
+  [ "$generations" = 1 ] || fail "D2: published record has $generations generation directories"
+  printf 'go\n' >&7
+  wait "$publisher" || fail "D2: publisher could not claim and release"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D2: release residue"
+  [ -z "$(find "$dir/state" -name '*.owner.*' -print)" ] || fail "D2: owner residue"
+  pass "D2${DIRLOCK_TAG:-}: a just-published directory record is complete and owned by its live publisher"
+}
+
+test_dirlock_d3_dead_holder_recovers_without_age() {
+  local dir lock holder stale out
+  for stale in 0 3600; do
+    dir=$(dirlock_case "dirlock-d3-$stale${DIRLOCK_TAG:-}")
+    lock="$dir/state/.d.lock"
+    dirlock_open "$dir" a
+    dirlock_spawn "$dir" a "" "$DIRLOCK_HOLD" "$lock" "$dir/a.id" &
+    holder=$!
+    dirlock_expect "a held pid=$holder" "D3: holder did not acquire"
+    [ "$(cat "$dir/a.id")" = "$holder" ] || fail "D3: holder identity is not its frame pid"
+    kill -KILL "$holder"
+    wait "$holder" 2>/dev/null
+    ! kill -0 "$holder" 2>/dev/null || fail "D3: holder survived SIGKILL"
+    # shellcheck disable=SC2016
+    out=$(PATH="$dir/fakebin:$PATH" FM_LOCK_STALE_AFTER=$stale FM_STATE_OVERRIDE="$dir/state" \
+      "${DIRLOCK_BASH:-bash}" -c '
+      . "$0"
+      fm_lock_try_acquire "$1" || { echo "refused held=$FM_LOCK_HELD_PID"; exit 0; }
+      echo "recovered=$FM_LOCK_RECOVERED_PID"
+      fm_lock_release "$1"' "$LIB" "$lock")
+    [ "$out" = "recovered=$holder" ] || fail "D3: dead holder not recovered with stale-after=$stale: $out"
+    dirlock_close
+    dirlock_assert_clean "$dir" "D3: recovery residue"
+  done
+  pass "D3${DIRLOCK_TAG:-}: a dead directory holder is recovered at once regardless of age"
+}
+
+test_dirlock_d4_crashed_release_is_finished() {
+  local dir lock holder spec out generation
+  for spec in retire:post discard:partial husk:pre; do
+    dir=$(dirlock_case "dirlock-d4-${spec%%:*}")
+    lock="$dir/state/.d.lock"
+    dirlock_open "$dir" a
+    # shellcheck disable=SC2016
+    dirlock_spawn "$dir" a "$spec:kill:$lock" '
+      fm_lock_try_acquire "$1" || exit 10
+      fm_lock_release "$1"
+      exit 11' "$lock" &
+    holder=$!
+    dirlock_expect "a $spec:$lock" "D4: releaser did not reach $spec"
+    wait "$holder" 2>/dev/null
+    ! kill -0 "$holder" 2>/dev/null || fail "D4: releaser survived its $spec kill"
+    generation=$(dirlock_generation "$lock")
+    case "$spec" in
+      retire:post)
+        [ ! -e "$lock/pid" ] && [ -f "$generation/pid.retired" ] \
+          || fail "D4: retire post is not a committed retirement: $(dirlock_tree "$dir")" ;;
+      discard:partial)
+        [ ! -e "$lock/pid" ] && [ -f "$generation/pid" ] && [ ! -e "$generation/pid.retired" ] \
+          || fail "D4: discard partial is not a partly deleted generation: $(dirlock_tree "$dir")" ;;
+      husk:pre)
+        [ -d "$lock" ] && [ "$(dirlock_tree "$dir")" = ./.d.lock ] \
+          || fail "D4: husk pre is not an empty lock directory: $(dirlock_tree "$dir")" ;;
+    esac
+    # shellcheck disable=SC2016
+    out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '
+      . "$0"
+      fm_lock_try_acquire "$1" || { echo refused; exit 0; }
+      echo "recovered=$FM_LOCK_RECOVERED_PID"
+      fm_lock_release "$1"' "$LIB" "$lock")
+    if [ "$spec" = husk:pre ]; then
+      [ "$out" = refused ] || fail "D4: an empty lock directory was taken inside its grace: $out"
+      touch -t 200001010000 "$lock"
+      # shellcheck disable=SC2016
+      out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '
+        . "$0"
+        fm_lock_try_acquire "$1" || { echo refused; exit 0; }
+        echo acquired
+        fm_lock_release "$1"' "$LIB" "$lock")
+      [ "$out" = acquired ] || fail "D4: an aged empty lock directory was not recovered: $out"
+    else
+      [ "$out" = "recovered=$holder" ] || fail "D4: crashed release at $spec was not finished: $out"
+    fi
+    dirlock_close
+    dirlock_assert_clean "$dir" "D4: $spec residue"
+  done
+  pass "D4: a release killed after commit, mid-delete or before the final rmdir is finished by the next acquirer"
+}
+
+# D1b: a claim that fails after publication leaves its generation to
+# retirement. Its first retirement commits and then fails to delete the
+# generation; the claim's cleanup must not delete it outside retirement.
+test_dirlock_d1b_failed_claim_leaves_generation_to_retirement() {
+  local dir lock claimant
+  dir=$(dirlock_case dirlock-d1b)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" a
+  mkdir "$lock.steal"
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" a "discard:pre:fail:$lock" '
+    if fm_lock_try_create "$1"; then out=acquired; else out=refused; fi
+    printf "%s finished out=%s\n" "$FM_TEST_SUBJECT" "$out" >> "$FM_TEST_EVENTS"' "$lock" &
+  claimant=$!
+  dirlock_expect "a discard:pre:$lock" "D1b: the steal-blocked claim did not retire its generation"
+  dirlock_expect "a finished out=refused" "D1b: a claim blocked by a steal mutex did not refuse"
+  wait "$claimant" || fail "D1b: claimant subject failed"
+  rmdir "$lock.steal"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D1b: the generation was deleted outside retirement"
+  pass "D1b: a claim that fails after publication leaves its generation to retirement"
+}
+
+# D4b: after a bounded handoff only L/pid names the caller, so a release by
+# the caller killed after its commit is recovered as the caller, not as the
+# helper whose pid the generation still records.
+test_dirlock_d4b_handoff_release_recovers_caller() {
+  local dir lock caller generation out
+  dir=$(dirlock_case dirlock-d4b)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" c
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" c "retire:post:kill:$lock" '
+    printf "%s ready\n" "$FM_TEST_SUBJECT" >> "$FM_TEST_EVENTS"
+    IFS= read -r _ < "$FM_TEST_RESUME"
+    fm_lock_release "$1"
+    exit 11' "$lock" &
+  caller=$!
+  dirlock_expect "c ready" "D4b: caller did not start"
+  PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; _fm_lock_acquire_wait_handoff "$1" "$2"' \
+    "$LIB" "$lock" "$caller" || fail "D4b: helper could not hand the lock to the caller"
+  generation=$(dirlock_generation "$lock")
+  [ "$(cat "$lock/pid" 2>/dev/null)" = "$caller" ] && [ -f "$generation/pid" ] \
+    && [ "$(cat "$generation/pid")" != "$caller" ] \
+    || fail "D4b: handoff did not change only L/pid: $(dirlock_tree "$dir")"
+  printf 'go\n' >&7
+  dirlock_expect "c retire:post:$lock" "D4b: caller release did not reach its committed retirement"
+  wait "$caller" 2>/dev/null
+  ! kill -0 "$caller" 2>/dev/null || fail "D4b: caller survived its retire kill"
+  [ ! -e "$lock/pid" ] && [ "$(cat "$generation/pid.retired" 2>/dev/null)" = "$caller" ] \
+    || fail "D4b: caller release is not a committed retirement: $(dirlock_tree "$dir")"
+  # shellcheck disable=SC2016
+  out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '
+    . "$0"
+    fm_lock_try_acquire "$1" || { echo refused; exit 0; }
+    echo "recovered=$FM_LOCK_RECOVERED_PID"
+    fm_lock_release "$1"' "$LIB" "$lock")
+  [ "$out" = "recovered=$caller" ] || fail "D4b: handed-off release was not recovered as the caller: $out"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D4b: residue"
+  pass "D4b: a handed-off release killed after commit is recovered as the caller"
+}
+
+test_dirlock_d5_orphan_retirement_cannot_touch_successor() {
+  local dir lock holder orphan contender generation
+  dir=$(dirlock_case dirlock-d5)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" a b
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" a "retire:pre:wait:$lock" '
+    fm_lock_try_acquire "$1" || exit 10
+    fm_lock_release "$1"' "$lock" &
+  holder=$!
+  dirlock_expect "a retire:pre:$lock" "D5: holder did not reach its retirement rename"
+  orphan=$(dirlock_event_field pid)
+  [ "$(dirlock_event_field caller)" = "$holder" ] || fail "D5: barrier was not raised by the holder: $DIRLOCK_EVENT"
+  kill -KILL "$holder"
+  wait "$holder" 2>/dev/null
+  ! kill -0 "$holder" 2>/dev/null || fail "D5: holder survived SIGKILL"
+  kill -0 "$orphan" 2>/dev/null || fail "D5: retirement child died with its frame"
+  FM_LOCK_STALE_AFTER=0 dirlock_spawn "$dir" b "" "$DIRLOCK_HOLD" "$lock" "$dir/b.id" &
+  contender=$!
+  dirlock_expect "b held pid=$contender" "D5: contender did not recover the dead holder"
+  generation=$(cd "$lock" && echo .owner.*)
+  printf 'go\n' >&7
+  dirlock_expect "a done rc=" "D5: orphaned retirement did not resume"
+  [ "$(cat "$lock/pid" 2>/dev/null)" = "$contender" ] || fail "D5: orphaned retirement took the successor's pid"
+  [ "$(cd "$lock" && echo .owner.*)" = "$generation" ] && [ -f "$lock/$generation/pid" ] \
+    || fail "D5: orphaned retirement changed the successor's generation: $(dirlock_tree "$dir")"
+  printf 'go\n' >&8
+  wait "$contender" || fail "D5: contender could not release cleanly"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D5: residue"
+  pass "D5: an orphaned retirement child resumed after recovery cannot touch the successor"
+}
+
+test_dirlock_d5b_stealer_retires_only_captured_generation() {
+  local dir lock stealer sleeper live_stage out
+  dir=$(dirlock_case dirlock-d5b)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" s
+  FM_STATE_OVERRIDE="$dir/state" PATH="$dir/fakebin:$PATH" bash -c '. "$0"; fm_lock_try_acquire "$1"' "$LIB" "$lock" \
+    || fail "D5': could not leave a dead-held record"
+  # shellcheck disable=SC2016
+  FM_LOCK_STALE_AFTER=0 dirlock_spawn "$dir" s "retire:pre:wait:$lock" '
+    if fm_lock_try_acquire "$1"; then echo acquired > "$2"; else echo "held=$FM_LOCK_HELD_PID" > "$2"; fi' \
+    "$lock" "$dir/s.out" &
+  stealer=$!
+  dirlock_expect "s retire:pre:$lock" "D5': stealer did not reach its retirement rename"
+  # The self-held reclaim's effect: the dead generation is retired and a live
+  # one is published in its place while the stealer is paused.
+  FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_remove_path "$1"' "$LIB" "$lock" \
+    || fail "D5': could not retire the dead generation"
+  [ ! -e "$lock" ] || fail "D5': dead generation retirement left the lock"
+  sleep 300 &
+  sleeper=$!
+  live_stage="$dir/state/.d.lock.owner.live000"
+  mkdir -p "$live_stage/.owner.live000"
+  printf '%s\n' "$sleeper" > "$live_stage/pid"
+  printf '%s\n' "$sleeper" > "$live_stage/.owner.live000/pid"
+  mv "$live_stage" "$lock"
+  printf 'go\n' >&7
+  wait "$stealer" || fail "D5': stealer subject failed"
+  out=$(cat "$dir/s.out")
+  [ "$out" = "held=$sleeper" ] || fail "D5': stealer did not report the live successor: $out"
+  [ "$(cat "$lock/pid" 2>/dev/null)" = "$sleeper" ] && [ -f "$lock/.owner.live000/pid" ] \
+    || fail "D5': stealer damaged the live record: $(dirlock_tree "$dir")"
+  kill "$sleeper"
+  wait "$sleeper" 2>/dev/null
+  dirlock_close
+  pass "D5': a paused stealer's retirement is addressed only to the generation it validated"
+}
+
+# A subject script that pauses its first fm_lock_remove_path of <lock> (the
+# mutation after its stale recheck), runs <call> on <lock>, and reports
+# "<subject> finished out=<result>" so a wrong outcome fails within the event
+# deadline instead of blocking on the pause.
+# shellcheck disable=SC2016 # Expanded by the subject shell.
+DIRLOCK_PAUSE_REMOVE='target=$1 paused=
+original=$(declare -f fm_lock_remove_path)
+eval "${original/fm_lock_remove_path/_fm_original_remove_path}"
+fm_lock_remove_path() {
+  if [ -z "$paused" ] && [ "$1" = "$target" ]; then
+    paused=1
+    printf "%s remove:pre:%s\n" "$FM_TEST_SUBJECT" "$target" >> "$FM_TEST_EVENTS"
+    IFS= read -r _ < "$FM_TEST_RESUME"
+  fi
+  _fm_original_remove_path "$@"
+}'
+
+# Replace the paused subject's dead record with a live successor held by this
+# test shell, retiring the dead generation the way a competing reaper does.
+dirlock_replace_with_live_successor() {  # <dir> <lock> <row>
+  local dir=$1 lock=$2 row=$3 live_stage
+  PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_remove_path "$1"' "$LIB" "$lock" \
+    || fail "$row: could not retire the captured dead generation"
+  [ ! -e "$lock" ] || fail "$row: dead generation retirement left the lock"
+  live_stage="$lock.owner.live000"
+  mkdir -p "$live_stage/.owner.live000"
+  printf '%s\n' "$$" > "$live_stage/pid"
+  printf '%s\n' "$$" > "$live_stage/.owner.live000/pid"
+  mv "$live_stage" "$lock"
+}
+
+dirlock_assert_live_successor() {  # <dir> <lock> <row>
+  [ "$(cat "$2/pid" 2>/dev/null)" = "$$" ] && [ -f "$2/.owner.live000/pid" ] \
+    || fail "$3: successor record changed: $(dirlock_tree "$1")"
+  rm -rf "$2"
+}
+
+test_dirlock_d5c_acquirer_retires_captured_generation() {
+  local dir lock stealer
+  dir=$(dirlock_case dirlock-d5c)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" s
+  PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_try_acquire "$1"' "$LIB" "$lock" \
+    || fail "D5c: could not leave a dead-held record"
+  # shellcheck disable=SC2016
+  FM_LOCK_STALE_AFTER=0 dirlock_spawn "$dir" s "" "$DIRLOCK_PAUSE_REMOVE"'
+    if fm_lock_try_acquire "$1"; then out=acquired; fm_lock_release "$1"; else out="held=$FM_LOCK_HELD_PID"; fi
+    printf "%s finished out=%s\n" "$FM_TEST_SUBJECT" "$out" >> "$FM_TEST_EVENTS"' "$lock" &
+  stealer=$!
+  dirlock_expect "s remove:pre:$lock" "D5c: acquirer did not pause after its stale recheck"
+  dirlock_replace_with_live_successor "$dir" "$lock" D5c
+  printf 'go\n' >&7
+  dirlock_expect "s finished out=" "D5c: acquirer did not finish"
+  wait "$stealer" || fail "D5c: acquirer subject failed"
+  [ "$(dirlock_event_field out)" = "held=$$" ] \
+    || fail "D5c: acquirer damaged or took the successor: $DIRLOCK_EVENT"
+  dirlock_assert_live_successor "$dir" "$lock" D5c
+  dirlock_close
+  dirlock_assert_clean "$dir" "D5c: residue"
+  pass "D5c: stale acquisition retires only its captured generation"
+}
+
+# D8b: the direct reaper's mutation after its stale recheck is addressed to the
+# generation it rechecked, not to whatever record the lock path holds by then.
+test_dirlock_d8b_reaper_retires_captured_generation() {
+  local dir lock reaper
+  dir=$(dirlock_case dirlock-d8b)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" r
+  PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; fm_lock_try_acquire "$1"' "$LIB" "$lock" \
+    || fail "D8b: could not leave a dead-held record"
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" r "" "$DIRLOCK_PAUSE_REMOVE"'
+    if fm_lock_reap_dead_link "$1"; then out=reaped; else out=refused; fi
+    printf "%s finished out=%s\n" "$FM_TEST_SUBJECT" "$out" >> "$FM_TEST_EVENTS"' "$lock" &
+  reaper=$!
+  dirlock_expect "r remove:pre:$lock" "D8b: reaper did not pause after its stale recheck"
+  dirlock_replace_with_live_successor "$dir" "$lock" D8b
+  printf 'go\n' >&7
+  dirlock_expect "r finished out=" "D8b: reaper did not finish"
+  wait "$reaper" || fail "D8b: reaper subject failed"
+  dirlock_assert_live_successor "$dir" "$lock" D8b
+  dirlock_close
+  dirlock_assert_clean "$dir" "D8b: residue"
+  pass "D8b: a paused direct reaper retires only the generation it rechecked"
+}
+
+test_dirlock_d6_late_publication_is_ordinary_recovery() {
+  local dir lock publisher orphan contender case_name out staging
+  for case_name in held released; do
+    dir=$(dirlock_case "dirlock-d6-$case_name")
+    lock="$dir/state/.d.lock"
+    dirlock_open "$dir" a b
+    # shellcheck disable=SC2016
+    dirlock_spawn "$dir" a "publish:pre:wait:$lock" 'fm_lock_try_acquire "$1"' "$lock" &
+    publisher=$!
+    dirlock_expect "a publish:pre:$lock" "D6: publisher did not reach its publication rename"
+    orphan=$(dirlock_event_field pid)
+    for staging in "$lock".owner.*; do :; done
+    kill -KILL "$publisher"
+    wait "$publisher" 2>/dev/null
+    ! kill -0 "$publisher" 2>/dev/null || fail "D6: publisher survived SIGKILL"
+    kill -0 "$orphan" 2>/dev/null || fail "D6: publication child died with its frame"
+    dirlock_spawn "$dir" b "" "$DIRLOCK_HOLD" "$lock" "$dir/b.id" &
+    contender=$!
+    dirlock_expect "b held pid=$contender" "D6: contender did not acquire"
+    if [ "$case_name" = held ]; then
+      printf 'go\n' >&7
+      dirlock_expect "a done rc=1" "D6: late publication did not fail onto the held lock"
+      [ "$(cat "$lock/pid")" = "$contender" ] || fail "D6: late publication changed the holder"
+      [ -d "$staging" ] || fail "D6: the dead publisher's staging directory vanished"
+      printf 'go\n' >&8
+      wait "$contender" || fail "D6: contender could not release"
+      [ "$(dirlock_tree "$dir")" = "./${staging##*/}
+./${staging##*/}/.owner.${staging##*.owner.}
+./${staging##*/}/.owner.${staging##*.owner.}/pid
+./${staging##*/}/pid" ] || fail "D6: unexpected leftovers besides the one inert staging directory: $(dirlock_tree "$dir")"
+    else
+      printf 'go\n' >&8
+      wait "$contender" || fail "D6: contender could not release"
+      printf 'go\n' >&7
+      dirlock_expect "a done rc=0" "D6: late publication did not publish onto the absent lock"
+      [ "$(cat "$lock/pid")" = "$publisher" ] || fail "D6: late publication is not held by its dead publisher"
+      # shellcheck disable=SC2016
+      out=$(FM_STATE_OVERRIDE="$dir/state" bash -c '
+        . "$0"
+        fm_lock_try_acquire "$1" || { echo refused; exit 0; }
+        echo "recovered=$FM_LOCK_RECOVERED_PID"
+        fm_lock_release "$1"' "$LIB" "$lock")
+      [ "$out" = "recovered=$publisher" ] || fail "D6: late dead-held publication was not recovered: $out"
+      dirlock_assert_clean "$dir" "D6: residue after recovering a late publication"
+    fi
+    dirlock_close
+  done
+  pass "D6: a late publication by a dead publisher fails onto a holder or becomes an ordinary dead-held record"
+}
+
+test_dirlock_d7_handoff_transient_follows_generation_pid() {
+  local dir lock sleeper out
+  dir=$(dirlock_case "dirlock-d7${DIRLOCK_TAG:-}")
+  lock="$dir/state/.d.lock"
+  sleep 300 &
+  sleeper=$!
+  mkdir -p "$lock/.owner.handof"
+  printf '%s\n' "$sleeper" > "$lock/.owner.handof/pid"
+  : > "$lock/pid"
+  touch -t 200001010000 "$lock" "$lock/pid"
+  # shellcheck disable=SC2016
+  out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" "${DIRLOCK_BASH:-bash}" -c '
+    . "$0"
+    if fm_lock_try_acquire "$1"; then echo stolen; else echo refused; fi' "$LIB" "$lock")
+  [ "$out" = refused ] || fail "D7: an empty pid with a live generation pid was stolen: $out"
+  [ -e "$lock/pid" ] && [ -f "$lock/.owner.handof/pid" ] || fail "D7: contender changed the handoff record"
+  kill "$sleeper"
+  wait "$sleeper" 2>/dev/null
+  # shellcheck disable=SC2016
+  out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" "${DIRLOCK_BASH:-bash}" -c '
+    . "$0"
+    fm_lock_try_acquire "$1" || { echo refused; exit 0; }
+    echo "recovered=$FM_LOCK_RECOVERED_PID"
+    fm_lock_release "$1"' "$LIB" "$lock")
+  [ "$out" = "recovered=$sleeper" ] || fail "D7: a dead handoff helper's record was not recovered: $out"
+  dirlock_assert_clean "$dir" "D7: residue"
+  pass "D7${DIRLOCK_TAG:-}: an empty handoff pid is held exactly while the generation's pid lives"
+}
+
+test_dirlock_d7b_bounded_helper_killed_by_deadline() {
+  local dir lock holder caller out
+  dir=$(dirlock_case dirlock-d7b)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" h c
+  dirlock_spawn "$dir" h "" "$DIRLOCK_HOLD" "$lock" "$dir/h.id" &
+  holder=$!
+  dirlock_expect "h held pid=$holder" "D7': holder did not acquire"
+  # The caller announces its timed helper; the helper's own publication then
+  # pauses until the deadline kills it before the handoff write.
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" c "publish:post:wait:$lock" '
+    _fm_wake_require_timeout || exit 9
+    eval "_dirlock_run_timed() $(declare -f fm_run_timed | tail -n +2)"
+    fm_run_timed() { printf "c helper-start\n" >> "$FM_TEST_EVENTS"; _dirlock_run_timed "$@"; }
+    sh -c '\''printf "%s\n" "$PPID"'\'' > "$2" || exit 8
+    rc=0; fm_lock_acquire_wait_bounded "$1" 2 || rc=$?
+    printf "rc=%s pid=%s\n" "$rc" "$(cat "$1/pid" 2>/dev/null)" > "$3"
+    [ "$rc" -ne 0 ] || fm_lock_release "$1"' "$lock" "$dir/c.id" "$dir/c.out" &
+  caller=$!
+  dirlock_expect "c helper-start" "D7': caller did not start its timed helper"
+  printf 'go\n' >&7
+  wait "$holder" || fail "D7': holder could not release"
+  dirlock_expect "c publish:post:$lock" "D7': helper did not acquire after the holder released"
+  wait "$caller" || fail "D7': caller subject failed"
+  out=$(cat "$dir/c.out")
+  [ "$out" = "rc=0 pid=$caller" ] || fail "D7': caller did not end holding after its helper was killed: $out"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D7': residue"
+  pass "D7': a bounded helper killed by its deadline after acquiring leaves the caller holding"
+}
+
+test_dirlock_d8_dead_steal_mutex_observers_compose() {
+  local dir lock first second
+  dir=$(dirlock_case dirlock-d8)
+  lock="$dir/state/.d.lock"
+  # shellcheck disable=SC2016
+  FM_STATE_OVERRIDE="$dir/state" PATH="$dir/fakebin:$PATH" bash -c '
+    . "$0"; fm_lock_try_create "$1" && fm_lock_try_create "$1.steal"' "$LIB" "$lock" \
+    || fail "D8: could not leave dead primary and steal records"
+  dirlock_open "$dir" a b
+  # shellcheck disable=SC2016
+  FM_LOCK_STALE_AFTER=0 dirlock_spawn "$dir" a "retire:pre:wait:$lock.steal publish:post:wait:$lock" '
+    fm_lock_try_acquire "$1" || exit 10
+    fm_lock_release "$1"' "$lock" &
+  first=$!
+  dirlock_expect "a retire:pre:$lock.steal" "D8: first observer did not reach the steal-mutex retirement"
+  # shellcheck disable=SC2016
+  FM_LOCK_STALE_AFTER=0 dirlock_spawn "$dir" b "retire:pre:wait:$lock.steal" '
+    if fm_lock_try_acquire "$1"; then out=acquired; else out="held=$FM_LOCK_HELD_PID"; fi
+    printf "%s result %s\n" "$FM_TEST_SUBJECT" "$out" >> "$FM_TEST_EVENTS"
+    IFS= read -r _ < "$FM_TEST_RESUME"
+    fm_lock_try_acquire "$1" || exit 11
+    fm_lock_release "$1"' "$lock" &
+  second=$!
+  dirlock_expect "b retire:pre:$lock.steal" "D8: second observer did not reach the steal-mutex retirement"
+  printf 'go\n' >&7
+  dirlock_expect "a done rc=" "D8: first observer's retirement did not finish"
+  dirlock_expect "a publish:post:$lock" "D8: first observer did not publish the primary lock"
+  [ "$(cat "$lock.steal/pid")" = "$first" ] && [ "$(cat "$lock/pid")" = "$first" ] \
+    || fail "D8: first observer does not hold the steal mutex and the lock: $(dirlock_tree "$dir")"
+  printf 'go\n' >&8
+  dirlock_expect "b done rc=" "D8: second observer's late retirement did not run"
+  dirlock_expect "b result held=$first" "D8: second observer did not report the first as holder"
+  [ "$(cat "$lock.steal/pid")" = "$first" ] && [ "$(cat "$lock/pid")" = "$first" ] \
+    || fail "D8: second observer's retirement touched the first's records: $(dirlock_tree "$dir")"
+  printf 'go\n' >&7
+  wait "$first" || fail "D8: first observer could not finish"
+  printf 'go\n' >&8
+  wait "$second" || fail "D8: second observer could not acquire after the first released"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D8: residue"
+  pass "D8: two observers of a dead directory steal mutex compose and cannot disturb the winner"
+}
+
+test_dirlock_d9_uncommitted_retirement_keeps_record() {
+  local dir lock holder out
+  dir=$(dirlock_case dirlock-d9)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" a
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" a "retire:pre:fail:$lock retire:pre:fail:$lock" '
+    fm_lock_try_acquire "$1" || exit 10
+    rc=0; fm_lock_remove_path "$1" || rc=$?
+    [ "$rc" -eq 1 ] || exit 11
+    fm_lock_release "$1" || exit 12
+    printf "%s held pid=%s\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"
+    IFS= read -r _ < "$FM_TEST_RESUME"
+    fm_lock_release "$1"' "$lock" &
+  holder=$!
+  dirlock_expect "a retire:pre:$lock" "D9: first retirement did not reach its rename"
+  dirlock_expect "a retire:pre:$lock" "D9: release did not reach its rename"
+  dirlock_expect "a held pid=$holder" "D9: failed retirement did not leave the holder's record"
+  [ "$(cat "$(dirlock_generation "$lock")/pid")" = "$holder" ] \
+    || fail "D9: failed retirement damaged the generation: $(dirlock_tree "$dir")"
+  # shellcheck disable=SC2016
+  out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '
+    . "$0"; if fm_lock_try_acquire "$1"; then echo stolen; else echo "held=$FM_LOCK_HELD_PID"; fi' "$LIB" "$lock")
+  [ "$out" = "held=$holder" ] || fail "D9: contender took a record whose retirement failed: $out"
+  printf 'go\n' >&7
+  wait "$holder" || fail "D9: holder subject failed"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D9: residue after the fault cleared"
+  pass "D9: an uncommitted retirement leaves the complete held record and deletes nothing"
+}
+
+test_dirlock_d10_committed_retirement_is_finished() {
+  local dir lock holder out expected
+  dir=$(dirlock_case dirlock-d10)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" a
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" a "retire:skip-role:none:$lock" '
+    fm_lock_try_acquire "$1" || exit 10
+    fm_lock_set_role "$1" autoarm || exit 11
+    rc=0; fm_lock_remove_path "$1" || rc=$?
+    [ "$rc" -eq 1 ] || exit 12' "$lock" &
+  holder=$!
+  dirlock_expect "a retire:skip-role:$lock" "D10: retirement did not reach its rename"
+  wait "$holder" || fail "D10: remove_path did not report the unfinished retirement"
+  expected=$(cd "$lock" && printf './%s\n' role .owner.* .owner.*/pid .owner.*/pid.retired | LC_ALL=C sort)
+  [ "$(cd "$lock" && find . -mindepth 1 -print | LC_ALL=C sort)" = "$expected" ] \
+    || fail "D10: committed retirement left an unexpected record: $(dirlock_tree "$dir")"
+  # shellcheck disable=SC2016
+  out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '
+    . "$0"
+    fm_lock_try_acquire "$1" || { echo refused; exit 0; }
+    echo acquired
+    fm_lock_release "$1"' "$LIB" "$lock")
+  [ "$out" = acquired ] || fail "D10: contender did not finish a committed retirement: $out"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D10: residue"
+  pass "D10: a committed retirement blocked by a remaining known file is finished by the next acquirer"
+}
+
+test_dirlock_d11_ambiguous_generation_is_refused() {
+  local dir lock holder before
+  dir=$(dirlock_case dirlock-d11)
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" a
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" a "" '
+    fm_current_pid me || exit 9
+    mkdir -p "$1/.owner.first1" "$1/.owner.secnd2" || exit 10
+    printf "%s\n" "$me" > "$1/pid"
+    printf "%s\n" "$me" > "$1/.owner.first1/pid"
+    printf "%s\n" "$me" > "$1/.owner.secnd2/pid"
+    ! fm_lock_link_owner "$1" >/dev/null || exit 11
+    fm_lock_release "$1" || exit 12
+    printf "%s held pid=%s\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"
+    IFS= read -r _ < "$FM_TEST_RESUME"' "$lock" &
+  holder=$!
+  dirlock_expect "a held pid=$holder" "D11: ambiguous record was not refused by its own holder"
+  before=$(dirlock_tree "$dir")
+  [ "$(printf '%s\n' "$before" | grep -c '/pid$')" = 3 ] || fail "D11: release touched the ambiguous record: $before"
+  FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '. "$0"; ! fm_lock_try_acquire "$1"' "$LIB" "$lock" \
+    || fail "D11: contender acquired an ambiguous live record"
+  [ "$(dirlock_tree "$dir")" = "$before" ] || fail "D11: contender changed the ambiguous record"
+  printf 'go\n' >&7
+  wait "$holder" || fail "D11: holder subject failed"
+  dirlock_close
+  pass "D11: a record with more than one generation is invalid and never released or taken"
+}
+
+# D11c runs D11b on the watcher lock, whose stale recovery first publishes
+# downtime evidence: an invalid record must be refused before that too.
+test_dirlock_d11b_dead_ambiguous_generation_is_refused() {
+  local dir lock dead before out row
+  for row in D11b:.d.lock D11c:.watch.lock; do
+    dir=$(dirlock_case "dirlock-${row%%:*}")
+    lock="$dir/state/${row#*:}"
+    row=${row%%:*}
+    dirlock_open "$dir"
+    dead=$(dead_pid)
+    mkdir -p "$lock/.owner.first1" "$lock/.owner.secnd2"
+    printf '%s\n' "$dead" > "$lock/pid"
+    printf '%s\n' "$dead" > "$lock/.owner.first1/pid"
+    printf '%s\n' "$dead" > "$lock/.owner.secnd2/pid"
+    before=$(dirlock_tree "$dir")
+    out=$(FM_LOCK_STALE_AFTER=0 FM_STATE_OVERRIDE="$dir/state" bash -c '
+      . "$0"
+      if fm_lock_try_acquire "$1"; then echo acquired; else echo refused; fi' "$LIB" "$lock")
+    [ "$out" = refused ] || fail "$row: contender acted on an invalid dead record: $out"
+    [ "$(dirlock_tree "$dir")" = "$before" ] || fail "$row: invalid dead record or its state was changed: $(dirlock_tree "$dir")"
+    dirlock_close
+  done
+  pass "D11b: an invalid dead record fails closed before destructive cleanup"
+  pass "D11c: an invalid dead watcher record is refused before downtime evidence is published"
+}
+
+test_dirlock_d12_staging_litter_is_never_consulted() {
+  local dir lock sleeper before
+  dir=$(dirlock_case dirlock-d12)
+  lock="$dir/state/.d.lock"
+  sleep 300 &
+  sleeper=$!
+  mkdir -p "$lock.owner.livepb/.owner.livepb" "$lock.owner.deadpb/.owner.deadpb"
+  printf '%s\n' "$sleeper" > "$lock.owner.livepb/pid"
+  printf '%s\n' "$sleeper" > "$lock.owner.livepb/.owner.livepb/pid"
+  printf '%s\n' "$(dead_pid)" > "$lock.owner.deadpb/pid"
+  printf '%s\n' "$(dead_pid)" > "$lock.owner.deadpb/.owner.deadpb/pid"
+  before=$(dirlock_tree "$dir")
+  # shellcheck disable=SC2016
+  PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '
+    . "$0"
+    fm_lock_try_acquire "$1" || exit 10
+    fm_lock_release "$1"
+    [ ! -e "$1" ] || exit 11
+    fm_lock_try_acquire "$1" || exit 12
+    fm_lock_release "$1"' "$LIB" "$lock" || fail "D12: staging litter interfered with acquire and release"
+  [ "$(dirlock_tree "$dir")" = "$before" ] || fail "D12: lock operations changed staging litter: $(dirlock_tree "$dir")"
+  kill "$sleeper"
+  wait "$sleeper" 2>/dev/null
+  pass "D12: staging directories beside a directory lock are never read or removed"
+}
+
+test_dirlock_d16_pre_v2_record_recovers_as_raw() {
+  local dir lock old lock_abs out
+  dir=$(dirlock_case dirlock-d16)
+  lock="$dir/state/.d.lock"
+  lock_abs="$(cd "$dir/state" && pwd -P)/.d.lock"
+  old="$lock_abs.owner.oldv1x"
+  mkdir -p "$lock" "$old"
+  dead_pid > "$old/pid"
+  cp "$old/pid" "$lock/pid"
+  printf '%s\n' "$old" > "$lock/.owner"
+  # shellcheck disable=SC2016
+  out=$(PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '
+    . "$0"
+    fm_lock_try_acquire "$1" || { echo refused; exit 0; }
+    fm_current_pid me
+    owner=$(fm_lock_link_owner "$1") || { echo no-owner; exit 0; }
+    [ "$(cat "$1/pid")" = "$me" ] && [ "$owner" = "$FM_LOCK_OWNER_DIR" ] && [ ! -e "$1/.owner" ] \
+      && case "$owner" in "$1"/.owner.*|*/.d.lock/.owner.*) true ;; *) false ;; esac || { echo not-v2; exit 0; }
+    fm_lock_release "$1"
+    echo republished' "$LIB" "$lock")
+  [ "$out" = republished ] || fail "D16: a dead pre-v2 record was not recovered into the v2 layout: $out"
+  [ "$(dirlock_tree "$dir")" = "./${old##*/}
+./${old##*/}/pid" ] || fail "D16: expected only the inert pre-v2 private directory: $(dirlock_tree "$dir")"
+  pass "D16: a dead pre-v2 directory record is recovered as raw, leaving its private directory inert"
+}
+
+test_dirlock_d17_subshell_publisher_identity() {
+  local dir lock holder recorded
+  dir=$(dirlock_case "dirlock-d17${DIRLOCK_TAG:-}")
+  lock="$dir/state/.d.lock"
+  dirlock_open "$dir" a
+  # shellcheck disable=SC2016
+  dirlock_spawn "$dir" a "" '
+    (
+      sh -c '\''printf "%s\n" "$PPID"'\'' > "$2" || exit 9
+      fm_lock_try_acquire "$1" || exit 10
+      printf "%s held pid=%s\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"
+      IFS= read -r _ < "$FM_TEST_RESUME"
+      fm_lock_release "$1"
+    ) &
+    wait "$!"' "$lock" "$dir/a.id" &
+  holder=$!
+  dirlock_expect "a held pid=" "D17: subshell publisher did not acquire"
+  recorded=$(cat "$dir/a.id")
+  [ "$(dirlock_event_field pid)" = "$recorded" ] && [ "$recorded" != "$holder" ] \
+    && [ "$(cat "$(dirlock_generation "$lock")/pid")" = "$recorded" ] \
+    || fail "D17: subshell publisher recorded $(dirlock_event_field pid), expected its own frame $recorded"
+  printf 'go\n' >&7
+  wait "$holder" || fail "D17: subshell publisher could not release"
+  dirlock_close
+  dirlock_assert_clean "$dir" "D17: residue"
+  pass "D17${DIRLOCK_TAG:-}: a background-subshell publisher records its own frame identity"
+}
+
+# D17: the identity-sensitive cases also run under stock macOS Bash 3.2, whose
+# fm_current_pid has no BASHPID. A shell whose version already ran is skipped:
+# on Linux both names are the same Bash, and its rows would reuse the fixtures.
+test_dirlock_identity_cases_per_shell() {
+  local shell version seen=" "
+  for shell in bash /bin/bash; do
+    command -v "$shell" >/dev/null 2>&1 || continue
+    # shellcheck disable=SC2016 # Expanded by the probed shell.
+    version=$("$shell" -c 'printf "%s.%s" "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}"')
+    case "$seen" in *" $version "*) continue ;; esac
+    seen="$seen$version "
+    DIRLOCK_BASH=$shell DIRLOCK_TAG="-bash-$version"
+    export DIRLOCK_BASH
+    test_dirlock_d1_unpublished_staging_is_private
+    test_dirlock_d2_published_record_is_complete
+    test_dirlock_d3_dead_holder_recovers_without_age
+    test_dirlock_d7_handoff_transient_follows_generation_pid
+    test_dirlock_d17_subshell_publisher_identity
+  done
+  unset DIRLOCK_BASH DIRLOCK_TAG
 }
 
 test_lock_empty_pid_uses_minimum_grace() {
@@ -1920,8 +2668,23 @@ test_direct_directory_reaper_cannot_remove_live_successor
 test_direct_directory_lock_release_and_reap
 test_lock_without_real_symlinks
 test_directory_lock_single_winner_under_load
-test_directory_lock_paused_publication_cannot_be_stolen
-test_directory_lock_ignores_old_unrelated_publisher
+test_dirlock_identity_cases_per_shell
+test_dirlock_d1b_failed_claim_leaves_generation_to_retirement
+test_dirlock_d4_crashed_release_is_finished
+test_dirlock_d4b_handoff_release_recovers_caller
+test_dirlock_d5_orphan_retirement_cannot_touch_successor
+test_dirlock_d5b_stealer_retires_only_captured_generation
+test_dirlock_d5c_acquirer_retires_captured_generation
+test_dirlock_d6_late_publication_is_ordinary_recovery
+test_dirlock_d7b_bounded_helper_killed_by_deadline
+test_dirlock_d8_dead_steal_mutex_observers_compose
+test_dirlock_d8b_reaper_retires_captured_generation
+test_dirlock_d9_uncommitted_retirement_keeps_record
+test_dirlock_d10_committed_retirement_is_finished
+test_dirlock_d11_ambiguous_generation_is_refused
+test_dirlock_d11b_dead_ambiguous_generation_is_refused
+test_dirlock_d12_staging_litter_is_never_consulted
+test_dirlock_d16_pre_v2_record_recovers_as_raw
 test_lock_empty_pid_uses_minimum_grace
 test_lock_late_claim_loses_after_recreate
 test_lock_paused_mid_acquire_claim_fails_during_steal
