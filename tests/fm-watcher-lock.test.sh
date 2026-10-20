@@ -957,7 +957,8 @@ SH
 
 # dirlock_spawn <dir> <subject> <barriers> <script> [args...] - run with `&`:
 # it execs the subject so $! is the subject frame. The script sees the lock
-# library loaded and its own arguments as "$@".
+# library loaded and its own arguments as "$@". Output goes to the case's
+# <subject>.log so a subject left paused by a failed case holds no test pipe.
 dirlock_spawn() {
   local dir=$1 subject=$2 barriers=$3 script=$4
   shift 4
@@ -966,7 +967,7 @@ dirlock_spawn() {
     FM_LOCK_STALE_AFTER="${FM_LOCK_STALE_AFTER:-2}" \
     FM_TEST_BARRIERS="$barriers" FM_TEST_BARRIER_DIR="$dir/barrier.$subject" \
     FM_TEST_EVENTS="$dir/events" FM_TEST_RESUME="$dir/resume.$subject" \
-    exec "${DIRLOCK_BASH:-bash}" -c ". \"\$0\"; $script" "$LIB" "$@"
+    exec "${DIRLOCK_BASH:-bash}" -c ". \"\$0\"; $script" "$LIB" "$@" >> "$dir/$subject.log" 2>&1
 }
 
 # Open the shared event stream on fd 6 and one resume FIFO per named subject
