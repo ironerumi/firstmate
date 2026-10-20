@@ -846,9 +846,12 @@ dirlock_out=$(FM_HOME="$H_DIRLOCK" bash -c '
   FM_EXTENSION_RETIREMENT_MODE=bind FM_EXTENSION_LIFECYCLE_LOCK="$2" \
     FM_EXTENSION_LIFECYCLE_OWNER="$2/.owner.a" exec "$3" not-a-lifecycle-command
 ' _ "$ROOT/bin/fm-wake-lib.sh" "$DIRLOCK_NODE_LOCK" "$HOST" 2>&1) || dirlock_rc=$?
-[ "$dirlock_rc" -eq 1 ] && assert_contains "$dirlock_out" "error[lifecycle-lock-invalid]" \
-  "N6: ambiguous directory record was not rejected" \
-  || fail "N6: ambiguous directory record returned an unexpected result: rc=$dirlock_rc $dirlock_out"
+if [ "$dirlock_rc" -eq 1 ]; then
+  assert_contains "$dirlock_out" "error[lifecycle-lock-invalid]" \
+    "N6: ambiguous directory record was not rejected"
+else
+  fail "N6: ambiguous directory record returned an unexpected result: rc=$dirlock_rc $dirlock_out"
+fi
 [ "$(dirlock_node_tree "$H_DIRLOCK")" = "./.extension-binding-lifecycle.lock
 ./.extension-binding-lifecycle.lock/.owner.a
 ./.extension-binding-lifecycle.lock/.owner.a/pid
