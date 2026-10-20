@@ -835,6 +835,29 @@ dirlock_node_expect "host locked pid=" "N5: shell did not acquire a directory li
 exec 6>&-
 pass "N5: a junk entry leaves only a husk after the host deletes its generation"
 
+# N6: an ambiguous directory record is rejected before retirement.
+dirlock_node_case n6
+mkdir -p "$DIRLOCK_NODE_LOCK/.owner.a" "$DIRLOCK_NODE_LOCK/.owner.b"
+dirlock_rc=0
+dirlock_out=$(FM_HOME="$H_DIRLOCK" bash -c '
+  printf "%s\n" "$$" > "$2/pid"
+  printf "%s\n" "$$" > "$2/.owner.a/pid"
+  printf "%s\n" "$$" > "$2/.owner.b/pid"
+  FM_EXTENSION_RETIREMENT_MODE=bind FM_EXTENSION_LIFECYCLE_LOCK="$2" \
+    FM_EXTENSION_LIFECYCLE_OWNER="$2/.owner.a" exec "$3" not-a-lifecycle-command
+' _ "$ROOT/bin/fm-wake-lib.sh" "$DIRLOCK_NODE_LOCK" "$HOST" 2>&1) || dirlock_rc=$?
+[ "$dirlock_rc" -eq 1 ] && assert_contains "$dirlock_out" "error[lifecycle-lock-invalid]" \
+  "N6: ambiguous directory record was not rejected" \
+  || fail "N6: ambiguous directory record returned an unexpected result: rc=$dirlock_rc $dirlock_out"
+[ "$(dirlock_node_tree "$H_DIRLOCK")" = "./.extension-binding-lifecycle.lock
+./.extension-binding-lifecycle.lock/.owner.a
+./.extension-binding-lifecycle.lock/.owner.a/pid
+./.extension-binding-lifecycle.lock/.owner.b
+./.extension-binding-lifecycle.lock/.owner.b/pid
+./.extension-binding-lifecycle.lock/pid" ] \
+  || fail "N6: ambiguous directory record was mutated: $(dirlock_node_tree "$H_DIRLOCK")"
+pass "N6: an ambiguous directory record is rejected without retirement"
+
 H_ABSENT="$HOMES/absent"
 new_home "$H_ABSENT"
 before=$(find "$H_ABSENT" -mindepth 1 -print | LC_ALL=C sort)

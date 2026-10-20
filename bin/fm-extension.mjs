@@ -2060,6 +2060,12 @@ async function assertLifecycleLockOwned() {
     // fm_lock_link_owner in fm-wake-lib.sh owns the generation identity contract.
     if (path.dirname(ownerPath) !== lockPath) fail("lifecycle-lock-lost", "retirement lifecycle lock owner changed");
     if (lockInfo.uid !== currentUid()) fail("lifecycle-lock-invalid", "retirement lifecycle lock identity is unsafe");
+    const entries = await readdir(lockPath, { withFileTypes: true });
+    const generations = entries.filter((entry) => entry.name.startsWith(".owner."));
+    if (generations.length !== 1 || !generations[0].isDirectory()
+        || generations[0].isSymbolicLink() || path.join(lockPath, generations[0].name) !== ownerPath) {
+      fail("lifecycle-lock-invalid", "retirement lifecycle lock generation is invalid");
+    }
   }
   const ownerInfo = await maybeLstat(ownerPath);
   if (!ownerInfo && !lockInfo.isSymbolicLink()) fail("lifecycle-lock-lost", "retirement lifecycle lock owner changed");
