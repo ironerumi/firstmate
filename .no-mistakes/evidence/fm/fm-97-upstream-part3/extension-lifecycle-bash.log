@@ -1,0 +1,7 @@
+command: live extension-host lifecycle wrapper regression
+platform: Darwin 24.6.0 arm64
+direct-shell-spawn: EACCES
+PASS bind: argv preserved; failure mapping preserved
+PASS retire-binding: argv preserved; failure mapping preserved
+PASS retire-transfer: argv preserved; failure mapping preserved
+PASS process-event: argv preserved; failure mapping preserved
