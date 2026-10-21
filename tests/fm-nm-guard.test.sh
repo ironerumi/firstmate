@@ -128,6 +128,13 @@ pass "aborting a working run is refused and names the run"
 run_in_repo git push origin fm/task-x
 assert_refused nm-push-supersedes "push under a live run"
 pass "a superseding push is refused while a run is live"
+run_in_repo git push --repo origin fm/task-x
+assert_refused nm-push-supersedes "a push with a separate repository option operand"
+run_in_repo git push --repo=origin fm/task-x
+assert_refused nm-push-supersedes "a push with an attached repository option operand"
+run_in_repo git push --recurse-submodules on-demand origin fm/task-x
+assert_refused nm-push-supersedes "a push with a separate submodule option operand"
+pass "push option operands cannot bypass the own-branch guard"
 
 # --- 1b. only the branch's own ref on its own remote supersedes the run ------
 

@@ -255,7 +255,7 @@ fm_nm_guard_git_split() {  # <git args...>
 # HEAD and @ meaning the current branch - names the branch.
 fm_nm_guard_push_scope() {  # <git args...>
   local -a g=() specs=()
-  local branch remote target='' repo_opt='' expect='' arg spec dst all=0 tags=0 past_dd=0 have_target=0
+  local branch remote target='' repo_opt='' expect='' arg spec dst all=0 tags=0 past_dd=0 have_target=0 have_repo=0
   fm_nm_guard_git_split "$@"
   g=(${FM_NM_GUARD_GIT_GLOBALS[@]+"${FM_NM_GUARD_GIT_GLOBALS[@]}"})
   branch=$(git ${g[@]+"${g[@]}"} symbolic-ref --quiet --short HEAD 2>/dev/null) || { printf 'other'; return 0; }
@@ -266,7 +266,7 @@ fm_nm_guard_push_scope() {  # <git args...>
     || remote=origin
   for arg in ${FM_NM_GUARD_GIT_SUBARGS[@]+"${FM_NM_GUARD_GIT_SUBARGS[@]}"}; do
     if [ -n "$expect" ]; then
-      [ "$expect" != repo ] || repo_opt=$arg
+      [ "$expect" != repo ] || { repo_opt=$arg; have_repo=1; }
       expect=''
       continue
     fi
@@ -274,21 +274,22 @@ fm_nm_guard_push_scope() {  # <git args...>
       case "$arg" in
         --) past_dd=1; continue ;;
         --repo) expect=repo; continue ;;
-        --repo=*) repo_opt=${arg#--repo=}; continue ;;
-        -o|--push-option|--receive-pack|--exec) expect=skip; continue ;;
+        --repo=*) repo_opt=${arg#--repo=}; have_repo=1; continue ;;
+        --recurse-submodules|--receive-pack|--exec|-o|--push-option) expect=skip; continue ;;
+        --recurse-submodules=*|--receive-pack=*|--exec=*|--push-option=*) continue ;;
         --all|--branches|--mirror) all=1; continue ;;
         --tags) tags=1; continue ;;
         -*) continue ;;
       esac
     fi
-    if [ "$have_target" -eq 0 ]; then
+    if [ "$have_repo" -eq 0 ] && [ "$have_target" -eq 0 ]; then
       target=$arg
       have_target=1
     else
       specs+=("$arg")
     fi
   done
-  [ -n "$target" ] || target=$repo_opt
+  [ "$have_repo" -eq 0 ] || target=$repo_opt
   [ -n "$target" ] || target=$remote
   if [ "$target" != "$remote" ] \
     && [ "$target" != "$(git ${g[@]+"${g[@]}"} config --get "remote.$remote.pushurl" 2>/dev/null)" ] \
