@@ -258,6 +258,7 @@ fm_nm_guard_push_scope() {  # <git args...>
   local -a own_remotes=() target_remotes=() own_urls=() target_urls=() configured_urls=()
   local -a configured_specs=()
   local branch remote target='' repo_opt='' expect='' arg spec dst short short_char config_value
+  local push_default upstream_remote upstream_ref
   local own_name target_name url all=0 tags=0 past_dd=0 have_repo=0 own_destination=0 default_own=0
   fm_nm_guard_git_split "$@"
   g=(${FM_NM_GUARD_GIT_GLOBALS[@]+"${FM_NM_GUARD_GIT_GLOBALS[@]}"})
@@ -371,14 +372,32 @@ fm_nm_guard_push_scope() {  # <git args...>
         [ -n "$config_value" ] && configured_specs+=("$config_value")
       done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$target_name.push" 2>/dev/null || true)
       if [ "${#configured_specs[@]}" -eq 0 ]; then
-        default_own=1
+        push_default=$(git ${g[@]+"${g[@]}"} config --get push.default 2>/dev/null || true)
+        [ -n "$push_default" ] || push_default=simple
+        upstream_remote=$(git ${g[@]+"${g[@]}"} config --get "branch.$branch.remote" 2>/dev/null || true)
+        upstream_ref=$(git ${g[@]+"${g[@]}"} config --get "branch.$branch.merge" 2>/dev/null || true)
+        case "$push_default" in
+          current|matching) default_own=1 ;;
+          upstream)
+            [ "$target_name" = "$upstream_remote" ] && [ "$upstream_ref" = "refs/heads/$branch" ] && default_own=1
+            ;;
+          simple)
+            if [ -z "$upstream_ref" ]; then
+              default_own=1
+            elif [ "$upstream_ref" = "refs/heads/$branch" ] && {
+              [ -z "$upstream_remote" ] || [ "$target_name" = "$upstream_remote" ]
+            }; then
+              default_own=1
+            fi
+            ;;
+        esac
       else
         specs+=("${configured_specs[@]}")
       fi
     done
   fi
   if [ "${#specs[@]}" -eq 0 ]; then
-    if [ "$tags" -eq 1 ]; then printf 'other'; else printf 'own'; fi
+    if [ "$tags" -eq 1 ] || [ "$default_own" -eq 0 ]; then printf 'other'; else printf 'own'; fi
     return 0
   fi
   for spec in "${specs[@]}"; do

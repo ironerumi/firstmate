@@ -146,6 +146,21 @@ run_in_repo git push --repo=backup origin fm/task-x
 assert_refused nm-push-supersedes "a positional repository overriding the repo option"
 pass "push option operands cannot bypass the own-branch guard"
 
+# Git's no-refspec policy can target a tracked branch other than the worker's
+# branch, or perform no push at all; neither case supersedes the live run.
+git -C "$REPO" config branch.fm/task-x.remote origin
+git -C "$REPO" config branch.fm/task-x.merge refs/heads/main
+git -C "$REPO" config push.default upstream
+run_in_repo git push origin
+assert_allowed "an upstream-configured push to another branch"
+git -C "$REPO" config push.default nothing
+run_in_repo git push origin
+assert_allowed "a no-op push.default=nothing push"
+git -C "$REPO" config --unset push.default
+git -C "$REPO" config --unset branch.fm/task-x.remote
+git -C "$REPO" config --unset branch.fm/task-x.merge
+pass "no-refspec push policy is not over-blocked"
+
 # --- 1b. only the branch's own ref on its own remote supersedes the run ------
 
 # A refused push never reaches git, so the remote must still lack the branch.
