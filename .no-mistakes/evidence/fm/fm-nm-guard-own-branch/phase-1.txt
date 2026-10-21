@@ -1,0 +1,13 @@
+Phase 1 targeted validation
+
+Listed suites:
+`bin/fm-test-run.sh --list --changed`
+- tests/fm-nm-guard.test.sh
+- tests/fm-test-run.test.sh
+
+Diff narrowing selected `tests/fm-nm-guard.test.sh` because the changed files are `bin/fm-nm-guard-lib.sh` and `bin/fm-nm-guard-shim.sh`; no other changed test script applies.
+
+Ran:
+`bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-nm-guard.test.sh`
+
+Result: passed (exit=0), 39 documented behavioral assertions exercised, duration 38.795s. No suites failed or hit the time bound.

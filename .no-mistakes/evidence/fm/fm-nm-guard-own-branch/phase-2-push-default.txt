@@ -1,0 +1,8 @@
+scenario=push.default upstream with branch upstream=origin/main
+command=git push origin
+exit=3
+output=●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  REFUSED BY FIRSTMATE [nm-push-supersedes]
+●  this branch has a live no-mistakes run (run 01LIVE at its review step), and pushing now cancels it as superseded - the whole pipeline restarts on a larger diff. The pipeline pushes the branch itself when it reaches its push step. Let the run finish, or answer its gate with `no-mistakes axi respond`; if it cannot be driven forward, report it to firstmate with a blocked line naming the run id.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+result=FAIL own-branch guard refused a push Git targets at refs/heads/main

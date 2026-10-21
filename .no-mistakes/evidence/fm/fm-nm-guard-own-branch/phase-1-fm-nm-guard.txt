@@ -1,0 +1,18 @@
+Phase 1 targeted validation
+
+Command:
+  bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-nm-guard.test.sh
+
+Ran:
+  tests/fm-nm-guard.test.sh
+
+Passed:
+  tests/fm-nm-guard.test.sh (exit=0; duration 19.749s)
+
+Failed:
+  none
+
+Time bound:
+  none
+
+The suite exercised the changed guard through the real git/no-mistakes shims, including option-operand parsing, own-branch versus proof-ref pushes, configured push URLs/remote groups/mappings, and fixture/foreign-remote pushes.

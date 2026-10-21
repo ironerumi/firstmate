@@ -1,0 +1,15 @@
+Phase 1 targeted validation
+
+Elapsed at completion: <1 minute
+
+Ran:
+  bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-nm-guard.test.sh
+
+Passed:
+  tests/fm-nm-guard.test.sh (exit=0; 40 behavioral assertions; duration_ms=42502)
+
+Failed: none
+Time bound: none
+Not started: tests/fm-test-run.test.sh was listed by --list --changed but was not selected: it was not changed and does not plainly exercise the changed no-mistakes guard behavior.
+
+Phase 2: skipped because the targeted guard suite covers every changed behavior, including own-branch refusal, proof-ref and alternate-remote allowance, option-operand parsing, configured destinations, no-refspec policies, and shim dispatch.
