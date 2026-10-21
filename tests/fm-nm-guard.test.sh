@@ -129,6 +129,51 @@ run_in_repo git push origin fm/task-x
 assert_refused nm-push-supersedes "push under a live run"
 pass "a superseding push is refused while a run is live"
 
+# --- 1b. only the branch's own ref on its own remote supersedes the run ------
+
+# A refused push never reaches git, so the remote must still lack the branch.
+remote_has() {  # <ref>
+  git -C "$REMOTE" rev-parse --verify --quiet "$1" >/dev/null
+}
+REMOTE_URL=$(git -C "$REPO" config --get remote.origin.url)
+
+run_in_repo git push
+assert_refused nm-push-supersedes "a bare push under a live run"
+run_in_repo git push origin
+assert_refused nm-push-supersedes "a push naming only the own remote"
+run_in_repo git push origin HEAD
+assert_refused nm-push-supersedes "a push of HEAD to the own remote"
+run_in_repo git push --force origin fm/task-x
+assert_refused nm-push-supersedes "a forced push of the own branch"
+run_in_repo git push origin "$HEAD_SHA:refs/heads/fm/task-x"
+assert_refused nm-push-supersedes "a push whose destination is the own branch"
+run_in_repo git push "$REMOTE_URL" fm/task-x
+assert_refused nm-push-supersedes "a push of the own branch to the own remote's URL"
+remote_has refs/heads/fm/task-x && fail "a refused own-branch push must never reach the remote"
+pass "every form of pushing the own branch to its own remote is refused"
+
+run_in_repo git push origin "$HEAD_SHA:refs/heads/fm/proof-linux"
+assert_allowed "a proof ref pushed to the own remote"
+remote_has refs/heads/fm/proof-linux || fail "the allowed proof-ref push must reach the remote: $OUT"
+pass "a push of another ref to the own remote is allowed"
+
+FIXTURE="$TMP/fixture"
+FIXTURE_REMOTE="$TMP/fixture-remote.git"
+fm_git_init_commit "$FIXTURE"
+fm_git_add_origin "$FIXTURE" "$FIXTURE_REMOTE"
+git -C "$FIXTURE" commit -q --allow-empty -m fixture-work
+run_in_repo git -C "$FIXTURE" push origin main
+assert_allowed "a fixture push into a temporary repository through git -C"
+[ "$(git -C "$FIXTURE_REMOTE" rev-parse main)" = "$(git -C "$FIXTURE" rev-parse main)" ] \
+  || fail "the allowed fixture push must reach the fixture remote: $OUT"
+pass "a push from another repository is judged against that repository"
+
+run_in_repo git push "$FIXTURE_REMOTE" HEAD
+assert_allowed "the own branch pushed to a temporary repository"
+git -C "$FIXTURE_REMOTE" rev-parse --verify --quiet refs/heads/fm/task-x >/dev/null \
+  || fail "the allowed push to a temporary repository must reach it: $OUT"
+pass "a push to a remote other than the branch's own is allowed"
+
 # --- 2. inspection, reconnection and the gate response path stay open -------
 
 for probe in "axi status" "axi logs --step review" "attach" "runs --limit 5" "status" "doctor"; do
@@ -298,7 +343,7 @@ pass "a review fix response is allowed however many rounds have run"
 check_action() {  # <expected> <tool> <args...>
   local expected=$1 got
   shift
-  got=$(fm_nm_guard_action "$@")
+  got=$(cd "$REPO" && fm_nm_guard_action "$@")
   [ "$got" = "$expected" ] || fail "action for '$*': expected $expected, got $got"
 }
 
@@ -319,7 +364,9 @@ check_action none no-mistakes axi logs --step review --full
 check_action none no-mistakes attach
 check_action none no-mistakes axi run --help
 check_action push git push
-check_action push git -C /tmp push --force
+check_action push git -C "$REPO" push --force
+check_action none git push --tags
+check_action push git push --all
 check_action none git push --dry-run
 check_action none git status
 check_action none git commit -m "push"

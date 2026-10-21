@@ -215,10 +215,110 @@ fm_nm_run_state() {  # <worktree> [timeout-seconds]
 # never the subcommand.
 FM_NM_GUARD_GIT_VALUE_OPTS=' -C -c --git-dir --work-tree --namespace --exec-path --config-env '
 
+# Split a git argv into the global options before its subcommand, the
+# subcommand, and the words after it. Sets FM_NM_GUARD_GIT_GLOBALS (array),
+# FM_NM_GUARD_GIT_SUB and FM_NM_GUARD_GIT_SUBARGS (array), so a caller can replay
+# the globals - `-C`, `--git-dir`, `-c` - to reach the repository git would act on.
+fm_nm_guard_git_split() {  # <git args...>
+  local arg expect_value=0
+  FM_NM_GUARD_GIT_GLOBALS=()
+  FM_NM_GUARD_GIT_SUB=''
+  FM_NM_GUARD_GIT_SUBARGS=()
+  while [ "$#" -gt 0 ]; do
+    arg=$1
+    shift
+    if [ "$expect_value" -eq 1 ]; then
+      expect_value=0
+      FM_NM_GUARD_GIT_GLOBALS+=("$arg")
+      continue
+    fi
+    case "$FM_NM_GUARD_GIT_VALUE_OPTS" in
+      *" $arg "*) expect_value=1; FM_NM_GUARD_GIT_GLOBALS+=("$arg"); continue ;;
+    esac
+    case "$arg" in
+      -*) FM_NM_GUARD_GIT_GLOBALS+=("$arg"); continue ;;
+    esac
+    FM_NM_GUARD_GIT_SUB=$arg
+    FM_NM_GUARD_GIT_SUBARGS=("$@")
+    return 0
+  done
+}
+
+# Whether a `git push` argv would move the pushing repository's current branch
+# on that branch's own remote: `own`, or `other` for every other remote or
+# refspec. The own remote is the one a bare `git push` targets
+# (branch.<b>.pushRemote, remote.pushDefault, branch.<b>.remote, then origin),
+# named or given by its URL. With no refspec, `--all`, `--branches`, `--mirror`,
+# or the matching refspec `:`, git's push configuration decides, which can move
+# the branch, so those count as own; `--tags` alone moves only tags. A refspec is
+# own when its destination - the part after `:`, or the source itself, with
+# HEAD and @ meaning the current branch - names the branch.
+fm_nm_guard_push_scope() {  # <git args...>
+  local -a g=() specs=()
+  local branch remote target='' repo_opt='' expect='' arg spec dst all=0 tags=0 past_dd=0 have_target=0
+  fm_nm_guard_git_split "$@"
+  g=(${FM_NM_GUARD_GIT_GLOBALS[@]+"${FM_NM_GUARD_GIT_GLOBALS[@]}"})
+  branch=$(git ${g[@]+"${g[@]}"} symbolic-ref --quiet --short HEAD 2>/dev/null) || { printf 'other'; return 0; }
+  [ -n "$branch" ] || { printf 'other'; return 0; }
+  remote=$(git ${g[@]+"${g[@]}"} config --get "branch.$branch.pushRemote" 2>/dev/null) \
+    || remote=$(git ${g[@]+"${g[@]}"} config --get remote.pushDefault 2>/dev/null) \
+    || remote=$(git ${g[@]+"${g[@]}"} config --get "branch.$branch.remote" 2>/dev/null) \
+    || remote=origin
+  for arg in ${FM_NM_GUARD_GIT_SUBARGS[@]+"${FM_NM_GUARD_GIT_SUBARGS[@]}"}; do
+    if [ -n "$expect" ]; then
+      [ "$expect" != repo ] || repo_opt=$arg
+      expect=''
+      continue
+    fi
+    if [ "$past_dd" -eq 0 ]; then
+      case "$arg" in
+        --) past_dd=1; continue ;;
+        --repo) expect=repo; continue ;;
+        --repo=*) repo_opt=${arg#--repo=}; continue ;;
+        -o|--push-option|--receive-pack|--exec) expect=skip; continue ;;
+        --all|--branches|--mirror) all=1; continue ;;
+        --tags) tags=1; continue ;;
+        -*) continue ;;
+      esac
+    fi
+    if [ "$have_target" -eq 0 ]; then
+      target=$arg
+      have_target=1
+    else
+      specs+=("$arg")
+    fi
+  done
+  [ -n "$target" ] || target=$repo_opt
+  [ -n "$target" ] || target=$remote
+  if [ "$target" != "$remote" ] \
+    && [ "$target" != "$(git ${g[@]+"${g[@]}"} config --get "remote.$remote.pushurl" 2>/dev/null)" ] \
+    && [ "$target" != "$(git ${g[@]+"${g[@]}"} config --get "remote.$remote.url" 2>/dev/null)" ]; then
+    printf 'other'
+    return 0
+  fi
+  if [ "$all" -eq 1 ]; then printf 'own'; return 0; fi
+  if [ "${#specs[@]}" -eq 0 ]; then
+    if [ "$tags" -eq 1 ]; then printf 'other'; else printf 'own'; fi
+    return 0
+  fi
+  for spec in "${specs[@]}"; do
+    spec=${spec#+}
+    [ "$spec" != : ] || { printf 'own'; return 0; }
+    dst=${spec#*:}
+    case "$dst" in HEAD|@) dst=$branch ;; esac
+    case "$dst" in refs/*) ;; *) dst="refs/heads/$dst" ;; esac
+    # Unquoted on purpose: a pattern refspec's `*` matches the branch.
+    # shellcheck disable=SC2254
+    case "refs/heads/$branch" in $dst) printf 'own'; return 0 ;; esac
+  done
+  printf 'other'
+}
+
 # What a command would do to a live run: run, abort, push, or none.
 # `none` covers every inspection and continuation path on purpose - axi status,
-# axi logs, axi respond, attach, runs, status, doctor, and any git command that
-# is not a push. A flagless axi run is `reattach`.
+# axi logs, axi respond, attach, runs, status, doctor, any git command that is
+# not a push, and any push that fm_nm_guard_push_scope does not classify as the
+# branch's own. A flagless axi run is `reattach`.
 fm_nm_guard_action() {  # <tool> [args...]
   local tool=$1 arg sub='' axi=0 expect_value=0
   shift
@@ -256,18 +356,8 @@ fm_nm_guard_action() {  # <tool> [args...]
       printf 'none'
       ;;
     git)
-      for arg in "$@"; do
-        if [ "$expect_value" -eq 1 ]; then expect_value=0; continue; fi
-        case "$FM_NM_GUARD_GIT_VALUE_OPTS" in
-          *" $arg "*) expect_value=1; continue ;;
-        esac
-        case "$arg" in
-          -*) continue ;;
-        esac
-        sub=$arg
-        break
-      done
-      if [ "$sub" != push ]; then printf 'none'; return 0; fi
+      fm_nm_guard_git_split "$@"
+      if [ "$FM_NM_GUARD_GIT_SUB" != push ]; then printf 'none'; return 0; fi
       # A dry run reports what would happen without moving the remote ref, so it
       # cannot supersede anything.
       for arg in "$@"; do
@@ -275,7 +365,9 @@ fm_nm_guard_action() {  # <tool> [args...]
           -n|--dry-run) printf 'none'; return 0 ;;
         esac
       done
-      printf 'push'
+      # Only a push that moves the branch's own ref on the remote it is pushed to
+      # supersedes the run; every other destination is unrelated work.
+      if [ "$(fm_nm_guard_push_scope "$@")" = own ]; then printf 'push'; else printf 'none'; fi
       ;;
     *) printf 'none' ;;
   esac
