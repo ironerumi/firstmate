@@ -128,6 +128,105 @@ pass "aborting a working run is refused and names the run"
 run_in_repo git push origin fm/task-x
 assert_refused nm-push-supersedes "push under a live run"
 pass "a superseding push is refused while a run is live"
+run_in_repo git push --repo origin fm/task-x
+assert_allowed "a positional repository overriding a separate repo option operand"
+run_in_repo git push --repo=origin fm/task-x
+assert_allowed "a positional repository overriding an attached repo option operand"
+run_in_repo git push --repo origin
+assert_refused nm-push-supersedes "a separate repo option supplying the repository"
+run_in_repo git push --repo=origin
+assert_refused nm-push-supersedes "an attached repo option supplying the repository"
+run_in_repo git push --recurse-submodules on-demand origin fm/task-x
+assert_refused nm-push-supersedes "a push with a separate submodule option operand"
+run_in_repo git push -vo ci.skip origin fm/task-x
+assert_refused nm-push-supersedes "a push with an aggregated short option operand"
+run_in_repo git push --rec on-demand origin fm/task-x
+assert_refused nm-push-supersedes "a push with an abbreviated long option operand"
+run_in_repo git push --repo=backup origin fm/task-x
+assert_refused nm-push-supersedes "a positional repository overriding the repo option"
+pass "push option operands cannot bypass the own-branch guard"
+
+# Git's no-refspec policy can target a tracked branch other than the worker's
+# branch, or perform no push at all; neither case supersedes the live run.
+git -C "$REPO" config branch.fm/task-x.remote origin
+git -C "$REPO" config branch.fm/task-x.merge refs/heads/main
+git -C "$REPO" config push.default upstream
+run_in_repo git push origin
+assert_allowed "an upstream-configured push to another branch"
+git -C "$REPO" config push.default nothing
+run_in_repo git push origin
+assert_allowed "a no-op push.default=nothing push"
+git -C "$REPO" config --unset push.default
+git -C "$REPO" config --unset branch.fm/task-x.remote
+git -C "$REPO" config --unset branch.fm/task-x.merge
+pass "no-refspec push policy is not over-blocked"
+
+# --- 1b. only the branch's own ref on its own remote supersedes the run ------
+
+# A refused push never reaches git, so the remote must still lack the branch.
+remote_has() {  # <ref>
+  git -C "$REMOTE" rev-parse --verify --quiet "$1" >/dev/null
+}
+REMOTE_URL=$(git -C "$REPO" config --get remote.origin.url)
+SECOND_REMOTE="$TMP/second-remote.git"
+git init --bare -q "$SECOND_REMOTE"
+
+run_in_repo git push
+assert_refused nm-push-supersedes "a bare push under a live run"
+run_in_repo git push origin
+assert_refused nm-push-supersedes "a push naming only the own remote"
+run_in_repo git push origin HEAD
+assert_refused nm-push-supersedes "a push of HEAD to the own remote"
+run_in_repo git push --force origin fm/task-x
+assert_refused nm-push-supersedes "a forced push of the own branch"
+run_in_repo git push origin "$HEAD_SHA:refs/heads/fm/task-x"
+assert_refused nm-push-supersedes "a push whose destination is the own branch"
+run_in_repo git push "$REMOTE_URL" fm/task-x
+assert_refused nm-push-supersedes "a push of the own branch to the own remote's URL"
+remote_has refs/heads/fm/task-x && fail "a refused own-branch push must never reach the remote"
+pass "every form of pushing the own branch to its own remote is refused"
+
+run_in_repo git push origin "$HEAD_SHA:refs/heads/fm/proof-linux"
+assert_allowed "a proof ref pushed to the own remote"
+remote_has refs/heads/fm/proof-linux || fail "the allowed proof-ref push must reach the remote: $OUT"
+pass "a push of another ref to the own remote is allowed"
+
+# Configured push destinations and mappings are part of Git's push contract.
+git -C "$REPO" config --add remote.origin.pushurl "$REMOTE"
+git -C "$REPO" config --add remote.origin.pushurl "$SECOND_REMOTE"
+run_in_repo git push "$SECOND_REMOTE" fm/task-x
+assert_refused nm-push-supersedes "a push to a second configured own push URL"
+git -C "$REPO" remote add backup "$SECOND_REMOTE"
+git -C "$REPO" config --add remotes.publish origin
+git -C "$REPO" config --add remotes.publish backup
+run_in_repo git push publish fm/task-x
+assert_refused nm-push-supersedes "a push through a remote group containing the own remote"
+git -C "$REPO" config --unset-all remotes.publish
+git -C "$REPO" config remote.origin.push 'HEAD:refs/heads/fm/proof-config'
+run_in_repo git push origin
+assert_allowed "a bare push with a configured proof refspec"
+remote_has refs/heads/fm/proof-config || fail "the configured proof ref push must reach the remote: $OUT"
+git -C "$REPO" config --unset-all remote.origin.push
+git -C "$REPO" config --unset-all remote.origin.pushurl
+git -C "$REPO" remote remove backup
+pass "configured push URLs, remote groups, and mappings are classified"
+
+FIXTURE="$TMP/fixture"
+FIXTURE_REMOTE="$TMP/fixture-remote.git"
+fm_git_init_commit "$FIXTURE"
+fm_git_add_origin "$FIXTURE" "$FIXTURE_REMOTE"
+git -C "$FIXTURE" commit -q --allow-empty -m fixture-work
+run_in_repo git -C "$FIXTURE" push origin main
+assert_allowed "a fixture push into a temporary repository through git -C"
+[ "$(git -C "$FIXTURE_REMOTE" rev-parse main)" = "$(git -C "$FIXTURE" rev-parse main)" ] \
+  || fail "the allowed fixture push must reach the fixture remote: $OUT"
+pass "a push from another repository is judged against that repository"
+
+run_in_repo git push "$FIXTURE_REMOTE" HEAD
+assert_allowed "the own branch pushed to a temporary repository"
+git -C "$FIXTURE_REMOTE" rev-parse --verify --quiet refs/heads/fm/task-x >/dev/null \
+  || fail "the allowed push to a temporary repository must reach it: $OUT"
+pass "a push to a remote other than the branch's own is allowed"
 
 # --- 2. inspection, reconnection and the gate response path stay open -------
 
@@ -298,7 +397,7 @@ pass "a review fix response is allowed however many rounds have run"
 check_action() {  # <expected> <tool> <args...>
   local expected=$1 got
   shift
-  got=$(fm_nm_guard_action "$@")
+  got=$(cd "$REPO" && fm_nm_guard_action "$@")
   [ "$got" = "$expected" ] || fail "action for '$*': expected $expected, got $got"
 }
 
@@ -319,7 +418,9 @@ check_action none no-mistakes axi logs --step review --full
 check_action none no-mistakes attach
 check_action none no-mistakes axi run --help
 check_action push git push
-check_action push git -C /tmp push --force
+check_action push git -C "$REPO" push --force
+check_action none git push --tags
+check_action push git push --all
 check_action none git push --dry-run
 check_action none git status
 check_action none git commit -m "push"

@@ -131,7 +131,14 @@ ACTION=$(fm_nm_guard_action "$FM_NM_GUARD_TOOL" "$@")
 [ "${FM_NM_GUARD_ALLOW:-}" != "1" ] || exec_real "$@"
 
 GIT_BIN=$(fm_nm_path_bin_fallback git) || exec_real "$@"
-WT=$("$GIT_BIN" rev-parse --show-toplevel 2>/dev/null) || WT=""
+# A git command's run is read in the repository it acts on, so `git -C <other>`
+# is judged against that repository rather than the pane's.
+GIT_GLOBALS=()
+if [ "$FM_NM_GUARD_TOOL" = git ]; then
+  fm_nm_guard_git_split "$@"
+  GIT_GLOBALS=(${FM_NM_GUARD_GIT_GLOBALS[@]+"${FM_NM_GUARD_GIT_GLOBALS[@]}"})
+fi
+WT=$("$GIT_BIN" ${GIT_GLOBALS[@]+"${GIT_GLOBALS[@]}"} rev-parse --show-toplevel 2>/dev/null) || WT=""
 [ -n "$WT" ] || exec_real "$@"
 
 STATUS_FILE=${FM_NM_GUARD_STATUS:-}

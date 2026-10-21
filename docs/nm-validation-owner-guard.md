@@ -27,7 +27,7 @@ Refused, and only while a run attributed to this branch is active or parked:
 | Attempt | Code | Why |
 | --- | --- | --- |
 | `no-mistakes axi run` with any flag, `no-mistakes rerun` | `nm-run-active` | Cancels the live run and restarts every completed step. |
-| `git push` of any shape | `nm-push-supersedes` | Cancels the live run as superseded; the pipeline pushes the branch itself at its push step. |
+| `git push` of the branch's own ref to its own remote | `nm-push-supersedes` | Cancels the live run as superseded; the pipeline pushes the branch itself at its push step. |
 | `no-mistakes axi abort` at a gate | `nm-abandon-gate` | Discards completed work at a stage the worker could answer. |
 | `no-mistakes axi abort` mid-step | `nm-abandon-run` | Same loss, decided unilaterally; whether to abandon a run is firstmate's call. |
 
@@ -49,6 +49,8 @@ Always permitted, whatever the run state:
 - Reconnection: `no-mistakes attach`.
 - The continuation path: `no-mistakes axi respond` in every form, including `--action fix` on the review step. The review loop's round budget belongs to no-mistakes (`auto_fix.review`), not to this guard.
 - `git push --dry-run`, which moves no remote ref.
+- Every other push: another ref such as a separate proof branch, a remote other than the branch's own, or a push into another repository such as a temporary test fixture.
+  The run is read in the repository the push acts on, honoring `git -C`, and `fm_nm_guard_push_scope` in `bin/fm-nm-guard-lib.sh` owns which destinations count as the branch's own.
 - Every git command that is not a push, and every command that is not `no-mistakes` or `git` at all.
 - Everything, unconditionally, once the attributed run is terminal and reported, or when no run is attributed to this branch. A genuinely new run after a conclusively terminal one is exactly the authorized recovery path, and the guard does not stand in its way.
 
@@ -135,7 +137,7 @@ For any wrapper that still does that, each shim carries a pid-marked backstop th
 
 ## Automated validation
 
-`tests/fm-nm-guard.test.sh` owns the acceptance matrix: the permitted continuation and inspection commands under a live run, each refused duplicate-run, push, and abort path, the terminal-failed recovery sequence in both its unreported and reported forms, a genuinely new run after a terminal run, a review fix response past any round count staying allowed, non-no-mistakes tasks and unrelated commands, the fail-open degradations, and the shim's exec-through behavior including argument fidelity.
+`tests/fm-nm-guard.test.sh` owns the acceptance matrix: the permitted continuation and inspection commands under a live run, each refused duplicate-run, own-branch push, and abort path, the pushes to other refs, remotes, and repositories that stay allowed, the terminal-failed recovery sequence in both its unreported and reported forms, a genuinely new run after a terminal run, a review fix response past any round count staying allowed, non-no-mistakes tasks and unrelated commands, the fail-open degradations, and the shim's exec-through behavior including argument fidelity.
 
 Run:
 

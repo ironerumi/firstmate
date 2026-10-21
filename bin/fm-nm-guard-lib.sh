@@ -215,10 +215,210 @@ fm_nm_run_state() {  # <worktree> [timeout-seconds]
 # never the subcommand.
 FM_NM_GUARD_GIT_VALUE_OPTS=' -C -c --git-dir --work-tree --namespace --exec-path --config-env '
 
+# Split a git argv into the global options before its subcommand, the
+# subcommand, and the words after it. Sets FM_NM_GUARD_GIT_GLOBALS (array),
+# FM_NM_GUARD_GIT_SUB and FM_NM_GUARD_GIT_SUBARGS (array), so a caller can replay
+# the globals - `-C`, `--git-dir`, `-c` - to reach the repository git would act on.
+fm_nm_guard_git_split() {  # <git args...>
+  local arg expect_value=0
+  FM_NM_GUARD_GIT_GLOBALS=()
+  FM_NM_GUARD_GIT_SUB=''
+  FM_NM_GUARD_GIT_SUBARGS=()
+  while [ "$#" -gt 0 ]; do
+    arg=$1
+    shift
+    if [ "$expect_value" -eq 1 ]; then
+      expect_value=0
+      FM_NM_GUARD_GIT_GLOBALS+=("$arg")
+      continue
+    fi
+    case "$FM_NM_GUARD_GIT_VALUE_OPTS" in
+      *" $arg "*) expect_value=1; FM_NM_GUARD_GIT_GLOBALS+=("$arg"); continue ;;
+    esac
+    case "$arg" in
+      -*) FM_NM_GUARD_GIT_GLOBALS+=("$arg"); continue ;;
+    esac
+    FM_NM_GUARD_GIT_SUB=$arg
+    FM_NM_GUARD_GIT_SUBARGS=("$@")
+    return 0
+  done
+}
+
+# Whether a `git push` argv would move the pushing repository's current branch
+# on that branch's own remote: `own`, or `other` for every other remote or
+# refspec. The own remote is the one a bare `git push` targets
+# (branch.<b>.pushRemote, remote.pushDefault, branch.<b>.remote, then origin),
+# named or given by its URL. With no refspec, `--all`, `--branches`, `--mirror`,
+# or the matching refspec `:`, git's push configuration decides, which can move
+# the branch, so those count as own; `--tags` alone moves only tags. A refspec is
+# own when its destination - the part after `:`, or the source itself, with
+# HEAD and @ meaning the current branch - names the branch.
+fm_nm_guard_push_scope() {  # <git args...>
+  local -a g=() specs=() positionals=()
+  local -a own_remotes=() target_remotes=() own_urls=() target_urls=() configured_urls=()
+  local -a configured_specs=()
+  local branch remote target='' repo_opt='' expect='' arg spec dst short short_char config_value
+  local push_default upstream_remote upstream_ref
+  local own_name target_name url all=0 tags=0 past_dd=0 have_repo=0 own_destination=0 default_own=0
+  fm_nm_guard_git_split "$@"
+  g=(${FM_NM_GUARD_GIT_GLOBALS[@]+"${FM_NM_GUARD_GIT_GLOBALS[@]}"})
+  branch=$(git ${g[@]+"${g[@]}"} symbolic-ref --quiet --short HEAD 2>/dev/null) || { printf 'other'; return 0; }
+  [ -n "$branch" ] || { printf 'other'; return 0; }
+  remote=$(git ${g[@]+"${g[@]}"} config --get "branch.$branch.pushRemote" 2>/dev/null) \
+    || remote=$(git ${g[@]+"${g[@]}"} config --get remote.pushDefault 2>/dev/null) \
+    || remote=$(git ${g[@]+"${g[@]}"} config --get "branch.$branch.remote" 2>/dev/null) \
+    || remote=origin
+  for arg in ${FM_NM_GUARD_GIT_SUBARGS[@]+"${FM_NM_GUARD_GIT_SUBARGS[@]}"}; do
+    if [ -n "$expect" ]; then
+      [ "$expect" != repo ] || { repo_opt=$arg; have_repo=1; }
+      expect=''
+      continue
+    fi
+    if [ "$past_dd" -eq 0 ]; then
+      case "$arg" in
+        --) past_dd=1; continue ;;
+        --rep|--repo) expect=repo; continue ;;
+        --rep=*|--repo=*) repo_opt=${arg#*=}; have_repo=1; continue ;;
+        --rep*) expect=repo; continue ;;
+        --rec*|--ex*|--push*)
+          case "$arg" in *=*) ;; *) expect=skip ;; esac
+          continue
+          ;;
+        --all|--branches|--mirror) all=1; continue ;;
+        --tags) tags=1; continue ;;
+        -?*)
+          short=${arg#-}
+          while [ -n "$short" ]; do
+            short_char=${short:0:1}
+            short=${short:1}
+            if [ "$short_char" = o ]; then
+              if [ -n "$short" ]; then short=''; else expect=skip; fi
+            fi
+          done
+          continue
+          ;;
+        -*) continue ;;
+      esac
+    fi
+    positionals+=("$arg")
+  done
+  if [ "${#positionals[@]}" -eq 0 ]; then
+    [ "$have_repo" -eq 0 ] || target=$repo_opt
+  else
+    target=${positionals[0]}
+    specs=("${positionals[@]:1}")
+  fi
+  [ -n "$target" ] || target=$remote
+
+  own_remotes=()
+  while IFS= read -r config_value; do
+    [ -n "$config_value" ] && own_remotes+=("$config_value")
+  done < <(git ${g[@]+"${g[@]}"} config --get-all "remotes.$remote" 2>/dev/null || true)
+  [ "${#own_remotes[@]}" -gt 0 ] || own_remotes=("$remote")
+  target_remotes=()
+  while IFS= read -r config_value; do
+    [ -n "$config_value" ] && target_remotes+=("$config_value")
+  done < <(git ${g[@]+"${g[@]}"} config --get-all "remotes.$target" 2>/dev/null || true)
+  [ "${#target_remotes[@]}" -gt 0 ] || target_remotes=("$target")
+
+  for own_name in "${own_remotes[@]}"; do
+    configured_urls=()
+    while IFS= read -r config_value; do
+      [ -n "$config_value" ] && configured_urls+=("$config_value")
+    done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$own_name.pushurl" 2>/dev/null || true)
+    if [ "${#configured_urls[@]}" -eq 0 ]; then
+      while IFS= read -r config_value; do
+        [ -n "$config_value" ] && configured_urls+=("$config_value")
+      done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$own_name.url" 2>/dev/null || true)
+    fi
+    own_urls+=("${configured_urls[@]}")
+  done
+  for target_name in "${target_remotes[@]}"; do
+    for own_name in "${own_remotes[@]}"; do
+      [ "$target_name" = "$own_name" ] || continue
+      own_destination=1
+    done
+    configured_urls=()
+    while IFS= read -r config_value; do
+      [ -n "$config_value" ] && configured_urls+=("$config_value")
+    done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$target_name.pushurl" 2>/dev/null || true)
+    if [ "${#configured_urls[@]}" -eq 0 ]; then
+      while IFS= read -r config_value; do
+        [ -n "$config_value" ] && configured_urls+=("$config_value")
+      done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$target_name.url" 2>/dev/null || true)
+    fi
+    target_urls+=("${configured_urls[@]}")
+  done
+  for own_name in "${own_remotes[@]}"; do
+    [ "$target" = "$own_name" ] || continue
+    own_destination=1
+  done
+  for url in "${own_urls[@]}"; do
+    [ "$target" = "$url" ] || continue
+    own_destination=1
+  done
+  for url in "${target_urls[@]}"; do
+    for own_name in "${own_urls[@]}"; do
+      [ "$url" = "$own_name" ] || continue
+      own_destination=1
+    done
+  done
+  [ "$own_destination" -eq 1 ] || { printf 'other'; return 0; }
+  if [ "$all" -eq 1 ]; then printf 'own'; return 0; fi
+  if [ "${#specs[@]}" -eq 0 ] && [ "$tags" -eq 0 ]; then
+    for target_name in "${target_remotes[@]}"; do
+      configured_specs=()
+      while IFS= read -r config_value; do
+        [ -n "$config_value" ] && configured_specs+=("$config_value")
+      done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$target_name.push" 2>/dev/null || true)
+      if [ "${#configured_specs[@]}" -eq 0 ]; then
+        push_default=$(git ${g[@]+"${g[@]}"} config --get push.default 2>/dev/null || true)
+        [ -n "$push_default" ] || push_default=simple
+        upstream_remote=$(git ${g[@]+"${g[@]}"} config --get "branch.$branch.remote" 2>/dev/null || true)
+        upstream_ref=$(git ${g[@]+"${g[@]}"} config --get "branch.$branch.merge" 2>/dev/null || true)
+        case "$push_default" in
+          current|matching) default_own=1 ;;
+          upstream)
+            [ "$target_name" = "$upstream_remote" ] && [ "$upstream_ref" = "refs/heads/$branch" ] && default_own=1
+            ;;
+          simple)
+            if [ -z "$upstream_ref" ]; then
+              default_own=1
+            elif [ "$upstream_ref" = "refs/heads/$branch" ] && {
+              [ -z "$upstream_remote" ] || [ "$target_name" = "$upstream_remote" ]
+            }; then
+              default_own=1
+            fi
+            ;;
+        esac
+      else
+        specs+=("${configured_specs[@]}")
+      fi
+    done
+  fi
+  if [ "${#specs[@]}" -eq 0 ]; then
+    if [ "$tags" -eq 1 ] || [ "$default_own" -eq 0 ]; then printf 'other'; else printf 'own'; fi
+    return 0
+  fi
+  for spec in "${specs[@]}"; do
+    spec=${spec#+}
+    [ "$spec" != : ] || { printf 'own'; return 0; }
+    dst=${spec#*:}
+    case "$dst" in HEAD|@) dst=$branch ;; esac
+    case "$dst" in refs/*) ;; *) dst="refs/heads/$dst" ;; esac
+    # Unquoted on purpose: a pattern refspec's `*` matches the branch.
+    # shellcheck disable=SC2254
+    case "refs/heads/$branch" in $dst) printf 'own'; return 0 ;; esac
+  done
+  [ "$default_own" -eq 1 ] && { printf 'own'; return 0; }
+  printf 'other'
+}
+
 # What a command would do to a live run: run, abort, push, or none.
 # `none` covers every inspection and continuation path on purpose - axi status,
-# axi logs, axi respond, attach, runs, status, doctor, and any git command that
-# is not a push. A flagless axi run is `reattach`.
+# axi logs, axi respond, attach, runs, status, doctor, any git command that is
+# not a push, and any push that fm_nm_guard_push_scope does not classify as the
+# branch's own. A flagless axi run is `reattach`.
 fm_nm_guard_action() {  # <tool> [args...]
   local tool=$1 arg sub='' axi=0 expect_value=0
   shift
@@ -256,18 +456,8 @@ fm_nm_guard_action() {  # <tool> [args...]
       printf 'none'
       ;;
     git)
-      for arg in "$@"; do
-        if [ "$expect_value" -eq 1 ]; then expect_value=0; continue; fi
-        case "$FM_NM_GUARD_GIT_VALUE_OPTS" in
-          *" $arg "*) expect_value=1; continue ;;
-        esac
-        case "$arg" in
-          -*) continue ;;
-        esac
-        sub=$arg
-        break
-      done
-      if [ "$sub" != push ]; then printf 'none'; return 0; fi
+      fm_nm_guard_git_split "$@"
+      if [ "$FM_NM_GUARD_GIT_SUB" != push ]; then printf 'none'; return 0; fi
       # A dry run reports what would happen without moving the remote ref, so it
       # cannot supersede anything.
       for arg in "$@"; do
@@ -275,7 +465,9 @@ fm_nm_guard_action() {  # <tool> [args...]
           -n|--dry-run) printf 'none'; return 0 ;;
         esac
       done
-      printf 'push'
+      # Only a push that moves the branch's own ref on the remote it is pushed to
+      # supersedes the run; every other destination is unrelated work.
+      if [ "$(fm_nm_guard_push_scope "$@")" = own ]; then printf 'push'; else printf 'none'; fi
       ;;
     *) printf 'none' ;;
   esac
