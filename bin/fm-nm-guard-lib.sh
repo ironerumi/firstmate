@@ -254,8 +254,11 @@ fm_nm_guard_git_split() {  # <git args...>
 # own when its destination - the part after `:`, or the source itself, with
 # HEAD and @ meaning the current branch - names the branch.
 fm_nm_guard_push_scope() {  # <git args...>
-  local -a g=() specs=()
-  local branch remote target='' repo_opt='' expect='' arg spec dst all=0 tags=0 past_dd=0 have_target=0 have_repo=0
+  local -a g=() specs=() positionals=()
+  local -a own_remotes=() target_remotes=() own_urls=() target_urls=() configured_urls=()
+  local -a configured_specs=()
+  local branch remote target='' repo_opt='' expect='' arg spec dst short short_char config_value
+  local own_name target_name url all=0 tags=0 past_dd=0 have_repo=0 own_destination=0 default_own=0
   fm_nm_guard_git_split "$@"
   g=(${FM_NM_GUARD_GIT_GLOBALS[@]+"${FM_NM_GUARD_GIT_GLOBALS[@]}"})
   branch=$(git ${g[@]+"${g[@]}"} symbolic-ref --quiet --short HEAD 2>/dev/null) || { printf 'other'; return 0; }
@@ -273,31 +276,107 @@ fm_nm_guard_push_scope() {  # <git args...>
     if [ "$past_dd" -eq 0 ]; then
       case "$arg" in
         --) past_dd=1; continue ;;
-        --repo) expect=repo; continue ;;
-        --repo=*) repo_opt=${arg#--repo=}; have_repo=1; continue ;;
-        --recurse-submodules|--receive-pack|--exec|-o|--push-option) expect=skip; continue ;;
-        --recurse-submodules=*|--receive-pack=*|--exec=*|--push-option=*) continue ;;
+        --rep|--repo) expect=repo; continue ;;
+        --rep=*|--repo=*) repo_opt=${arg#*=}; have_repo=1; continue ;;
+        --rep*) expect=repo; continue ;;
+        --rec*|--ex*|--push*)
+          case "$arg" in *=*) ;; *) expect=skip ;; esac
+          continue
+          ;;
         --all|--branches|--mirror) all=1; continue ;;
         --tags) tags=1; continue ;;
+        -?*)
+          short=${arg#-}
+          while [ -n "$short" ]; do
+            short_char=${short:0:1}
+            short=${short:1}
+            if [ "$short_char" = o ]; then
+              if [ -n "$short" ]; then short=''; else expect=skip; fi
+            fi
+          done
+          continue
+          ;;
         -*) continue ;;
       esac
     fi
-    if [ "$have_repo" -eq 0 ] && [ "$have_target" -eq 0 ]; then
-      target=$arg
-      have_target=1
-    else
-      specs+=("$arg")
-    fi
+    positionals+=("$arg")
   done
-  [ "$have_repo" -eq 0 ] || target=$repo_opt
-  [ -n "$target" ] || target=$remote
-  if [ "$target" != "$remote" ] \
-    && [ "$target" != "$(git ${g[@]+"${g[@]}"} config --get "remote.$remote.pushurl" 2>/dev/null)" ] \
-    && [ "$target" != "$(git ${g[@]+"${g[@]}"} config --get "remote.$remote.url" 2>/dev/null)" ]; then
-    printf 'other'
-    return 0
+  if [ "${#positionals[@]}" -eq 0 ]; then
+    [ "$have_repo" -eq 0 ] || target=$repo_opt
+  else
+    target=${positionals[0]}
+    specs=("${positionals[@]:1}")
   fi
+  [ -n "$target" ] || target=$remote
+
+  own_remotes=()
+  while IFS= read -r config_value; do
+    [ -n "$config_value" ] && own_remotes+=("$config_value")
+  done < <(git ${g[@]+"${g[@]}"} config --get-all "remotes.$remote" 2>/dev/null || true)
+  [ "${#own_remotes[@]}" -gt 0 ] || own_remotes=("$remote")
+  target_remotes=()
+  while IFS= read -r config_value; do
+    [ -n "$config_value" ] && target_remotes+=("$config_value")
+  done < <(git ${g[@]+"${g[@]}"} config --get-all "remotes.$target" 2>/dev/null || true)
+  [ "${#target_remotes[@]}" -gt 0 ] || target_remotes=("$target")
+
+  for own_name in "${own_remotes[@]}"; do
+    configured_urls=()
+    while IFS= read -r config_value; do
+      [ -n "$config_value" ] && configured_urls+=("$config_value")
+    done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$own_name.pushurl" 2>/dev/null || true)
+    if [ "${#configured_urls[@]}" -eq 0 ]; then
+      while IFS= read -r config_value; do
+        [ -n "$config_value" ] && configured_urls+=("$config_value")
+      done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$own_name.url" 2>/dev/null || true)
+    fi
+    own_urls+=("${configured_urls[@]}")
+  done
+  for target_name in "${target_remotes[@]}"; do
+    for own_name in "${own_remotes[@]}"; do
+      [ "$target_name" = "$own_name" ] || continue
+      own_destination=1
+    done
+    configured_urls=()
+    while IFS= read -r config_value; do
+      [ -n "$config_value" ] && configured_urls+=("$config_value")
+    done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$target_name.pushurl" 2>/dev/null || true)
+    if [ "${#configured_urls[@]}" -eq 0 ]; then
+      while IFS= read -r config_value; do
+        [ -n "$config_value" ] && configured_urls+=("$config_value")
+      done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$target_name.url" 2>/dev/null || true)
+    fi
+    target_urls+=("${configured_urls[@]}")
+  done
+  for own_name in "${own_remotes[@]}"; do
+    [ "$target" = "$own_name" ] || continue
+    own_destination=1
+  done
+  for url in "${own_urls[@]}"; do
+    [ "$target" = "$url" ] || continue
+    own_destination=1
+  done
+  for url in "${target_urls[@]}"; do
+    for own_name in "${own_urls[@]}"; do
+      [ "$url" = "$own_name" ] || continue
+      own_destination=1
+    done
+  done
+  [ "$own_destination" -eq 1 ] || { printf 'other'; return 0; }
   if [ "$all" -eq 1 ]; then printf 'own'; return 0; fi
+  if [ "${#specs[@]}" -eq 0 ] && [ "$tags" -eq 0 ]; then
+    for target_name in "${target_remotes[@]}"; do
+      configured_specs=()
+      while IFS= read -r config_value; do
+        [ -n "$config_value" ] && configured_specs+=("$config_value")
+      done < <(git ${g[@]+"${g[@]}"} config --get-all "remote.$target_name.push" 2>/dev/null || true)
+      if [ "${#configured_specs[@]}" -eq 0 ]; then
+        default_own=1
+      else
+        specs+=("${configured_specs[@]}")
+      fi
+    done
+  fi
   if [ "${#specs[@]}" -eq 0 ]; then
     if [ "$tags" -eq 1 ]; then printf 'other'; else printf 'own'; fi
     return 0
@@ -312,6 +391,7 @@ fm_nm_guard_push_scope() {  # <git args...>
     # shellcheck disable=SC2254
     case "refs/heads/$branch" in $dst) printf 'own'; return 0 ;; esac
   done
+  [ "$default_own" -eq 1 ] && { printf 'own'; return 0; }
   printf 'other'
 }
 

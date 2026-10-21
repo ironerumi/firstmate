@@ -129,11 +129,21 @@ run_in_repo git push origin fm/task-x
 assert_refused nm-push-supersedes "push under a live run"
 pass "a superseding push is refused while a run is live"
 run_in_repo git push --repo origin fm/task-x
-assert_refused nm-push-supersedes "a push with a separate repository option operand"
+assert_allowed "a positional repository overriding a separate repo option operand"
 run_in_repo git push --repo=origin fm/task-x
-assert_refused nm-push-supersedes "a push with an attached repository option operand"
+assert_allowed "a positional repository overriding an attached repo option operand"
+run_in_repo git push --repo origin
+assert_refused nm-push-supersedes "a separate repo option supplying the repository"
+run_in_repo git push --repo=origin
+assert_refused nm-push-supersedes "an attached repo option supplying the repository"
 run_in_repo git push --recurse-submodules on-demand origin fm/task-x
 assert_refused nm-push-supersedes "a push with a separate submodule option operand"
+run_in_repo git push -vo ci.skip origin fm/task-x
+assert_refused nm-push-supersedes "a push with an aggregated short option operand"
+run_in_repo git push --rec on-demand origin fm/task-x
+assert_refused nm-push-supersedes "a push with an abbreviated long option operand"
+run_in_repo git push --repo=backup origin fm/task-x
+assert_refused nm-push-supersedes "a positional repository overriding the repo option"
 pass "push option operands cannot bypass the own-branch guard"
 
 # --- 1b. only the branch's own ref on its own remote supersedes the run ------
@@ -143,6 +153,8 @@ remote_has() {  # <ref>
   git -C "$REMOTE" rev-parse --verify --quiet "$1" >/dev/null
 }
 REMOTE_URL=$(git -C "$REPO" config --get remote.origin.url)
+SECOND_REMOTE="$TMP/second-remote.git"
+git init --bare -q "$SECOND_REMOTE"
 
 run_in_repo git push
 assert_refused nm-push-supersedes "a bare push under a live run"
@@ -163,6 +175,26 @@ run_in_repo git push origin "$HEAD_SHA:refs/heads/fm/proof-linux"
 assert_allowed "a proof ref pushed to the own remote"
 remote_has refs/heads/fm/proof-linux || fail "the allowed proof-ref push must reach the remote: $OUT"
 pass "a push of another ref to the own remote is allowed"
+
+# Configured push destinations and mappings are part of Git's push contract.
+git -C "$REPO" config --add remote.origin.pushurl "$REMOTE"
+git -C "$REPO" config --add remote.origin.pushurl "$SECOND_REMOTE"
+run_in_repo git push "$SECOND_REMOTE" fm/task-x
+assert_refused nm-push-supersedes "a push to a second configured own push URL"
+git -C "$REPO" remote add backup "$SECOND_REMOTE"
+git -C "$REPO" config --add remotes.publish origin
+git -C "$REPO" config --add remotes.publish backup
+run_in_repo git push publish fm/task-x
+assert_refused nm-push-supersedes "a push through a remote group containing the own remote"
+git -C "$REPO" config --unset-all remotes.publish
+git -C "$REPO" config remote.origin.push 'HEAD:refs/heads/fm/proof-config'
+run_in_repo git push origin
+assert_allowed "a bare push with a configured proof refspec"
+remote_has refs/heads/fm/proof-config || fail "the configured proof ref push must reach the remote: $OUT"
+git -C "$REPO" config --unset-all remote.origin.push
+git -C "$REPO" config --unset-all remote.origin.pushurl
+git -C "$REPO" remote remove backup
+pass "configured push URLs, remote groups, and mappings are classified"
 
 FIXTURE="$TMP/fixture"
 FIXTURE_REMOTE="$TMP/fixture-remote.git"
