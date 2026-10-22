@@ -69,11 +69,11 @@
 # repository. A pull observation has three
 # dependent waves: core, six independent reads, then the closing head read;
 # an issue has two waves, so one observation needs at most 15 seconds.
-# Each poll observes one wave of up to eight URLs in parallel under the same
-# deadline, each in its own scratch directory, then applies the results in
-# rotation order. URLs needing forge reads are sorted by URL and rotated by
-# the current five-minute epoch bucket times that width, modulo their count,
-# so successive polls cover successive slices without stored scheduling state
+# Each poll observes one wave sized to cover all live URLs in two successive
+# five-minute buckets, in parallel under the same deadline, each in its own
+# scratch directory, then applies the results in rotation order. URLs needing
+# forge reads are sorted by URL and rotated by the current five-minute epoch
+# bucket times that width, modulo their count, without stored scheduling state
 # or freshness-based reordering. Terminal URLs settle separately before the
 # forge budget starts and consume no rotation slots.
 # A deliberately smaller configured budget remains bounded and may be
@@ -146,7 +146,6 @@ case "$CHECK_TIMEOUT" in ''|*[!0-9]*|0) CHECK_TIMEOUT=30 ;; esac
 BUDGET_CAP=$((CHECK_TIMEOUT - 3))
 [ "$BUDGET_CAP" -ge 1 ] || BUDGET_CAP=1
 [ "$BUDGET" -le "$BUDGET_CAP" ] || BUDGET=$BUDGET_CAP
-OBSERVATION_WIDTH=8
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-contributions.XXXXXX")
 LOCK_HELD=0
 cleanup() {
@@ -484,7 +483,7 @@ clear_unsupported_errors() {
 }
 
 poll() {
-  local task url old kind error observed why exhausted index bucket dir
+  local task url old kind error observed why exhausted index bucket dir live_count
   local -a row
   acquire
   get_input
@@ -510,7 +509,10 @@ poll() {
       (IFS=$'\t'; printf '%s\n' "${row[*]}") >> "$TMP/live.tsv"
     fi
   done < "$TMP/known.tsv"
-  # Each five-minute bucket advances the rotation by one whole wave.
+  # Two successive five-minute buckets cover every live URL.
+  live_count=$(wc -l < "$TMP/live.tsv")
+  OBSERVATION_WIDTH=$(( (live_count + 1) / 2 ))
+  [ "$OBSERVATION_WIDTH" -ge 2 ] || OBSERVATION_WIDTH=$live_count
   bucket=$((EPOCH / 300))
   jq -Rnr --argjson start "$((bucket * OBSERVATION_WIDTH))" --argjson width "$OBSERVATION_WIDTH" '
     [inputs] | if length == 0 then . else ($start % length) as $offset | (.[$offset:] + .[:$offset])[:$width] end
