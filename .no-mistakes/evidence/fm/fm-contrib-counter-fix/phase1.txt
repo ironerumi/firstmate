@@ -1,0 +1,8 @@
+Phase 1 targeted live validation
+
+Listed suites: `bin/fm-test-run.sh --list --changed` (upper-bound list).
+Narrowed changed-behavior suites, run serially with `--jobs 1 --per-script-timeout-secs 300`:
+- `tests/fm-contributions.test.sh` — passed, exit 0, duration 241337 ms; all contribution coverage, parallel polling, age separation, stale verdict, fix-link, and expired-child cases passed.
+- `tests/fm-bearings-snapshot.test.sh` — passed, exit 0, duration 236876 ms; snapshot projection suite passed.
+
+No suite failed. No suite hit the 300-second per-script time bound. No additional suite was started.
