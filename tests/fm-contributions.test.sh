@@ -1105,8 +1105,9 @@ test_next_url_does_not_inherit_a_forge_diagnostic() {
   # Both URLs share one parallel wave; each keeps its own diagnostic.
   out=$(with_home "$home" env FM_CONTRIBUTIONS_NOW=2026-09-16T08:05:00Z "$ROOT/bin/fm-contributions.sh" poll) \
     || fail 'poll failed while a GitHub issue followed a failed PR read'
-  grep -qF 'api repos/o/r/pulls/8/reviews?' "$home/forge/calls" && grep -qFx 'api repos/o/r/issues/9' "$home/forge/calls" \
-    || fail 'the seeded PR read failure and the issue read did not both run'
+  if ! { grep -qF 'api repos/o/r/pulls/8/reviews?' "$home/forge/calls" && grep -qFx 'api repos/o/r/issues/9' "$home/forge/calls"; }; then
+    fail 'the seeded PR read failure and the issue read did not both run'
+  fi
   printf '%s\n' "$out" | mask_budget | grep -Fxq "contributions: observation unavailable for https://github.com/o/r/pull/8 - $why" \
     || fail 'the seeded PR failure did not wake'
   printf '%s\n' "$out" | grep -Fxq 'contributions: observation unavailable for https://github.com/o/r/issues/9 - comment pages returned an unexpected shape' \
