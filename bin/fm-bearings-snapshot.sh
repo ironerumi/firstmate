@@ -614,8 +614,8 @@ MODEL=$(printf '%s' "$SNAP" | jq \
         | map(if . != null and .owner != "(main)" and .known > 0 and (.valid_until // 0) < ($now | fromdateiso8601)
               then .complete=false | .proven_clear=false | .checked=0 | .captain=[]
                 | .unmeasured=(.unmeasured // 0)
-                | .counts={captain:0,fleet:0,maintainer:0,nobody:0}
-                | .not_recently_checked=(.known - .unmeasured)
+                | .counts={captain:0,fleet:(.counts.fleet // 0),maintainer:0,nobody:0}
+                | .not_recently_checked=([0, (.known - .unmeasured - .counts.fleet)] | max)
               else . end) as $homes
         | ([$homes[] | select(. != null)]) as $measured
         | {scope:"owned contributions per home",known:([$measured[].known] | add // 0),

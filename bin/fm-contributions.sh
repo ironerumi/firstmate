@@ -69,15 +69,12 @@
 # repository. A pull observation has three
 # dependent waves: core, six independent reads, then the closing head read;
 # a PR observation needs at most 15 seconds and an issue at most 10 seconds.
-# Each poll observes one wave from a bounded two-phase cycle in parallel under
-# the same deadline, each URL assigned to a phase by its stable URL hash, then
-# applies the results in rotation order. URLs needing forge reads are sorted by
-# URL before phase selection, without stored scheduling state or freshness-based
-# reordering. A phase uses at most eight streaming URL workers and rotates its
-# start position each cycle; while one observation takes about six seconds or
-# less, this keeps the two-phase cycle inside the freshness window; slower
-# latency remains not_recently_checked rather than fleet work. Terminal URLs
-# settle separately before the forge budget starts and consume no rotation slots.
+# Each poll observes one parallel wave of up to eight live URLs. The wave starts
+# at (five-minute bucket * 8) modulo the live URL count, so every live URL is
+# retried within the current open-set rotation. Coverage freshness is the
+# greater of FM_CONTRIBUTIONS_MAX_AGE and (ceil(open/8) + 1) * 300 seconds,
+# where open is the number of non-final supported URLs. Terminal URLs settle
+# separately before the forge budget starts and consume no rotation slots.
 # A deliberately smaller configured budget remains bounded and may be
 # unmeasured, rather than being mislabeled unavailable. Each distinct supported
 # URL is attempted at most once per poll and its observation applied to every owner.
@@ -140,6 +137,7 @@ NOW=${FM_CONTRIBUTIONS_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 EPOCH=$(jq -nr --arg now "$NOW" '$now | fromdateiso8601') || fail 'invalid observation clock'
 MAX_AGE=${FM_CONTRIBUTIONS_MAX_AGE:-900}
 BUDGET=${FM_CONTRIBUTIONS_BUDGET:-20}
+OBSERVATION_WIDTH=8
 case "$MAX_AGE" in ''|*[!0-9]*) fail 'invalid freshness bound' ;; esac
 case "$BUDGET" in ''|*[!0-9]*) fail 'invalid poll budget' ;; esac
 [ "$BUDGET" -ge 1 ] && [ "$BUDGET" -le 25 ] || fail 'poll budget must be 1..25 seconds'
@@ -198,9 +196,10 @@ project() {
     --argjson now "$EPOCH" --argjson max_age "$MAX_AGE" --argjson errors "$ERRORS" \
     --arg all "${2:-}" '
     projected($input[0];$saved[0];$now;$max_age) as $rows
-    | summary($rows;($errors + (if $input[0].backlog.present == true then 0 else 1 end)))
+    | summary($rows;($errors + (if $input[0].backlog.present == true then 0 else 1 end));$max_age)
     # Final rows never expire; a home holding only final rows is valid from now.
-    | .valid_until = (if ($rows | length) > 0 and all($rows[]; .final) then $now else .valid_until end) + $max_age
+    | .valid_until = (if ($rows | length) > 0 and all($rows[]; .final) then $now else .valid_until end) + .coverage_age
+    | del(.coverage_age)
     | .captain_omitted = ([0, (.captain | length) - 20] | max)
     | .captain |= .[:20]
     | . + (if $all == "--all" then {rows:$rows} else {} end)'
@@ -485,10 +484,8 @@ clear_unsupported_errors() {
 }
 
 poll() {
-  local task url old kind error observed why exhausted index bucket dir live_count partition hash
-  local phase_count cycle offset reserve now line active slot slot_index pid
-  local max_pr max_issue duration started_at finished_at worker_duration
-  local -a row pids dirs kinds
+  local task url old kind error observed why exhausted index bucket dir
+  local -a row
   acquire
   get_input
   read_saved
@@ -513,108 +510,25 @@ poll() {
       (IFS=$'\t'; printf '%s\n' "${row[*]}") >> "$TMP/live.tsv"
     fi
   done < "$TMP/known.tsv"
-  # Successive five-minute buckets select each phase; an oversized phase rotates
-  # its start position until every URL has been attempted.
-  live_count=$(wc -l < "$TMP/live.tsv")
-  OBSERVATION_PARTITIONS=1
-  [ "$live_count" -gt 2 ] && OBSERVATION_PARTITIONS=2
+  # Each five-minute bucket advances the rotation by one whole wave.
   bucket=$((EPOCH / 300))
-  partition=$((bucket % OBSERVATION_PARTITIONS))
-  : > "$TMP/phase.tsv"
-  while IFS=$'\t' read -r -a row; do
-    hash=$(printf '%s\n' "${row[0]}" | cksum | awk '{print $1}')
-    [ "$((hash % OBSERVATION_PARTITIONS))" -eq "$partition" ] || continue
-    (IFS=$'\t'; printf '%s\n' "${row[*]}") >> "$TMP/phase.tsv"
-  done < "$TMP/live.tsv"
-  phase_count=$(wc -l < "$TMP/phase.tsv")
-  cycle=$((bucket / OBSERVATION_PARTITIONS))
-  offset=0
-  [ "$phase_count" -gt 0 ] && offset=$((cycle % phase_count))
-  jq -Rnr --argjson offset "$offset" '
-    [inputs] | if length == 0 then . else .[$offset:] + .[:$offset] end | .[]' \
-    < "$TMP/phase.tsv" > "$TMP/known.tsv"
+  jq -Rnr --argjson start "$((bucket * OBSERVATION_WIDTH))" --argjson width "$OBSERVATION_WIDTH" '
+    [inputs] | if length == 0 then . else ($start % length) as $offset | (.[$offset:] + .[:$offset])[:$width] end
+    | .[]' < "$TMP/live.tsv" > "$TMP/known.tsv"
   DEADLINE=$(( $(date +%s) + BUDGET ))
-  active=0
-  max_pr=0
-  max_issue=0
   index=0
-  exec 3< "$TMP/known.tsv"
-  while IFS= read -r line <&3; do
-    IFS=$'\t' read -r -a row <<< "$line"
-    case "${row[0]}" in
-      */issues/*) kind=issue; reserve=$max_issue ;;
-      *) kind=pr; reserve=$max_pr ;;
-    esac
-    now=$(date +%s)
-    if [ "$reserve" -gt 0 ] && [ "$((DEADLINE - now))" -lt "$reserve" ]; then
-      break
-    fi
+  while IFS=$'\t' read -r -a row; do
     index=$((index + 1))
     dir=$TMP/url.$index
     mkdir "$dir"
     # Each URL observes in its own scratch directory; the parent applies results in rotation order.
     {
       observed=0
-      started_at=$(date +%s)
       TMP=$dir observe "${row[0]}" || observed=$?
-      finished_at=$(date +%s)
-      worker_duration=$((finished_at - started_at))
-      [ "$worker_duration" -ge 1 ] || worker_duration=1
-      printf '%s %s %s\n' "$observed" "$BUDGET_EXHAUSTED" "$worker_duration" > "$dir/result"
-      : > "$dir/done"
+      printf '%s %s\n' "$observed" "$BUDGET_EXHAUSTED" > "$dir/result"
     } &
-    pids+=("$!")
-    dirs+=("$dir")
-    kinds+=("$kind")
-    active=$((active + 1))
-    while [ "$active" -ge 8 ]; do
-      slot_index=-1
-      while [ "$slot_index" -lt 0 ]; do
-        slot=0
-        for pid in "${pids[@]}"; do
-          if [ -e "${dirs[$slot]}/done" ]; then
-            slot_index=$slot
-            break
-          fi
-          slot=$((slot + 1))
-        done
-        [ "$slot_index" -ge 0 ] || sleep 0.01
-      done
-      wait "${pids[$slot_index]}" || true
-      if read -r observed exhausted duration < "${dirs[$slot_index]}/result"; then
-        case "${kinds[$slot_index]}" in
-          pr) [ "$duration" -gt "$max_pr" ] && max_pr=$duration ;;
-          issue) [ "$duration" -gt "$max_issue" ] && max_issue=$duration ;;
-        esac
-      fi
-      unset "pids[$slot_index]" "dirs[$slot_index]" "kinds[$slot_index]"
-      pids=("${pids[@]}")
-      dirs=("${dirs[@]}")
-      kinds=("${kinds[@]}")
-      active=$((active - 1))
-    done
-  done
-  exec 3<&-
-  while [ "$active" -gt 0 ]; do
-    slot_index=-1
-    while [ "$slot_index" -lt 0 ]; do
-      slot=0
-      for pid in "${pids[@]}"; do
-        if [ -e "${dirs[$slot]}/done" ]; then
-          slot_index=$slot
-          break
-        fi
-        slot=$((slot + 1))
-      done
-      [ "$slot_index" -ge 0 ] || sleep 0.01
-    done
-    wait "${pids[$slot_index]}" || true
-    unset "pids[$slot_index]" "dirs[$slot_index]" "kinds[$slot_index]"
-    pids=("${pids[@]}")
-    dirs=("${dirs[@]}")
-    kinds=("${kinds[@]}")
-    active=$((active - 1))
-  done
+  done < "$TMP/known.tsv"
+  wait
   index=0
   while IFS=$'\t' read -r -a row; do
     index=$((index + 1))
@@ -622,7 +536,7 @@ poll() {
     dir=$TMP/url.$index
     # A missing result is an interrupted observation: leave its records untouched.
     [ -f "$dir/result" ] || continue
-    read -r observed exhausted duration < "$dir/result" || continue
+    read -r observed exhausted < "$dir/result" 2>/dev/null || continue
     [ "$exhausted" -eq 0 ] || continue
     why='no failing step recorded'
     [ ! -s "$dir/why" ] || IFS= read -r why < "$dir/why"
