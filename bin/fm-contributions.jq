@@ -30,6 +30,7 @@ def valid_record:
       and (if $kind == "pr" then (.head | sha) and (.draft | type == "boolean")
         and (.mergeable | IN("mergeable","conflicting","unknown")) and (.can_merge | type == "boolean")
         and (.review_decision | IN("","APPROVED","CHANGES_REQUESTED","REVIEW_REQUIRED"))
+        and ((.fixes // []) | type == "array" and all(.[]; type == "string"))
         else (.ready | type == "boolean") end))))) catch false;
 def known($input; $saved):
   ([($input.tasks // [])[] | select(.kind != "secondmate")
@@ -45,6 +46,10 @@ def latest_checks:
   group_by(.name) | map(sort_by([(.started_at // ""),(.id // 0)]) | last);
 def projected($input; $saved; $now; $max_age):
   known($input; $saved) as $known
+  # An owned open or merged PR names the issues it fixes; that PR row carries their work.
+  | [$known[] as $k | $saved[] | select(.task == $k.task) | .records[]
+      | select(.url == $k.url and .kind == "pr" and (.observation.state | IN("open","merged")))
+      | {pr:.url,fixes:(.observation.fixes // [])}] as $fix_prs
   | [$known[] as $k
     | ([$saved[] | select(.task == $k.task) | .records[] | select(.url == $k.url)] | first) as $record
     | ([$input.backlog.records[]? | select(.structured and
@@ -63,6 +68,7 @@ def projected($input; $saved; $now; $max_age):
        and (if $record.kind == "pr" then $observed_head != null
             else $record.error == null and $record.observation != null end)
        and ($k.url | supported_url)) as $fresh
+    | ([$fix_prs[] | select(any(.fixes[]; . == $k.url)) | .pr] | first) as $fix_pr
     | (($o.checks // []) | latest_checks) as $checks
     | [$checks[] | select(.status == "completed" and (.conclusion == null or .conclusion == ""))] as $no_verdict
     | [$checks[] | select(.status != "completed")] as $pending
@@ -80,11 +86,16 @@ def projected($input; $saved; $now; $max_age):
          if $fresh then {actor:"nobody",reason:("forge reports " + $o.state)}
          else {actor:"fleet",reason:"terminal observation needs refresh"} end
        elif $hold != null then {actor:"captain",reason:$hold.hold_reason,hold:$hold.id}
-       elif $fresh | not then {actor:"fleet",reason:($record.error // "contribution not recently checked")}
+       elif $record.error != null then {actor:"fleet",reason:$record.error}
+       # Observation age is a coverage gap the rotation refreshes, never owed fleet
+       # work; a durable pending signal still needs triage at any age.
+       elif ($fresh | not) and ($record.pending // [] | length) == 0 then
+         {actor:"not_recently_checked",reason:"contribution not recently checked"}
        elif $stale then {actor:"fleet",reason:"STALE maintainer verdict; reassess the current head"}
        elif ($record.pending | length) > 0 then {actor:"fleet",reason:"incoming maintainer signal needs triage"}
        elif $record.kind == "issue" then
-         if $o.ready then {actor:"fleet",reason:"filed issue is ready-for-pr"}
+         if $o.ready and $fix_pr != null then {actor:"nobody",reason:("ready-for-pr work is carried by fix PR " + $fix_pr)}
+         elif $o.ready then {actor:"fleet",reason:"filed issue is ready-for-pr"}
          else {actor:"maintainer",reason:"awaiting issue triage"} end
        elif $o.draft then {actor:"fleet",reason:"draft delivery"}
        elif $o.mergeable != "mergeable" then {actor:"fleet",reason:("mergeability " + ($o.mergeable // "unknown"))}
@@ -111,7 +122,7 @@ def projected($input; $saved; $now; $max_age):
   # Multiple filed tasks may own the same URL. Retain every owner but count a
   # contribution once; any live arbitration wins over action-free duplicates.
   | group_by(.url)
-  | map(. as $owners | sort_by(if .actor == "captain" then 0 elif .actor == "fleet" then 1 else 2 end) | first
+  | map(. as $owners | sort_by(if .actor == "captain" then 0 elif .actor == "fleet" then 1 elif .actor == "not_recently_checked" then 2 else 3 end) | first
       | . + {tasks:($owners | map(.task) | unique)});
 def summary($rows; $errors):
   {known:($rows | length),checked:([$rows[] | select(.checked)] | length),
@@ -120,6 +131,7 @@ def summary($rows; $errors):
      maintainer:([$rows[] | select(.actor == "maintainer")] | length),
      nobody:([$rows[] | select(.actor == "nobody")] | length)},
    unmeasured:([$rows[] | select(.actor == "unmeasured")] | length),
+   not_recently_checked:([$rows[] | select(.actor == "not_recently_checked")] | length),
    complete:($errors == 0 and all($rows[]; .checked)),
    proven_clear:($errors == 0 and all($rows[]; .checked and .actor != "captain")),
    stale_verdicts:([$rows[].stale_verdicts] | add // 0),

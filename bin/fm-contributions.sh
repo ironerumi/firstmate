@@ -33,6 +33,9 @@
 # Reviews keep only id, state, submitted_at, commit_id and user.login, so a
 # long review history cannot push a task's file past the 1 MiB cap above which
 # a read refuses it as an unreadable record.
+# A PR observation's fixes lists the issue URLs the forge links as closed by
+# that PR. A ready-for-pr issue named by an owned open or merged PR's fixes
+# needs nobody: that PR's own row carries the work.
 # A verdict records the EXACT judged head, source URL, actor and summary. The
 # actor is exactly one of captain, fleet, maintainer or nobody; any other value
 # is refused. A comment's arrival time never supplies its judged head. Record a
@@ -65,22 +68,26 @@
 # immediately, including a 404, which is how a lost login reads on a private
 # repository. A pull observation has three
 # dependent waves: core, six independent reads, then the closing head read;
-# an issue has two waves. Before starting a URL, poll reserves the smaller of
-# the effective budget and 15 seconds for those waves. URLs needing forge
-# reads are sorted by URL and rotated by the current five-minute epoch bucket
-# modulo their count, without stored scheduling state or freshness-based
-# reordering. Terminal URLs settle separately before the forge budget starts
-# and consume no rotation slots.
+# an issue has two waves, so one observation needs at most 15 seconds.
+# Each poll observes one wave of up to eight URLs in parallel under the same
+# deadline, each in its own scratch directory, then applies the results in
+# rotation order. URLs needing forge reads are sorted by URL and rotated by
+# the current five-minute epoch bucket times that width, modulo their count,
+# so successive polls cover successive slices without stored scheduling state
+# or freshness-based reordering. Terminal URLs settle separately before the
+# forge budget starts and consume no rotation slots.
 # A deliberately smaller configured budget remains bounded and may be
 # unmeasured, rather than being mislabeled unavailable. Each distinct supported
 # URL is attempted at most once per poll and its observation applied to every owner.
 # A supported URL's final observation applies
 # to every owner without another forge read. When the budget refuses a read
-# mid-observation, that URL's records stay untouched and the poll moves to the
-# next URL that still has a full observation reserve; only a genuine forge
+# mid-observation, that URL's records stay untouched; only a genuine forge
 # failure, structural refusal or head change records an error.
 # API failure leaves error evidence; an expired or absent observation is not
-# silence. The error and its unavailable line name the first failing step: a
+# silence. Projection counts a row with no error and no pending signal whose
+# observation expired or never happened as not_recently_checked rather than
+# owed fleet work, and it never counts as checked.
+# The error and its unavailable line name the first failing step: a
 # read's label, exit status, budget seconds left and first line of its error
 # output (control characters dropped, at most 160 characters), or the
 # structural check that refused the observation. A later good read clears the
@@ -139,6 +146,7 @@ case "$CHECK_TIMEOUT" in ''|*[!0-9]*|0) CHECK_TIMEOUT=30 ;; esac
 BUDGET_CAP=$((CHECK_TIMEOUT - 3))
 [ "$BUDGET_CAP" -ge 1 ] || BUDGET_CAP=1
 [ "$BUDGET" -le "$BUDGET_CAP" ] || BUDGET=$BUDGET_CAP
+OBSERVATION_WIDTH=8
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-contributions.XXXXXX")
 LOCK_HELD=0
 cleanup() {
@@ -365,7 +373,7 @@ observe() { # canonical GitHub URL -> normalized JSON
     wait_forges "$comments_pid" "$reviews_pid" "$inline_pid" "$checks_pid" "$statuses_pid" "$repo_pid" || return 1
     jq -e 'type == "array" and all(.[]; type == "array")' "$TMP/comments.json" >/dev/null \
       || unobserved 'comment pages returned an unexpected shape' || return 1
-    FORGE_ERR="$TMP/head.err" forge pr view "$url" --json headRefOid,reviewDecision > "$TMP/after.json" || return 1
+    FORGE_ERR="$TMP/head.err" forge pr view "$url" --json headRefOid,reviewDecision,closingIssuesReferences > "$TMP/after.json" || return 1
     after=$(jq -er '.headRefOid | select(test("^[a-fA-F0-9]{40}$"))' "$TMP/after.json") \
       || unobserved 'head read named no head commit' || return 1
     [ "$head" = "$after" ] || unobserved 'head changed during observation' || return 1
@@ -378,6 +386,7 @@ observe() { # canonical GitHub URL -> normalized JSON
           draft:$c.draft,mergeable:(if $c.mergeable == true then "mergeable" elif $c.mergeable == false then "conflicting" else "unknown" end),
           can_merge:($repo[0].permissions.push // false),
           review_decision:($after[0].reviewDecision // ""),
+          fixes:[($after[0].closingIssuesReferences // [])[] | .url | select(type == "string")],
           reviews:($reviews | map({id,state,submitted_at,commit_id,user:{login:.user.login}})),
           checks:([ $checks[0][] | .check_runs[] | {name,id,status,conclusion,started_at} ]
             + [ $statuses[0][] | .[] | {name:.context,id,started_at:.created_at,
@@ -475,7 +484,7 @@ clear_unsupported_errors() {
 }
 
 poll() {
-  local task url old kind error observed why
+  local task url old kind error observed why exhausted index bucket dir
   local -a row
   acquire
   get_input
@@ -501,19 +510,35 @@ poll() {
       (IFS=$'\t'; printf '%s\n' "${row[*]}") >> "$TMP/live.tsv"
     fi
   done < "$TMP/known.tsv"
-  jq -Rnr --argjson bucket "$((EPOCH / 300))" '
-    [inputs] | if length == 0 then . else ($bucket % length) as $offset | .[$offset:] + .[:$offset] end
+  # Each five-minute bucket advances the rotation by one whole wave.
+  bucket=$((EPOCH / 300))
+  jq -Rnr --argjson start "$((bucket * OBSERVATION_WIDTH))" --argjson width "$OBSERVATION_WIDTH" '
+    [inputs] | if length == 0 then . else ($start % length) as $offset | (.[$offset:] + .[:$offset])[:$width] end
     | .[]' < "$TMP/live.tsv" > "$TMP/known.tsv"
   DEADLINE=$(( $(date +%s) + BUDGET ))
-  OBSERVATION_RESERVE=$((BUDGET < 15 ? BUDGET : 15))
+  index=0
   while IFS=$'\t' read -r -a row; do
-    [ $((DEADLINE - $(date +%s))) -ge "$OBSERVATION_RESERVE" ] || break
+    index=$((index + 1))
+    dir=$TMP/url.$index
+    mkdir "$dir"
+    # Each URL observes in its own scratch directory; the parent applies results in rotation order.
+    {
+      observed=0
+      TMP=$dir observe "${row[0]}" || observed=$?
+      printf '%s %s\n' "$observed" "$BUDGET_EXHAUSTED" > "$dir/result"
+    } &
+  done < "$TMP/known.tsv"
+  wait
+  index=0
+  while IFS=$'\t' read -r -a row; do
+    index=$((index + 1))
     url=${row[0]}
-    observed=0
-    observe "$url" || observed=$?
-    [ "$BUDGET_EXHAUSTED" -eq 0 ] || continue
+    dir=$TMP/url.$index
+    # A missing result is an interrupted observation: leave its records untouched.
+    read -r observed exhausted < "$dir/result" 2>/dev/null || continue
+    [ "$exhausted" -eq 0 ] || continue
     why='no failing step recorded'
-    [ ! -s "$TMP/why" ] || IFS= read -r why < "$TMP/why"
+    [ ! -s "$dir/why" ] || IFS= read -r why < "$dir/why"
     # Wake once per failure episode: only when no owner has a prior error.
     if [ "$observed" -ne 0 ] && jq -ne --slurpfile saved "$TMP/saved.json" --arg url "$url" --args \
       'all($ARGS.positional[] as $task | [$saved[0][] | select(.task == $task) | .records[] | select(.url == $url)] | first;
@@ -528,7 +553,7 @@ poll() {
         ([$saved[0][] | select(.task == $task) | .records[] | select(.url == $url)] | first)
         // {url:$url,kind:$kind,checked_at:null,observation:null,verdict:null,seen:[],pending:[],notified:[]}' > "$old"
       if [ "$observed" -eq 0 ]; then
-        jq -n --arg now "$NOW" --slurpfile old "$old" --slurpfile observation "$TMP/observation.json" '
+        jq -n --arg now "$NOW" --slurpfile old "$old" --slurpfile observation "$dir/observation.json" '
           $old[0] as $old | $observation[0] as $o
           | ($o.events + (if $o.ready == true and $old.observation.ready != true and (any($o.events[]; .type == "ready-for-pr") | not) then
               [{token:("ready-for-pr:" + $now),type:"ready-for-pr",source:$old.url,head:null,body:"filed issue reached ready-for-pr"}]

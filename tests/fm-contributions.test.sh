@@ -118,15 +118,19 @@ forge_home() {
   printf '[]\n' > "$home/forge/inline.json"
   printf '[]\n' > "$home/forge/labels.json"
   printf '[]\n' > "$home/forge/events.json"
+  printf '[]\n' > "$home/forge/fixes.json"
   cat > "$home/fakebin/gh" <<'SH'
 #!/usr/bin/env bash
 set -eu
 case "$*" in
   'pr view '*headRefOid,reviewDecision*)
-    jq -n --arg head "$(cat "$FORGE/head")" '{headRefOid:$head,reviewDecision:"APPROVED"}' ;;
+    # Like gh, return only the requested JSON fields.
+    jq -n --arg head "$(cat "$FORGE/head")" --slurpfile fixes "$FORGE/fixes.json" --arg args "$*" '
+      {headRefOid:$head,reviewDecision:"APPROVED"}
+      + (if $args | test("[ ,]closingIssuesReferences([ ,]|$)") then {closingIssuesReferences:[$fixes[0][] | {url:.}]} else {} end)' ;;
   'pr view '*headRefOid*) cat "$FORGE/head" ;;
   'pr view '*state*) printf 'OPEN\n' ;;
-  'api repos/o/r/pulls/8'|'api repos/o/r/pulls/9'|'api repos/o/r/pulls/10')
+  'api repos/o/r/pulls/8'|'api repos/o/r/pulls/9'|'api repos/o/r/pulls/10'|'api repos/o/r/pulls/4'[0-9])
     jq -n --arg head "$(cat "$FORGE/head")" --arg state "$(cat "$FORGE/state" 2>/dev/null || printf open)" '
       {state:(if $state == "open" then "open" else "closed" end),user:{login:"author"},head:{sha:$head},draft:false,
        mergeable:(if $state == "open" then true else null end),
@@ -594,6 +598,28 @@ test_watcher_keeps_diagnostics_separate_from_contribution_wakes() {
   pass 'watcher keeps observer diagnostics separate from contribution wakes'
 }
 
+test_expired_child_coverage_is_not_fleet_work() {
+  local home child
+  home=$(new_home expired-child-parent)
+  child=$(new_home expired-child)
+  mkdir -p "$child/bin"
+  printf '# Fixture\n' > "$child/AGENTS.md"
+  printf 'child\n' > "$child/.fm-secondmate-home"
+  record "$child" delivery 8 open mergeable
+  FM_SNAPSHOT_NOW="$NOW" with_home "$child" "$ROOT/bin/fm-fleet-snapshot.sh" --secondmate-home-summary > "$child/state/home-summary.json" \
+    || fail 'could not collect child contribution coverage'
+  printf -- '- child - fixture (home: %s; scope: fixture; projects: sample; added 2026-09-16)\n' "$child" > "$home/data/secondmates.md"
+  bearings "$home" | jq -e '.contributions.counts.maintainer == 1 and .contributions.not_recently_checked == 0' >/dev/null \
+    || fail 'current child coverage was not measured'
+  jq '.contributions.valid_until=0' "$child/state/home-summary.json" > "$child/update.json"
+  mv "$child/update.json" "$child/state/home-summary.json"
+  bearings "$home" | jq -e '.contributions.known == 1 and .contributions.checked == 0
+    and .contributions.not_recently_checked == 1 and .contributions.counts.fleet == 0
+    and .contributions.complete == false and .contributions.proven_clear == false' >/dev/null \
+    || fail 'expired child coverage was reported as owed fleet work'
+  pass 'expired child coverage is not recently checked rather than owed fleet work'
+}
+
 test_expired_child_unsupported_forge_stays_unmeasured() {
   local home child
   home=$(new_home expired-unsupported-parent)
@@ -749,7 +775,13 @@ clock_bump() {
 }
 case "$fault:$*" in
   # Advance once before the parallel read wave; its readers share this clock.
-  reserve:'api repos/o/r/issues/9') clock_bump 6 ;;
+  # Each core read waits for the other to start, so only a parallel wave completes both.
+  rendezvous:'api repos/o/r/pulls/8')
+    : > "$FORGE/pull-started"
+    until [ -e "$FORGE/issue-started" ]; do sleep 0.1; done ;;
+  rendezvous:'api repos/o/r/issues/9')
+    : > "$FORGE/issue-started"
+    until [ -e "$FORGE/pull-started" ]; do sleep 0.1; done ;;
   slow-wave:'api repos/o/r/pulls/8') sleep 3 ;;
   slow-wave:'api repos/o/r/pulls/8/reviews?'*) sleep 6 ;;
   exhaust:'api repos/o/r/issues/8/comments?'*) clock_bump 100 ;;
@@ -1058,7 +1090,7 @@ test_real_gh_errors_drive_retry_and_summary() {
 }
 
 test_next_url_does_not_inherit_a_forge_diagnostic() {
-  local home out pull_line issue_line why='reviews read exited 1 with Ns of budget left: gh: Internal Server Error (HTTP 500)'
+  local home out why='reviews read exited 1 with Ns of budget left: gh: Internal Server Error (HTTP 500)'
   home=$(new_home next-url-no-stale-diagnostic)
   forge_home "$home"
   wrap_forge "$home"
@@ -1067,13 +1099,11 @@ test_next_url_does_not_inherit_a_forge_diagnostic() {
   # fails on its reviews read before it checks comments.
   printf '{}\n' > "$home/forge/comments.json"
   printf 'fail\n' > "$home/forge/fault"
-  # This rotation bucket reads the failing PR before the issue.
+  # Both URLs share one parallel wave; each keeps its own diagnostic.
   out=$(with_home "$home" env FM_CONTRIBUTIONS_NOW=2026-09-16T08:05:00Z "$ROOT/bin/fm-contributions.sh" poll) \
     || fail 'poll failed while a GitHub issue followed a failed PR read'
-  pull_line=$(grep -nF 'api repos/o/r/pulls/8/reviews?' "$home/forge/calls" | head -n 1 | cut -d: -f1)
-  issue_line=$(grep -nFx 'api repos/o/r/issues/9' "$home/forge/calls" | head -n 1 | cut -d: -f1)
-  [ -n "$pull_line" ] && [ -n "$issue_line" ] && [ "$pull_line" -lt "$issue_line" ] \
-    || fail 'the seeded PR read failure did not run before the issue'
+  grep -qF 'api repos/o/r/pulls/8/reviews?' "$home/forge/calls" && grep -qFx 'api repos/o/r/issues/9' "$home/forge/calls" \
+    || fail 'the seeded PR read failure and the issue read did not both run'
   printf '%s\n' "$out" | mask_budget | grep -Fxq "contributions: observation unavailable for https://github.com/o/r/pull/8 - $why" \
     || fail 'the seeded PR failure did not wake'
   printf '%s\n' "$out" | grep -Fxq 'contributions: observation unavailable for https://github.com/o/r/issues/9 - comment pages returned an unexpected shape' \
@@ -1242,26 +1272,114 @@ test_done_task_open_pr_still_observed() {
   pass 'an open PR linked from a done task keeps being observed'
 }
 
-test_reservation_defers_later_url_when_fifteen_seconds_do_not_remain() {
-  local home out
-  home=$(new_home reservation)
+test_one_poll_observes_a_parallel_wave() {
+  local home out task
+  home=$(new_home parallel-wave)
   forge_home "$home"
   wrap_forge "$home"
   printf -- '- [ ] filed - Measured defect https://github.com/o/r/issues/9 (repo: sample) (kind: ship)\n' >> "$home/data/backlog.md"
   mutate_record "$home" delivery '.records[0].checked_at="2026-09-15T08:00:00Z"'
-  /bin/date +%s > "$home/forge/clock"
-  printf 'reserve\n' > "$home/forge/fault"
+  printf 'rendezvous\n' > "$home/forge/fault"
   out=$(with_home "$home" env FM_CONTRIBUTIONS_BUDGET=20 "$ROOT/bin/fm-contributions.sh" poll) \
-    || fail 'reservation poll failed'
-  [ -z "$out" ] || fail "reservation poll printed an unavailable wake: $out"
-  jq -e --arg now "$NOW" '.records[0] | .checked_at == $now and .error == null' \
-    "$home/data/filed/contributions.json" >/dev/null \
-    || fail 'the first issue was not observed before reserving the remaining budget'
-  grep -F 'api repos/o/r/pulls/8' "$home/forge/calls" >/dev/null \
-    && fail 'a later PR began without the fifteen-second observation reservation'
-  jq -e '.records[0].checked_at == "2026-09-15T08:00:00Z"' "$home/data/delivery/contributions.json" >/dev/null \
-    || fail 'a later PR record changed when the poll deferred it for budget'
-  pass 'a later URL waits when fewer than fifteen seconds remain for its observation'
+    || fail 'parallel-wave poll failed'
+  [ -z "$out" ] || fail "parallel-wave poll printed an unavailable wake: $out"
+  for task in delivery filed; do
+    jq -e --arg now "$NOW" '.records[0] | .checked_at == $now and .error == null' \
+      "$home/data/$task/contributions.json" >/dev/null \
+      || fail "$task was not observed in the same poll as the other live URL"
+  done
+  pass 'one poll observes several live URLs concurrently within its budget'
+}
+
+test_successive_polls_cover_successive_waves() {
+  local home number later out
+  home=$(new_home wave-rotation)
+  forge_home "$home"
+  wrap_forge "$home"
+  mutate_record "$home" delivery '.records[0].checked_at="2026-09-15T08:00:00Z"'
+  for number in 40 41 42 43 44 45 46 47 48 49; do
+    record "$home" "wave-$number" "$number" open mergeable
+    mutate_record "$home" "wave-$number" '.records[0].checked_at="2026-09-15T08:00:00Z"'
+  done
+  out=$(with_home "$home" "$ROOT/bin/fm-contributions.sh" poll) || fail 'first wave poll failed'
+  [ -z "$out" ] || fail "first wave poll printed: $out"
+  [ "$(grep -cE '^api repos/o/r/pulls/[0-9]+$' "$home/forge/calls")" = 8 ] \
+    || fail "one poll did not observe exactly one eight-URL wave: $(grep -E '^api repos/o/r/pulls/[0-9]+$' "$home/forge/calls" | tr '\n' ' ')"
+  later=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 300 | todateiso8601')
+  out=$(with_home "$home" env FM_CONTRIBUTIONS_NOW="$later" "$ROOT/bin/fm-contributions.sh" poll) \
+    || fail 'second wave poll failed'
+  [ -z "$out" ] || fail "second wave poll printed: $out"
+  for number in delivery 40 41 42 43 44 45 46 47 48 49; do
+    [ "$number" = delivery ] || number="wave-$number"
+    jq -e '.records[0] | .checked_at != "2026-09-15T08:00:00Z" and .error == null' \
+      "$home/data/$number/contributions.json" >/dev/null \
+      || fail "$number was not observed by two successive polls of eleven live URLs"
+  done
+  pass 'successive polls observe successive eight-URL slices of the rotation'
+}
+
+test_age_is_not_owed_fleet_work() {
+  local home out
+  home=$(new_home age-not-fleet)
+  record "$home" expired 11 open mergeable
+  mutate_record "$home" expired '.records[0].checked_at="2026-09-15T08:00:00Z"'
+  out=$(bearings "$home") || fail 'Bearings could not read the expired fixture'
+  printf '%s' "$out" | jq -e '.contributions.known == 1 and .contributions.checked == 0
+    and .contributions.not_recently_checked == 1 and .contributions.counts.fleet == 0
+    and .contributions.complete == false and .contributions.proven_clear == false' >/dev/null \
+    || fail "an expired observation was reported as owed fleet work: $out"
+  mutate_record "$home" expired '.records[0].pending=[{token:"comment:1:x",type:"comment"}]'
+  bearings "$home" | jq -e '.contributions.not_recently_checked == 0 and .contributions.counts.fleet == 1' >/dev/null \
+    || fail 'an expired observation hid a pending signal that still needs triage'
+  mutate_record "$home" expired '.records[0].pending=[] | .records[0].error="forge observation unavailable: HTTP 502"'
+  bearings "$home" | jq -e '.contributions.not_recently_checked == 0 and .contributions.counts.fleet == 1' >/dev/null \
+    || fail 'a failed observation was reported as mere age'
+  pass 'observation age is counted apart from owed fleet work; failures and signals stay fleet work'
+}
+
+fixed_issue() { # home task issue-number ready
+  mkdir -p "$1/data/$2"
+  printf -- '- [ ] %s - Filed https://github.com/o/r/issues/%s (repo: sample) (kind: ship)\n' "$2" "$3" >> "$1/data/backlog.md"
+  jq -n --arg task "$2" --arg url "https://github.com/o/r/issues/$3" --arg at "$NOW" --argjson ready "$4" '
+    {schema:"fm-contributions.v1",task:$task,records:[{url:$url,kind:"issue",checked_at:$at,error:null,
+      pending:[],seen:[],verdict:null,observation:{state:"open",head:null,ready:$ready,checks:[],reviews:[],events:[]}}]}' \
+    > "$1/data/$2/contributions.json"
+}
+
+test_fix_pr_carries_ready_issue() {
+  local home out
+  home=$(new_home fix-pr)
+  record "$home" delivery 8 open mergeable
+  fixed_issue "$home" filed 9 true
+  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:1,nobody:0}' >/dev/null \
+    || fail 'a ready issue without a fix PR was not fleet work'
+  mutate_record "$home" delivery '.records[0].observation.fixes=["https://github.com/o/r/issues/9"]'
+  out=$(bearings "$home") || fail 'Bearings could not read the fix-PR fixture'
+  printf '%s' "$out" | jq -e '.contributions.counts == {captain:0,fleet:0,maintainer:1,nobody:1}' >/dev/null \
+    || fail "a ready issue whose owned fix PR exists was counted twice: $out"
+  mutate_record "$home" delivery '.records[0].observation.state="closed"'
+  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:0,nobody:1}' >/dev/null \
+    || fail 'a closed unmerged fix PR still carried its ready issue'
+  pass 'an owned open fix PR carries its ready-for-pr issue, which is not counted again'
+}
+
+test_poll_records_fix_links() {
+  local home token
+  home=$(new_home fix-link)
+  forge_home "$home"
+  printf -- '- [ ] filed - Filed https://github.com/o/r/issues/9 (repo: sample) (kind: ship)\n' >> "$home/data/backlog.md"
+  printf '[{"name":"ready-for-pr"}]\n' > "$home/forge/labels.json"
+  printf '["https://github.com/o/r/issues/9"]\n' > "$home/forge/fixes.json"
+  with_home "$home" "$ROOT/bin/fm-contributions.sh" poll >/dev/null || fail 'fix-link poll failed'
+  jq -e '.records[0].observation.fixes == ["https://github.com/o/r/issues/9"]' \
+    "$home/data/delivery/contributions.json" >/dev/null || fail 'the PR observation did not record its closing issue'
+  token=$(with_home "$home" "$ROOT/bin/fm-contributions.sh" pending | jq -er '.[] | select(.type == "ready-for-pr") | .token') \
+    || fail 'the ready issue raised no signal'
+  with_home "$home" "$ROOT/bin/fm-contributions.sh" ack filed https://github.com/o/r/issues/9 "$token" \
+    || fail 'could not acknowledge the ready signal'
+  bearings "$home" | jq -e '.contributions.counts.fleet == 0 and .contributions.counts.nobody == 1' >/dev/null \
+    || fail 'an observed fix link did not carry the ready issue'
+  pass 'poll records the forge closing-issue links that carry ready issues'
 }
 
 test_three_second_pr_reads_complete_fresh_in_one_cycle() { # 3-second reads: 8 sequential > 20s budget, parallel waves fit
@@ -1318,9 +1436,11 @@ test_unmeasured_url_does_not_starve_the_tail() {
     [ "$elapsed" -le 23 ] || fail "poll exceeded its elapsed budget: $elapsed seconds"
     if [ "$cycle" -eq 0 ]; then
       [ "$elapsed" -ge 8 ] || fail 'the slow head did not consume its core and parallel-wave budget'
-      if grep -Eq '^api repos/o/r/pulls/(9|10)$' "$home/forge/calls"; then
-        fail 'a tail PR began without its observation reserve'
-      fi
+      for task in second third; do
+        jq -e --arg at "$at" '.records[0] | .checked_at == $at and .error == null' \
+          "$home/data/$task/contributions.json" >/dev/null \
+          || fail "the slow head starved $task in its own parallel wave"
+      done
     fi
     cmp -s "$home/prior.json" "$home/data/delivery/contributions.json" \
       || fail 'a timed-out observation changed its prior freshness or record'
@@ -1644,7 +1764,7 @@ test_many_reviews_stay_readable() {
 }
 
 failures=0
-for test_name in test_actor_coverage test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_unsupported_poll_is_silent_and_clears_legacy_errors test_legacy_cleanup_preserves_supported_failure test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_http_500_once_retries_without_waking test_http_500_twice_records_the_failed_read test_http_404_is_not_retried test_real_gh_errors_drive_retry_and_summary test_next_url_does_not_inherit_a_forge_diagnostic test_shared_url_observed_once test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_reservation_defers_later_url_when_fifteen_seconds_do_not_remain test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_retire_ends_observation_of_a_gone_contribution test_late_owner_of_a_retired_final_contribution_is_not_retired test_retire_is_idempotent_and_refuses_unknown_pairs test_many_reviews_stay_readable; do
+for test_name in test_actor_coverage test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_unsupported_poll_is_silent_and_clears_legacy_errors test_legacy_cleanup_preserves_supported_failure test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_expired_child_coverage_is_not_fleet_work test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_http_500_once_retries_without_waking test_http_500_twice_records_the_failed_read test_http_404_is_not_retried test_real_gh_errors_drive_retry_and_summary test_next_url_does_not_inherit_a_forge_diagnostic test_shared_url_observed_once test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_one_poll_observes_a_parallel_wave test_successive_polls_cover_successive_waves test_age_is_not_owed_fleet_work test_fix_pr_carries_ready_issue test_poll_records_fix_links test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_retire_ends_observation_of_a_gone_contribution test_late_owner_of_a_retired_final_contribution_is_not_retired test_retire_is_idempotent_and_refuses_unknown_pairs test_many_reviews_stay_readable; do
   ( "$test_name" ) || failures=$((failures + 1))
 done
 [ "$failures" -eq 0 ] || fail "$failures contribution regressions"
