@@ -122,7 +122,7 @@ def projected($input; $saved; $now; $max_age):
   # Multiple filed tasks may own the same URL. Retain every owner but count a
   # contribution once; any live arbitration wins over action-free duplicates.
   | group_by(.url)
-  | map(. as $owners | sort_by(if .actor == "captain" then 0 elif .actor == "fleet" then 1 elif .actor == "not_recently_checked" then 2 else 3 end) | first
+  | map(. as $owners | sort_by(if .actor == "captain" then 0 elif .actor == "fleet" then 1 elif .actor == "not_recently_checked" then 3 else 2 end) | first
       | . + {tasks:($owners | map(.task) | unique)});
 def summary($rows; $errors):
   {known:($rows | length),checked:([$rows[] | select(.checked)] | length),
