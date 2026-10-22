@@ -1,0 +1,6 @@
+below-floor no-mistakes:
+OUTDATED: no-mistakes (installed: 1.45.4; requires 1.46.0; upgrade: no-mistakes update)
+absent no-mistakes:
+MISSING: no-mistakes (install: curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh)
+at-floor tasks-axi missing archive capability:
+OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body; upgrade: npm install -g tasks-axi)
