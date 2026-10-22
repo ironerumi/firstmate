@@ -73,9 +73,11 @@
 # the same deadline, each URL assigned to a phase by its stable URL hash, then
 # applies the results in rotation order. URLs needing forge reads are sorted by
 # URL before phase selection, without stored scheduling state or freshness-based
-# reordering. A phase uses at most eight URL workers and rotates its start
-# position each cycle. Terminal URLs settle separately before the forge budget
-# starts and consume no rotation slots.
+# reordering. A phase uses at most eight streaming URL workers and rotates its
+# start position each cycle; under bounded forge latency this keeps the
+# two-phase cycle inside the freshness window, while pathological latency
+# remains not_recently_checked rather than fleet work. Terminal URLs settle
+# separately before the forge budget starts and consume no rotation slots.
 # A deliberately smaller configured budget remains bounded and may be
 # unmeasured, rather than being mislabeled unavailable. Each distinct supported
 # URL is attempted at most once per poll and its observation applied to every owner.
@@ -484,8 +486,8 @@ clear_unsupported_errors() {
 
 poll() {
   local task url old kind error observed why exhausted index bucket dir live_count partition hash
-  local phase_count cycle offset reserve batch now
-  local -a row
+  local phase_count cycle offset reserve now line active started slot slot_index pid
+  local -a row pids dirs
   acquire
   get_input
   read_saved
@@ -531,17 +533,16 @@ poll() {
     [inputs] | if length == 0 then . else .[$offset:] + .[:$offset] end | .[]' \
     < "$TMP/phase.tsv" > "$TMP/known.tsv"
   DEADLINE=$(( $(date +%s) + BUDGET ))
-  reserve=15
-  [ "$BUDGET" -lt "$reserve" ] && reserve=$BUDGET
-  batch=0
+  active=0
+  started=0
   index=0
-  while IFS=$'\t' read -r -a row; do
+  exec 3< "$TMP/known.tsv"
+  while IFS= read -r line <&3; do
+    IFS=$'\t' read -r -a row <<< "$line"
+    case "${row[0]}" in */issues/*) reserve=10 ;; *) reserve=15 ;; esac
+    [ "$BUDGET" -lt "$reserve" ] && reserve=$BUDGET
     now=$(date +%s)
-    if [ "$batch" -eq 0 ]; then
-      if [ "$index" -ne 0 ] && [ "$((DEADLINE - now))" -le "$reserve" ]; then
-        break
-      fi
-    elif [ "$((DEADLINE - now))" -lt "$reserve" ]; then
+    if [ "$started" -ne 0 ] && [ "$((DEADLINE - now))" -lt "$reserve" ]; then
       break
     fi
     index=$((index + 1))
@@ -552,14 +553,52 @@ poll() {
       observed=0
       TMP=$dir observe "${row[0]}" || observed=$?
       printf '%s %s\n' "$observed" "$BUDGET_EXHAUSTED" > "$dir/result"
+      : > "$dir/done"
     } &
-    batch=$((batch + 1))
-    if [ "$batch" -eq 8 ]; then
-      wait
-      batch=0
-    fi
-  done < "$TMP/known.tsv"
-  [ "$batch" -eq 0 ] || wait
+    pids+=("$!")
+    dirs+=("$dir")
+    active=$((active + 1))
+    started=1
+    while [ "$active" -ge 8 ]; do
+      slot_index=-1
+      while [ "$slot_index" -lt 0 ]; do
+        slot=0
+        for pid in "${pids[@]}"; do
+          if [ -e "${dirs[$slot]}/done" ]; then
+            slot_index=$slot
+            break
+          fi
+          slot=$((slot + 1))
+        done
+        [ "$slot_index" -ge 0 ] || sleep 0.01
+      done
+      wait "${pids[$slot_index]}" || true
+      unset "pids[$slot_index]" "dirs[$slot_index]"
+      pids=("${pids[@]}")
+      dirs=("${dirs[@]}")
+      active=$((active - 1))
+    done
+  done
+  exec 3<&-
+  while [ "$active" -gt 0 ]; do
+    slot_index=-1
+    while [ "$slot_index" -lt 0 ]; do
+      slot=0
+      for pid in "${pids[@]}"; do
+        if [ -e "${dirs[$slot]}/done" ]; then
+          slot_index=$slot
+          break
+        fi
+        slot=$((slot + 1))
+      done
+      [ "$slot_index" -ge 0 ] || sleep 0.01
+    done
+    wait "${pids[$slot_index]}" || true
+    unset "pids[$slot_index]" "dirs[$slot_index]"
+    pids=("${pids[@]}")
+    dirs=("${dirs[@]}")
+    active=$((active - 1))
+  done
   index=0
   while IFS=$'\t' read -r -a row; do
     index=$((index + 1))
