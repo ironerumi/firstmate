@@ -73,8 +73,9 @@
 # the same deadline, each URL assigned to a phase by its stable URL hash, then
 # applies the results in rotation order. URLs needing forge reads are sorted by
 # URL before phase selection, without stored scheduling state or freshness-based
-# reordering. Terminal URLs settle separately before the forge budget starts and
-# consume no rotation slots.
+# reordering. A phase uses at most eight URL workers and rotates its start
+# position each cycle. Terminal URLs settle separately before the forge budget
+# starts and consume no rotation slots.
 # A deliberately smaller configured budget remains bounded and may be
 # unmeasured, rather than being mislabeled unavailable. Each distinct supported
 # URL is attempted at most once per poll and its observation applied to every owner.
@@ -483,6 +484,7 @@ clear_unsupported_errors() {
 
 poll() {
   local task url old kind error observed why exhausted index bucket dir live_count partition hash
+  local phase_count cycle offset reserve batch now
   local -a row
   acquire
   get_input
@@ -508,21 +510,40 @@ poll() {
       (IFS=$'\t'; printf '%s\n' "${row[*]}") >> "$TMP/live.tsv"
     fi
   done < "$TMP/known.tsv"
-  # Two successive five-minute buckets cover every live URL.
+  # Successive five-minute buckets select each phase; an oversized phase rotates
+  # its start position until every URL has been attempted.
   live_count=$(wc -l < "$TMP/live.tsv")
   OBSERVATION_PARTITIONS=1
   [ "$live_count" -gt 2 ] && OBSERVATION_PARTITIONS=2
   bucket=$((EPOCH / 300))
   partition=$((bucket % OBSERVATION_PARTITIONS))
-  : > "$TMP/known.tsv"
+  : > "$TMP/phase.tsv"
   while IFS=$'\t' read -r -a row; do
     hash=$(printf '%s\n' "${row[0]}" | cksum | awk '{print $1}')
     [ "$((hash % OBSERVATION_PARTITIONS))" -eq "$partition" ] || continue
-    (IFS=$'\t'; printf '%s\n' "${row[*]}") >> "$TMP/known.tsv"
+    (IFS=$'\t'; printf '%s\n' "${row[*]}") >> "$TMP/phase.tsv"
   done < "$TMP/live.tsv"
+  phase_count=$(wc -l < "$TMP/phase.tsv")
+  cycle=$((bucket / OBSERVATION_PARTITIONS))
+  offset=0
+  [ "$phase_count" -gt 0 ] && offset=$((cycle % phase_count))
+  jq -Rnr --argjson offset "$offset" '
+    [inputs] | if length == 0 then . else .[$offset:] + .[:$offset] end | .[]' \
+    < "$TMP/phase.tsv" > "$TMP/known.tsv"
   DEADLINE=$(( $(date +%s) + BUDGET ))
+  reserve=15
+  [ "$BUDGET" -lt "$reserve" ] && reserve=$BUDGET
+  batch=0
   index=0
   while IFS=$'\t' read -r -a row; do
+    now=$(date +%s)
+    if [ "$batch" -eq 0 ]; then
+      if [ "$index" -ne 0 ] && [ "$((DEADLINE - now))" -le "$reserve" ]; then
+        break
+      fi
+    elif [ "$((DEADLINE - now))" -lt "$reserve" ]; then
+      break
+    fi
     index=$((index + 1))
     dir=$TMP/url.$index
     mkdir "$dir"
@@ -532,15 +553,21 @@ poll() {
       TMP=$dir observe "${row[0]}" || observed=$?
       printf '%s %s\n' "$observed" "$BUDGET_EXHAUSTED" > "$dir/result"
     } &
+    batch=$((batch + 1))
+    if [ "$batch" -eq 8 ]; then
+      wait
+      batch=0
+    fi
   done < "$TMP/known.tsv"
-  wait
+  [ "$batch" -eq 0 ] || wait
   index=0
   while IFS=$'\t' read -r -a row; do
     index=$((index + 1))
     url=${row[0]}
     dir=$TMP/url.$index
     # A missing result is an interrupted observation: leave its records untouched.
-    read -r observed exhausted < "$dir/result" 2>/dev/null || continue
+    [ -f "$dir/result" ] || continue
+    read -r observed exhausted < "$dir/result" || continue
     [ "$exhausted" -eq 0 ] || continue
     why='no failing step recorded'
     [ ! -s "$dir/why" ] || IFS= read -r why < "$dir/why"

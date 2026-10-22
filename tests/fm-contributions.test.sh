@@ -773,6 +773,7 @@ clock_bump() {
   printf '%s\n' "$(( $(cat "$FORGE/clock") + $1 ))" > "$tmp"
   mv -f "$tmp" "$FORGE/clock"
 }
+bounded_core=0
 case "$fault:$*" in
   # Advance once before the parallel read wave; its readers share this clock.
   # Each core read waits for the other to start, so only a parallel wave completes both.
@@ -784,6 +785,20 @@ case "$fault:$*" in
     until [ -e "$FORGE/pull-started" ]; do sleep 0.1; done ;;
   slow-wave:'api repos/o/r/pulls/8') sleep 3 ;;
   slow-wave:'api repos/o/r/pulls/8/reviews?'*) sleep 6 ;;
+  bounded-wave:'api repos/o/r/pulls/'*)
+    case "$*" in
+      'api repos/o/r/pulls/'*'/'*) ;;
+      *)
+        bounded_core=1
+        while ! mkdir "$FORGE/bounded.lock" 2>/dev/null; do sleep 0.01; done
+        active=$(( $(cat "$FORGE/active") + 1 ))
+        printf '%s\n' "$active" > "$FORGE/active"
+        max=$(cat "$FORGE/max-active")
+        [ "$active" -le "$max" ] || printf '%s\n' "$active" > "$FORGE/max-active"
+        rmdir "$FORGE/bounded.lock"
+        ;;
+    esac
+    ;;
   exhaust:'api repos/o/r/issues/8/comments?'*) clock_bump 100 ;;
   fail-late:'api repos/o/r/pulls/8/reviews?'*) clock_bump 100; printf 'gh: Bad Gateway (HTTP 502)\n' >&2; exit 1 ;;
   fail:'api repos/o/r/pulls/8/reviews?'*) printf 'gh: Internal Server Error (HTTP 500)\n' >&2; exit 1 ;;
@@ -812,6 +827,18 @@ case "$fault:$*" in
   head:'pr view '*) printf '{"headRefOid":"%s","reviewDecision":"APPROVED"}\n' "$(printf 'b%.0s' $(seq 40))"; exit 0 ;;
   headless:'pr view '*) printf '{"headRefOid":null,"reviewDecision":"APPROVED"}\n'; exit 0 ;;
 esac
+if [ "$bounded_core" -eq 1 ]; then
+  sleep 0.2
+  output=
+  rc=0
+  output=$("$(dirname "$0")/gh-fixture" "$@") || rc=$?
+  while ! mkdir "$FORGE/bounded.lock" 2>/dev/null; do sleep 0.01; done
+  active=$(( $(cat "$FORGE/active") - 1 ))
+  printf '%s\n' "$active" > "$FORGE/active"
+  rmdir "$FORGE/bounded.lock"
+  printf '%s' "$output"
+  exit "$rc"
+fi
 exec "$(dirname "$0")/gh-fixture" "$@"
 SH
   # A controllable clock lets the budget expire between two forge calls.
@@ -1348,6 +1375,36 @@ test_successive_polls_cover_successive_waves() {
   pass 'successive polls refresh every live URL within the achievable cadence'
 }
 
+test_bounded_workers_rotate_unattempted_urls() {
+  local home cycle at number out
+  home=$(new_home bounded-workers)
+  forge_home "$home"
+  wrap_forge "$home"
+  mutate_record "$home" delivery '.records[0].checked_at="2026-09-15T08:00:00Z"'
+  for number in 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61; do
+    record "$home" "bounded-$number" "$number" open mergeable
+    mutate_record "$home" "bounded-$number" '.records[0].checked_at="2026-09-15T08:00:00Z"'
+  done
+  printf '0\n' > "$home/forge/active"
+  printf '0\n' > "$home/forge/max-active"
+  printf 'bounded-wave\n' > "$home/forge/fault"
+  for cycle in $(seq 0 11); do
+    at=$(jq -nr --arg now "$NOW" --argjson cycle "$cycle" '($now | fromdateiso8601) + ($cycle * 315) | todateiso8601')
+    out=$(with_home "$home" env FM_CONTRIBUTIONS_BUDGET=15 FM_CONTRIBUTIONS_NOW="$at" \
+      "$ROOT/bin/fm-contributions.sh" poll) || fail "bounded worker poll $cycle failed"
+    [ -z "$out" ] || fail "bounded worker poll $cycle printed: $out"
+  done
+  [ "$(cat "$home/forge/max-active")" -eq 8 ] \
+    || fail "a phase did not reach the eight-worker bound: $(cat "$home/forge/max-active")"
+  for number in delivery 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61; do
+    [ "$number" = delivery ] || number="bounded-$number"
+    jq -e '.records[0] | .checked_at != "2026-09-15T08:00:00Z" and .error == null' \
+      "$home/data/$number/contributions.json" >/dev/null \
+      || fail "$number starved while the phase rotated its unattempted URLs"
+  done
+  pass 'bounded workers rotate every unattempted URL without exceeding eight in flight'
+}
+
 test_rotation_survives_live_set_churn() {
   local home task target old later third probe out
   home=$(new_home rotation-churn)
@@ -1860,7 +1917,7 @@ test_many_reviews_stay_readable() {
 }
 
 failures=0
-for test_name in test_actor_coverage test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_unsupported_poll_is_silent_and_clears_legacy_errors test_legacy_cleanup_preserves_supported_failure test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_expired_child_coverage_is_not_fleet_work test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_http_500_once_retries_without_waking test_http_500_twice_records_the_failed_read test_http_404_is_not_retried test_real_gh_errors_drive_retry_and_summary test_next_url_does_not_inherit_a_forge_diagnostic test_shared_url_observed_once test_shared_owner_age_only_does_not_hide_measured_state test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_one_poll_observes_a_parallel_wave test_successive_polls_cover_successive_waves test_rotation_survives_live_set_churn test_age_is_not_owed_fleet_work test_fix_pr_carries_ready_issue test_poll_records_fix_links test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_retire_ends_observation_of_a_gone_contribution test_late_owner_of_a_retired_final_contribution_is_not_retired test_retire_is_idempotent_and_refuses_unknown_pairs test_many_reviews_stay_readable; do
+for test_name in test_actor_coverage test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_unsupported_poll_is_silent_and_clears_legacy_errors test_legacy_cleanup_preserves_supported_failure test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_expired_child_coverage_is_not_fleet_work test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_http_500_once_retries_without_waking test_http_500_twice_records_the_failed_read test_http_404_is_not_retried test_real_gh_errors_drive_retry_and_summary test_next_url_does_not_inherit_a_forge_diagnostic test_shared_url_observed_once test_shared_owner_age_only_does_not_hide_measured_state test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_one_poll_observes_a_parallel_wave test_successive_polls_cover_successive_waves test_bounded_workers_rotate_unattempted_urls test_rotation_survives_live_set_churn test_age_is_not_owed_fleet_work test_fix_pr_carries_ready_issue test_poll_records_fix_links test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_retire_ends_observation_of_a_gone_contribution test_late_owner_of_a_retired_final_contribution_is_not_retired test_retire_is_idempotent_and_refuses_unknown_pairs test_many_reviews_stay_readable; do
   ( "$test_name" ) || failures=$((failures + 1))
 done
 [ "$failures" -eq 0 ] || fail "$failures contribution regressions"
