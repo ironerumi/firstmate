@@ -130,7 +130,7 @@ case "$*" in
       + (if $args | test("[ ,]closingIssuesReferences([ ,]|$)") then {closingIssuesReferences:[$fixes[0][] | {url:.}]} else {} end)' ;;
   'pr view '*headRefOid*) cat "$FORGE/head" ;;
   'pr view '*state*) printf 'OPEN\n' ;;
-  'api repos/o/r/pulls/8'|'api repos/o/r/pulls/9'|'api repos/o/r/pulls/10'|'api repos/o/r/pulls/4'[0-9]|'api repos/o/r/pulls/5'[0-9]|'api repos/o/r/pulls/6'[01])
+  'api repos/o/r/pulls/8'|'api repos/o/r/pulls/9'|'api repos/o/r/pulls/10'|'api repos/o/r/pulls/4'[0-9]|'api repos/o/r/pulls/5'[0-9]|'api repos/o/r/pulls/6'[01]|'api repos/o/r/pulls/9'[0-2])
     jq -n --arg head "$(cat "$FORGE/head")" --arg state "$(cat "$FORGE/state" 2>/dev/null || printf open)" '
       {state:(if $state == "open" then "open" else "closed" end),user:{login:"author"},head:{sha:$head},draft:false,
        mergeable:(if $state == "open" then true else null end),
@@ -1348,6 +1348,56 @@ test_successive_polls_cover_successive_waves() {
   pass 'successive polls refresh every live URL within the achievable cadence'
 }
 
+test_rotation_survives_live_set_churn() {
+  local home task target old later third probe out
+  home=$(new_home rotation-churn)
+  forge_home "$home"
+  for task in second third fourth; do
+    case "$task" in
+      second) number=9 ;;
+      third) number=10 ;;
+      fourth) number=40 ;;
+    esac
+    record "$home" "$task" "$number" open mergeable
+  done
+  old=2026-09-15T08:00:00Z
+  for task in delivery second third fourth; do
+    mutate_record "$home" "$task" '.records[0].checked_at="2026-09-15T08:00:00Z"'
+  done
+  with_home "$home" "$ROOT/bin/fm-contributions.sh" poll >/dev/null \
+    || fail 'initial churn poll failed'
+  target=
+  for task in delivery second third fourth; do
+    if jq -e --arg old "$old" '.records[0].checked_at == $old' "$home/data/$task/contributions.json" >/dev/null; then
+      target=$task
+      break
+    fi
+  done
+  [ -n "$target" ] || fail 'the initial churn poll left no target to protect'
+  for number in 90 91 92; do
+    record "$home" "wave-$number" "$number" open mergeable
+  done
+  later=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 315 | todateiso8601')
+  with_home "$home" env FM_CONTRIBUTIONS_NOW="$later" "$ROOT/bin/fm-contributions.sh" poll >/dev/null \
+    || fail 'churn poll with added URLs failed'
+  jq -e --arg at "$later" '.records[0].checked_at == $at and .records[0].error == null' \
+    "$home/data/$target/contributions.json" >/dev/null \
+    || fail "live URL $target was skipped after other URLs were added"
+  for number in 90 91 92; do
+    rm -rf "$home/data/wave-$number"
+    grep -v "wave-$number -" "$home/data/backlog.md" > "$home/backlog.next"
+    mv "$home/backlog.next" "$home/data/backlog.md"
+  done
+  third=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 630 | todateiso8601')
+  with_home "$home" env FM_CONTRIBUTIONS_NOW="$third" "$ROOT/bin/fm-contributions.sh" poll >/dev/null \
+    || fail 'churn poll after removing URLs failed'
+  probe=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 945 | todateiso8601')
+  out=$(NOW="$probe" bearings "$home") || fail 'could not inspect coverage after URL churn'
+  printf '%s' "$out" | jq -e '.contributions.known == 4 and .contributions.not_recently_checked == 0' >/dev/null \
+    || fail "URL churn left a live contribution stale: $out"
+  pass 'stable contribution phases survive live URL churn'
+}
+
 test_age_is_not_owed_fleet_work() {
   local home out
   home=$(new_home age-not-fleet)
@@ -1394,9 +1444,10 @@ test_fix_pr_carries_ready_issue() {
 }
 
 test_poll_records_fix_links() {
-  local home token
+  local home token later out
   home=$(new_home fix-link)
   forge_home "$home"
+  wrap_forge "$home"
   printf -- '- [ ] filed - Filed https://github.com/o/r/issues/9 (repo: sample) (kind: ship)\n' >> "$home/data/backlog.md"
   printf '[{"name":"ready-for-pr"}]\n' > "$home/forge/labels.json"
   printf '["https://github.com/o/r/issues/9"]\n' > "$home/forge/fixes.json"
@@ -1409,7 +1460,15 @@ test_poll_records_fix_links() {
     || fail 'could not acknowledge the ready signal'
   bearings "$home" | jq -e '.contributions.counts.fleet == 0 and .contributions.counts.nobody == 1' >/dev/null \
     || fail 'an observed fix link did not carry the ready issue'
-  pass 'poll records the forge closing-issue links that carry ready issues'
+  printf 'fail\n' > "$home/forge/fault"
+  later=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 315 | todateiso8601')
+  with_home "$home" env FM_CONTRIBUTIONS_NOW="$later" "$ROOT/bin/fm-contributions.sh" poll >/dev/null \
+    || fail 'fix-link failure transition poll failed'
+  out=$(NOW="$later" bearings "$home") || fail 'could not inspect a failed fix-link transition'
+  printf '%s' "$out" | jq -e '.contributions.counts.fleet == 2 and .contributions.counts.nobody == 0' >/dev/null \
+    || fail "a failed fix PR observation still carried its stale issue link: $out"
+  pass 'poll records fix links and drops them after a failed PR observation'
+
 }
 
 test_three_second_pr_reads_complete_fresh_in_one_cycle() { # 3-second reads fit within one 20-second parallel poll
@@ -1801,7 +1860,7 @@ test_many_reviews_stay_readable() {
 }
 
 failures=0
-for test_name in test_actor_coverage test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_unsupported_poll_is_silent_and_clears_legacy_errors test_legacy_cleanup_preserves_supported_failure test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_expired_child_coverage_is_not_fleet_work test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_http_500_once_retries_without_waking test_http_500_twice_records_the_failed_read test_http_404_is_not_retried test_real_gh_errors_drive_retry_and_summary test_next_url_does_not_inherit_a_forge_diagnostic test_shared_url_observed_once test_shared_owner_age_only_does_not_hide_measured_state test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_one_poll_observes_a_parallel_wave test_successive_polls_cover_successive_waves test_age_is_not_owed_fleet_work test_fix_pr_carries_ready_issue test_poll_records_fix_links test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_retire_ends_observation_of_a_gone_contribution test_late_owner_of_a_retired_final_contribution_is_not_retired test_retire_is_idempotent_and_refuses_unknown_pairs test_many_reviews_stay_readable; do
+for test_name in test_actor_coverage test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_unsupported_poll_is_silent_and_clears_legacy_errors test_legacy_cleanup_preserves_supported_failure test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_expired_child_coverage_is_not_fleet_work test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_http_500_once_retries_without_waking test_http_500_twice_records_the_failed_read test_http_404_is_not_retried test_real_gh_errors_drive_retry_and_summary test_next_url_does_not_inherit_a_forge_diagnostic test_shared_url_observed_once test_shared_owner_age_only_does_not_hide_measured_state test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_one_poll_observes_a_parallel_wave test_successive_polls_cover_successive_waves test_rotation_survives_live_set_churn test_age_is_not_owed_fleet_work test_fix_pr_carries_ready_issue test_poll_records_fix_links test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_retire_ends_observation_of_a_gone_contribution test_late_owner_of_a_retired_final_contribution_is_not_retired test_retire_is_idempotent_and_refuses_unknown_pairs test_many_reviews_stay_readable; do
   ( "$test_name" ) || failures=$((failures + 1))
 done
 [ "$failures" -eq 0 ] || fail "$failures contribution regressions"

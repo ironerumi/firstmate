@@ -48,7 +48,8 @@ def projected($input; $saved; $now; $max_age):
   known($input; $saved) as $known
   # An owned open or merged PR names the issues it fixes; that PR row carries their work.
   | [$known[] as $k | $saved[] | select(.task == $k.task) | .records[]
-      | select(.url == $k.url and .kind == "pr" and (.observation.state | IN("open","merged")))
+      | select(.url == $k.url and .kind == "pr" and .error == null
+          and (.observation.state | IN("open","merged")))
       | {pr:.url,fixes:(.observation.fixes // [])}] as $fix_prs
   | [$known[] as $k
     | ([$saved[] | select(.task == $k.task) | .records[] | select(.url == $k.url)] | first) as $record
