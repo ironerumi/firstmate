@@ -101,11 +101,11 @@ def projected($input; $saved; $now; $max_age):
          else {actor:"fleet",reason:"terminal observation needs refresh"} end
        elif $hold != null then {actor:"captain",reason:$hold.hold_reason,hold:$hold.id}
        elif $record.error != null then {actor:"fleet",reason:$record.error}
+       elif $stale then {actor:"fleet",reason:"STALE maintainer verdict; reassess the current head"}
        # Observation age is a coverage gap the rotation refreshes, never owed fleet
        # work; a durable pending signal still needs triage at any age.
        elif ($fresh | not) and ($record.pending // [] | length) == 0 then
          {actor:"not_recently_checked",reason:"contribution not recently checked"}
-       elif $stale then {actor:"fleet",reason:"STALE maintainer verdict; reassess the current head"}
        elif ($record.pending | length) > 0 then {actor:"fleet",reason:"incoming maintainer signal needs triage"}
        elif $record.kind == "issue" then
          if $o.ready and $fix_pr != null then {actor:"nobody",reason:("ready-for-pr work is carried by fix PR " + $fix_pr)}

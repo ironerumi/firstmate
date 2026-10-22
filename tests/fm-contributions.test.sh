@@ -66,13 +66,13 @@ test_stale_verdict() {
   local home out
   home=$(new_home stale)
   record "$home" changed 5 open mergeable
-  mutate_record "$home" changed ".records[0].verdict = {head:\"$HEAD_B\",actor:\"captain\",source:\"https://github.com/o/r/pull/5#issuecomment-8\",summary:\"choose contract\"}"
+  mutate_record "$home" changed ".records[0].checked_at=\"2026-09-16T07:39:59Z\" | .records[0].verdict = {head:\"$HEAD_B\",actor:\"captain\",source:\"https://github.com/o/r/pull/5#issuecomment-8\",summary:\"choose contract\"}"
   out=$(bearings "$home") || fail 'Bearings could not read stale verdict fixture'
   printf '%s' "$out" | jq -e '
     .contributions.stale_verdicts == 1 and .contributions.counts.captain == 0
-    and .contributions.counts.fleet == 1' >/dev/null \
-    || fail "a verdict on a replaced head must be STALE, not current captain work: $out"
-  pass 'replaced-head verdict is stale and cannot create a captain requirement'
+    and .contributions.counts.fleet == 1 and .contributions.not_recently_checked == 0' >/dev/null \
+    || fail "a stale verdict on an expired observation must remain fleet work: $out"
+  pass 'stale verdicts remain fleet work after observation expiry'
 }
 
 test_unchecked_is_not_silence() {
