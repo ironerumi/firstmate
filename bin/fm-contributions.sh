@@ -72,8 +72,8 @@
 # Each poll observes one wave sized to cover all live URLs in two successive
 # five-minute buckets, in parallel under the same deadline, each in its own
 # scratch directory, then applies the results in rotation order. URLs needing
-# forge reads are sorted by URL and rotated by the current five-minute epoch
-# bucket times that width, modulo their count, without stored scheduling state
+# forge reads are sorted by URL and selected from a bounded partition cycle
+# using the current five-minute epoch bucket, without stored scheduling state
 # or freshness-based reordering. Terminal URLs settle separately before the
 # forge budget starts and consume no rotation slots.
 # A deliberately smaller configured budget remains bounded and may be
@@ -483,7 +483,7 @@ clear_unsupported_errors() {
 }
 
 poll() {
-  local task url old kind error observed why exhausted index bucket dir live_count
+  local task url old kind error observed why exhausted index bucket dir live_count partition
   local -a row
   acquire
   get_input
@@ -511,12 +511,17 @@ poll() {
   done < "$TMP/known.tsv"
   # Two successive five-minute buckets cover every live URL.
   live_count=$(wc -l < "$TMP/live.tsv")
-  OBSERVATION_WIDTH=$(( (live_count + 1) / 2 ))
-  [ "$OBSERVATION_WIDTH" -ge 2 ] || OBSERVATION_WIDTH=$live_count
+  OBSERVATION_WIDTH=0
+  OBSERVATION_PARTITIONS=1
+  if [ "$live_count" -gt 0 ]; then
+    OBSERVATION_WIDTH=$(( (live_count + 1) / 2 ))
+    [ "$OBSERVATION_WIDTH" -ge 2 ] || OBSERVATION_WIDTH=$live_count
+    OBSERVATION_PARTITIONS=$(( (live_count + OBSERVATION_WIDTH - 1) / OBSERVATION_WIDTH ))
+  fi
   bucket=$((EPOCH / 300))
-  jq -Rnr --argjson start "$((bucket * OBSERVATION_WIDTH))" --argjson width "$OBSERVATION_WIDTH" '
-    [inputs] | if length == 0 then . else ($start % length) as $offset | (.[$offset:] + .[:$offset])[:$width] end
-    | .[]' < "$TMP/live.tsv" > "$TMP/known.tsv"
+  partition=$((bucket % OBSERVATION_PARTITIONS))
+  jq -Rnr --argjson start "$((partition * OBSERVATION_WIDTH))" --argjson width "$OBSERVATION_WIDTH" '
+    [inputs] | .[$start:($start + $width)] | .[]' < "$TMP/live.tsv" > "$TMP/known.tsv"
   DEADLINE=$(( $(date +%s) + BUDGET ))
   index=0
   while IFS=$'\t' read -r -a row; do

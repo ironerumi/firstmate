@@ -1315,7 +1315,7 @@ test_one_poll_observes_a_parallel_wave() {
 }
 
 test_successive_polls_cover_successive_waves() {
-  local home number later out
+  local home number later third probe out
   home=$(new_home wave-rotation)
   forge_home "$home"
   wrap_forge "$home"
@@ -1326,16 +1326,25 @@ test_successive_polls_cover_successive_waves() {
   done
   out=$(with_home "$home" "$ROOT/bin/fm-contributions.sh" poll) || fail 'first wave poll failed'
   [ -z "$out" ] || fail "first wave poll printed: $out"
-  later=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 300 | todateiso8601')
+  later=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 315 | todateiso8601')
   out=$(with_home "$home" env FM_CONTRIBUTIONS_NOW="$later" "$ROOT/bin/fm-contributions.sh" poll) \
     || fail 'second wave poll failed'
   [ -z "$out" ] || fail "second wave poll printed: $out"
+  third=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 630 | todateiso8601')
+  out=$(with_home "$home" env FM_CONTRIBUTIONS_NOW="$third" "$ROOT/bin/fm-contributions.sh" poll) \
+    || fail 'third wave poll failed'
+  [ -z "$out" ] || fail "third wave poll printed: $out"
   for number in delivery 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61; do
     [ "$number" = delivery ] || number="wave-$number"
     jq -e '.records[0] | .checked_at != "2026-09-15T08:00:00Z" and .error == null' \
       "$home/data/$number/contributions.json" >/dev/null \
-      || fail "$number was not observed by two successive polls of twenty-three live URLs"
+      || fail "$number was not observed by a complete rotation of twenty-three live URLs"
   done
+  probe=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 945 | todateiso8601')
+  out=$(NOW="$probe" bearings "$home") || fail 'could not inspect coverage after a complete rotation'
+  printf '%s' "$out" | jq -e '.contributions.known == 23 and .contributions.checked == 23
+    and .contributions.not_recently_checked == 0' >/dev/null \
+    || fail "a complete rotation left a live URL stale: $out"
   pass 'successive polls refresh every live URL within the achievable cadence'
 }
 
