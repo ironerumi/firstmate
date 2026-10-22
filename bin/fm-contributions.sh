@@ -68,16 +68,16 @@
 # immediately, including a 404, which is how a lost login reads on a private
 # repository. A pull observation has three
 # dependent waves: core, six independent reads, then the closing head read;
-# an issue has two waves, so one observation needs at most 15 seconds.
+# a PR observation needs at most 15 seconds and an issue at most 10 seconds.
 # Each poll observes one wave from a bounded two-phase cycle in parallel under
 # the same deadline, each URL assigned to a phase by its stable URL hash, then
 # applies the results in rotation order. URLs needing forge reads are sorted by
 # URL before phase selection, without stored scheduling state or freshness-based
 # reordering. A phase uses at most eight streaming URL workers and rotates its
-# start position each cycle; under bounded forge latency this keeps the
-# two-phase cycle inside the freshness window, while pathological latency
-# remains not_recently_checked rather than fleet work. Terminal URLs settle
-# separately before the forge budget starts and consume no rotation slots.
+# start position each cycle; while one observation takes about six seconds or
+# less, this keeps the two-phase cycle inside the freshness window; slower
+# latency remains not_recently_checked rather than fleet work. Terminal URLs
+# settle separately before the forge budget starts and consume no rotation slots.
 # A deliberately smaller configured budget remains bounded and may be
 # unmeasured, rather than being mislabeled unavailable. Each distinct supported
 # URL is attempted at most once per poll and its observation applied to every owner.
@@ -486,8 +486,9 @@ clear_unsupported_errors() {
 
 poll() {
   local task url old kind error observed why exhausted index bucket dir live_count partition hash
-  local phase_count cycle offset reserve now line active started slot slot_index pid
-  local -a row pids dirs
+  local phase_count cycle offset reserve now line active slot slot_index pid
+  local max_pr max_issue duration started_at finished_at worker_duration
+  local -a row pids dirs kinds
   acquire
   get_input
   read_saved
@@ -534,15 +535,18 @@ poll() {
     < "$TMP/phase.tsv" > "$TMP/known.tsv"
   DEADLINE=$(( $(date +%s) + BUDGET ))
   active=0
-  started=0
+  max_pr=0
+  max_issue=0
   index=0
   exec 3< "$TMP/known.tsv"
   while IFS= read -r line <&3; do
     IFS=$'\t' read -r -a row <<< "$line"
-    case "${row[0]}" in */issues/*) reserve=10 ;; *) reserve=15 ;; esac
-    [ "$BUDGET" -lt "$reserve" ] && reserve=$BUDGET
+    case "${row[0]}" in
+      */issues/*) kind=issue; reserve=$max_issue ;;
+      *) kind=pr; reserve=$max_pr ;;
+    esac
     now=$(date +%s)
-    if [ "$started" -ne 0 ] && [ "$((DEADLINE - now))" -lt "$reserve" ]; then
+    if [ "$reserve" -gt 0 ] && [ "$((DEADLINE - now))" -lt "$reserve" ]; then
       break
     fi
     index=$((index + 1))
@@ -551,14 +555,18 @@ poll() {
     # Each URL observes in its own scratch directory; the parent applies results in rotation order.
     {
       observed=0
+      started_at=$(date +%s)
       TMP=$dir observe "${row[0]}" || observed=$?
-      printf '%s %s\n' "$observed" "$BUDGET_EXHAUSTED" > "$dir/result"
+      finished_at=$(date +%s)
+      worker_duration=$((finished_at - started_at))
+      [ "$worker_duration" -ge 1 ] || worker_duration=1
+      printf '%s %s %s\n' "$observed" "$BUDGET_EXHAUSTED" "$worker_duration" > "$dir/result"
       : > "$dir/done"
     } &
     pids+=("$!")
     dirs+=("$dir")
+    kinds+=("$kind")
     active=$((active + 1))
-    started=1
     while [ "$active" -ge 8 ]; do
       slot_index=-1
       while [ "$slot_index" -lt 0 ]; do
@@ -573,9 +581,16 @@ poll() {
         [ "$slot_index" -ge 0 ] || sleep 0.01
       done
       wait "${pids[$slot_index]}" || true
-      unset "pids[$slot_index]" "dirs[$slot_index]"
+      if read -r observed exhausted duration < "${dirs[$slot_index]}/result"; then
+        case "${kinds[$slot_index]}" in
+          pr) [ "$duration" -gt "$max_pr" ] && max_pr=$duration ;;
+          issue) [ "$duration" -gt "$max_issue" ] && max_issue=$duration ;;
+        esac
+      fi
+      unset "pids[$slot_index]" "dirs[$slot_index]" "kinds[$slot_index]"
       pids=("${pids[@]}")
       dirs=("${dirs[@]}")
+      kinds=("${kinds[@]}")
       active=$((active - 1))
     done
   done
@@ -594,9 +609,10 @@ poll() {
       [ "$slot_index" -ge 0 ] || sleep 0.01
     done
     wait "${pids[$slot_index]}" || true
-    unset "pids[$slot_index]" "dirs[$slot_index]"
+    unset "pids[$slot_index]" "dirs[$slot_index]" "kinds[$slot_index]"
     pids=("${pids[@]}")
     dirs=("${dirs[@]}")
+    kinds=("${kinds[@]}")
     active=$((active - 1))
   done
   index=0
@@ -606,7 +622,7 @@ poll() {
     dir=$TMP/url.$index
     # A missing result is an interrupted observation: leave its records untouched.
     [ -f "$dir/result" ] || continue
-    read -r observed exhausted < "$dir/result" || continue
+    read -r observed exhausted duration < "$dir/result" || continue
     [ "$exhausted" -eq 0 ] || continue
     why='no failing step recorded'
     [ ! -s "$dir/why" ] || IFS= read -r why < "$dir/why"

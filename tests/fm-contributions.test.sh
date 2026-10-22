@@ -1352,14 +1352,14 @@ test_successive_polls_cover_successive_waves() {
     record "$home" "wave-$number" "$number" open mergeable
     mutate_record "$home" "wave-$number" '.records[0].checked_at="2026-09-15T08:00:00Z"'
   done
-  out=$(with_home "$home" env FORGE_LATENCY=1 "$ROOT/bin/fm-contributions.sh" poll) || fail 'first wave poll failed'
+  out=$(with_home "$home" env FORGE_LATENCY=2 "$ROOT/bin/fm-contributions.sh" poll) || fail 'first wave poll failed'
   [ -z "$out" ] || fail "first wave poll printed: $out"
   later=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 315 | todateiso8601')
-  out=$(with_home "$home" env FORGE_LATENCY=1 FM_CONTRIBUTIONS_NOW="$later" "$ROOT/bin/fm-contributions.sh" poll) \
+  out=$(with_home "$home" env FORGE_LATENCY=2 FM_CONTRIBUTIONS_NOW="$later" "$ROOT/bin/fm-contributions.sh" poll) \
     || fail 'second wave poll failed'
   [ -z "$out" ] || fail "second wave poll printed: $out"
   third=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 630 | todateiso8601')
-  out=$(with_home "$home" env FORGE_LATENCY=1 FM_CONTRIBUTIONS_NOW="$third" "$ROOT/bin/fm-contributions.sh" poll) \
+  out=$(with_home "$home" env FORGE_LATENCY=2 FM_CONTRIBUTIONS_NOW="$third" "$ROOT/bin/fm-contributions.sh" poll) \
     || fail 'third wave poll failed'
   [ -z "$out" ] || fail "third wave poll printed: $out"
   for number in delivery 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61; do
