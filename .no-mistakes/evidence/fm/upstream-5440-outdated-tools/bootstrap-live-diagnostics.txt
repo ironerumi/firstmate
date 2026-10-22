@@ -1,0 +1,42 @@
+[absent-treehouse]
+MISSING: treehouse (install: curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh)
+
+[absent-no-mistakes]
+MISSING: no-mistakes (install: curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh)
+
+[unparseable-no-mistakes]
+OUTDATED: no-mistakes (installed: unparseable; requires 1.46.0; upgrade: no-mistakes update)
+
+[outdated-no-mistakes]
+OUTDATED: no-mistakes (installed: 1.45.4; requires 1.46.0; upgrade: no-mistakes update)
+
+[absent-gh-axi]
+MISSING: gh-axi (install: npm install -g gh-axi && gh-axi setup hooks)
+
+[outdated-gh-axi]
+OUTDATED: gh-axi (installed: 0.1.19; requires 0.1.29; upgrade: gh-axi update)
+
+[absent-tasks-axi]
+MISSING: tasks-axi (install: npm install -g tasks-axi)
+
+[tasks-capability]
+OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body; upgrade: npm install -g tasks-axi)
+
+[tasks-both-capabilities]
+OUTDATED: tasks-axi (installed: 0.2.6; requires 0.2.6 with update --archive-body and mv multi-ID; upgrade: npm install -g tasks-axi)
+
+[absent-quota-axi]
+MISSING: quota-axi (install: npm install -g quota-axi)
+
+[outdated-quota-axi]
+OUTDATED: quota-axi (installed: 0.1.50; requires 0.1.51; upgrade: quota-axi update)
+
+[absent-lavish-axi]
+PRESENTATION_UNAVAILABLE: lavish-axi (requires >=0.1.77; install: npm install -g lavish-axi && lavish-axi setup hooks) - nonvisual work may proceed with plain-text decisions and reports; install or upgrade before using Lavish
+
+[at-floor-all]
+(silent)
+
+[outdated-treehouse]
+OUTDATED: treehouse (installed: 0.4.2; requires --lease support; upgrade: treehouse update)
+
