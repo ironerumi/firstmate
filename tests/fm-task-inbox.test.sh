@@ -424,12 +424,12 @@ render() {
   printf '%s\n  ? for shortcuts\n' "$rule"
 }
 fm_backend_herdr_parse_target() { FM_BACKEND_HERDR_SESSION=s; FM_BACKEND_HERDR_PANE=p; }
-fm_backend_herdr_visible_capture_ansi() { render; }
-fm_backend_herdr_visible_capture() { render; }
+fm_backend_herdr_visible_capture_ansi() { [ "${FM_FAKE_READ_FAIL:-0}" = 1 ] && return 1; render; }
+fm_backend_herdr_visible_capture() { [ "${FM_FAKE_READ_FAIL:-0}" = 1 ] && return 1; render; }
 fm_backend_herdr_capture() { printf '● done\n'; }
 fm_backend_herdr_composer_identity() { printf 'claude\tidle'; }
 fm_backend_herdr_agent_state() { printf 'idle'; }
-fm_backend_herdr_busy_state() { printf 'idle'; }
+fm_backend_herdr_busy_state() { printf '%s' "${FM_FAKE_BUSY_STATE:-idle}"; }
 fm_backend_herdr_send_key() {
   local drops
   [ "$2" = Enter ] || return 0
@@ -457,9 +457,8 @@ SH
 # Issue 104: on Herdr the doorbell can be typed into a Claude composer and left
 # unsubmitted while the submit reports delivery, and that pending line then
 # blocked every later ring. The ring re-reads the composer after typing and
-# presses Enter, never retyping, within its Enter budget; a doorbell already
-# pending is submitted rather than retyped; other pending text is untouched;
-# and the stuck-busy helper submits only our own doorbell.
+# presses Enter only with an idle proof, never retyping; other pending text is
+# untouched.
 test_herdr_ring_submits_a_typed_doorbell_left_pending() {
   local dir state rec doorbell log composer drops driver rc
   dir="$TMP_ROOT/herdr-ring-pending"
@@ -471,7 +470,8 @@ test_herdr_ring_submits_a_typed_doorbell_left_pending() {
   log="$dir/send.log"; composer="$dir/composer"; drops="$dir/drops"
   herdr_fn() {
     ROOT="$ROOT" FM_STATE_OVERRIDE="$state" FM_SEND_LOG="$log" FM_FAKE_COMPOSER="$composer" \
-      FM_FAKE_DROP_ENTERS="$drops" bash "$driver" "$@"
+      FM_FAKE_DROP_ENTERS="$drops" FM_FAKE_BUSY_STATE="${FM_FAKE_BUSY_STATE:-idle}" \
+      FM_FAKE_READ_FAIL="${FM_FAKE_READ_FAIL:-0}" bash "$driver" "$@"
   }
 
   : > "$log"; : > "$composer"; echo 0 > "$drops"
@@ -500,58 +500,30 @@ test_herdr_ring_submits_a_typed_doorbell_left_pending() {
   [ "$(cat "$log")" = "ENTER"$'\n'"SUBMIT: $doorbell" ] \
     || fail "an already pending doorbell should be submitted, not retyped:"$'\n'"$(cat "$log")"
 
+  : > "$log"; printf '%s' "$doorbell" > "$composer"; echo 0 > "$drops"
+  rc=0; FM_FAKE_BUSY_STATE=busy herdr_fn fm_task_inbox_ring herdr s:p "$rec" || rc=$?
+  [ "$rc" = 1 ] || fail "a busy pane holding the doorbell should defer, got rc $rc"
+  [ ! -s "$log" ] || fail "a busy pane received an extra Enter:"$'\n'"$(cat "$log")"
+  [ "$(cat "$composer")" = "$doorbell" ] || fail "a busy pane lost its queued doorbell"
+
+  : > "$log"; : > "$composer"; echo 0 > "$drops"
+  rc=0; FM_FAKE_BUSY_STATE=busy herdr_fn fm_task_inbox_ring herdr s:p "$rec" || rc=$?
+  [ "$rc" = 0 ] || fail "a busy submit result should be preserved, got rc $rc"
+  [ "$(cat "$log")" = "TYPE: $doorbell" ] || fail "a busy submit result was retried:"$'\n'"$(cat "$log")"
+  [ -s "$composer" ] || fail "a busy submit result lost the queued doorbell"
+
+  : > "$log"; : > "$composer"; echo 0 > "$drops"
+  rc=0; FM_FAKE_READ_FAIL=1 herdr_fn fm_task_inbox_ring herdr s:p "$rec" || rc=$?
+  [ "$rc" = 2 ] || fail "an unreadable composer should report failure, got rc $rc"
+  [ "$(cat "$log")" = "TYPE: $doorbell" ] || fail "an unreadable composer was treated as delivered:"$'\n'"$(cat "$log")"
+  [ -s "$composer" ] || fail "an unreadable composer lost the typed doorbell"
+
   : > "$log"; printf 'a half-typed draft' > "$composer"
   rc=0; herdr_fn fm_task_inbox_ring herdr s:p "$rec" || rc=$?
   [ "$rc" = 1 ] || fail "other pending text should skip the ring, got rc $rc"
   [ ! -s "$log" ] || fail "other pending text was touched:"$'\n'"$(cat "$log")"
 
-  : > "$log"; printf '%s' "$doorbell" > "$composer"
-  rc=0; herdr_fn fm_task_inbox_submit_stuck_doorbell herdr s:p "$rec" || rc=$?
-  [ "$rc" = 0 ] || fail "the stuck-busy helper should submit our pending doorbell, got rc $rc"
-  [ "$(cat "$log")" = "ENTER"$'\n'"SUBMIT: $doorbell" ] \
-    || fail "the stuck-busy helper should press Enter only:"$'\n'"$(cat "$log")"
-  for other in '' 'a half-typed draft'; do
-    : > "$log"; printf '%s' "$other" > "$composer"
-    rc=0; herdr_fn fm_task_inbox_submit_stuck_doorbell herdr s:p "$rec" || rc=$?
-    [ "$rc" = 1 ] || fail "the stuck-busy helper should leave '$other' alone, got rc $rc"
-    [ ! -s "$log" ] || fail "the stuck-busy helper touched '$other':"$'\n'"$(cat "$log")"
-  done
-  pass "inbox: on herdr the ring submits a typed doorbell left pending with Enter only, within its budget"
-}
-
-# Before escalating stuck-busy, the watcher submits our own doorbell when it is
-# what sits in the composer, counting that as a delivery attempt; a busy pane
-# with no pending doorbell still escalates without typing.
-test_watcher_stuck_busy_submits_pending_doorbell() {
-  local dir rec doorbell composer
-  dir=$(busy_case busy-pending-doorbell)
-  make_composer_stub "$dir"
-  rec="$dir/state/t1.inbox/001.msg"
-  doorbell=$(inbox_lib "$dir/state" fm_task_inbox_doorbell_line "$rec")
-  composer="$dir/composer"
-  printf '%s' "$doorbell" > "$composer"
-  stuck_check() {
-    FM_FAKE_COMPOSER="$composer" FM_FAKE_DROP_ENTERS="$dir/drops" FM_FAKE_LOG_TYPES=1 \
-      FM_FAKE_BUSY_LINE='BUSYTOKEN active' busy_steer_check "$dir" /dev/null
-  }
-  stuck_check
-  [ ! -s "$dir/send.log" ] || fail "the first busy deferral typed or pressed:"$'\n'"$(cat "$dir/send.log")"
-  stuck_check
-  [ ! -s "$dir/state/.wake-queue" ] \
-    || fail "a busy pane holding our own doorbell escalated instead of submitting it:"$'\n'"$(cat "$dir/state/.wake-queue")"
-  [ "$(cat "$dir/send.log")" = "SUBMIT: $doorbell" ] \
-    || fail "the stuck-busy check should submit the pending doorbell with Enter only:"$'\n'"$(cat "$dir/send.log")"
-  [ ! -e "$dir/state/t1.inbox/.busy-state" ] || fail "a submitted doorbell did not reset the busy budget"
-  [ -s "$dir/state/t1.inbox/.ring-state" ] || fail "a submitted doorbell was not recorded as a delivery attempt"
-  [ -f "$rec" ] || fail "submitting the doorbell removed the durable record"
-
-  : > "$dir/send.log"; printf 'a half-typed draft' > "$composer"
-  stuck_check
-  stuck_check
-  grep -q 'stuck-busy after 2 consecutive' "$dir/state/.wake-queue" \
-    || fail "a busy pane with other pending text did not escalate stuck-busy"
-  [ ! -s "$dir/send.log" ] || fail "stuck-busy escalation touched other pending text:"$'\n'"$(cat "$dir/send.log")"
-  pass "watcher: stuck-busy submits our own pending doorbell before escalating and leaves other text alone"
+  pass "inbox: on herdr the ring submits an unsubmitted doorbell only with an idle proof"
 }
 
 test_idempotent_write_dedups_exact_body() {
@@ -1355,7 +1327,6 @@ test_fire_and_forget_retry_is_quiet_without_the_flag
 test_ring_ladder_policy
 test_watcher_rerings_idle_pane_quietly
 test_watcher_waits_on_busy_pane
-test_watcher_stuck_busy_submits_pending_doorbell
 test_watcher_busy_budget_resets_on_ring_and_ack
 test_watcher_busy_bookkeeping_failure_surfaces
 test_watcher_successor_busy_reset_failure_surfaces idle
