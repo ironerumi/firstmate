@@ -548,7 +548,7 @@ inbox_steer_escalate_unavailable() {  # <window> <task> <record>
 # Runs for secondmates too: their pane-staleness exemption is about quiet panes
 # being healthy, while an unacknowledged instruction can still be a stuck steer.
 inbox_steer_check() {  # <window> <task>
-  local w=$1 task=$2 action verb rec count tail40 reason='' ring_rc backend agent_state
+  local w=$1 task=$2 action verb rec count tail40 reason='' ring_rc backend agent_state submitted=0 reset_busy=0
   action=$(fm_task_inbox_due_action "$STATE" "$task") || return 0
   verb=${action%% *}
   [ "$verb" != quiet ] || return 0
@@ -582,20 +582,34 @@ inbox_steer_check() {  # <window> <task>
     if ! count=$(fm_task_inbox_record_busy "$STATE" "$task" "$rec"); then
       [ -f "$rec" ] || return 0
       reason="stale: $w (steering-inbox busy bookkeeping unwritable: ${rec%/*}/.busy-state cannot be written while $rec stays unhandled; inspect the inbox directory)"
+      verb=escalate
     elif [ "$count" -ge "$(fm_task_inbox_busy_max)" ]; then
-      reason="stale: $w (unread firstmate instruction: stuck-busy after $count consecutive busy-deferred due doorbells; $rec stays unhandled and no doorbell was typed; inspect the worker)"
+      # Our own unsubmitted doorbell can be what holds the worker:
+      # submit it with Enter and count that as a delivery attempt instead.
+      if fm_task_inbox_submit_stuck_doorbell "$backend" "$w" "$rec" "$(window_label "$w")"; then
+        submitted=1
+        reset_busy=1
+        verb=ring
+      else
+        reason="stale: $w (unread firstmate instruction: stuck-busy after $count consecutive busy-deferred due doorbells; $rec stays unhandled and no doorbell was typed; inspect the worker)"
+        verb=escalate
+      fi
     else
       return 0
     fi
-    verb=escalate
-  elif [ "$verb" != retry ] && ! fm_task_inbox_clear_busy "$STATE" "$task"; then
+  elif [ "$verb" != retry ]; then
+    reset_busy=1
+  fi
+  if [ "$reset_busy" = 1 ] && ! fm_task_inbox_clear_busy "$STATE" "$task"; then
     reason="stale: $w (steering-inbox busy bookkeeping unwritable: ${rec%/*}/.busy-state cannot be reset after a non-busy check; inspect the inbox directory)"
     verb=escalate
   fi
   case "$verb" in
     ring)
       ring_rc=0
-      fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" || ring_rc=$?
+      if [ "$submitted" = 0 ]; then
+        fm_task_inbox_ring "$backend" "$w" "$rec" "$(window_label "$w")" || ring_rc=$?
+      fi
       if [ "$ring_rc" -eq 3 ]; then
         inbox_steer_escalate_unavailable "$w" "$task" "$rec"
         return 0
