@@ -667,7 +667,7 @@ Enter, Escape, and Ctrl-C are supported.
 Typed-plane slash input, and dollar-prefixed skill input for Codex, uses the shared harness-aware settle before the first Enter, so a completion popup cannot consume it.
 Typed-plane text is typed once; only Enter is retried.
 For a Herdr inbox doorbell, the post-submit check also reads the full visible composer.
-If it still contains exactly that doorbell and Herdr reports the pane idle, the ring sends Enter without retyping the line, up to the two-press internal budget; if Herdr reports busy, it leaves the line queued instead of sending another Enter.
+If the shared classifier still reads `pending`, that full read contains exactly that doorbell, and Herdr reports the pane idle, the ring sends Enter without retyping the line, up to the two-press internal budget; if Herdr reports busy, it leaves the line queued instead of sending another Enter.
 That path clears a doorbell typed but not submitted, so a swallowed Enter cannot block later steering.
 
 ### Claude composer proof
