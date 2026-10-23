@@ -1,0 +1,19 @@
+Target: 67c24069b1ee00dde2bb5288a089e76af1174637
+Base: d23465084e407ff0b957c33fda050dcf6d434efa
+
+Phase 1 targeted validation (serial, --jobs 1, per-script timeout 300s)
+Command:
+  bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-spawn-concurrent-impl.test.sh tests/fm-task-inbox.test.sh
+
+Passed:
+  tests/fm-spawn-concurrent-impl.test.sh
+    - declared capacity of 2 admits a second ship and refuses a third
+    - guard default/capacity/scout/unreadable-declaration behavior
+  tests/fm-task-inbox.test.sh
+    - Herdr submits an unsubmitted doorbell only with an idle proof
+    - ring submits its own stuck doorbell and retries a lost Enter once on both paths
+    - idle/busy/dead-pane watcher delivery and escalation behavior
+
+Failed: none
+Time-bound: none
+Phase 2: skipped; phase 1 directly covers both changed behaviors.
