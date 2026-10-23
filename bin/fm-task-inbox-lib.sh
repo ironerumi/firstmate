@@ -55,8 +55,10 @@
 # FM_TASK_INBOX_RING_MAX attempts without an acknowledgement it escalates. The
 # caller owns the busy and recovery-grade endpoint checks: due actions deferred
 # by a busy pane consume a separate durable consecutive-poll budget,
-# FM_TASK_INBOX_BUSY_MAX. At that bound the same escalation path surfaces a
-# stuck-busy reason without typing. A non-busy due check or acknowledgement resets
+# FM_TASK_INBOX_BUSY_MAX. At that bound a composer proven to hold exactly this
+# record's doorbell is submitted with Enter and counted as a delivery attempt
+# (fm_task_inbox_submit_stuck_doorbell); otherwise the same escalation path
+# surfaces a stuck-busy reason without typing. A non-busy due check or acknowledgement resets
 # this budget. Fire-and-forget retries remain outside escalation. A positively
 # dead or missing endpoint skips delivery and the ladder and escalates directly.
 # This library owns the schedule, durable budgets, and escalation marker.
@@ -424,6 +426,34 @@ fm_task_inbox_submit_pending() {  # <backend> <target> <line> [expected-label]
     esac
     [ "$i" -lt "$FM_TASK_INBOX_ENTER_RETRIES" ] || return 2
     fm_backend_send_key "$backend" "$target" Enter "$label" >/dev/null 2>&1 || return 2
+    i=$((i + 1))
+    sleep 0.3
+  done
+}
+
+# Before a stuck-busy escalation (bin/fm-watch.sh): the pane reads busy, but
+# the worker may be held by our own unsubmitted doorbell. Enter is pressed ONLY
+# on proof that the composer holds exactly this record's doorbell line: the
+# shared classifier reads it as `pending` AND its text equals the doorbell
+# line. Any other text, any other verdict, or an unreadable composer presses
+# nothing and the caller escalates as before. The pane's busy reading is not a
+# veto here, because it is this path's premise; with the composer proven to
+# hold only our constant line, Enter can submit nothing else.
+# Returns 0 when that proof held and the doorbell left the composer within
+# FM_TASK_INBOX_ENTER_RETRIES presses, 1 otherwise.
+fm_task_inbox_submit_stuck_doorbell() {  # <backend> <target> <record-path> [expected-label]
+  local backend=$1 target=$2 rec=$3 label=${4:-} line i=0 cstate
+  line=$(fm_task_inbox_doorbell_line "$rec") || return 1
+  while :; do
+    cstate=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null) || return 1
+    if [ "$cstate" != pending ] || ! fm_task_inbox_composer_holds "$backend" "$target" "$line" "$label"; then
+      # Only a press already sent can have cleared the composer, and only an
+      # empty verdict proves it did.
+      [ "$i" -gt 0 ] && [ "$cstate" = empty ] && return 0
+      return 1
+    fi
+    [ "$i" -lt "$FM_TASK_INBOX_ENTER_RETRIES" ] || return 1
+    fm_backend_send_key "$backend" "$target" Enter "$label" >/dev/null 2>&1 || return 1
     i=$((i + 1))
     sleep 0.3
   done
