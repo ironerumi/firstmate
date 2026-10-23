@@ -23,7 +23,8 @@
 # This wrapper consumes canonical status decisions plus canonically normalized
 # backlog roles, unresolved blockers, and captain actionability.
 # Contributions project cached coverage and required actors from fm-contributions.sh;
-# only captain rows are exposed, with counts for the other actors and unmeasured homes. It never infers
+# only captain rows are exposed, with counts for the other actors, observations
+# not recently checked (age, never owed work) and unmeasured homes. It never infers
 # decisions from report or visual-review prose or reimplements snapshot semantics.
 # Underway (in_flight) projects every main live worker plus every active child
 # from every readable secondmate ledger, independently of that home's
@@ -613,7 +614,8 @@ MODEL=$(printf '%s' "$SNAP" | jq \
         | map(if . != null and .owner != "(main)" and .known > 0 and (.valid_until // 0) < ($now | fromdateiso8601)
               then .complete=false | .proven_clear=false | .checked=0 | .captain=[]
                 | .unmeasured=(.unmeasured // 0)
-                | .counts={captain:0,fleet:(.known - .unmeasured),maintainer:0,nobody:0}
+                | .counts={captain:0,fleet:(.counts.fleet // 0),maintainer:0,nobody:0}
+                | .not_recently_checked=([0, (.known - .unmeasured - .counts.fleet)] | max)
               else . end) as $homes
         | ([$homes[] | select(. != null)]) as $measured
         | {scope:"owned contributions per home",known:([$measured[].known] | add // 0),
@@ -631,6 +633,7 @@ MODEL=$(printf '%s' "$SNAP" | jq \
            unmeasured_homes:([$homes[] | select(. == null)] | length),
            unreadable_records:([$measured[].unreadable_records] | add // 0),
            unmeasured:([$measured[].unmeasured] | add // 0),
+           not_recently_checked:([$measured[] | .not_recently_checked // 0] | add // 0),
            stale_verdicts:([$measured[].stale_verdicts] | add // 0),
            missing_verdicts:([$measured[].missing_verdicts] | add // 0),
            captain_omitted:([$measured[].captain_omitted] | add // 0),
