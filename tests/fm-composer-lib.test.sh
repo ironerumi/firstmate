@@ -1513,6 +1513,7 @@ test_quoted_exit_picker_text_is_not_a_dialog() {
 # shape used by the stuck-doorbell recovery path.
 test_herdr_claude_wrapped_doorbell_is_pending() {
   local line wrapped screen out
+  # shellcheck disable=SC2016 # The doorbell line intentionally names $FM_TASK_INBOX literally.
   line=': Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your '\''task.inbox'\'' steering inbox, read and act on each in numeric order, then mv each into its handled/.'
   wrapped=$(printf '%s' "$line" | fold -w 60 | awk 'NR == 1 { print "❯ " $0; next } { print "  " $0 }')
   screen=$'transcript line\n────────────────────────────────────────────────────────────────────────\n'"$wrapped"$'\n────────────────────────────────────────────────────────────────────────\n  ⏵⏵ bypass permissions on'
