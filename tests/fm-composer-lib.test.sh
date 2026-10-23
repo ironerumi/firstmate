@@ -1507,7 +1507,33 @@ test_quoted_exit_picker_text_is_not_a_dialog() {
   pass "picker text quoted above a normal composer is not read as a live picker"
 }
 
+# A real Herdr Claude viewport keeps the long doorbell in a bare composer
+# wrapped across rows between the harness's separator rules. Exercise the
+# backend adapter as well as the shared classifier, because this is the exact
+# shape used by the stuck-doorbell recovery path.
+test_herdr_claude_wrapped_doorbell_is_pending() {
+  local line wrapped screen out
+  line=': Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your '\''task.inbox'\'' steering inbox, read and act on each in numeric order, then mv each into its handled/.'
+  wrapped=$(printf '%s' "$line" | fold -w 60 | awk 'NR == 1 { print "❯ " $0; next } { print "  " $0 }')
+  screen=$'transcript line\n────────────────────────────────────────────────────────────────────────\n'"$wrapped"$'\n────────────────────────────────────────────────────────────────────────\n  ⏵⏵ bypass permissions on'
+  out=$(FM_TEST_HERDR_SCREEN="$screen" bash -c '
+    . "$1/bin/fm-backend.sh"
+    fm_backend_source herdr || exit 9
+    fm_backend_herdr_parse_target() {
+      FM_BACKEND_HERDR_SESSION=fixture
+      FM_BACKEND_HERDR_PANE=pane
+    }
+    fm_backend_herdr_visible_capture_ansi() { printf "%s" "$FM_TEST_HERDR_SCREEN"; }
+    fm_backend_herdr_visible_capture() { printf "%s" "$FM_TEST_HERDR_SCREEN"; }
+    fm_backend_herdr_composer_identity() { printf "claude\\tidle"; }
+    fm_backend_herdr_composer_state fixture:pane
+  ' _ "$ROOT")
+  [ "$out" = pending ] || fail "a wrapped Claude Herdr doorbell should read pending, got '$out'"
+  pass "herdr composer state: the wrapped Claude doorbell reads pending"
+}
+
 test_background_exit_picker_stays_pending_and_blocks_retry
 test_dialog_heading_and_footer_must_be_the_recorded_lines
 test_dialog_note_skips_the_match_when_no_sink_is_set
 test_quoted_exit_picker_text_is_not_a_dialog
+test_herdr_claude_wrapped_doorbell_is_pending

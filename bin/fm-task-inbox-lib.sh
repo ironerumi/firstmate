@@ -378,6 +378,7 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
   fi
   cstate=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null) || cstate=unknown
   if [ "$cstate" != empty ] && fm_task_inbox_composer_holds "$backend" "$target" "$line" "$label"; then
+    [ "$cstate" = pending ] || return 1
     fm_task_inbox_can_submit_pending "$backend" "$target" || return 1
     fm_task_inbox_submit_pending "$backend" "$target" "$line" "$label"
     return
@@ -414,7 +415,7 @@ fm_task_inbox_submit_pending() {  # <backend> <target> <line> [expected-label]
     cstate=$(fm_backend_composer_state "$backend" "$target" "$label" 2>/dev/null) || return 2
     case "$cstate" in
       empty) return 0 ;;
-      pending|pending-unproven) ;;
+      pending) ;;
       *) return 2 ;;
     esac
     fm_task_inbox_composer_holds "$backend" "$target" "$line" "$label"
