@@ -1,0 +1,8 @@
+Targeted phase 1 validation for c766753a742ba2af15d9ef5a25fae6281fdd3e5b
+
+Ran serially with --jobs 1 and --per-script-timeout-secs 300:
+- tests/fm-composer-lib.test.sh — PASS; wrapped Claude-on-Herdr doorbell classified pending.
+- tests/fm-task-inbox.test.sh — PASS; Herdr ring submits its own pending doorbell only with idle proof, stuck-busy submits only an exact pending doorbell, watcher wiring records the attempt, and foreign/unreadable composers are untouched.
+- tests/fm-spawn-concurrent-impl.test.sh — PASS; declared capacity 2 admits a second implementation spawn and refuses a third, while default capacity and unreadable declarations retain safe behavior.
+
+No targeted suite failed or hit the time bound. Phase 1 covered all changed runtime behaviors, so phase 2 live scenarios was skipped per the runbook.
