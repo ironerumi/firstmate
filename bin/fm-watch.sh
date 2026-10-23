@@ -582,6 +582,16 @@ inbox_steer_check() {  # <window> <task>
     if ! count=$(fm_task_inbox_record_busy "$STATE" "$task" "$rec"); then
       [ -f "$rec" ] || return 0
       reason="stale: $w (steering-inbox busy bookkeeping unwritable: ${rec%/*}/.busy-state cannot be written while $rec stays unhandled; inspect the inbox directory)"
+    elif [ "$count" -ge "$(fm_task_inbox_busy_max)" ] \
+      && fm_task_inbox_submit_stuck_doorbell "$backend" "$w" "$rec" "$(window_label "$w")"; then
+      # Our own doorbell, proven pending in the composer, was what held the
+      # worker; it is now submitted, so this counts as a delivery attempt.
+      if fm_task_inbox_clear_busy "$STATE" "$task" && fm_task_inbox_record_ring "$STATE" "$task" "$rec"; then
+        triage_log "steer-inbox stuck-busy doorbell submitted: $task ${rec##*/}"
+        return 0
+      fi
+      [ -f "$rec" ] || return 0
+      reason="stale: $w (steering-inbox busy bookkeeping unwritable: ${rec%/*} could not record the submitted stuck doorbell while $rec stays unhandled; inspect the inbox directory)"
     elif [ "$count" -ge "$(fm_task_inbox_busy_max)" ]; then
       reason="stale: $w (unread firstmate instruction: stuck-busy after $count consecutive busy-deferred due doorbells; $rec stays unhandled and no doorbell was typed; inspect the worker)"
     else

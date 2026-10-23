@@ -108,7 +108,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
 | `fm-guard-refusal-lib.sh` | Own best-effort keyed `blocked:` reporting for guard refusals (see [nm-validation-owner-guard.md](nm-validation-owner-guard.md#refusals-report-themselves)) |
 | `fm-worker-env-lib.sh`   | Single owner of the guard-shim environment `fm-spawn.sh` exports into a worker pane, shared with `tests/fm-nm-guard.test.sh` |
-| `fm-impl-concurrency-guard.sh` | Enforce the per-home one-implementation-task-per-repository cap for fresh ship spawns in any mode, direct Firstmate ship registrations, and scout promotions (full contract in the script header) |
+| `fm-impl-concurrency-guard.sh` | Enforce the per-home implementation-task-per-repository cap (one, or the project's declared capacity) for fresh ship spawns in any mode, direct Firstmate ship registrations, and scout promotions (full contract in the script header) |
 | `fm-pipeline-spend.sh`   | Attribute a task's no-mistakes pipeline spend to the task and keep it in the private spend ledger |
 | `fm-tangle-lib.sh`       | Shared default-branch resolution and primary-checkout tangle classification          |
 | `fm-timeout-lib.sh`      | Single owner of hard-bounded command execution and its fallback watchdog |

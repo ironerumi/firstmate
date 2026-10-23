@@ -284,9 +284,9 @@
 #   Before a secondmate launch, the home is fast-forwarded to the primary's
 #   default-branch commit when safe: directly for a local home, or through the
 #   configured host for a remote home. Skipped syncs warn and launch unchanged.
-#   A fresh ship spawn in any mode is refused while this home already has an
-#   implementation task in flight for the same repository
-#   (bin/fm-impl-concurrency-guard.sh owns that rule).
+#   A fresh ship spawn in any mode is refused while this home already has the
+#   repository's implementation limit in flight - one task, or the project's
+#   declared capacity (bin/fm-impl-concurrency-guard.sh owns that rule).
 #   Ship/scout spawns refuse to launch unless the resolved task path is a real
 #   git worktree root distinct from both the spawning project and its repository's
 #   primary checkout, including when the spawning project is a linked worktree.
@@ -3788,7 +3788,7 @@ if [ "$KIND" = ship ]; then
   fi
 fi
 
-# Pre-flight guard for the one-implementation-task-per-repository cap; that script owns the rule.
+# Pre-flight guard for the per-repository implementation cap; that script owns the rule.
 # FM_TEST_IMPL_GUARD_OFF=1 is the test-only seam a fixture that deliberately models more
 # than one ship spawn in one home sets; a production caller never sets it, and the
 # batch re-exec's FM_SPAWN_NO_GUARD does not affect this guard.
