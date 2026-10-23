@@ -1254,6 +1254,7 @@ A clone of that origin under a different directory name finds no declaration and
 When every place is held, `bin/fm-spawn.sh` launches nothing, creates no record, leaves the backlog item queued, prints one `deferred:` line naming the holders, and exits 75, so Firstmate dispatches the item again once a place frees.
 A malformed or unreadable file refuses every fresh ship or scout spawn until it is fixed, rather than guessing the intended limit, and so does a local home's state directory or task record that cannot be read while counting a capped project's holders.
 Firstmate cannot see which part of a worker's life uses the resource, so the number bounds whole workers from launch to handoff, and the tightest resource every worker needs should decide it.
+The same number also raises the per-repository implementation limit, which is otherwise one, so a declared capacity of N lets up to N ship tasks for that repository be in flight in one home at once ([`bin/fm-impl-concurrency-guard.sh`](../bin/fm-impl-concurrency-guard.sh) owns that rule); declare more than one only for a repository whose parallel PRs do not re-run CI when a sibling merges first.
 [`bin/fm-project-capacity-lib.sh`](../bin/fm-project-capacity-lib.sh) owns the file format, what holds a place, and why concurrent spawns cannot both take the last one.
 
 ## Crew dispatch profiles (config/crew-dispatch.json)

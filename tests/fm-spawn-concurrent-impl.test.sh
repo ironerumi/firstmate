@@ -450,6 +450,100 @@ EOF
   pass "the guard is a standalone command with its own documented exit codes"
 }
 
+# A declared machine capacity raises the per-repository implementation limit:
+# with `project 2` the second ship spawn launches, and a third is refused by the
+# guard even after the first recorded its ready PR, because a PR-ready ship
+# frees its capacity place but stays in flight until it lands.
+test_declared_capacity_raises_the_implementation_limit() {
+  local repo_rec world home fakebin project slot_a slot_b slot_c out status
+  world=$(make_world capacity-two)
+  IFS='|' read -r _ home fakebin <<EOF
+$world
+EOF
+  repo_rec=$(make_repo capacity-two project)
+  IFS='|' read -r project slot_a <<EOF
+$repo_rec
+EOF
+  slot_b=$(add_slot "$project" slot-b) || fail "could not add the second worktree"
+  slot_c=$(add_slot "$project" slot-c) || fail "could not add the third worktree"
+  printf 'project 2\n' > "$home/config/project-capacity"
+  write_brief "$home" impl-cap-first-z30
+  write_brief "$home" impl-cap-second-z31
+  write_brief "$home" impl-cap-third-z32
+
+  out=$(run_spawn "$home" "$slot_a" "$fakebin" impl-cap-first-z30 "$project" --mode no-mistakes --yolo off)
+  status=$?
+  expect_code 0 "$status" "the first ship spawn should succeed"$'\n'"$out"
+
+  out=$(run_spawn "$home" "$slot_b" "$fakebin" impl-cap-second-z31 "$project" --mode no-mistakes --yolo off)
+  status=$?
+  expect_code 0 "$status" "a declared capacity of 2 must admit a second ship for the repository"$'\n'"$out"
+  assert_contains "$out" "spawned impl-cap-second-z31" "the second ship spawn did not report success"
+
+  printf 'pr=https://example.invalid/pr/1\n' >> "$home/state/impl-cap-first-z30.meta"
+  out=$(run_spawn "$home" "$slot_c" "$fakebin" impl-cap-third-z32 "$project" --mode no-mistakes --yolo off)
+  status=$?
+  expect_code 1 "$status" "a third ship beyond a declared capacity of 2 must be refused by the guard"$'\n'"$out"
+  assert_contains "$out" "2 implementation tasks are already in flight for project (impl-cap-first-z30, impl-cap-second-z31), its declared capacity of 2" \
+    "the refusal did not name the declared capacity and the tasks in flight"
+  if [ -e "$home/state/impl-cap-third-z32.meta" ]; then
+    fail "the refused spawn published a task record for impl-cap-third-z32"
+  fi
+  pass "a declared capacity of 2 admits a second ship and refuses a third"
+}
+
+# The guard's limit read directly: no declaration means one, a declared capacity
+# counts only ship records, scouts never use up a place, and an unreadable
+# declaration refuses rather than guessing.
+test_guard_limit_follows_the_declared_capacity() {
+  local repo_rec world home project slot guard out status
+  world=$(make_world guard-capacity)
+  IFS='|' read -r _ home _ <<EOF
+$world
+EOF
+  repo_rec=$(make_repo guard-capacity project)
+  IFS='|' read -r project slot <<EOF
+$repo_rec
+EOF
+  guard="$ROOT/bin/fm-impl-concurrency-guard.sh"
+  fm_write_meta "$home/state/cap-ship-z33.meta" \
+    "window=firstmate:fm-cap-ship-z33" "endpoint_task_id=cap-ship-z33" \
+    "worktree=$slot" "project=$project" "kind=ship"
+  fm_write_meta "$home/state/cap-scout-z34.meta" \
+    "window=firstmate:fm-cap-scout-z34" "endpoint_task_id=cap-scout-z34" \
+    "worktree=$slot" "project=$project" "kind=scout"
+  fm_write_meta "$home/state/cap-scout-z35.meta" \
+    "window=firstmate:fm-cap-scout-z35" "endpoint_task_id=cap-scout-z35" \
+    "worktree=$slot" "project=$project" "kind=scout"
+
+  out=$(FM_HOME="$home" "$guard" "$home/state" "$project" cap-new-z36 2>&1)
+  status=$?
+  expect_code 1 "$status" "with no declaration the limit must stay one"$'\n'"$out"
+  assert_contains "$out" "one implementation task per repository runs at a time" \
+    "the undeclared refusal did not state the default limit of one"
+
+  printf 'project 2\n' > "$home/config/project-capacity"
+  out=$(FM_HOME="$home" "$guard" "$home/state" "$project" cap-new-z36 2>&1)
+  status=$?
+  expect_code 0 "$status" "a declared capacity of 2 with one ship and two scouts in flight must admit a second ship"$'\n'"$out"
+
+  fm_write_meta "$home/state/cap-ship-z37.meta" \
+    "window=firstmate:fm-cap-ship-z37" "endpoint_task_id=cap-ship-z37" \
+    "worktree=$slot" "project=$project"
+  out=$(FM_HOME="$home" "$guard" "$home/state" "$project" cap-new-z36 2>&1)
+  status=$?
+  expect_code 1 "$status" "a third ship beyond a declared capacity of 2 must be refused"$'\n'"$out"
+  assert_contains "$out" "its declared capacity of 2" "the refusal did not name the declared capacity"
+
+  printf 'project two\n' > "$home/config/project-capacity"
+  out=$(FM_HOME="$home" "$guard" "$home/state" "$project" cap-ship-z33 2>&1)
+  status=$?
+  expect_code 1 "$status" "an unreadable declaration must refuse"$'\n'"$out"
+  assert_contains "$out" "the project capacity declaration is unreadable" \
+    "the refusal did not name the unreadable declaration"
+  pass "the guard limit is one by default, follows a declared capacity, ignores scouts, and refuses an unreadable declaration"
+}
+
 test_second_ship_on_one_repo_is_refused
 test_direct_pr_second_ship_is_refused_too
 test_same_origin_clones_are_one_repository
@@ -463,3 +557,5 @@ test_torn_down_ship_releases_the_repository
 test_secondmate_and_scout_records_never_block
 test_record_without_kind_is_treated_as_ship
 test_guard_interface_is_a_standalone_command
+test_declared_capacity_raises_the_implementation_limit
+test_guard_limit_follows_the_declared_capacity

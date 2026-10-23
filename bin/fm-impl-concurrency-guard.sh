@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Refuse a second implementation task for one repository in the same firstmate
-# home, so at most ONE implementation task can be in flight per repository at a time.
+# Refuse an implementation task for one repository in the same firstmate home
+# once that repository's implementation limit is already in flight. The limit is
+# ONE implementation task per repository unless the project declares a machine
+# capacity in config/project-capacity, which then also raises this limit to that
+# capacity.
 #
 # Why this is mechanical rather than a prose cap: GitHub's merge queue is not
 # available on this fleet's plan (Team private repositories), so two open PRs on
@@ -8,10 +11,17 @@
 # The second PR goes behind the moment the first merges and re-runs CI for
 # nothing, which is pure wasted compute; one at a time per repository removes
 # that collision by construction instead of asking an agent to remember a cap.
+# A project whose PRs behind only by unrelated commits land without a CI rerun
+# loses nothing to parallel PRs, and its captain declares that by giving it a
+# capacity above one.
+# bin/fm-project-capacity-lib.sh owns the declaration and its lookup; this guard
+# never parses the file itself. An unreadable declaration refuses, as it does
+# for every fresh spawn.
 #
 # Usage: fm-impl-concurrency-guard.sh <state-dir> <project-dir> <task-id>
-#   Exit 0 - the repository is free for this implementation task.
-#   Exit 1 - refused; stderr names the task(s) already in flight.
+#   Exit 0 - the repository has room for this implementation task.
+#   Exit 1 - refused; stderr names the task(s) already in flight, or the
+#            unreadable capacity declaration.
 #   Exit 2 - usage or argument error.
 #
 # The callers are bin/fm-spawn.sh's pre-flight pass for every fresh ship spawn
@@ -68,6 +78,8 @@ fi
 FM_STATE_OVERRIDE=${FM_STATE_OVERRIDE:-$STATE_DIR}
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-project-capacity-lib.sh
+. "$SCRIPT_DIR/fm-project-capacity-lib.sh"
 
 # This guard deliberately scans THIS home's state directory only. A same-repository
 # clone in another home, including a remote or separately cloned secondmate home,
@@ -94,8 +106,20 @@ repository_identity() { # <project-dir>
   fi
 }
 
+CONFIG_DIR=${FM_CONFIG_OVERRIDE:-$FM_HOME/config}
+CAPACITY_CONFIG=$(fm_project_capacity_config_dir "$FM_HOME" "$CONFIG_DIR") || {
+  echo "error: spawn refused: could not resolve the root Firstmate home that declares project capacity for $PROJECT" >&2
+  exit 1
+}
+if ! fm_project_capacity_lookup "$CAPACITY_CONFIG" "$(basename "$PROJECT")"; then
+  echo "error: spawn refused: the project capacity declaration is unreadable ($FM_PROJECT_CAPACITY_ERROR); fix it so the captain's implementation limit is known (docs/configuration.md \"Project capacity\")" >&2
+  exit 1
+fi
+LIMIT=${FM_PROJECT_CAPACITY:-1}
+
 PROJECT_IDENTITY=$(repository_identity "$PROJECT")
 BLOCKERS=
+COUNT=0
 for meta in "$STATE_DIR"/*.meta; do
   [ -f "$meta" ] || continue
   id=$(basename "$meta" .meta)
@@ -110,8 +134,13 @@ for meta in "$STATE_DIR"/*.meta; do
   [ -n "$project" ] || continue
   [ "$(repository_identity "$project")" = "$PROJECT_IDENTITY" ] || continue
   BLOCKERS="${BLOCKERS:+$BLOCKERS, }$id"
+  COUNT=$((COUNT + 1))
 done
-[ -n "$BLOCKERS" ] || exit 0
+[ "$COUNT" -ge "$LIMIT" ] || exit 0
 
-echo "error: spawn refused: an implementation task is already in flight for $(basename "$PROJECT"): $BLOCKERS; one implementation task per repository runs at a time, so a second implementation task cannot land behind the first merge and re-run CI. Start $OWN_ID after that task lands (teardown)" >&2
+if [ "$LIMIT" -eq 1 ]; then
+  echo "error: spawn refused: an implementation task is already in flight for $(basename "$PROJECT"): $BLOCKERS; one implementation task per repository runs at a time, so a second implementation task cannot land behind the first merge and re-run CI. Start $OWN_ID after that task lands (teardown), or declare a higher capacity for the project (docs/configuration.md \"Project capacity\")" >&2
+else
+  echo "error: spawn refused: $COUNT implementation tasks are already in flight for $(basename "$PROJECT") ($BLOCKERS), its declared capacity of $LIMIT ($FM_PROJECT_CAPACITY_FILE). Start $OWN_ID after one of them lands (teardown)" >&2
+fi
 exit 1
