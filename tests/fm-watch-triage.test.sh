@@ -7419,6 +7419,27 @@ test_parked_gate_wake_without_a_status_log_still_wakes() {
   pass "a parked human-owed gate on a ship with no status log still wakes"
 }
 
+test_parked_gate_wake_skips_an_existing_symlinked_status() {
+  local dir state r status_file target
+  dir=$(gate_wake_case gate-wake-symlink-status 'paused [at=1]: waiting on CI' armed); state="$dir/state"
+  status_file="$state/gate-task.status"; target="$dir/status-target"
+  printf 'paused [at=1]: waiting on CI\n' > "$target"
+  rm -f "$status_file"
+  ln -s "$target" "$status_file"
+  prime_status_seen "$state" "$status_file"
+  r=$(gate_wake_round "$dir" "$(gate_verdict 01RUNA ci aaa111)")
+  [ "$r" = quiet ] || fail "an existing symlinked status woke a parked gate: $(cat "$dir/watch.out")"
+  [ ! -e "$state/.parked-gate-wake-gate-task" ] \
+    || fail "an existing symlinked status wrote a parked-gate marker"
+
+  rm -f "$status_file"
+  printf 'paused [at=1]: waiting on CI\n' > "$status_file"
+  prime_status_seen "$state" "$status_file"
+  r=$(gate_wake_round "$dir" "$(gate_verdict 01RUNA ci aaa111)")
+  [ "$r" = woke ] || fail "a readable regular status did not wake the parked gate"
+  pass "an existing symlinked status stays indeterminate until a readable regular record exists"
+}
+
 test_parked_human_gate_with_a_decision_record_does_not_wake() {
   local dir r
   local gate
@@ -7813,5 +7834,6 @@ test_parked_gate_wake_is_off_without_its_flag
 test_parked_human_gate_wakes_once_per_gate
 test_parked_gate_wake_keeps_a_durable_row_when_delivery_is_lost
 test_parked_gate_wake_without_a_status_log_still_wakes
+test_parked_gate_wake_skips_an_existing_symlinked_status
 test_parked_human_gate_with_a_decision_record_does_not_wake
 test_parked_gate_wake_skips_running_crewmate_owed_and_scout

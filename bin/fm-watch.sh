@@ -1663,7 +1663,7 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
 # flag only changes how the ladder treats a gate firstmate WAS told about (an open
 # decision for the run), which is exactly the case this tick skips.
 parked_gate_tick() {
-  local meta task gate run step checksum marker marker_tmp reason key notify_key queued status
+  local meta task gate run step checksum marker marker_tmp reason key notify_key queued status statusf
   [ -e "$CONFIG/parked-gate-wake" ] || return 0
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
@@ -1675,8 +1675,12 @@ parked_gate_tick() {
 $gate
 EOF
     key="nm-$run-$step"
-    [ -z "$(status_key_closing_verb "$STATE/$task.status" "$key")" ] || continue
-    ! status_has_open_needs_decision "$STATE/$task.status" "$run" || continue
+    statusf="$STATE/$task.status"
+    if [ -e "$statusf" ] || [ -L "$statusf" ]; then
+      [ -f "$statusf" ] && [ -r "$statusf" ] && [ ! -L "$statusf" ] || continue
+    fi
+    [ -z "$(status_key_closing_verb "$statusf" "$key")" ] || continue
+    ! status_has_open_needs_decision "$statusf" "$run" || continue
     marker="$STATE/.parked-gate-wake-$task"
     [ "$(cat "$marker" 2>/dev/null || true)" = "$run|$step|$checksum" ] && continue
     reason="check: ask-user gate parked: task=$task run=$run step=$step"
