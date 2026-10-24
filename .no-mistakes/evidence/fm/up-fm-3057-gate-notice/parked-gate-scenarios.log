@@ -1,0 +1,11 @@
+Real bin/fm-watch.sh subprocess scenarios over disposable homes:
+ok - with config/parked-gate-wake absent a parked human-owed gate wakes nothing
+ok - a parked human-owed gate wakes once per run, step and findings checksum, past a paused: line
+ok - a parked-gate wake remains queued when delivery is not acknowledged
+ok - a parked human-owed gate on a ship with no status log still wakes
+ok - an existing symlinked status stays indeterminate until a readable regular record exists
+ok - an existing unreadable status stays indeterminate until it is readable
+ok - a parked gate with a decision record for its run stays quiet, while another run's record does not
+ok - a running step, a crewmate-owed gate, an unkeyable verdict and a scout do not wake
+Independent checksum test:
+ok - a human-owed parked gate carries a stable digest of its raw findings table
