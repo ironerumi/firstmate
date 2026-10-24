@@ -7405,6 +7405,18 @@ test_parked_gate_wake_keeps_a_durable_row_when_delivery_is_lost() {
   pass "a parked-gate wake remains queued when delivery is not acknowledged"
 }
 
+test_parked_gate_wake_skips_unreadable_status() {
+  local dir r
+  dir=$(gate_wake_case gate-wake-unreadable 'paused [at=1]: waiting on CI' armed)
+  chmod 000 "$dir/state/gate-task.status"
+  prime_status_seen "$dir/state" "$dir/state/gate-task.status"
+  r=$(gate_wake_round "$dir" "$(gate_verdict 01RUNA ci aaa111)")
+  [ "$r" = quiet ] || fail "an unreadable task status woke a parked gate: $(cat "$dir/watch.out")"
+  [ ! -e "$dir/state/.parked-gate-wake-gate-task" ] \
+    || fail "an unreadable task status wrote a parked-gate marker"
+  pass "an unreadable task status fails closed without a parked-gate wake"
+}
+
 test_parked_human_gate_with_a_decision_record_does_not_wake() {
   local dir r
   local gate
@@ -7798,5 +7810,6 @@ test_closed_exit_picker_drops_saved_dialog_name
 test_parked_gate_wake_is_off_without_its_flag
 test_parked_human_gate_wakes_once_per_gate
 test_parked_gate_wake_keeps_a_durable_row_when_delivery_is_lost
+test_parked_gate_wake_skips_unreadable_status
 test_parked_human_gate_with_a_decision_record_does_not_wake
 test_parked_gate_wake_skips_running_crewmate_owed_and_scout
