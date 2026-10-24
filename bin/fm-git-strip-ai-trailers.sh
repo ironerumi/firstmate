@@ -57,12 +57,13 @@
 # Human Co-Authored-By trailers are left untouched. Author identity is not
 # rewritten.
 #
-# SKIPPING THE HOOKS IS NOT BLOCKED. git commit --no-verify skips every hook, so a
-# worker that passes it commits without this strip; these hooks are spawn-owned
-# setup, not the worker's to skip, but no guard refuses the flag. A trailer found on
-# a fleet commit therefore points at --no-verify or at a runtime that writes the
-# commit object without running git (an accepted residual ruled 2026-09-17), not
-# at an unnoticed hole in the matcher.
+# ACCEPTED RESIDUAL, ruled 2026-09-17. git commit --no-verify skips every hook,
+# so a worker that passes it still lands the trailer, as would a runtime that
+# writes the commit object without running git. Both incidents that motivated
+# this strip came through an ordinary hook-running commit, so the ruling is to
+# accept that gap rather than add a push-side rewrite or a push-side check. A
+# trailer found on a fleet commit therefore points at one of those two paths,
+# not at an unnoticed hole in the matcher.
 #
 # ACCEPTED RESIDUAL, ruled 2026-09-17. Inside a fleet pane git reports this
 # directory as the repository's hooks directory, so a hook manager run there
