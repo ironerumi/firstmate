@@ -31,9 +31,10 @@ fm_fork_family_for_basename() {  # <basename>
 
 # Provisional weights: twice one local macOS `bin/fm-test-run.sh` run of each
 # file, until fork CI timing artifacts measure them on Ubuntu. Without them each
-# file packs at the 45000 ms default and overfills the serial shards.
+# file packs at the 45000 ms default and overfills the serial shards. A reader
+# that stops at its first match closes the pipe early, so cat stays quiet.
 fm_fork_serial_weight_hints() {
-  cat <<'HINTS'
+  cat 2>/dev/null <<'HINTS'
 tests/fm-brief-repo-guard.test.sh 14000
 tests/fm-classify-decision-key-extra.test.sh 1200
 tests/fm-endpoint-retire.test.sh 51700
