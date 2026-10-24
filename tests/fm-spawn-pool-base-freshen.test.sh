@@ -185,10 +185,6 @@ test_stale_pool_base_refreshes_before_branching() {
 
   id='pool-current-base-repeat-r1'
   fm_test_spawn_brief "$HOME_DIR" "$id"
-  # One implementation task per repository at a time: the repeat spawn is only
-  # legal once the first task has landed and its record is gone, which is the
-  # state this case now sets up before re-refreshing the same pooled worktree.
-  rm -f "$HOME_DIR/state/pool-current-base-r1.meta"
   out=$(run_spawn "$id" --mode no-mistakes --yolo off)
   status=$?
   expect_code 0 "$status" "repeating the base refresh should be idempotent"
@@ -599,11 +595,6 @@ strand_submodule_pin_via_spawn() {  # <seed-id>
     || fail "the first spawn did not move the pooled base across the moved submodule pin"
   [ "$(git -C "$POOL_DIR/ui" rev-parse HEAD)" = "$SUBPIN1" ] \
     || fail "the first spawn did not strand the submodule on the pin the old base recorded"
-  # The seed spawn exists only to move the pooled base. One implementation task
-  # per repository at a time means its record is retired here, exactly as its
-  # landing and teardown would, so the case's own spawn reaches the pool gate
-  # this suite is about.
-  rm -f "$HOME_DIR/state/$id.meta"
 }
 
 test_stale_submodule_pin_explains_itself() {
@@ -949,9 +940,7 @@ SH
   assert_grep "worktree=$slot_root/1/project" "$HOME_DIR/state/$id.meta" \
     "the retry did not land on the slot the refused launch returned"
 
-  # This allocation fixture deliberately needs two implementations; bypass only
-  # the fork's unrelated cap for this second spawn, retaining all slot assertions.
-  out=$(FM_TEST_IMPL_GUARD_OFF=1 run_spawn "$other" --harness codex --mode no-mistakes --yolo off)
+  out=$(run_spawn "$other" --harness codex --mode no-mistakes --yolo off)
   status=$?
   expect_code 0 "$status" "a second task spawned after the retry should launch"$'\n'"$out"
   assert_grep "worktree=$slot_root/2/project" "$HOME_DIR/state/$other.meta" \
