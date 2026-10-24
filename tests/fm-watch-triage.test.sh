@@ -7389,6 +7389,22 @@ test_parked_human_gate_wakes_once_per_gate() {
   pass "a parked human-owed gate wakes once per run, step and findings checksum, past a paused: line"
 }
 
+test_parked_gate_wake_keeps_a_durable_row_when_delivery_is_lost() {
+  local dir state r key wakes
+  dir=$(gate_wake_case gate-wake-durable 'paused [at=1]: waiting on CI' armed); state="$dir/state"
+  r=$(gate_wake_round "$dir" "$(gate_verdict 01RUNA ci aaa111)")
+  [ "$r" = woke ] || fail "a parked gate did not produce its initial wake"
+  key='parked-gate-gate-task-01RUNA-ci-aaa111'
+  wakes=$(awk -F '\t' -v k="$key" '$3 == "check" && $4 == k { n++ } END { print n + 0 }' \
+    "$state/.wake-queue" 2>/dev/null || echo 0)
+  [ "$wakes" -eq 1 ] || fail "a delivered parked-gate wake left $wakes durable rows: $(cat "$state/.wake-queue" 2>/dev/null)"
+  awk -F '\t' -v k="$key" '$3 == "check" && $4 == k && $5 == "check: ask-user gate parked: task=gate-task run=01RUNA step=ci" { found = 1 } END { exit !found }' \
+    "$state/.wake-queue" || fail "the durable parked-gate row had the wrong payload: $(cat "$state/.wake-queue")"
+  [ "$(cat "$state/.parked-gate-wake-gate-task" 2>/dev/null)" = '01RUNA|ci|aaa111' ] \
+    || fail "the parked-gate marker was not committed after its durable row"
+  pass "a parked-gate wake remains queued when delivery is not acknowledged"
+}
+
 test_parked_human_gate_with_a_decision_record_does_not_wake() {
   local dir r
   local gate
@@ -7781,5 +7797,6 @@ test_secondmate_exit_picker_stays_quiet
 test_closed_exit_picker_drops_saved_dialog_name
 test_parked_gate_wake_is_off_without_its_flag
 test_parked_human_gate_wakes_once_per_gate
+test_parked_gate_wake_keeps_a_durable_row_when_delivery_is_lost
 test_parked_human_gate_with_a_decision_record_does_not_wake
 test_parked_gate_wake_skips_running_crewmate_owed_and_scout

@@ -146,8 +146,8 @@
 #                          ship task's no-mistakes run is parked at a gate owed
 #                          a human and the task has no decision record for that
 #                          run's gate; read from the run's own state each cycle
-#                          whatever the worker last declared, and reported once
-#                          per run, step and findings checksum (parked_gate_tick)
+#                          whatever the worker last declared, and queued/reported
+#                          once per run, step and findings checksum (parked_gate_tick)
 #   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
 #                          inactive terminal outcome that still lacks its durable
 #                          upstream receipt
@@ -1660,7 +1660,7 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
 # flag only changes how the ladder treats a gate firstmate WAS told about (an open
 # decision for the run), which is exactly the case this tick skips.
 parked_gate_tick() {
-  local meta task gate run step checksum marker reason key
+  local meta task gate run step checksum marker reason key notify_key queued
   [ -e "$CONFIG/parked-gate-wake" ] || return 0
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
@@ -1676,8 +1676,13 @@ EOF
     ! status_has_open_needs_decision "$STATE/$task.status" "$run" || continue
     marker="$STATE/.parked-gate-wake-$task"
     [ "$(cat "$marker" 2>/dev/null || true)" = "$run|$step|$checksum" ] && continue
-    printf '%s\n' "$run|$step|$checksum" > "$marker" || continue
     reason="check: ask-user gate parked: task=$task run=$run step=$step"
+    notify_key="parked-gate-$task-$run-$step-$checksum"
+    queued=$(fm_wake_queued_keys check)
+    if ! printf '%s\n' "$queued" | grep -Fx -- "$notify_key" >/dev/null 2>&1; then
+      fm_wake_append check "$notify_key" "$reason" || continue
+    fi
+    printf '%s\n' "$run|$step|$checksum" > "$marker" || continue
     triage_log "parked human-owed gate with no decision record: $reason"
     wake "$reason"
   done
