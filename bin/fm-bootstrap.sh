@@ -65,7 +65,7 @@
 #          1.46.0 (structured pipeline attestation floor; see CONTRIBUTING.md).
 #          The AXI-family floor policy is owned beside GH_AXI_MIN and
 #          LAVISH_AXI_MIN below; the per-tool owners point there.
-#          Missing or incompatible lavish-axi reports PRESENTATION_UNAVAILABLE;
+#          Missing or board-incompatible lavish-axi reports PRESENTATION_UNAVAILABLE;
 #          a compatible older build keeps legacy boards and reports a BOOTSTRAP_INFO
 #          upgrade recommendation for synchronous reply acceptance.
 #          tasks-axi feature probes remain a separate defense-in-depth check, and
@@ -220,6 +220,10 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 # deferred network stage sets, so an ordinary bootstrap run records nothing.
 # shellcheck source=bin/fm-timing-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-timing-lib.sh"
+# Sourced only for fm_session_pid_valid: the lock identity this script compares
+# is not always a local pid.
+# shellcheck source=bin/fm-session-lock-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-session-lock-lib.sh"
 
 # Network-phase selection (see the header). An unrecognized value resolves to
 # `all` so a malformed override runs every step rather than silently dropping a
@@ -234,7 +238,7 @@ network_phase() { [ "$FM_BOOTSTRAP_NETWORK_PHASE" != skip ]; }
 network_mutation_authorized() {
   local expected=${FM_BOOTSTRAP_NETWORK_LOCK_PID:-} current
   [ -n "$expected" ] || return 0
-  case "$expected" in *[!0-9]*) return 1 ;; esac
+  fm_session_pid_valid "$expected" || return 1
   [ -f "$STATE/.lock" ] && [ ! -L "$STATE/.lock" ] || return 1
   current=$(cat "$STATE/.lock" 2>/dev/null) || return 1
   [ "$current" = "$expected" ]
@@ -883,6 +887,8 @@ upgrade_cmd() {
 manual_install_url() {
   case "$1" in
     herdr) echo "https://herdr.dev" ;;
+    paseo) echo "https://paseo.sh" ;;
+    rex) echo "https://www.superlogical.com/rex" ;;
     cursor-agent) echo "https://cursor.com/cli" ;;
     *) return 1 ;;
   esac
@@ -959,14 +965,12 @@ tool_version_at_least() {  # <tool> <min-version>
 }
 
 # The installed version an OUTDATED line reports, or "unparseable" when the tool
-# does not report exactly one major.minor.patch triple. Use the same version
-# parser as the floor check so its diagnostic cannot disagree with that verdict.
+# does not report exactly one major.minor.patch triple. It parses with the same
+# rule as tool_version_at_least so a version a floor would refuse is never
+# displayed as a clean one.
 tool_version() {  # <tool>
   local parts major minor patch
-  if ! parts=$(tool_version_parts "$1"); then
-    printf 'unparseable'
-    return 0
-  fi
+  parts=$(tool_version_parts "$1") || { printf 'unparseable'; return 0; }
   IFS=' ' read -r major minor patch <<< "$parts"
   printf '%s.%s.%s' "$major" "$minor" "$patch"
 }
@@ -974,11 +978,12 @@ tool_version() {  # <tool>
 # The requirement a tasks-axi OUTDATED line reports: its version floor plus any
 # capability the shared probe (bin/fm-tasks-axi-lib.sh) requires that this build
 # lacks, so a build already at the floor still names the feature it is missing.
+# The capabilities come from the compatibility check's own probe results, so
+# naming them never repeats a probe that check already ran.
 tasks_axi_requirement() {
-  local req=$FM_TASKS_AXI_MIN missing_features=
-  fm_tasks_axi_update_has_archive_body || missing_features='update --archive-body'
-  fm_tasks_axi_mv_has_multi_id || missing_features="${missing_features:+$missing_features and }mv multi-ID"
-  [ -z "$missing_features" ] || req="$req with $missing_features"
+  local req=$FM_TASKS_AXI_MIN missing
+  missing=$(fm_tasks_axi_missing_capabilities)
+  [ -z "$missing" ] || req="$req with $missing"
   printf '%s' "$req"
 }
 
@@ -1704,6 +1709,11 @@ if [ "${FM_BOOTSTRAP_DETECT_ONLY:-0}" != 1 ]; then
     && [ -d "$DATA" ] && [ -x "$SCRIPT_DIR/fm-contributions.sh" ]; then
     "$SCRIPT_DIR/fm-contributions.sh" arm --if-owned >/dev/null \
       || echo "MISSING: contribution observation could not be armed; coverage is unconfirmed"
+  fi
+  if local_phase && [ -e "$CONFIG/pr-health-monitor" ] && command -v jq >/dev/null 2>&1 \
+    && [ -d "$DATA" ] && [ -x "$SCRIPT_DIR/fm-pr-health.sh" ]; then
+    "$SCRIPT_DIR/fm-pr-health.sh" arm >/dev/null \
+      || echo "MISSING: the PR health monitor could not be armed; owned PRs are not watched"
   fi
   if [ -n "$fleet_sync_pid" ]; then
     wait "$fleet_sync_pid" || true
