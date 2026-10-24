@@ -1153,7 +1153,7 @@ test_parked_human_decision_comes_from_the_action_column() {
 # when that table changes at the same step, and appear only beside the
 # human-decision component it qualifies.
 test_parked_human_gate_carries_a_findings_checksum() {
-  local d out first again changed
+  local d out first again changed expected digest_input
   reset_fakes
   d=$(new_case parked-findings-checksum)
   make_repo_on_branch "$d/wt" fm/feat-fc
@@ -1166,6 +1166,21 @@ test_parked_human_gate_carries_a_findings_checksum() {
     "the checksum component follows the human-decision component"
   first=$(printf '%s\n' "$out" | sed -n 's/.* · ask-user findings checksum: \([0-9a-f]*\).*/\1/p')
   [ "${#first}" -eq 64 ] || fail "the findings checksum is not a sha256 digest: '$first' in $out"
+  digest_input=$(cat <<'EOF'
+  findings[2]{id,severity,file,line,action,description}:
+    r1,warning,a.go,,auto-fix,ignored error
+    r2,error,b.go,,ask-user,changes product behavior
+EOF
+)
+  if command -v shasum >/dev/null 2>&1; then
+    expected=$(printf '%s\n' "$digest_input" | shasum -a 256 | awk '{print $1}')
+  elif command -v sha256sum >/dev/null 2>&1; then
+    expected=$(printf '%s\n' "$digest_input" | sha256sum | awk '{print $1}')
+  else
+    fail "no independent SHA-256 tool is available"
+  fi
+  [ "$first" = "$expected" ] \
+    || fail "the findings checksum did not match the serialized table: '$first' vs '$expected'"
   assert_not_contains "$out" "changes product behavior" "the verdict carries no finding text"
 
   out=$(run_crew_state "$d" feat-fc)
