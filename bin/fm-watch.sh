@@ -1660,7 +1660,7 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
 # flag only changes how the ladder treats a gate firstmate WAS told about (an open
 # decision for the run), which is exactly the case this tick skips.
 parked_gate_tick() {
-  local meta task gate run step checksum marker reason key notify_key queued
+  local meta task gate run step checksum marker reason key notify_key queued status
   [ -e "$CONFIG/parked-gate-wake" ] || return 0
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
@@ -1678,11 +1678,17 @@ EOF
     [ "$(cat "$marker" 2>/dev/null || true)" = "$run|$step|$checksum" ] && continue
     reason="check: ask-user gate parked: task=$task run=$run step=$step"
     notify_key="parked-gate-$task-$run-$step-$checksum"
-    queued=$(fm_wake_queued_keys check)
+    fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK" || continue
+    status=0
+    queued=$(fm_wake_queued_keys_locked check)
     if ! printf '%s\n' "$queued" | grep -Fx -- "$notify_key" >/dev/null 2>&1; then
-      fm_wake_append check "$notify_key" "$reason" || continue
+      fm_wake_append_locked check "$notify_key" "$reason" || status=$?
     fi
-    printf '%s\n' "$run|$step|$checksum" > "$marker" || continue
+    if [ "$status" -eq 0 ]; then
+      printf '%s\n' "$run|$step|$checksum" > "$marker" || status=$?
+    fi
+    fm_lock_release "$FM_WAKE_QUEUE_LOCK" || [ "$status" -ne 0 ] || status=1
+    [ "$status" -eq 0 ] || continue
     triage_log "parked human-owed gate with no decision record: $reason"
     wake "$reason"
   done
