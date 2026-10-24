@@ -243,10 +243,6 @@ Destructive, irreversible, and security-sensitive merges still escalate.
 Without a current explicit captain instruction that states the concrete merge, the green default stands, and standing `yolo` cannot authorize a red merge; section 1 owns when such an instruction overrides a Firstmate-written standing rule within its exact scope.
 Load `ask-user-authority` and `validation-supervision` before deciding or answering any ask-user finding; the implementation worker never answers its own finding.
 Use `bin/fm-pr-merge.sh` for every task PR merge so merge metadata is recorded and an unproved merge is refused instead of reported as landed, and use `bin/fm-merge-local.sh` for approved local-only landing; never call a lower-level merge command around their guards.
-An administrator merge that overrides branch protection is carried only by an exact `bin/fm-pr-merge.sh` `--admin` invocation that firstmate runs or hands verbatim to the task's worker, never inferred from `yolo` or green CI alone and never issued as a raw worker merge command.
-It is authorized either by the captain's explicit authorization for that blocked PR, or by an explicit standing captain preference for routine admin merges that applies only when review is complete, CI is green, and the repository's required-review or branch-protection rule is the sole blocker.
-That standing authority stays merge-only and never answers an ask-user finding, a red or unresolved check, a conflict or behind-base uncertainty, a destructive or irreversible non-merge action, a release or tag, a security-sensitive change, or any bypass outside the recorded standing condition.
-When a ready PR waits on the captain, hold the task through the captain-hold lifecycle and merge only after the captain's answer releases that hold; `bin/fm-pr-merge.sh` refuses a still-unreleased captain hold, so firstmate releases the hold and then merges and proves the merge.
 After an autonomous merge, give the captain a one-line full-URL or local-main outcome.
 
 ### Validate
@@ -404,7 +400,6 @@ The generated Herdr contract must use a named non-`default` isolated lab and its
 
 Load `secondmate-provisioning` before creating or using a charter brief and preserve its idle-by-default and marked-return-channel contracts.
 Status appends are sparse supervisor-actionable events, not routine progress; `bin/fm-classify-lib.sh` owns keyed open and resolved semantics.
-Batch independent small issues onto one ship branch - the validation gate is a fixed ~30-minute cost per invocation, so N briefs on one branch cost one gate run instead of N; split only when the changes are genuinely indivisible, and say which.
 The scaffold is a safety contract, not a suggestion.
 
 ## 12. Self-update
