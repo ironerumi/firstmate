@@ -1,0 +1,10 @@
+Phase 1 targeted validation
+
+Ran serially with `bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300`:
+- `tests/fm-brief.test.sh` — passed
+- `tests/fm-task-delivery.test.sh` — passed
+- `tests/fm-fleet-sync.test.sh` — passed
+- `tests/fm-git-strip-ai-trailers.test.sh` — passed
+- `tests/fm-backend-orca.test.sh` — passed
+
+No suite failed and none hit the 300-second per-script bound. The narrowed selection covers the changed brief generation, task-delivery contract, fleet-sync comment-adjacent behavior, trailer-hook behavior, and Orca backend script. Phase 1 completed before the minute-12 cutoff; no additional suite was started afterward.
