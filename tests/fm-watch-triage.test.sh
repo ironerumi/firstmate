@@ -3124,10 +3124,11 @@ wedge_threshold_fixture() {  # <name> <status-log> <status-age-secs> [<wedge-tim
   statusf="$state/wedge.status"
   text='waiting at the gate'
   printf '%s' "$text" > "$dir/pane.txt"
-  # The parked-gate cases pin the WEDGE LADDER's own reading of a parked gate. A ship
-  # task would have that gate woken first by parked_gate_tick, which these cases
-  # are not about, so they run as a scout (no no-mistakes run for the tick to read).
-  case "$name" in parked-gate-*) kind=scout ;; *) kind=ship ;; esac
+  # The parked-gate and validating-run cases pin the WEDGE LADDER's own reading of
+  # the run state. parked_gate_tick reads every live ship task's run state on each
+  # cycle, which these cases are not about, so they run as a scout and their
+  # current-state read counts stay the ladder's own.
+  case "$name" in parked-gate-*|validating-*) kind=scout ;; *) kind=ship ;; esac
   printf 'window=%s\nkind=%s\nharness=grok\nbackend=tmux\n' "$window" "$kind" > "$state/wedge.meta"
   printf '%s\n' "$log" > "$statusf"
   back=$(( $(date +%s) - age ))
