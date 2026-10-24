@@ -770,6 +770,23 @@ The flag is a home-local supervision-noise preference and is not inherited by se
 
 [`architecture.md`](architecture.md) owns the wait-evidence contract and which records may take the ladder away; `bin/fm-watch.sh`'s `wedge_wait_evidence` owns the exact derivation and its fail-closed boundaries.
 
+## Parked-gate notice (config/parked-gate-wake)
+
+The optional local, gitignored `config/parked-gate-wake` presence flag opts this home into a default-off watcher notice for a no-mistakes gate owed a human that nobody was told about.
+Create it with `touch "$FM_HOME/config/parked-gate-wake"`; remove it to restore the default.
+
+With it present, the watcher reads each live ship's own current state once per cycle, and when that ship's no-mistakes run is parked at a gate whose findings include an `ask-user` action, it queues one `check: ask-user gate parked: task=<id> run=<run> step=<step>` notification.
+A worker's own `paused:` or `working:` line does not suppress it, because the gate is read from the run rather than from the worker's report.
+It stays quiet when the task already has a decision record for that gate, whether the worker escalated it under its `nm-<run>-<step>` key, another decision for the same run is still open, or firstmate's answer already closed that key.
+It reports each gate once per run, step, and digest of the gate's raw findings table, so the same gate stays quiet on later cycles while a new run, a new step, or a changed findings table notifies again.
+
+It complements the parked-gate wait deferral above: that flag changes how the wedge ladder treats a gate firstmate was already told about, while this notice covers only the gate nobody was told about.
+It is independent of a worker's own background-job completion, which this notice never watches.
+
+With the flag absent the watcher spends no current-state read for it, writes no record, and queues no notification.
+The flag is a home-local supervision preference and is not inherited by secondmate homes.
+`bin/fm-watch.sh`'s `parked_gate_tick` owns the exact derivation and `bin/fm-classify-lib.sh`'s `crew_parked_human_gate` owns which verdicts count.
+
 ## Wedge evidence guards (config/wedge-evidence-guards)
 
 The optional local, gitignored `config/wedge-evidence-guards` file opts this home into consulting operator-owned [Jev guards](jev-guards.md) before the watcher wedge-escalates a quiet live pane.
