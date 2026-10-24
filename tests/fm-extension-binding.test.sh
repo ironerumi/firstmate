@@ -686,6 +686,16 @@ for shell_command in bind retire-binding retire-transfer process-event; do
   fi
 done
 pass "lifecycle wrappers use Bash without shell interpolation and preserve failure mapping"
+# POSIX resolution stays on the sanitized PATH: an exported BASH is never tried.
+exported_bash="$TMP_ROOT/exported bash"
+real_bash=$(command -v bash)
+printf '#!%s\ntouch "%s.used"\nexec "%s" "$@"\n' "$real_bash" "$exported_bash" "$real_bash" > "$exported_bash"
+chmod 700 "$exported_bash"
+out=$(BASH="$exported_bash" FM_HOME="$H_SHELL" node "$SHELL_ROOT/bin/fm-extension.mjs" process-event "$literal_arg") \
+  || fail "process-event did not launch with an exported BASH present"
+[ "$out" = "$(printf '%s\n' extension-process-event "$literal_arg")" ] || fail "process-event changed literal argv with an exported BASH: $out"
+[ ! -e "$exported_bash.used" ] || fail "POSIX lifecycle resolution tried the exported BASH"
+pass "POSIX lifecycle Bash resolution ignores an exported BASH"
 
 # The host retires an inherited copied-link directory lifecycle lock with the
 # generation-addressed steps of fm-wake-lib.sh. These cases enter through a

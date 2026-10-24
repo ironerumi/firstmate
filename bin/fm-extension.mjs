@@ -845,10 +845,11 @@ function sanitizedPath() {
 
 // Node on Windows cannot execute a shell script via its shebang. Resolve and
 // verify the interpreter, keeping the lifecycle child's sanitized environment.
+// POSIX resolves Bash through the sanitized PATH only, as the shebang did.
 async function lifecycleBash(code, message) {
   const searchPath = process.platform === "win32" ? process.env.PATH || "" : sanitizedPath();
   const candidates = [
-    ...(process.env.BASH ? [process.env.BASH] : []),
+    ...(process.platform === "win32" && process.env.BASH ? [process.env.BASH] : []),
     ...searchPath.split(path.delimiter).filter(Boolean).map((directory) =>
       path.join(directory, process.platform === "win32" ? "bash.exe" : "bash")),
   ];
@@ -857,10 +858,15 @@ async function lifecycleBash(code, message) {
     try {
       const executable = await realpath(candidate);
       await access(executable, fsConstants.X_OK);
+      const marker = "firstmate-lifecycle-bash-probe";
       const probe = process.platform === "win32"
-        ? 'test -n "$BASH_VERSION" && case "$OSTYPE" in msys*|cygwin*) exit 0;; *) exit 1;; esac'
-        : 'test -n "$BASH_VERSION"';
-      await promisify(execFile)(executable, ["--noprofile", "--norc", "-c", probe], { timeout: 5000 });
+        ? `test -n "$BASH_VERSION" && case "$OSTYPE" in msys*|cygwin*) ;; *) exit 1;; esac && printf '%s\\n' '${marker}'`
+        : `test -n "$BASH_VERSION" && printf '%s\\n' '${marker}'`;
+      const { stdout } = await promisify(execFile)(executable, ["--noprofile", "--norc", "-c", probe], {
+        timeout: 5000,
+        env: { PATH: sanitizedPath(), LANG: "C", LC_ALL: "C" },
+      });
+      if (stdout !== `${marker}\n`) throw new Error("lifecycle Bash probe marker missing");
       return executable;
     } catch {
       // A PATH entry may be absent or a different shell (e.g. WSL bash.exe).
