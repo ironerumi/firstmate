@@ -1,0 +1,12 @@
+Phase 1 targeted validation (serial, --jobs 1, per-script-timeout-secs 300)
+
+Passed:
+- tests/fm-nm-test-contract.test.sh
+- tests/fm-project-capacity.test.sh
+- tests/fm-session-lock-ancestry.test.sh
+- tests/fm-contributions.test.sh
+
+Time bound / untested:
+- tests/fm-pr-merge.test.sh — reached the 300s per-script bound after exercising many assertions; not rerun.
+
+The changed-file mapper (`bin/fm-test-run.sh --list --changed`) could not produce a list because `.opencode/plugins/fm-primary-cd-check.js` has no changed-test mapping. The selected suites above cover the authoritative intent behaviors for config/project capacity, Windows/session-lock identity, contribution coverage, and sole merge-method enforcement. No suite failed an assertion.
