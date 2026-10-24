@@ -1,8 +1,8 @@
-# OpenCode 2 primary-plugin port - scoping findings
+# OpenCode 2 primary-plugin port - historical scoping findings
 
-Point-in-time scoping note recorded 2026-10-01 against the installed OpenCode v2.0.21.
-It exists to size the OpenCode 2 primary-integration port so the choice between porting now and holding the OpenCode primary on 1.18.x can be made with evidence.
-It is not a standing contract; the adapter reference `.agents/skills/harness-adapters/references/harness/opencode.md` and `docs/turnend-guard.md` remain the owners once the port lands.
+Historical scoping note recorded 2026-10-01 against the installed OpenCode v2.0.21.
+The port described here is now shipped, and this page preserves the compatibility evidence that informed it rather than a current implementation plan.
+It is not a standing contract; the adapter reference `.agents/skills/harness-adapters/references/harness/opencode.md` and `docs/turnend-guard.md` remain the owners of current behavior.
 
 All facts below were exercised first-hand on v2.0.21 (`opencode run --standalone --print-logs --auto`, model `openai/gpt-5.5-fast`) unless marked as read from the installed binary or the `@opencode-ai/plugin`/`sdk` packages.
 
@@ -14,7 +14,7 @@ A default export of `{ id, setup }` loads with no failure.
 
 The v1 `server` entrypoint and the hooks it returned are not honored on v2.
 A sentinel plugin exporting `{ id, server, setup }` showed only `setup` running: the `server` function was never invoked, and neither its `event` hook nor its `tool.execute.before` hook fired, even though the turn ran a real bash tool call.
-So the current `{ id, server, setup(){} }` edits make all five primary plugins and `fm-busy-state.js` load without failure, but leave every hook they rely on inert.
+At that point, the `{ id, server, setup(){} }` edits made all five primary plugins and `fm-busy-state.js` load without failure, but left every hook they relied on inert.
 The managed Herdr plugins use the same `{ id, server, setup(){} }` shape and document the same conclusion: their `server` hooks are legacy and their live behavior runs through a separate entrypoint (`herdr-tui-session.js`, the `tui`/`setup` object).
 
 ## The v2 server-plugin context
@@ -53,7 +53,7 @@ The session-start nudge's `session.created` filter remains an event type, reacha
 `ctx.tool.hook("execute.before", fn)` fires on the tool call, and throwing from it blocks the tool: the model reported the bash command denied with the thrown message and did not run it.
 So `fm-primary-cd-check.js` and `fm-primary-pretool-check.js`, and the watcher-arm pre-tool seatbelt, keep their throw-to-block behavior by moving the body into `ctx.tool.hook("execute.before")`.
 
-## Rough effort for option A (port now)
+## Historical effort estimate for option A (port now)
 
 This is a server-plugin port inside `setup(ctx)`, not the full TUI-plugin re-architecture flagged as the worst case before this experiment.
 The guard scripts (`bin/fm-turnend-guard.sh`, `bin/fm-cd-pretool-check.sh`, `bin/fm-sessionstart-nudge.sh`, `bin/fm-busy-event.sh`) and the latch and coordinator logic are reusable; what changes is the event plumbing and the event-name mapping.
@@ -67,11 +67,11 @@ Per plugin:
 - `fm-primary-watch-arm.js` (about 560 lines): medium to large; its seatbelt moves to `ctx.tool.hook("execute.before")` and its idle coordination and blind-turn wake move onto `session.execution.*` plus `ctx.session.prompt`.
 
 Shared work: a small per-plugin or shared event-subscribe helper, the event-name remap, and dropping the dead `server` entrypoint from the default export.
-Documentation and tests: refresh `opencode.md`, `docs/turnend-guard.md`, `docs/arm-pretool-check.md`, and the supervision verification record, and add the portable regression plus the installed-harness live guard that the harness-dependent-check rule requires for the busy, turn-end, and seatbelt classifiers.
+The expected documentation and test work covered refreshing `opencode.md`, `docs/turnend-guard.md`, `docs/arm-pretool-check.md`, and the supervision verification record, plus adding the portable regression and installed-harness live guard required for the busy, turn-end, and seatbelt classifiers.
 
 Rough size: on the order of 1.5 to 3 focused days, with the weight in watch-arm, busy-state, and the two live guards and their tests rather than the trivial seatbelts.
 
-## Risks to validate during implementation, not resolved here
+## Historical risks considered before implementation
 
 - The exact `session.execution.*` payload shape (session id and parent id) for the child-session scoping.
 - Whether `session.idle`/`session.status` ever fire on 2.0.21 or are fully replaced by `session.execution.*`; the live run showed only `session.execution.*`, and the port should key off those and treat the old names as legacy.
