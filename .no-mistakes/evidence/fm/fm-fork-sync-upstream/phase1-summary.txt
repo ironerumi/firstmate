@@ -1,0 +1,21 @@
+Phase 1 targeted validation
+
+Ran serially with:
+bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 [targeted changed suites]
+
+Passed:
+- tests/fm-session-lock-windows-consumers.test.sh
+- tests/fm-session-lock-ancestry.test.sh
+- tests/fm-bootstrap.test.sh
+- tests/fm-capacity.test.sh
+- tests/fm-project-capacity.test.sh
+- tests/fm-contributions.test.sh
+- tests/fm-extension-binding.test.sh
+- tests/fm-supervision-events.test.sh
+
+Time-bounded / incomplete:
+- tests/fm-pr-merge.test.sh reached its 300-second per-script bound after assertions had been running; reported untested per runbook, not a test assertion failure.
+- tests/fm-wake-queue.test.sh was still running when the 20-minute validation command bound ended; reported untested (time bound).
+- Suites not started after the runbook start-new-suite cutoff are reported as untested (time bound), including supervision-host, crew-state, and wedge-cap suites.
+
+No source or test files were changed by this validation.
