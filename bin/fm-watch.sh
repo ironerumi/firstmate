@@ -147,7 +147,9 @@
 #                          a human and the task has no decision record for that
 #                          run's gate; read from the run's own state each cycle
 #                          whatever the worker last declared, and queued/reported
-#                          once per run, step and findings checksum (parked_gate_tick)
+#                          at least once per run, step and findings checksum;
+#                          a crash during marker commit may repeat one notice
+#                          (parked_gate_tick)
 #   check: inactive-outcome bounded poll-loop reconciliation found a suspicious
 #                          inactive terminal outcome that still lacks its durable
 #                          upstream receipt
@@ -1652,15 +1654,16 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
 # or `fm-send --resolve-key` closed it at answer time), or an open needs-decision
 # for any step of THIS run, the same run-scoped test wedge_wait_evidence uses,
 # because the key's step is the worker's own spelling.
-# Once per gate: the marker holds run|step|findings-checksum, so the same gate on
-# the next cycle stays quiet while a new run, step or findings table wakes again.
+# At least once per gate: the marker holds run|step|findings-checksum, so the
+# same gate on the next cycle stays quiet while a new run, step or findings table
+# wakes again. A crash during marker commit may repeat one notice.
 # Every way the read can come back empty (no run, a running step, a gate owed the
 # crewmate's own answer, a verdict naming no step or checksum) wakes nothing.
 # It complements config/wedge-defer-parked-gate rather than overlapping it: that
 # flag only changes how the ladder treats a gate firstmate WAS told about (an open
 # decision for the run), which is exactly the case this tick skips.
 parked_gate_tick() {
-  local meta task gate run step checksum marker reason key notify_key queued status
+  local meta task gate run step checksum marker marker_tmp reason key notify_key queued status
   [ -e "$CONFIG/parked-gate-wake" ] || return 0
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
@@ -1685,7 +1688,14 @@ EOF
       fm_wake_append_locked check "$notify_key" "$reason" || status=$?
     fi
     if [ "$status" -eq 0 ]; then
-      printf '%s\n' "$run|$step|$checksum" > "$marker" || status=$?
+      marker_tmp="$marker.tmp.${BASHPID:-$$}"
+      if printf '%s\n' "$run|$step|$checksum" > "$marker_tmp" \
+        && mv -f -- "$marker_tmp" "$marker"; then
+        :
+      else
+        rm -f -- "$marker_tmp"
+        status=1
+      fi
     fi
     fm_lock_release "$FM_WAKE_QUEUE_LOCK" || [ "$status" -ne 0 ] || status=1
     [ "$status" -eq 0 ] || continue
