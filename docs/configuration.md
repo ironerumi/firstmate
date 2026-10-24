@@ -778,7 +778,8 @@ Create it with `touch "$FM_HOME/config/parked-gate-wake"`; remove it to restore 
 With it present, the watcher reads each live ship's own current state once per cycle, and when that ship's no-mistakes run is parked at a gate whose findings include an `ask-user` action, it queues one `check: ask-user gate parked: task=<id> run=<run> step=<step>` notification.
 A worker's own `paused:` or `working:` line does not suppress it, because the gate is read from the run rather than from the worker's report.
 It stays quiet when the task already has a decision record for that gate, whether the worker escalated it under its `nm-<run>-<step>` key, another decision for the same run is still open, or firstmate's answer already closed that key.
-It reports each gate at least once per run, step, and digest of the gate's raw findings table, so the same gate stays quiet on later cycles while a new run, a new step, or a changed findings table notifies again. A crash during marker commit may repeat one notice.
+It reports each gate at least once per run, step, and digest of the gate's raw findings table, so the same gate stays quiet on later cycles while a new run, a new step, or a changed findings table notifies again.
+A crash during marker commit may repeat one notice.
 
 It complements the parked-gate wait deferral above: that flag changes how the wedge ladder treats a gate firstmate was already told about, while this notice covers only the gate nobody was told about.
 It is independent of a worker's own background-job completion, which this notice never watches.
