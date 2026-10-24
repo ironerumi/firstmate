@@ -1658,14 +1658,12 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
 # same gate on the next cycle stays quiet while a new run, step or findings table
 # wakes again. A crash during marker commit may repeat one notice.
 # Every way the read can come back empty (no run, a running step, a gate owed the
-# crewmate's own answer, a verdict naming no step or checksum) wakes nothing. A
-# missing, unreadable or symlinked task status log also wakes nothing, because the
-# required absence of a decision record cannot be established safely.
+# crewmate's own answer, a verdict naming no step or checksum) wakes nothing.
 # It complements config/wedge-defer-parked-gate rather than overlapping it: that
 # flag only changes how the ladder treats a gate firstmate WAS told about (an open
 # decision for the run), which is exactly the case this tick skips.
 parked_gate_tick() {
-  local meta task gate run step checksum marker marker_tmp reason key notify_key queued status status_file
+  local meta task gate run step checksum marker marker_tmp reason key notify_key queued status
   [ -e "$CONFIG/parked-gate-wake" ] || return 0
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
@@ -1677,10 +1675,8 @@ parked_gate_tick() {
 $gate
 EOF
     key="nm-$run-$step"
-    status_file="$STATE/$task.status"
-    [ -f "$status_file" ] && [ -r "$status_file" ] && [ ! -L "$status_file" ] || continue
-    [ -z "$(status_key_closing_verb "$status_file" "$key")" ] || continue
-    ! status_has_open_needs_decision "$status_file" "$run" || continue
+    [ -z "$(status_key_closing_verb "$STATE/$task.status" "$key")" ] || continue
+    ! status_has_open_needs_decision "$STATE/$task.status" "$run" || continue
     marker="$STATE/.parked-gate-wake-$task"
     [ "$(cat "$marker" 2>/dev/null || true)" = "$run|$step|$checksum" ] && continue
     reason="check: ask-user gate parked: task=$task run=$run step=$step"
