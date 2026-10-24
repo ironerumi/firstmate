@@ -1412,7 +1412,11 @@ fm_lock_try_acquire() {
     return 1
   fi
 
-  if ! primary_owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null); then
+  # A lock that vanished since the first read has no owner to retire; only a
+  # present record whose owner cannot be read is refused.
+  primary_owner=
+  if { [ -e "$lockdir" ] || [ -L "$lockdir" ]; } \
+    && ! primary_owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null); then
     fm_lock_release "$steal"
     FM_LOCK_HELD_PID=$(cat "$lockdir/pid" 2>/dev/null || true)
     FM_LOCK_OWNER_DIR=
