@@ -1,0 +1,4 @@
+ok - untagged lock values: the session-pid helpers answer exactly as fm_pid_identity and fm_pid_alive do
+ok - supervision host: a win:<pid> session lock yields the main-session key only while that Windows process lives
+ok - auto-arm: a claim pins a win:<pid> lock holder and reads open only while that holder lives
+ok - auto-arm: mid-turn health accepts a rewake bound to a live win:<pid> holder and drops it when that holder exits
