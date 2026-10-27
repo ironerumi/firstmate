@@ -1,0 +1,12 @@
+ok - lifecycle wrappers use Bash without shell interpolation and preserve failure mapping
+ok - POSIX lifecycle Bash resolution ignores an exported BASH
+ok - N1: the host admits an inherited directory lifecycle lock and retires it without residue
+ok - N2/N3: a host killed before, after or during its retirement leaves a lock the shell recovers
+ok - N4: a paused host cannot retire a successor's directory lifecycle lock
+ok - N5: a junk entry leaves only a husk after the host deletes its generation
+ok - N6: an ambiguous directory record is rejected without retirement
+ok - an absent home-local registry is inert, state-free, and ignores project/environment discovery
+error[binding-failed]: error[path-unsafe]: package source must not be inside a Git project or task copy
+not ok - bind does not finish before the live handshake (missing: 'verified: process-event-adapter/1')
+--- output ---
+

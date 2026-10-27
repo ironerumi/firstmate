@@ -1,0 +1,431 @@
++ set -u
++ '[' 0 = 1 ']'
+++ dirname tests/fm-extension-binding.test.sh
++ . tests/lib.sh
+++ '[' -n '' ']'
+++ FM_TEST_LIB_SOURCED=1
+++ umask 022
++++ dirname tests/lib.sh
+++ . tests/git-config-helpers.sh
++++ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
++++ GIT_CONFIG_GLOBAL=/dev/null
++++ GIT_CONFIG_NOSYSTEM=1
++++ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
+++ export FM_GATE_REFUSE_BYPASS=1
+++ FM_GATE_REFUSE_BYPASS=1
+++ export FM_TEST_SEAM=1
+++ FM_TEST_SEAM=1
+++ unset FM_TASK_ID
+++ unset TASKS_AXI_FILE TASKS_AXI_BACKEND
+++ unset REX_SESSION REX_BLOCK
+++++ dirname tests/lib.sh
++++ cd tests/..
++++ pwd
+++ ROOT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ
++++ fm_test_tmpdir
++++ local base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp physical
++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp ']'
++++ case "$base" in
+++++ CDPATH=
+++++ cd -- /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ pwd -P
++++ physical=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ '[' -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.git ']'
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++ FM_TEST_TMPDIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++ FM_TEST_CLEANUP_DIRS=()
++++ mktemp /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-cleanup.19716.XXXXXX
+++ FM_TEST_CLEANUP_REGISTRY=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-cleanup.19716.H9m6iI
++++ fm_test_pid_identity 19716
++++ local pid=19716
++++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ bash -c '. "$1"; fm_pid_identity "$2"' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh 19716
+++ FM_TEST_OWNER_IDENTITY='Tue Oct 27 09:20:46 2026     bash -x tests/fm-extension-binding.test.sh'
++++ mktemp /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-procevent.19716.XXXXXX
+++ FM_TEST_PROCEVENT_REGISTRY=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-procevent.19716.qFQqVN
++++ mktemp /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-watcher.19716.XXXXXX
+++ FM_TEST_WATCHER_REGISTRY=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-watcher.19716.sErNae
+++ FM_TEST_STUB_MAX_BLOCK_SECONDS=120
+++ export FM_TEST_STUB_MAX_BLOCK_SECONDS
+++ FM_TEST_SUITE_PID=19716
+++ export FM_TEST_SUITE_PID
+++ trap fm_test_cleanup EXIT
+++ trap 'fm_test_cleanup; exit 130' INT
+++ trap 'fm_test_cleanup; exit 143' TERM
+++ trap 'fm_test_cleanup; exit 129' HUP
+++ trap 'fm_test_cleanup; exit 131' QUIT
+++ FM_TEST_ORPHAN_MAX_AGE_SECONDS=3600
+++ '[' 1 '!=' 1 ']'
++ extension_segment=early-bind
++ case "$extension_segment" in
++ HOST=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-extension.mjs
++ PROCEVENT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-procevent.sh
+++ fm_test_tmproot fm-extension-binding
+++ local prefix=fm-extension-binding root tmp_base
++++ fm_test_tmpdir
++++ local base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp physical
++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp ']'
++++ case "$base" in
+++++ CDPATH=
+++++ cd -- /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ pwd -P
++++ physical=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ '[' -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.git ']'
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++ tmp_base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++ tmp_base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ mktemp -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.XXXXXX
+++ root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
++++ cd -P -- /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
++++ pwd -P
+++ root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
+++ printf '%s\n%s\n' 19716 'Tue Oct 27 09:20:46 2026     bash -x tests/fm-extension-binding.test.sh'
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
++ TMP_ROOT_RAW=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
+++ pwd -P
++ TMP_ROOT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
++ first_bind_pid=
++ second_bind_pid=
++ handshake_orphan_pid=
++ concurrent_release=
++ race_register_pid=
++ race_retire_pid=
++ race_release=
++ process_race_start_pid=
++ process_race_retire_pid=
++ process_race_release=
++ registry_race_pid=
++ registry_race_release=
++ leaf_race_pid=
++ leaf_race_release=
++ owner_retire_pid=
++ owner_worker_pid=
++ owner_register_pid=
++ signal_retire_pid=
++ signal_worker_pid=
++ active_runner_pid=
++ active_runner_release=
++ remote_active_release=
++ unrelated_daemon_pid=
++ unrelated_launcher_pid=
++ signal_cleanup_host_pid=
++ signal_cleanup_group_pid=
++ crash_cleanup_host_pid=
++ crash_cleanup_group_pid=
++ crash_cleanup_release=
++ crash_silent_start_pid=
++ crash_silent_runner_pid=
++ override_crash_start_pid=
++ override_crash_runner_pid=
++ order_register_pid=
++ order_reconcile_pid=
++ order_release=
++ section_coordinator_pid=
++ trap extension_test_cleanup EXIT
++ trap 'extension_test_cleanup; exit 130' INT
++ trap 'extension_test_cleanup; exit 143' TERM
++ export FM_PROCEVENT_CLAIM_ROOT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/claims
++ FM_PROCEVENT_CLAIM_ROOT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/claims
++ PACKAGES=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/packages
++ HOMES=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/packages /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes
++ '[' 0 = 1 ']'
++ section_enabled coordinator-fail
++ local section
++ for section in "$@"
++ '[' early-bind = coordinator-fail ']'
++ return 1
++ section_enabled coordinator-wait
++ local section
++ for section in "$@"
++ '[' early-bind = coordinator-wait ']'
++ return 1
++ section_enabled coordinator-stubborn
++ local section
++ for section in "$@"
++ '[' early-bind = coordinator-stubborn ']'
++ return 1
++ section_enabled coordinator-pass
++ local section
++ for section in "$@"
++ '[' early-bind = coordinator-pass ']'
++ return 1
++ section_enabled coordinator-late-pass
++ local section
++ for section in "$@"
++ '[' early-bind = coordinator-late-pass ']'
++ return 1
++ section_enabled coordinator-scheduler-block
++ local section
++ for section in "$@"
++ '[' early-bind = coordinator-scheduler-block ']'
++ return 1
++ section_enabled coordinator-scheduler-late
++ local section
++ for section in "$@"
++ '[' early-bind = coordinator-scheduler-late ']'
++ return 1
++ '[' early-bind = all ']'
++ '[' early-bind = coordinator ']'
++ section_enabled early-bind
++ local section
++ for section in "$@"
++ '[' early-bind = early-bind ']'
++ return 0
++ SHELL_ROOT='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root'
++ mkdir -p '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin'
++ cp /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-extension.mjs '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-extension.mjs'
++ cat
++ chmod 600 '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-procevent.sh'
++ H_SHELL=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
++ new_home /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
++ literal_arg='space ; $(exit 97) *'
++ for shell_command in bind retire-binding retire-transfer process-event
++ case "$shell_command" in
+++ printf '%s\n' extension-bind bind 'space ; $(exit 97) *'
++ expected=$'extension-bind\nbind\nspace ; $(exit 97) *'
++ error_code=binding-failed
+++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
+++ node '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-extension.mjs' bind 'space ; $(exit 97) *'
++ out=$'extension-bind\nbind\nspace ; $(exit 97) *'
++ '[' $'extension-bind\nbind\nspace ; $(exit 97) *' = $'extension-bind\nbind\nspace ; $(exit 97) *' ']'
++ shell_rc=0
+++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
+++ node '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-extension.mjs' bind reject
++ out='error[binding-failed]: fixture refused'
++ shell_rc=1
++ '[' bind = process-event ']'
++ '[' 1 -eq 1 ']'
++ '[' 'error[binding-failed]: fixture refused' = 'error[binding-failed]: fixture refused' ']'
++ for shell_command in bind retire-binding retire-transfer process-event
++ case "$shell_command" in
+++ printf '%s\n' extension-retirement binding 'space ; $(exit 97) *'
++ expected=$'extension-retirement\nbinding\nspace ; $(exit 97) *'
++ error_code=retirement-failed
+++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
+++ node '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-extension.mjs' retire-binding 'space ; $(exit 97) *'
++ out=$'extension-retirement\nbinding\nspace ; $(exit 97) *'
++ '[' $'extension-retirement\nbinding\nspace ; $(exit 97) *' = $'extension-retirement\nbinding\nspace ; $(exit 97) *' ']'
++ shell_rc=0
+++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
+++ node '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-extension.mjs' retire-binding reject
++ out='error[retirement-failed]: fixture refused'
++ shell_rc=1
++ '[' retire-binding = process-event ']'
++ '[' 1 -eq 1 ']'
++ '[' 'error[retirement-failed]: fixture refused' = 'error[retirement-failed]: fixture refused' ']'
++ for shell_command in bind retire-binding retire-transfer process-event
++ case "$shell_command" in
+++ printf '%s\n' extension-retirement transfer 'space ; $(exit 97) *'
++ expected=$'extension-retirement\ntransfer\nspace ; $(exit 97) *'
++ error_code=retirement-failed
+++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
+++ node '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-extension.mjs' retire-transfer 'space ; $(exit 97) *'
++ out=$'extension-retirement\ntransfer\nspace ; $(exit 97) *'
++ '[' $'extension-retirement\ntransfer\nspace ; $(exit 97) *' = $'extension-retirement\ntransfer\nspace ; $(exit 97) *' ']'
++ shell_rc=0
+++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
+++ node '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-extension.mjs' retire-transfer reject
++ out='error[retirement-failed]: fixture refused'
++ shell_rc=1
++ '[' retire-transfer = process-event ']'
++ '[' 1 -eq 1 ']'
++ '[' 'error[retirement-failed]: fixture refused' = 'error[retirement-failed]: fixture refused' ']'
++ for shell_command in bind retire-binding retire-transfer process-event
++ case "$shell_command" in
+++ printf '%s\n' extension-process-event 'space ; $(exit 97) *'
++ expected=$'extension-process-event\nspace ; $(exit 97) *'
++ error_code=process-event-failed
+++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
+++ node '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-extension.mjs' process-event 'space ; $(exit 97) *'
++ out=$'extension-process-event\nspace ; $(exit 97) *'
++ '[' $'extension-process-event\nspace ; $(exit 97) *' = $'extension-process-event\nspace ; $(exit 97) *' ']'
++ shell_rc=0
+++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
+++ node '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-extension.mjs' process-event reject
++ out='fixture refused'
++ shell_rc=23
++ '[' process-event = process-event ']'
++ '[' 23 -eq 23 ']'
++ '[' 'fixture refused' = 'fixture refused' ']'
++ pass 'lifecycle wrappers use Bash without shell interpolation and preserve failure mapping'
++ printf 'ok - %s\n' 'lifecycle wrappers use Bash without shell interpolation and preserve failure mapping'
+ok - lifecycle wrappers use Bash without shell interpolation and preserve failure mapping
++ exported_bash='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/exported bash'
+++ command -v bash
++ real_bash=/opt/homebrew/bin/bash
++ printf '#!%s\ntouch "%s.used"\nexec "%s" "$@"\n' /opt/homebrew/bin/bash '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/exported bash' /opt/homebrew/bin/bash
++ chmod 700 '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/exported bash'
+++ BASH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/exported bash'
+++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/shell
+++ node '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/lifecycle shell root/bin/fm-extension.mjs' process-event 'space ; $(exit 97) *'
++ out=$'extension-process-event\nspace ; $(exit 97) *'
+++ printf '%s\n' extension-process-event 'space ; $(exit 97) *'
++ '[' $'extension-process-event\nspace ; $(exit 97) *' = $'extension-process-event\nspace ; $(exit 97) *' ']'
++ '[' '!' -e '/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/exported bash.used' ']'
++ pass 'POSIX lifecycle Bash resolution ignores an exported BASH'
++ printf 'ok - %s\n' 'POSIX lifecycle Bash resolution ignores an exported BASH'
+ok - POSIX lifecycle Bash resolution ignores an exported BASH
++ DIRLOCK_NODE_BIN=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/dirlock-node-bin
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/dirlock-node-bin
+++ command -v ln
++ printf '#!/usr/bin/env bash\nif [ "$1" = -s ]; then exec cp -R "$2" "$3"; fi\nexec %q "$@"\n' /bin/ln
++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/dirlock-node-bin/ln
++ dirlock_node_case n1
++ H_DIRLOCK=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1
++ new_home /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/state/procevent /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/barrier
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/events /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/resume
++ DIRLOCK_NODE_LOCK=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/state/procevent/.extension-binding-lifecycle.lock
++ exec
++ dirlock_rc=0
+++ dirlock_node_host /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1 ''
++ dirlock_out=$'++ local home=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1\n++ PATH=\'/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/dirlock-node-bin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin\'\n++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1\n++ FM_TEST_SUBJECT=host\n++ FM_TEST_BARRIERS=\n++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/barrier\n++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/events\n++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/resume\n++ NODE_OPTIONS=--require=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/tests/fixtures/rename-barrier.cjs\n++ bash -c $\'\\n      . "$1"\\n      fm_lock_try_acquire "$2" || exit 90\\n      [ -d "$2" ] && [ ! -L "$2" ] || exit 91\\n      printf "host locked pid=%s\\\\n" "$(cat "$2/pid")" >> "$FM_TEST_EVENTS"\\n      eval "$4"\\n      FM_EXTENSION_RETIREMENT_MODE=bind FM_EXTENSION_LIFECYCLE_LOCK="$2" \\\\\\n        FM_EXTENSION_LIFECYCLE_OWNER="$FM_LOCK_OWNER_DIR" exec "$3" not-a-lifecycle-command\\n    \' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/state/procevent/.extension-binding-lifecycle.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-extension.mjs \'\'\nerror[lifecycle-lock-invalid]: extension lifecycle binding command is invalid'
++ dirlock_rc=1
++ dirlock_node_expect 'host locked pid=' 'N1: shell did not acquire a directory lifecycle lock'
++ DIRLOCK_NODE_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_NODE_EVENT
++ case "$DIRLOCK_NODE_EVENT" in
++ '[' 1 -eq 1 ']'
++ '[' $'++ local home=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1\n++ PATH=\'/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/dirlock-node-bin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin\'\n++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1\n++ FM_TEST_SUBJECT=host\n++ FM_TEST_BARRIERS=\n++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/barrier\n++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/events\n++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/resume\n++ NODE_OPTIONS=--require=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/tests/fixtures/rename-barrier.cjs\n++ bash -c $\'\\n      . "$1"\\n      fm_lock_try_acquire "$2" || exit 90\\n      [ -d "$2" ] && [ ! -L "$2" ] || exit 91\\n      printf "host locked pid=%s\\\\n" "$(cat "$2/pid")" >> "$FM_TEST_EVENTS"\\n      eval "$4"\\n      FM_EXTENSION_RETIREMENT_MODE=bind FM_EXTENSION_LIFECYCLE_LOCK="$2" \\\\\\n        FM_EXTENSION_LIFECYCLE_OWNER="$FM_LOCK_OWNER_DIR" exec "$3" not-a-lifecycle-command\\n    \' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/state/procevent/.extension-binding-lifecycle.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-extension.mjs \'\'\nerror[lifecycle-lock-invalid]: extension lifecycle binding command is invalid' = 'error[lifecycle-lock-invalid]: extension lifecycle binding command is invalid' ']'
++ fail $'N1: host did not admit the inherited lock and run its command: rc=1 ++ local home=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1\n++ PATH=\'/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/dirlock-node-bin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin\'\n++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1\n++ FM_TEST_SUBJECT=host\n++ FM_TEST_BARRIERS=\n++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/barrier\n++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/events\n++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/resume\n++ NODE_OPTIONS=--require=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/tests/fixtures/rename-barrier.cjs\n++ bash -c $\'\\n      . "$1"\\n      fm_lock_try_acquire "$2" || exit 90\\n      [ -d "$2" ] && [ ! -L "$2" ] || exit 91\\n      printf "host locked pid=%s\\\\n" "$(cat "$2/pid")" >> "$FM_TEST_EVENTS"\\n      eval "$4"\\n      FM_EXTENSION_RETIREMENT_MODE=bind FM_EXTENSION_LIFECYCLE_LOCK="$2" \\\\\\n        FM_EXTENSION_LIFECYCLE_OWNER="$FM_LOCK_OWNER_DIR" exec "$3" not-a-lifecycle-command\\n    \' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/state/procevent/.extension-binding-lifecycle.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-extension.mjs \'\'\nerror[lifecycle-lock-invalid]: extension lifecycle binding command is invalid'
++ printf 'not ok - %s\n' $'N1: host did not admit the inherited lock and run its command: rc=1 ++ local home=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1\n++ PATH=\'/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/dirlock-node-bin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin\'\n++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1\n++ FM_TEST_SUBJECT=host\n++ FM_TEST_BARRIERS=\n++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/barrier\n++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/events\n++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/resume\n++ NODE_OPTIONS=--require=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/tests/fixtures/rename-barrier.cjs\n++ bash -c $\'\\n      . "$1"\\n      fm_lock_try_acquire "$2" || exit 90\\n      [ -d "$2" ] && [ ! -L "$2" ] || exit 91\\n      printf "host locked pid=%s\\\\n" "$(cat "$2/pid")" >> "$FM_TEST_EVENTS"\\n      eval "$4"\\n      FM_EXTENSION_RETIREMENT_MODE=bind FM_EXTENSION_LIFECYCLE_LOCK="$2" \\\\\\n        FM_EXTENSION_LIFECYCLE_OWNER="$FM_LOCK_OWNER_DIR" exec "$3" not-a-lifecycle-command\\n    \' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/state/procevent/.extension-binding-lifecycle.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-extension.mjs \'\'\nerror[lifecycle-lock-invalid]: extension lifecycle binding command is invalid'
+not ok - N1: host did not admit the inherited lock and run its command: rc=1 ++ local home=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1
+++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/dirlock-node-bin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
+++ FM_HOME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1
+++ FM_TEST_SUBJECT=host
+++ FM_TEST_BARRIERS=
+++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/barrier
+++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/events
+++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/resume
+++ NODE_OPTIONS=--require=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/tests/fixtures/rename-barrier.cjs
+++ bash -c $'\n      . "$1"\n      fm_lock_try_acquire "$2" || exit 90\n      [ -d "$2" ] && [ ! -L "$2" ] || exit 91\n      printf "host locked pid=%s\\n" "$(cat "$2/pid")" >> "$FM_TEST_EVENTS"\n      eval "$4"\n      FM_EXTENSION_RETIREMENT_MODE=bind FM_EXTENSION_LIFECYCLE_LOCK="$2" \\\n        FM_EXTENSION_LIFECYCLE_OWNER="$FM_LOCK_OWNER_DIR" exec "$3" not-a-lifecycle-command\n    ' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/homes/dirlock-n1/state/procevent/.extension-binding-lifecycle.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-extension.mjs ''
+error[lifecycle-lock-invalid]: extension lifecycle binding command is invalid
++ exit 1
++ extension_test_cleanup
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -z '' ']'
++ '[' -n '' ']'
++ '[' -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/remote-jobs/worker.pid ']'
++ '[' -n '' ']'
++ '[' -n '' ']'
++ chmod -R u+w /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
++ fm_test_cleanup
++ local d
++ fm_test_reap_watchers
++ local state lock_home $'seen=\n'
++ '[' -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-watcher.19716.sErNae ']'
++ IFS=
++ read -r state
++ rm -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-watcher.19716.sErNae
++ fm_test_reap_procevent_homes
++ local home claim_root $'seen=\n'
++ '[' -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-procevent.19716.qFQqVN ']'
++ IFS=$'\t'
++ read -r home claim_root
++ rm -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-procevent.19716.qFQqVN
++ for d in "${FM_TEST_CLEANUP_DIRS[@]:-}"
++ '[' -n '' ']'
++ '[' -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-cleanup.19716.H9m6iI ']'
++ IFS=
++ read -r d
++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue ']'
++ fm_test_reap_root_processes /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
++ local root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue chain pid pids signal i
++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue ']'
++ '[' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue '!=' / ']'
++ chain=' '
++ pid=19716
++ '[' -n 19716 ']'
++ '[' 19716 -gt 1 ']'
++ chain=' 19716 '
+++ ps -o ppid= -p 19716
+++ tr -d '[:space:]'
++ pid=19706
++ '[' -n 19706 ']'
++ '[' 19706 -gt 1 ']'
++ chain=' 19716 19706 '
+++ ps -o ppid= -p 19706
+++ tr -d '[:space:]'
++ pid=6440
++ '[' -n 6440 ']'
++ '[' 6440 -gt 1 ']'
++ chain=' 19716 19706 6440 '
+++ ps -o ppid= -p 6440
+++ tr -d '[:space:]'
++ pid=91697
++ '[' -n 91697 ']'
++ '[' 91697 -gt 1 ']'
++ chain=' 19716 19706 6440 91697 '
+++ ps -o ppid= -p 91697
+++ tr -d '[:space:]'
++ pid=17336
++ '[' -n 17336 ']'
++ '[' 17336 -gt 1 ']'
++ chain=' 19716 19706 6440 91697 17336 '
+++ ps -o ppid= -p 17336
+++ tr -d '[:space:]'
++ pid=1
++ '[' -n 1 ']'
++ '[' 1 -gt 1 ']'
++ for signal in TERM KILL
++ i=0
++ '[' 0 -lt 20 ']'
+++ ps -ww -eo pid=,args=
+++ FM_TEST_REAP_ROOT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue/
+++ awk -v 'chain= 19716 19706 6440 91697 17336 ' 'index($0, ENVIRON["FM_TEST_REAP_ROOT"]) && index(chain, " " $1 " ") == 0 { print $1 }'
++ pids=
++ '[' -n '' ']'
++ return 0
++ fm_test_remove_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
++ '[' -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue ']'
++ '[' '!' -L /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue ']'
++ find /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue -type d -exec chmod u+rwx '{}' +
++ rm -rf /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-extension-binding.FH4Sue
++ IFS=
++ read -r d
++ rm -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-cleanup.19716.H9m6iI

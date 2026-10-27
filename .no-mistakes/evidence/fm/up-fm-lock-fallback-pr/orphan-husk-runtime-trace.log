@@ -1,0 +1,747 @@
++ test_dirlock_d4c_orphan_husk_cleanup_preserves_successor
++ local mode dir lock holder acquirer successor orphan generation before after pid private_pid rc
++ for mode in acquire reap acquire-boundary reap-boundary
+++ dirlock_case dirlock-d4c-acquire
+++ local dir tool
++++ make_case dirlock-d4c-acquire
++++ local name=dirlock-d4c-acquire dir fakebin
++++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire
++++ fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin
++++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin
++++ fm_test_track_watcher_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state
++++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state ']'
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state
++++ cat
++++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin/tmux
++++ make_fake_crew_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin
++++ local fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin
++++ cat
++++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin/fm-crew-state.sh
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin/fm-crew-state.sh
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire
+++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire
++++ command -v ln
+++ printf '#!/usr/bin/env bash\nif [ "$1" = -s ]; then exec cp -R "$2" "$3"; fi\nexec %q "$@"\n' /bin/ln
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin/ln
+++ for tool in perl rm rmdir
++++ command -v perl
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' perl /usr/bin/perl
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin/perl
+++ for tool in perl rm rmdir
++++ command -v rm
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' rm /bin/rm
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin/rm
+++ for tool in perl rm rmdir
++++ command -v rmdir
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' rmdir /bin/rmdir
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin/rmdir
+++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/events
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire
++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire
++ lock=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock
++ case "$mode" in
++ dirlock_open /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire a b c
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire fd=7 subject
++ shift
++ exec
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/resume.a
++ eval 'exec 7<> "$dir/resume.$subject"'
+++ exec
++ fd=8
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/resume.b
++ eval 'exec 8<> "$dir/resume.$subject"'
+++ exec
++ fd=9
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/resume.c
++ eval 'exec 9<> "$dir/resume.$subject"'
+++ exec
++ fd=10
++ holder=51986
++ dirlock_expect 'a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock' 'D4c: releaser did not leave a husk'
++ DIRLOCK_EVENT=
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire a husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock $'\n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire subject=a barriers=husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock $'script=\n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"'
++ shift 4
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/barrier.a
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state
++ FM_TEST_SUBJECT=a
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/barrier.a
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/resume.a
++ exec bash -c $'. "$0"; \n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock
++ case "$DIRLOCK_EVENT" in
++ wait 51986
++ '[' -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock ']'
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ '[' ./.d.lock = ./.d.lock ']'
++ touch -t 200001010000 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock
++ acquirer=52037
++ dirlock_expect 'b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock' 'D4c: acquire did not reach husk cleanup'
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire b cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock $'\n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock acquire
++ DIRLOCK_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire subject=b barriers=cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock $'script=\n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac'
++ shift 4
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/barrier.b
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state
++ FM_TEST_SUBJECT=b
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/barrier.b
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/resume.b
++ exec bash -c $'. "$0"; \n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock acquire
++ case "$DIRLOCK_EVENT" in
+++ dirlock_event_field pid
+++ local 'value=52114 caller=52037'
+++ printf '%s\n' 52114
++ orphan=52114
+++ dirlock_event_field caller
+++ local value=52037
+++ printf '%s\n' 52037
++ '[' 52037 = 52037 ']'
++ kill -KILL 52037
++ wait 52037
++ kill -0 52114
++ successor=52135
++ dirlock_expect 'c held pid=52135' 'D4c: successor did not recover the abandoned husk'
++ DIRLOCK_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire c '' $'sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/c.id
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire subject=c barriers= $'script=sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"'
++ shift 4
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/barrier.c
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state
++ FM_TEST_SUBJECT=c
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/barrier.c
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/resume.c
++ exec bash -c $'. "$0"; sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/c.id
++ case "$DIRLOCK_EVENT" in
+++ dirlock_generation /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock
+++ local generation
+++ for generation in "$1"/.owner.*
+++ :
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock/.owner.A2WEbo
++ generation=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock/.owner.A2WEbo
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ before=$'./.d.lock\n./.d.lock/.owner.A2WEbo\n./.d.lock/.owner.A2WEbo/pid\n./.d.lock/pid'
++ printf 'go\n'
++ dirlock_expect 'b done rc=' 'D4c: orphan cleanup did not resume'
++ DIRLOCK_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ case "$DIRLOCK_EVENT" in
++ rc=1
+++ cat /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock/pid
++ pid=52135
+++ cat /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state/.d.lock/.owner.A2WEbo/pid
++ private_pid=52135
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ after=$'./.d.lock\n./.d.lock/.owner.A2WEbo\n./.d.lock/.owner.A2WEbo/pid\n./.d.lock/pid'
++ printf 'go\n'
++ wait 52135
++ dirlock_close
++ exec
++ '[' 52135 = 52135 ']'
++ '[' 52135 = 52135 ']'
++ '[' $'./.d.lock\n./.d.lock/.owner.A2WEbo\n./.d.lock/.owner.A2WEbo/pid\n./.d.lock/pid' = $'./.d.lock\n./.d.lock/.owner.A2WEbo\n./.d.lock/.owner.A2WEbo/pid\n./.d.lock/pid' ']'
++ '[' 1 = 1 ']'
++ dirlock_assert_clean /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire 'D4c: successor release residue'
++ local left
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ left=
++ '[' -z '' ']'
++ for mode in acquire reap acquire-boundary reap-boundary
+++ dirlock_case dirlock-d4c-reap
+++ local dir tool
++++ make_case dirlock-d4c-reap
++++ local name=dirlock-d4c-reap dir fakebin
++++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap
++++ fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin
++++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin
++++ fm_test_track_watcher_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state
++++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state ']'
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state
++++ cat
++++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin/tmux
++++ make_fake_crew_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin
++++ local fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin
++++ cat
++++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin/fm-crew-state.sh
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin/fm-crew-state.sh
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap
+++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap
++++ command -v ln
+++ printf '#!/usr/bin/env bash\nif [ "$1" = -s ]; then exec cp -R "$2" "$3"; fi\nexec %q "$@"\n' /bin/ln
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin/ln
+++ for tool in perl rm rmdir
++++ command -v perl
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' perl /usr/bin/perl
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin/perl
+++ for tool in perl rm rmdir
++++ command -v rm
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' rm /bin/rm
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin/rm
+++ for tool in perl rm rmdir
++++ command -v rmdir
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' rmdir /bin/rmdir
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin/rmdir
+++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/events
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap
++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap
++ lock=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock
++ case "$mode" in
++ lock=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal
++ dirlock_open /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap a b c
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap fd=7 subject
++ shift
++ exec
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/resume.a
++ eval 'exec 7<> "$dir/resume.$subject"'
+++ exec
++ fd=8
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/resume.b
++ eval 'exec 8<> "$dir/resume.$subject"'
+++ exec
++ fd=9
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/resume.c
++ eval 'exec 9<> "$dir/resume.$subject"'
+++ exec
++ fd=10
++ holder=52383
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap a husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal $'\n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal
++ dirlock_expect 'a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal' 'D4c: releaser did not leave a husk'
++ DIRLOCK_EVENT=
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap subject=a barriers=husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal $'script=\n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"'
++ shift 4
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/barrier.a
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state
++ FM_TEST_SUBJECT=a
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/barrier.a
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/resume.a
++ exec bash -c $'. "$0"; \n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal
++ case "$DIRLOCK_EVENT" in
++ wait 52383
++ '[' -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal ']'
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ '[' ./.d.lock.steal = ./.d.lock.steal ']'
++ touch -t 200001010000 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal
++ acquirer=52489
++ dirlock_expect 'b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal' 'D4c: reap did not reach husk cleanup'
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap b cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal $'\n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal reap
++ DIRLOCK_EVENT=
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap subject=b barriers=cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal $'script=\n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac'
++ shift 4
++ IFS=
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/barrier.b
++ read -r -t 30 DIRLOCK_EVENT
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state
++ FM_TEST_SUBJECT=b
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/barrier.b
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/resume.b
++ exec bash -c $'. "$0"; \n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal reap
++ case "$DIRLOCK_EVENT" in
+++ dirlock_event_field pid
+++ local 'value=52512 caller=52489'
+++ printf '%s\n' 52512
++ orphan=52512
+++ dirlock_event_field caller
+++ local value=52489
+++ printf '%s\n' 52489
++ '[' 52489 = 52489 ']'
++ kill -KILL 52489
++ wait 52489
++ kill -0 52512
++ successor=52516
++ dirlock_expect 'c held pid=52516' 'D4c: successor did not recover the abandoned husk'
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap c '' $'sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/c.id
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap subject=c barriers= $'script=sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"'
++ shift 4
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/barrier.c
++ DIRLOCK_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state
++ FM_TEST_SUBJECT=c
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/barrier.c
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/resume.c
++ exec bash -c $'. "$0"; sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/c.id
++ case "$DIRLOCK_EVENT" in
+++ dirlock_generation /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal
+++ local generation
+++ for generation in "$1"/.owner.*
+++ :
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal/.owner.4OVUeG
++ generation=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal/.owner.4OVUeG
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ before=$'./.d.lock.steal\n./.d.lock.steal/.owner.4OVUeG\n./.d.lock.steal/.owner.4OVUeG/pid\n./.d.lock.steal/pid'
++ printf 'go\n'
++ dirlock_expect 'b done rc=' 'D4c: orphan cleanup did not resume'
++ DIRLOCK_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ case "$DIRLOCK_EVENT" in
++ rc=1
+++ cat /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal/pid
++ pid=52516
+++ cat /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state/.d.lock.steal/.owner.4OVUeG/pid
++ private_pid=52516
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ after=$'./.d.lock.steal\n./.d.lock.steal/.owner.4OVUeG\n./.d.lock.steal/.owner.4OVUeG/pid\n./.d.lock.steal/pid'
++ printf 'go\n'
++ wait 52516
++ dirlock_close
++ exec
++ '[' 52516 = 52516 ']'
++ '[' 52516 = 52516 ']'
++ '[' $'./.d.lock.steal\n./.d.lock.steal/.owner.4OVUeG\n./.d.lock.steal/.owner.4OVUeG/pid\n./.d.lock.steal/pid' = $'./.d.lock.steal\n./.d.lock.steal/.owner.4OVUeG\n./.d.lock.steal/.owner.4OVUeG/pid\n./.d.lock.steal/pid' ']'
++ '[' 1 = 1 ']'
++ dirlock_assert_clean /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap 'D4c: successor release residue'
++ local left
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ left=
++ '[' -z '' ']'
++ for mode in acquire reap acquire-boundary reap-boundary
+++ dirlock_case dirlock-d4c-acquire-boundary
+++ local dir tool
++++ make_case dirlock-d4c-acquire-boundary
++++ local name=dirlock-d4c-acquire-boundary dir fakebin
++++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary
++++ fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin
++++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin
++++ fm_test_track_watcher_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state
++++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state ']'
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state
++++ cat
++++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin/tmux
++++ make_fake_crew_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin
++++ local fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin
++++ cat
++++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin/fm-crew-state.sh
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin/fm-crew-state.sh
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary
+++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary
++++ command -v ln
+++ printf '#!/usr/bin/env bash\nif [ "$1" = -s ]; then exec cp -R "$2" "$3"; fi\nexec %q "$@"\n' /bin/ln
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin/ln
+++ for tool in perl rm rmdir
++++ command -v perl
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' perl /usr/bin/perl
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin/perl
+++ for tool in perl rm rmdir
++++ command -v rm
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' rm /bin/rm
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin/rm
+++ for tool in perl rm rmdir
++++ command -v rmdir
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' rmdir /bin/rmdir
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin/rmdir
+++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/events
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary
++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary
++ lock=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock
++ case "$mode" in
++ dirlock_open /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary a b c
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary fd=7 subject
++ shift
++ exec
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/resume.a
++ eval 'exec 7<> "$dir/resume.$subject"'
+++ exec
++ fd=8
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/resume.b
++ eval 'exec 8<> "$dir/resume.$subject"'
+++ exec
++ fd=9
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/resume.c
++ eval 'exec 9<> "$dir/resume.$subject"'
+++ exec
++ fd=10
++ holder=52720
++ dirlock_expect 'a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock' 'D4c: releaser did not leave a husk'
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary a husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock $'\n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock
++ DIRLOCK_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary subject=a barriers=husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock $'script=\n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"'
++ shift 4
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/barrier.a
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state
++ FM_TEST_SUBJECT=a
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/barrier.a
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/resume.a
++ exec bash -c $'. "$0"; \n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock
++ case "$DIRLOCK_EVENT" in
++ wait 52720
++ '[' -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock ']'
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ '[' ./.d.lock = ./.d.lock ']'
++ touch -t 200001010000 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock
++ acquirer=52793
++ dirlock_expect 'b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock' 'D4c: acquire-boundary did not reach husk cleanup'
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary b cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock $'\n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock acquire-boundary
++ DIRLOCK_EVENT=
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary subject=b barriers=cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock $'script=\n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac'
++ IFS=
++ shift 4
++ read -r -t 30 DIRLOCK_EVENT
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/barrier.b
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state
++ FM_TEST_SUBJECT=b
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/barrier.b
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/resume.b
++ exec bash -c $'. "$0"; \n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock acquire-boundary
++ case "$DIRLOCK_EVENT" in
+++ dirlock_event_field pid
+++ local 'value=52895 caller=52793'
+++ printf '%s\n' 52895
++ orphan=52895
+++ dirlock_event_field caller
+++ local value=52793
+++ printf '%s\n' 52793
++ '[' 52793 = 52793 ']'
++ kill -KILL 52793
++ wait 52793
++ kill -0 52895
++ successor=52910
++ dirlock_expect 'c held pid=52910' 'D4c: successor did not recover the abandoned husk'
++ DIRLOCK_EVENT=
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary c '' $'sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/c.id
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary subject=c barriers= $'script=sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"'
++ shift 4
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/barrier.c
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state
++ FM_TEST_SUBJECT=c
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/barrier.c
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/resume.c
++ exec bash -c $'. "$0"; sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/c.id
++ case "$DIRLOCK_EVENT" in
+++ dirlock_generation /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock
+++ local generation
+++ for generation in "$1"/.owner.*
+++ :
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock/.owner.xPzkOh
++ generation=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock/.owner.xPzkOh
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ before=$'./.d.lock\n./.d.lock/.owner.xPzkOh\n./.d.lock/.owner.xPzkOh/pid\n./.d.lock/pid'
++ printf 'go\n'
++ dirlock_expect 'b done rc=' 'D4c: orphan cleanup did not resume'
++ DIRLOCK_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ case "$DIRLOCK_EVENT" in
++ rc=1
+++ cat /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock/pid
++ pid=52910
+++ cat /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state/.d.lock/.owner.xPzkOh/pid
++ private_pid=52910
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ after=$'./.d.lock\n./.d.lock/.owner.xPzkOh\n./.d.lock/.owner.xPzkOh/pid\n./.d.lock/pid'
++ printf 'go\n'
++ wait 52910
++ dirlock_close
++ exec
++ '[' 52910 = 52910 ']'
++ '[' 52910 = 52910 ']'
++ '[' $'./.d.lock\n./.d.lock/.owner.xPzkOh\n./.d.lock/.owner.xPzkOh/pid\n./.d.lock/pid' = $'./.d.lock\n./.d.lock/.owner.xPzkOh\n./.d.lock/.owner.xPzkOh/pid\n./.d.lock/pid' ']'
++ '[' 1 = 1 ']'
++ dirlock_assert_clean /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary 'D4c: successor release residue'
++ local left
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-acquire-boundary/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ left=
++ '[' -z '' ']'
++ for mode in acquire reap acquire-boundary reap-boundary
+++ dirlock_case dirlock-d4c-reap-boundary
+++ local dir tool
++++ make_case dirlock-d4c-reap-boundary
++++ local name=dirlock-d4c-reap-boundary dir fakebin
++++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary
++++ fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin
++++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin
++++ fm_test_track_watcher_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state
++++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state ']'
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state
++++ cat
++++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin/tmux
++++ make_fake_crew_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin
++++ local fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin
++++ cat
++++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin/fm-crew-state.sh
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin/fm-crew-state.sh
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary
+++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary
++++ command -v ln
+++ printf '#!/usr/bin/env bash\nif [ "$1" = -s ]; then exec cp -R "$2" "$3"; fi\nexec %q "$@"\n' /bin/ln
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin/ln
+++ for tool in perl rm rmdir
++++ command -v perl
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' perl /usr/bin/perl
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin/perl
+++ for tool in perl rm rmdir
++++ command -v rm
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' rm /bin/rm
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin/rm
+++ for tool in perl rm rmdir
++++ command -v rmdir
+++ printf '#!/usr/bin/env bash\nFM_TEST_TOOL=%s\nFM_TEST_REAL=%q\n' rmdir /bin/rmdir
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin/rmdir
+++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/events
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary
++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary
++ lock=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock
++ case "$mode" in
++ lock=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal
++ dirlock_open /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary a b c
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary fd=7 subject
++ shift
++ exec
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/resume.a
++ eval 'exec 7<> "$dir/resume.$subject"'
+++ exec
++ fd=8
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/resume.b
++ eval 'exec 8<> "$dir/resume.$subject"'
+++ exec
++ fd=9
++ for subject in "$@"
++ mkfifo /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/resume.c
++ eval 'exec 9<> "$dir/resume.$subject"'
+++ exec
++ fd=10
++ holder=53196
++ dirlock_expect 'a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal' 'D4c: releaser did not leave a husk'
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary a husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal $'\n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal
++ DIRLOCK_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary subject=a barriers=husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal $'script=\n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"'
++ shift 4
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/barrier.a
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state
++ FM_TEST_SUBJECT=a
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=husk:pre:kill:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/barrier.a
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/resume.a
++ exec bash -c $'. "$0"; \n      fm_lock_try_acquire "$1" || exit 10\n      fm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal
++ case "$DIRLOCK_EVENT" in
++ wait 53196
++ '[' -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal ']'
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ '[' ./.d.lock.steal = ./.d.lock.steal ']'
++ touch -t 200001010000 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal
++ acquirer=53257
++ dirlock_expect 'b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal' 'D4c: reap-boundary did not reach husk cleanup'
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary b cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal $'\n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc+ DIRLOCK_EVENT=
+=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal reap-boundary
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary subject=b barriers=cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal $'script=\n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac'
++ shift 4
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/barrier.b
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state
++ FM_TEST_SUBJECT=b
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=cleanup:pre:wait:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/barrier.b
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/resume.b
++ exec bash -c $'. "$0"; \n      case "$2" in *-boundary)\n        target=$1\n        original=$(declare -f _fm_lock_dir_remove_path)\n        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"\n        _fm_lock_dir_remove_path() {\n          if [ "$1" != "$target" ]; then\n            _fm_original_remove_path "$@"\n            return\n          fi\n          local rc=0\n          FM_TEST_BARRIERS= bash -c \'\n            . "$0"\n            printf "%s cleanup:pre:%s pid=%s caller=%s\\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"\n            IFS= read -r _ < "$FM_TEST_RESUME"\n            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?\n            printf "%s done rc=%s\\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"\n            exit "$rc"\n          \' "$0" "$@" || rc=$?\n          return "$rc"\n        }\n      esac\n      case "$2" in\n        acquire*) fm_lock_try_acquire "$1" ;;\n        reap*) fm_lock_reap_dead_link "$1" ;;\n      esac' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal reap-boundary
++ case "$DIRLOCK_EVENT" in
+++ dirlock_event_field pid
+++ local 'value=53293 caller=53257'
+++ printf '%s\n' 53293
++ orphan=53293
+++ dirlock_event_field caller
+++ local value=53257
+++ printf '%s\n' 53257
++ '[' 53257 = 53257 ']'
++ kill -KILL 53257
++ wait 53257
++ kill -0 53293
++ successor=53301
++ dirlock_expect 'c held pid=53301' 'D4c: successor did not recover the abandoned husk'
++ DIRLOCK_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ dirlock_spawn /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary c '' $'sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/c.id
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary subject=c barriers= $'script=sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"'
++ shift 4
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/barrier.c
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/fakebin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state
++ FM_TEST_SUBJECT=c
++ FM_LOCK_STALE_AFTER=2
++ FM_TEST_BARRIERS=
++ FM_TEST_BARRIER_DIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/barrier.c
++ FM_TEST_EVENTS=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/events
++ FM_TEST_RESUME=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/resume.c
++ exec bash -c $'. "$0"; sh -c \'printf "%s\\n" "$PPID"\' > "$2" || exit 9\nfm_lock_try_acquire "$1" || exit 10\nprintf "%s held pid=%s\\n" "$FM_TEST_SUBJECT" "$(cat "$1/pid")" >> "$FM_TEST_EVENTS"\nIFS= read -r _ < "$FM_TEST_RESUME"\nfm_lock_release "$1"' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/c.id
++ case "$DIRLOCK_EVENT" in
+++ dirlock_generation /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal
+++ local generation
+++ for generation in "$1"/.owner.*
+++ :
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal/.owner.P1lAcE
++ generation=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal/.owner.P1lAcE
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ before=$'./.d.lock.steal\n./.d.lock.steal/.owner.P1lAcE\n./.d.lock.steal/.owner.P1lAcE/pid\n./.d.lock.steal/pid'
++ printf 'go\n'
++ dirlock_expect 'b done rc=' 'D4c: orphan cleanup did not resume'
++ DIRLOCK_EVENT=
++ IFS=
++ read -r -t 30 DIRLOCK_EVENT
++ case "$DIRLOCK_EVENT" in
++ rc=1
+++ cat /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal/pid
++ pid=53301
+++ cat /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state/.d.lock.steal/.owner.P1lAcE/pid
++ private_pid=53301
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ after=$'./.d.lock.steal\n./.d.lock.steal/.owner.P1lAcE\n./.d.lock.steal/.owner.P1lAcE/pid\n./.d.lock.steal/pid'
++ printf 'go\n'
++ wait 53301
++ dirlock_close
++ exec
++ '[' 53301 = 53301 ']'
++ '[' 53301 = 53301 ']'
++ '[' $'./.d.lock.steal\n./.d.lock.steal/.owner.P1lAcE\n./.d.lock.steal/.owner.P1lAcE/pid\n./.d.lock.steal/pid' = $'./.d.lock.steal\n./.d.lock.steal/.owner.P1lAcE\n./.d.lock.steal/.owner.P1lAcE/pid\n./.d.lock.steal/pid' ']'
++ '[' 1 = 1 ']'
++ dirlock_assert_clean /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary 'D4c: successor release residue'
++ local left
+++ dirlock_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary
+++ cd /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-watcher-lock-tests.sI5Jms/dirlock-d4c-reap-boundary/state
+++ find . -mindepth 1 -print
+++ LC_ALL=C
+++ sort
++ left=
++ '[' -z '' ']'
++ pass 'D4c: orphaned husk cleanup cannot unlink a live successor'\''s pid or generation'
++ printf 'ok - %s\n' 'D4c: orphaned husk cleanup cannot unlink a live successor'\''s pid or generation'
+ok - D4c: orphaned husk cleanup cannot unlink a live successor's pid or generation

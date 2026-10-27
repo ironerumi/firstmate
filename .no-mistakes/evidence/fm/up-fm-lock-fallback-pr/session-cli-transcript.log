@@ -1,0 +1,22 @@
+$ bin/fm-lock.sh (copying ln -s boundary)
+lock acquired: harness pid 91697
+exit=0
+$ bin/fm-lock.sh status
+lock: held by live harness pid 91697
+$ bin/fm-lock.sh (confirm same real harness session)
+lock acquired: harness pid 91697
+exit=0
+$ seed a dead session pid, then reclaim
+lock acquired: harness pid 91697
+exit=0
+lock: held by live harness pid 91697
+Remaining session state:
+total 8
+drwxr-xr-x@ 3 gu_yifu  staff   96 Oct 27 18:23 .
+drwxr-xr-x@ 5 gu_yifu  staff  160 Oct 27 18:23 ..
+-rw-r--r--@ 1 gu_yifu  staff    6 Oct 27 18:23 .lock
+Capability boundary operations:
+ln -s copied probe
+ln -s copied probe
+ln -s copied probe
+

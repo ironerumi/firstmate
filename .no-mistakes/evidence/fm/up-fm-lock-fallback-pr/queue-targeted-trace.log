@@ -1,0 +1,688 @@
++ set -u
+++ dirname tests/.queue-gate-lock.sh
++ . tests/wake-helpers.sh
++++ dirname tests/wake-helpers.sh
+++ . tests/lib.sh
++++ '[' -n '' ']'
++++ FM_TEST_LIB_SOURCED=1
++++ umask 022
+++++ dirname tests/lib.sh
++++ . tests/git-config-helpers.sh
+++++ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+++++ GIT_CONFIG_GLOBAL=/dev/null
+++++ GIT_CONFIG_NOSYSTEM=1
+++++ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
++++ export FM_GATE_REFUSE_BYPASS=1
++++ FM_GATE_REFUSE_BYPASS=1
++++ export FM_TEST_SEAM=1
++++ FM_TEST_SEAM=1
++++ unset FM_TASK_ID
++++ unset TASKS_AXI_FILE TASKS_AXI_BACKEND
++++ unset REX_SESSION REX_BLOCK
++++++ dirname tests/lib.sh
+++++ cd tests/..
+++++ pwd
++++ ROOT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ
+++++ fm_test_tmpdir
+++++ local base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp physical
+++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp ']'
+++++ case "$base" in
++++++ CDPATH=
++++++ cd -- /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++++ pwd -P
+++++ case "$base" in
+++++ physical=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ '[' -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.git ']'
+++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ FM_TEST_TMPDIR=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ FM_TEST_CLEANUP_DIRS=()
+++++ mktemp /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-cleanup.55241.XXXXXX
++++ FM_TEST_CLEANUP_REGISTRY=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-cleanup.55241.v7mbsO
+++++ fm_test_pid_identity 55241
+++++ local pid=55241
+++++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ bash -c '. "$1"; fm_pid_identity "$2"' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh 55241
++++ FM_TEST_OWNER_IDENTITY='Tue Oct 27 09:22:26 2026     bash -x tests/.queue-gate-lock.sh'
+++++ mktemp /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-procevent.55241.XXXXXX
++++ FM_TEST_PROCEVENT_REGISTRY=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-procevent.55241.ZC4LWh
+++++ mktemp /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-watcher.55241.XXXXXX
++++ FM_TEST_WATCHER_REGISTRY=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-watcher.55241.OWvTBi
++++ FM_TEST_STUB_MAX_BLOCK_SECONDS=120
++++ export FM_TEST_STUB_MAX_BLOCK_SECONDS
++++ FM_TEST_SUITE_PID=55241
++++ export FM_TEST_SUITE_PID
++++ trap fm_test_cleanup EXIT
++++ trap 'fm_test_cleanup; exit 130' INT
++++ trap 'fm_test_cleanup; exit 143' TERM
++++ trap 'fm_test_cleanup; exit 129' HUP
++++ trap 'fm_test_cleanup; exit 131' QUIT
++++ FM_TEST_ORPHAN_MAX_AGE_SECONDS=3600
++++ '[' 1 '!=' 1 ']'
+++ '[' -z '' ']'
++++ fm_test_tmproot fm-wake-tangle-root
++++ local prefix=fm-wake-tangle-root root tmp_base
+++++ fm_test_tmpdir
+++++ local base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp physical
+++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp ']'
+++++ case "$base" in
++++++ CDPATH=
++++++ cd -- /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++++ pwd -P
+++++ case "$base" in
+++++ physical=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ '[' -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.git ']'
+++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ tmp_base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ tmp_base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ mktemp -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.XXXXXX
++++ root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI
+++++ cd -P -- /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI
+++++ pwd -P
++++ root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI
++++ printf '%s\n%s\n' 55241 'Tue Oct 27 09:22:26 2026     bash -x tests/.queue-gate-lock.sh'
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI
+++ FM_ROOT_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI
+++ export FM_ROOT_OVERRIDE
++++ fm_test_tmproot fm-wedge-rec
++++ local prefix=fm-wedge-rec root tmp_base
+++++ fm_test_tmpdir
+++++ local base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp physical
+++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp ']'
+++++ case "$base" in
++++++ CDPATH=
++++++ cd -- /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++++ pwd -P
+++++ case "$base" in
+++++ physical=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ '[' -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.git ']'
+++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ tmp_base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ tmp_base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ mktemp -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.XXXXXX
++++ root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG
+++++ cd -P -- /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG
+++++ pwd -P
++++ root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG
++++ printf '%s\n%s\n' 55241 'Tue Oct 27 09:22:26 2026     bash -x tests/.queue-gate-lock.sh'
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG
+++ _fm_wedge_rec_dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG/rec
+++ export FM_WEDGE_ALARM_EXEC=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG/rec
+++ FM_WEDGE_ALARM_EXEC=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG/rec
++ WATCH=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-watch.sh
++ DRAIN=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-drain.sh
++ GRANT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-grant.sh
++ GUARD=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-guard.sh
+++ fm_test_tmproot fm-wake-tests
+++ local prefix=fm-wake-tests root tmp_base
++++ fm_test_tmpdir
++++ local base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp physical
++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp ']'
++++ case "$base" in
+++++ CDPATH=
+++++ cd -- /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++++ pwd -P
++++ case "$base" in
++++ physical=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ '[' -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.git ']'
++++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++ tmp_base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
+++ tmp_base=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp
++++ mktemp -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.XXXXXX
+++ root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX
++++ cd -P -- /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX
++++ pwd -P
+++ root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX
+++ printf '%s\n%s\n' 55241 'Tue Oct 27 09:22:26 2026     bash -x tests/.queue-gate-lock.sh'
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX
++ TMP_ROOT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX
++ with_copied_link_locks test_bounded_lock_handoff_after_contention
++ local bin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks-bin log=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks.log real_ln
+++ command -v ln
++ real_ln=/bin/ln
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks-bin
++ cat
++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks-bin/ln
++ rm -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks.log
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks-bin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_TEST_REAL_LN=/bin/ln
++ FM_TEST_COPIED_LINK_LOG=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks.log
++ FM_TEST_CASE_SUFFIX=-copied-link
++ test_bounded_lock_handoff_after_contention
++ local dir state lock holder_pid waiter_pid i recorded_pid real_sleep sleep_log
+++ make_case bounded-lock-handoff
+++ local name=bounded-lock-handoff dir fakebin
+++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link
+++ fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/fakebin
+++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/fakebin
+++ fm_test_track_watcher_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state
+++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state ']'
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/fakebin/tmux
+++ make_fake_crew_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/fakebin
+++ local fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/fakebin
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/fakebin/fm-crew-state.sh
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/fakebin/fm-crew-state.sh
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link
++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link
++ state=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state
++ lock=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state/.fixture.lock
++ sleep_log=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter-sleeps
+++ command -v sleep
++ real_sleep=/bin/sleep
++ cat
++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/fakebin/sleep
++ holder_pid=55470
++ i=0
++ '[' 0 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/holder.ready ']'
++ sleep 0.05
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state
++ bash -c $'\n    . "$1"\n    fm_lock_acquire_wait "$2" || exit 10\n    printf "ready\\n" > "$3"\n    while [ ! -e "$4" ]; do sleep 0.05; done\n    fm_lock_release "$2"\n  ' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state/.fixture.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/holder.ready /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/release-holder
++ i=1
++ '[' 1 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/holder.ready ']'
++ sleep 0.05
++ i=2
++ '[' 2 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/holder.ready ']'
++ sleep 0.05
++ i=3
++ '[' 3 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/holder.ready ']'
++ sleep 0.05
++ i=4
++ '[' 4 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/holder.ready ']'
++ sleep 0.05
++ i=5
++ '[' 5 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/holder.ready ']'
++ sleep 0.05
++ i=6
++ '[' 6 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/holder.ready ']'
++ '[' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/holder.ready ']'
++ waiter_pid=55635
++ i=0
++ '[' 0 -lt 100 ']'
++ grep -Fx 0.1 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter-sleeps
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/fakebin:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks-bin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_HANDOFF_SLEEP_LOG=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter-sleeps
++ FM_HANDOFF_REAL_SLEEP=/bin/sleep
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state
++ bash -c $'\n    . "$1"\n    fm_lock_acquire_wait_bounded "$2" 5 || exit 11\n    current=${BASHPID:-$$}\n    printf "%s\\n" "$current" > "$3"\n    while [ ! -e "$4" ]; do sleep 0.05; done\n    [ "$(cat "$2/pid" 2>/dev/null || true)" = "$current" ] || exit 12\n    fm_lock_release "$2"\n  ' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state/.fixture.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter.ready /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/release-waiter
++ sleep 0.05
++ i=1
++ '[' 1 -lt 100 ']'
++ grep -Fx 0.1 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter-sleeps
++ sleep 0.05
++ i=2
++ '[' 2 -lt 100 ']'
++ grep -Fx 0.1 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter-sleeps
++ sleep 0.05
++ i=3
++ '[' 3 -lt 100 ']'
++ grep -Fx 0.1 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter-sleeps
++ sleep 0.05
++ i=4
++ '[' 4 -lt 100 ']'
++ grep -Fx 0.1 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter-sleeps
++ sleep 0.05
++ i=5
++ '[' 5 -lt 100 ']'
++ grep -Fx 0.1 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter-sleeps
++ grep -Fx 0.1 /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter-sleeps
++ '[' '!' -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter.ready ']'
++ :
++ wait 55470
++ i=0
++ '[' 0 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter.ready ']'
++ sleep 0.05
++ i=1
++ '[' 1 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter.ready ']'
++ sleep 0.05
++ i=2
++ '[' 2 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter.ready ']'
++ sleep 0.05
++ i=3
++ '[' 3 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter.ready ']'
++ sleep 0.05
++ i=4
++ '[' 4 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter.ready ']'
++ '[' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter.ready ']'
+++ cat /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/waiter.ready
++ recorded_pid=55635
++ '[' 55635 = 55635 ']'
+++ cat /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state/.fixture.lock/pid
++ '[' 55635 = 55635 ']'
++ :
++ wait 55635
++ '[' '!' -e /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state/.fixture.lock ']'
++ '[' '!' -L /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state/.fixture.lock ']'
++ pass 'bounded acquire hands ownership to the waiting caller after contention'
++ printf 'ok - %s\n' 'bounded acquire hands ownership to the waiting caller after contention'
++ '[' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks.log ']'
++ pass 'test_bounded_lock_handoff_after_contention also holds with copied-link directory locks'
++ printf 'ok - %s\n' 'test_bounded_lock_handoff_after_contention also holds with copied-link directory locks'
++ with_copied_link_locks test_live_presentation_holder_is_deadlined_without_weakening_ack
++ local bin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks-bin log=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks.log real_ln
+++ command -v ln
++ real_ln=/bin/ln
++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks-bin
++ cat
++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks-bin/ln
++ rm -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks.log
++ PATH='/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks-bin:/Users/gu_yifu/.pi/agent/bin:/Users/gu_yifu/.local/share/pnpm/bin:/Users/gu_yifu/.local/bin:/Users/gu_yifu/.nvm/versions/node/v25.8.1/bin:/Users/gu_yifu/.bun/bin:/Users/gu_yifu/Library/Application Support/reflex/bun/bin:/opt/homebrew/opt/openjdk/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/TeX/texbin:/Users/gu_yifu/go/bin:/Users/gu_yifu/.cargo/bin:/Users/gu_yifu/bin:/usr/local/sbin'
++ FM_TEST_REAL_LN=/bin/ln
++ FM_TEST_COPIED_LINK_LOG=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks.log
++ FM_TEST_CASE_SUFFIX=-copied-link
++ test_live_presentation_holder_is_deadlined_without_weakening_ack
++ local dir state status queue_out queue_err first_out first_err second_out second_err replay_out replay_err
++ local queue_holder presentation_holder ack_holder i start elapsed rc advisory_count
++ local drain_budget=4
++ '[' -z -copied-link ']'
++ drain_budget=15
+++ make_case presentation-lock-deadline
+++ local name=presentation-lock-deadline dir fakebin
+++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link
+++ fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/fakebin
+++ mkdir -p /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/fakebin
+++ fm_test_track_watcher_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
+++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state ']'
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/fakebin/tmux
+++ make_fake_crew_state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/fakebin
+++ local fakebin=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/fakebin
+++ cat
+++ chmod +x /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/fakebin/fm-crew-state.sh
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/fakebin/fm-crew-state.sh
+++ printf '%s\n' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link
++ dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link
++ state=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ status=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state/task.status
++ queue_out=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.out
++ queue_err=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.err
++ first_out=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/first.out
++ first_err=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/first.err
++ second_out=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/second.out
++ second_err=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/second.err
++ replay_out=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/replay.out
++ replay_err=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/replay.err
++ printf 'needs-decision [key=fixture]: presentation remains retriable\n'
++ append_wake /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state signal task.status 'signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state/task.status'
++ local state=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state kind=signal key=task.status 'payload=signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state/task.status' lib=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ bash -c $'\n    # shellcheck disable=SC1090,SC1091\n    . "$1"\n    fm_wake_append "$2" "$3" "$4"\n  ' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh signal task.status 'signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state/task.status'
++ queue_holder=56608
++ i=0
++ '[' 0 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.ready ']'
++ sleep 0.05
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ bash -c $'\n    . "$1"\n    fm_lock_acquire_wait "$2"\n    printf "ready\\n" > "$3"\n    exec sleep 30\n  ' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state/.wake-queue.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.ready
++ i=1
++ '[' 1 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.ready ']'
++ sleep 0.05
++ i=2
++ '[' 2 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.ready ']'
++ sleep 0.05
++ i=3
++ '[' 3 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.ready ']'
++ sleep 0.05
++ i=4
++ '[' 4 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.ready ']'
++ sleep 0.05
++ i=5
++ '[' 5 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.ready ']'
++ sleep 0.05
++ i=6
++ '[' 6 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.ready ']'
++ '[' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.ready ']'
+++ date +%s
++ start=1793092953
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ FM_STATUS_PRESENTATION_LOCK_TIMEOUT=1
++ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-drain.sh
+++ date +%s
++ elapsed=2
++ '[' 2 -le 15 ']'
+++ grep -Fc 'WAKE DRAIN SKIPPED: queue lock remains held by live pid 56608' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.out
++ advisory_count=1
++ '[' 1 -eq 1 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.err ']'
+++ printf '\tsignal\t'
++ grep $'\tsignal\t' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.out
++ grep -F WAKE_ACK_REQUIRED: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/queue.err
+++ printf '\tsignal\t'
++ grep $'\tsignal\t' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state/.wake-queue
++ kill 56608
++ wait 56608
++ true
++ presentation_holder=57187
++ i=0
++ '[' 0 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/presentation.ready ']'
++ sleep 0.05
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ bash -c $'\n    . "$1"\n    fm_lock_acquire_wait "$2"\n    printf "ready\\n" > "$3"\n    exec sleep 30\n  ' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state/.status-presentation-lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/presentation.ready
++ i=1
++ '[' 1 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/presentation.ready ']'
++ sleep 0.05
++ i=2
++ '[' 2 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/presentation.ready ']'
++ sleep 0.05
++ i=3
++ '[' 3 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/presentation.ready ']'
++ '[' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/presentation.ready ']'
+++ date +%s
++ start=1793092956
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ FM_STATUS_PRESENTATION_LOCK_TIMEOUT=1
++ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-drain.sh
+++ date +%s
++ elapsed=9
++ '[' 9 -le 15 ']'
+++ grep -Fc 'STATUS PRESENTATION SKIPPED: lock remains held by live pid 57187' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/first.out
++ advisory_count=1
++ '[' 1 -eq 1 ']'
++ grep -v '^WAKE_ACK_REQUIRED:' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/first.err
++ grep .
+++ printf '\tsignal\t'
++ grep $'\tsignal\t' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/first.out
++ grep -F 'task.status: needs-decision [key=fixture]' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/first.out
++ kill 57187
++ wait 57187
++ true
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ FM_STATUS_PRESENTATION_LOCK_TIMEOUT=1
++ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-drain.sh
++ grep -F 'task.status: needs-decision [key=fixture]: presentation remains retriable' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/second.out
++ ack_holder=62768
++ i=0
++ '[' 0 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/ack.ready ']'
++ sleep 0.05
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ bash -c $'\n    . "$1"\n    fm_lock_acquire_wait "$2"\n    printf "ready\\n" > "$3"\n    exec sleep 30\n  ' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state/.wake-queue.lock /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/ack.ready
++ i=1
++ '[' 1 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/ack.ready ']'
++ sleep 0.05
++ i=2
++ '[' 2 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/ack.ready ']'
++ sleep 0.05
++ i=3
++ '[' 3 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/ack.ready ']'
++ sleep 0.05
++ i=4
++ '[' 4 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/ack.ready ']'
++ sleep 0.05
++ i=5
++ '[' 5 -lt 100 ']'
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/ack.ready ']'
++ '[' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/ack.ready ']'
++ rc=0
+++ sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation [A-Za-z0-9._-][A-Za-z0-9._-]*$/\1/p' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/second.err
+++ sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through [0-9][0-9]* --recovery-generation \([A-Za-z0-9._-][A-Za-z0-9._-]*\)$/\1/p' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/second.err
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ bash -c $'\n    . "$1"\n    shift\n    fm_run_timed 1 "$@"\n  ' _ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-timeout-lib.sh /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 56380.1793092951.8quRhI
++ rc=124
++ '[' 124 -eq 124 ']'
++ kill 62768
++ wait 62768
++ true
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-drain.sh
+++ printf '\tsignal\t'
++ grep $'\tsignal\t' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/replay.out
++ ack_drain_err /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/replay.err
++ local state=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state err=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/replay.err sequence generation
+++ sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation [A-Za-z0-9._-][A-Za-z0-9._-]*$/\1/p' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/replay.err
++ sequence=1
+++ sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through [0-9][0-9]* --recovery-generation \([A-Za-z0-9._-][A-Za-z0-9._-]*\)$/\1/p' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/replay.err
++ generation=56380.1793092951.8quRhI
++ '[' -n 1 ']'
++ '[' -n 56380.1793092951.8quRhI ']'
++ FM_STATE_OVERRIDE=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state
++ /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 56380.1793092951.8quRhI
++ '[' '!' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state/.wake-queue ']'
++ pass 'presentation lock waits are bounded and retriable without weakening acknowledgement atomicity'
++ printf 'ok - %s\n' 'presentation lock waits are bounded and retriable without weakening acknowledgement atomicity'
++ '[' -s /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/copied-link-locks.log ']'
++ pass 'test_live_presentation_holder_is_deadlined_without_weakening_ack also holds with copied-link directory locks'
++ printf 'ok - %s\n' 'test_live_presentation_holder_is_deadlined_without_weakening_ack also holds with copied-link directory locks'
++ fm_test_cleanup
++ local d
++ fm_test_reap_watchers
++ local state lock_home $'seen=\n'
++ '[' -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-watcher.55241.OWvTBi ']'
++ IFS=
++ read -r state
++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state ']'
++ case "$seen" in
++ seen+=$'/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state\n'
++ '[' -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/bounded-lock-handoff-copied-link/state/.watch.lock/pid ']'
++ continue
++ IFS=
++ read -r state
++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state ']'
++ case "$seen" in
++ seen+=$'/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state\n'
++ '[' -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/presentation-lock-deadline-copied-link/state/.watch.lock/pid ']'
++ continue
++ IFS=
++ read -r state
++ rm -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-watcher.55241.OWvTBi
++ fm_test_reap_procevent_homes
++ local home claim_root $'seen=\n'
++ '[' -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-procevent.55241.ZC4LWh ']'
++ IFS=$'\t'
++ read -r home claim_root
++ rm -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-procevent.55241.ZC4LWh
++ for d in "${FM_TEST_CLEANUP_DIRS[@]:-}"
++ '[' -n '' ']'
++ '[' -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-cleanup.55241.v7mbsO ']'
++ IFS=
++ read -r d
++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI ']'
++ fm_test_reap_root_processes /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI
++ local root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI chain pid pids signal i
++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI ']'
++ '[' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI '!=' / ']'
++ chain=' '
++ pid=55241
++ '[' -n 55241 ']'
++ '[' 55241 -gt 1 ']'
++ chain=' 55241 '
+++ ps -o ppid= -p 55241
+++ tr -d '[:space:]'
++ pid=55232
++ '[' -n 55232 ']'
++ '[' 55232 -gt 1 ']'
++ chain=' 55241 55232 '
+++ ps -o ppid= -p 55232
+++ tr -d '[:space:]'
++ pid=36674
++ '[' -n 36674 ']'
++ '[' 36674 -gt 1 ']'
++ chain=' 55241 55232 36674 '
+++ ps -o ppid= -p 36674
+++ tr -d '[:space:]'
++ pid=91697
++ '[' -n 91697 ']'
++ '[' 91697 -gt 1 ']'
++ chain=' 55241 55232 36674 91697 '
+++ ps -o ppid= -p 91697
+++ tr -d '[:space:]'
++ pid=17336
++ '[' -n 17336 ']'
++ '[' 17336 -gt 1 ']'
++ chain=' 55241 55232 36674 91697 17336 '
+++ ps -o ppid= -p 17336
+++ tr -d '[:space:]'
++ pid=1
++ '[' -n 1 ']'
++ '[' 1 -gt 1 ']'
++ for signal in TERM KILL
++ i=0
++ '[' 0 -lt 20 ']'
+++ ps -ww -eo pid=,args=
+++ FM_TEST_REAP_ROOT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI/
+++ awk -v 'chain= 55241 55232 36674 91697 17336 ' 'index($0, ENVIRON["FM_TEST_REAP_ROOT"]) && index(chain, " " $1 " ") == 0 { print $1 }'
++ pids=
++ '[' -n '' ']'
++ return 0
++ fm_test_remove_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI
++ '[' -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI ']'
++ '[' '!' -L /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI ']'
++ find /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI -type d -exec chmod u+rwx '{}' +
++ rm -rf /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tangle-root.pwGTxI
++ IFS=
++ read -r d
++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG ']'
++ fm_test_reap_root_processes /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG
++ local root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG chain pid pids signal i
++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG ']'
++ '[' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG '!=' / ']'
++ chain=' '
++ pid=55241
++ '[' -n 55241 ']'
++ '[' 55241 -gt 1 ']'
++ chain=' 55241 '
+++ ps -o ppid= -p 55241
+++ tr -d '[:space:]'
++ pid=55232
++ '[' -n 55232 ']'
++ '[' 55232 -gt 1 ']'
++ chain=' 55241 55232 '
+++ ps -o ppid= -p 55232
+++ tr -d '[:space:]'
++ pid=36674
++ '[' -n 36674 ']'
++ '[' 36674 -gt 1 ']'
++ chain=' 55241 55232 36674 '
+++ ps -o ppid= -p 36674
+++ tr -d '[:space:]'
++ pid=91697
++ '[' -n 91697 ']'
++ '[' 91697 -gt 1 ']'
++ chain=' 55241 55232 36674 91697 '
+++ ps -o ppid= -p 91697
+++ tr -d '[:space:]'
++ pid=17336
++ '[' -n 17336 ']'
++ '[' 17336 -gt 1 ']'
++ chain=' 55241 55232 36674 91697 17336 '
+++ ps -o ppid= -p 17336
+++ tr -d '[:space:]'
++ pid=1
++ '[' -n 1 ']'
++ '[' 1 -gt 1 ']'
++ for signal in TERM KILL
++ i=0
++ '[' 0 -lt 20 ']'
+++ ps -ww -eo pid=,args=
+++ FM_TEST_REAP_ROOT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG/
+++ awk -v 'chain= 55241 55232 36674 91697 17336 ' 'index($0, ENVIRON["FM_TEST_REAP_ROOT"]) && index(chain, " " $1 " ") == 0 { print $1 }'
++ pids=
++ '[' -n '' ']'
++ return 0
++ fm_test_remove_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG
++ '[' -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG ']'
++ '[' '!' -L /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG ']'
++ find /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG -type d -exec chmod u+rwx '{}' +
++ rm -rf /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wedge-rec.bevFHG
++ IFS=
++ read -r d
++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX ']'
++ fm_test_reap_root_processes /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX
++ local root=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX chain pid pids signal i
++ '[' -n /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX ']'
++ '[' /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX '!=' / ']'
++ chain=' '
++ pid=55241
++ '[' -n 55241 ']'
++ '[' 55241 -gt 1 ']'
++ chain=' 55241 '
+++ ps -o ppid= -p 55241
+++ tr -d '[:space:]'
++ pid=55232
++ '[' -n 55232 ']'
++ '[' 55232 -gt 1 ']'
++ chain=' 55241 55232 '
+++ ps -o ppid= -p 55232
+++ tr -d '[:space:]'
++ pid=36674
++ '[' -n 36674 ']'
++ '[' 36674 -gt 1 ']'
++ chain=' 55241 55232 36674 '
+++ ps -o ppid= -p 36674
+++ tr -d '[:space:]'
++ pid=91697
++ '[' -n 91697 ']'
++ '[' 91697 -gt 1 ']'
++ chain=' 55241 55232 36674 91697 '
+++ ps -o ppid= -p 91697
+++ tr -d '[:space:]'
++ pid=17336
++ '[' -n 17336 ']'
++ '[' 17336 -gt 1 ']'
++ chain=' 55241 55232 36674 91697 17336 '
+++ ps -o ppid= -p 17336
+++ tr -d '[:space:]'
++ pid=1
++ '[' -n 1 ']'
++ '[' 1 -gt 1 ']'
++ for signal in TERM KILL
++ i=0
++ '[' 0 -lt 20 ']'
+++ ps -ww -eo pid=,args=
+++ FM_TEST_REAP_ROOT=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX/
+++ awk -v 'chain= 55241 55232 36674 91697 17336 ' 'index($0, ENVIRON["FM_TEST_REAP_ROOT"]) && index(chain, " " $1 " ") == 0 { print $1 }'
++ pids=
++ '[' -n '' ']'
++ return 0
++ fm_test_remove_tree /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX
++ local dir=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX
++ '[' -d /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX ']'
++ '[' '!' -L /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX ']'
++ find /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX -type d -exec chmod u+rwx '{}' +
++ rm -rf /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/fm-wake-tests.rkuqBX
++ IFS=
++ read -r d
++ rm -f /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5YA3Q4JJZ7BK51CECPJB6QZ/.test-tmp/.fm-test-cleanup.55241.v7mbsO
