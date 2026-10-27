@@ -989,7 +989,8 @@ barrier_match() {
       perl:retire) case " $* " in *" $l/pid "*) ;; *) continue ;; esac ;;
       rm:discard) [ "$#" -eq 2 ] && [ "$1" = -rf ] || continue
         case "$2" in "$l"/.owner.*) ;; *) continue ;; esac ;;
-      rmdir:husk) [ "$#" -eq 1 ] && [ "$1" = "$l" ] || continue ;;
+      rm:cleanup) [ "${2:-}" = "$l/pid" ] || continue ;;
+      rmdir:husk|rmdir:cleanup) [ "$#" -eq 1 ] && [ "$1" = "$l" ] || continue ;;
       *) continue ;;
     esac
     mkdir "$FM_TEST_BARRIER_DIR/fired.$i" 2>/dev/null || continue
@@ -1238,6 +1239,56 @@ test_dirlock_d4_crashed_release_is_finished() {
     dirlock_assert_clean "$dir" "D4: $spec residue"
   done
   pass "D4: a release killed after commit, mid-delete or before the final rmdir is finished by the next acquirer"
+}
+
+test_dirlock_d4c_orphan_husk_cleanup_preserves_successor() {
+  local mode dir lock holder acquirer successor orphan generation before after pid private_pid rc
+  for mode in acquire reap; do
+    dir=$(dirlock_case "dirlock-d4c-$mode")
+    lock="$dir/state/.d.lock"
+    dirlock_open "$dir" a b c
+    dirlock_spawn "$dir" a "husk:pre:kill:$lock" '
+      fm_lock_try_acquire "$1" || exit 10
+      fm_lock_release "$1"' "$lock" &
+    holder=$!
+    dirlock_expect "a husk:pre:$lock" "D4c: releaser did not leave a husk"
+    wait "$holder" 2>/dev/null
+    [ -d "$lock" ] && [ "$(dirlock_tree "$dir")" = ./.d.lock ] \
+      || fail "D4c: crashed releaser did not leave an empty husk"
+    touch -t 200001010000 "$lock"
+    dirlock_spawn "$dir" b "cleanup:pre:wait:$lock" '
+      case "$2" in
+        acquire) fm_lock_try_acquire "$1" ;;
+        reap) fm_lock_reap_dead_link "$1" ;;
+      esac' "$lock" "$mode" &
+    acquirer=$!
+    dirlock_expect "b cleanup:pre:$lock" "D4c: $mode did not reach husk cleanup"
+    orphan=$(dirlock_event_field pid)
+    [ "$(dirlock_event_field caller)" = "$acquirer" ] \
+      || fail "D4c: cleanup child does not belong to the acquirer"
+    kill -KILL "$acquirer"
+    wait "$acquirer" 2>/dev/null
+    kill -0 "$orphan" 2>/dev/null || fail "D4c: cleanup child did not survive its parent"
+    dirlock_spawn "$dir" c "" "$DIRLOCK_HOLD" "$lock" "$dir/c.id" &
+    successor=$!
+    dirlock_expect "c held pid=$successor" "D4c: successor did not recover the abandoned husk"
+    generation=$(dirlock_generation "$lock")
+    before=$(dirlock_tree "$dir")
+    printf 'go\n' >&8
+    dirlock_expect "b done rc=" "D4c: orphan cleanup did not resume"
+    rc=${DIRLOCK_EVENT##*=}
+    pid=$(cat "$lock/pid" 2>/dev/null || true)
+    private_pid=$(cat "$generation/pid" 2>/dev/null || true)
+    after=$(dirlock_tree "$dir")
+    printf 'go\n' >&9
+    wait "$successor" || fail "D4c: successor could not release"
+    dirlock_close
+    [ "$pid" = "$successor" ] && [ "$private_pid" = "$successor" ] && [ "$after" = "$before" ] \
+      || fail "D4c: orphaned $mode cleanup changed the live successor's pid or generation"
+    [ "$rc" = 1 ] || fail "D4c: orphan cleanup did not refuse the complete successor record"
+    dirlock_assert_clean "$dir" "D4c: successor release residue"
+  done
+  pass "D4c: orphaned husk cleanup cannot unlink a live successor's pid or generation"
 }
 
 # D1b: a claim that fails after publication leaves its generation to
@@ -1753,32 +1804,6 @@ test_dirlock_d12_staging_litter_is_never_consulted() {
   kill "$sleeper"
   wait "$sleeper" 2>/dev/null
   pass "D12: staging directories beside a directory lock are never read or removed"
-}
-
-test_dirlock_d16_pre_v2_record_recovers_as_raw() {
-  local dir lock old lock_abs out
-  dir=$(dirlock_case dirlock-d16)
-  lock="$dir/state/.d.lock"
-  lock_abs="$(cd "$dir/state" && pwd -P)/.d.lock"
-  old="$lock_abs.owner.oldv1x"
-  mkdir -p "$lock" "$old"
-  dead_pid > "$old/pid"
-  cp "$old/pid" "$lock/pid"
-  printf '%s\n' "$old" > "$lock/.owner"
-  # shellcheck disable=SC2016
-  out=$(PATH="$dir/fakebin:$PATH" FM_STATE_OVERRIDE="$dir/state" bash -c '
-    . "$0"
-    fm_lock_try_acquire "$1" || { echo refused; exit 0; }
-    fm_current_pid me
-    owner=$(fm_lock_link_owner "$1") || { echo no-owner; exit 0; }
-    [ "$(cat "$1/pid")" = "$me" ] && [ "$owner" = "$FM_LOCK_OWNER_DIR" ] && [ ! -e "$1/.owner" ] \
-      && case "$owner" in "$1"/.owner.*|*/.d.lock/.owner.*) true ;; *) false ;; esac || { echo not-v2; exit 0; }
-    fm_lock_release "$1"
-    echo republished' "$LIB" "$lock")
-  [ "$out" = republished ] || fail "D16: a dead pre-v2 record was not recovered into the v2 layout: $out"
-  [ "$(dirlock_tree "$dir")" = "./${old##*/}
-./${old##*/}/pid" ] || fail "D16: expected only the inert pre-v2 private directory: $(dirlock_tree "$dir")"
-  pass "D16: a dead pre-v2 directory record is recovered as raw, leaving its private directory inert"
 }
 
 test_dirlock_d17_subshell_publisher_identity() {
@@ -2746,6 +2771,7 @@ test_dirlock_identity_cases_per_shell
 test_dirlock_d1b_failed_claim_leaves_generation_to_retirement
 test_dirlock_d4_crashed_release_is_finished
 test_dirlock_d4b_handoff_release_recovers_caller
+test_dirlock_d4c_orphan_husk_cleanup_preserves_successor
 test_dirlock_d5_orphan_retirement_cannot_touch_successor
 test_dirlock_d5b_stealer_retires_only_captured_generation
 test_dirlock_d5c_acquirer_retires_captured_generation
@@ -2758,7 +2784,6 @@ test_dirlock_d10_committed_retirement_is_finished
 test_dirlock_d11_ambiguous_generation_is_refused
 test_dirlock_d11b_dead_ambiguous_generation_is_refused
 test_dirlock_d12_staging_litter_is_never_consulted
-test_dirlock_d16_pre_v2_record_recovers_as_raw
 test_lock_empty_pid_uses_minimum_grace
 test_lock_late_claim_loses_after_recreate
 test_lock_paused_mid_acquire_claim_fails_during_steal

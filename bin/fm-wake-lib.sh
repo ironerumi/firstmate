@@ -570,9 +570,6 @@ fm_lock_link_owner() {
       owner=$generation
     done
     if [ -z "$owner" ]; then
-      if [ -e "$lockdir/.owner" ] || [ -L "$lockdir/.owner" ]; then
-        [ -f "$lockdir/.owner" ] && [ ! -L "$lockdir/.owner" ] || return 1
-      fi
       printf '%s\n' "$lockdir"
       return 0
     fi
@@ -726,8 +723,9 @@ fm_lock_remove_path() {
     _fm_lock_retire_generation "$lockdir" "$ownerdir"
     return
   else
-    fm_lock_clean_known_files "$lockdir"
-    rm -f "$lockdir/.owner" 2>/dev/null || return 1
+    if [ -e "$lockdir/pid" ]; then
+      fm_lock_clean_known_files "$lockdir"
+    fi
     rmdir "$lockdir" 2>/dev/null || return 1
   fi
   if [ -n "$ownerdir" ] && [ "$ownerdir" != "$lockdir" ]; then
