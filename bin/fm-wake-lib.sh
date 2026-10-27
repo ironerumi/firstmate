@@ -613,7 +613,7 @@ fm_lock_discard_owner() {
 _fm_lock_publish_directory() {
   local lockdir=$1 ownerdir=$2 generation
   # Stage the complete record, then publish it with one rename that fails
-  # onto any existing lock. A late rename from a dead publisher can only
+  # onto a non-empty held lock. A late rename from a dead publisher can only
   # create a record holding that dead pid, which ordinary recovery clears.
   generation="$ownerdir/.owner.${ownerdir##*.owner.}"
   mkdir "$generation" 2>/dev/null && cp "$ownerdir/pid" "$generation/pid" 2>/dev/null || return 1
@@ -709,6 +709,10 @@ fm_lock_try_create() {
   return 1
 }
 
+# A captured pid-less, generation-less husk must keep the explicit husk mode:
+# reclassifying from the public path could select a successor's raw cleanup.
+# Only rmdir is safe even if a cleanup child outlives its caller (regression:
+# test_dirlock_d4c_orphan_husk_cleanup_preserves_successor in tests/fm-watcher-lock.test.sh).
 fm_lock_remove_path() {
   local lockdir=$1 ownerdir=${2:-} explicit=${2+x}
   if [ "${3:-}" = husk ]; then
