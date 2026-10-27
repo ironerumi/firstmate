@@ -1,0 +1,44 @@
+
+=== real fm-lock CLI: native symlink boundary ===
+lock acquired: harness pid 77392
+lock: held by live harness pid 77392
+lock acquired: harness pid 77392
+Persisted session anchor: 77392
+Concurrent claim: holder pid=49200 owner=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-live/native/state/.lock.acquire.owner.pthstF
+Live holder preserved; fm-lock is waiting, not entering its claim section
+After rightful release: lock acquired: harness pid 77392
+Abandoned claim pid=50375 owner=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-live/native/state/.lock.acquire.owner.bxlpMW
+Recovering the exited claim holder through fm-lock CLI:
+lock acquired: harness pid 77392
+lock: held by live harness pid 77392
+Claim lock and owner generations fully released
+
+=== real fm-lock CLI: copied symlink boundary ===
+lock acquired: harness pid 77392
+lock: held by live harness pid 77392
+lock acquired: harness pid 77392
+Persisted session anchor: 77392
+Concurrent claim: holder pid=51792 owner=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-live/copied/state/.lock.acquire/.owner.ybIFFl
+Live holder preserved; fm-lock is waiting, not entering its claim section
+After rightful release: lock acquired: harness pid 77392
+Abandoned claim pid=52897 owner=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-live/copied/state/.lock.acquire/.owner.dtwcb2
+Recovering the exited claim holder through fm-lock CLI:
+lock acquired: harness pid 77392
+lock: held by live harness pid 77392
+Observed symlink-capability boundary: copied /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-live/copied/state/.lock.acquire.owner.aykkZb/pid -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-live/copied/state/.lock.acquire.owner.aykkZb/.symlink-probe
+Claim lock and owner generations fully released
+
+=== real fm-lock CLI: denied symlink boundary ===
+lock acquired: harness pid 77392
+lock: held by live harness pid 77392
+lock acquired: harness pid 77392
+Persisted session anchor: 77392
+Concurrent claim: holder pid=53896 owner=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-live/denied/state/.lock.acquire/.owner.gsdKqm
+Live holder preserved; fm-lock is waiting, not entering its claim section
+After rightful release: lock acquired: harness pid 77392
+Abandoned claim pid=54508 owner=/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-live/denied/state/.lock.acquire/.owner.cTAbOi
+Recovering the exited claim holder through fm-lock CLI:
+lock acquired: harness pid 77392
+lock: held by live harness pid 77392
+Observed symlink-capability boundary: denied /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-live/denied/state/.lock.acquire.owner.VjMtbF/pid -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-live/denied/state/.lock.acquire.owner.VjMtbF/.symlink-probe
+Claim lock and owner generations fully released

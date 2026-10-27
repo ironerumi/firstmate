@@ -1,0 +1,68 @@
+/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-lab
+$ bin/fm-lock.sh 
+lock acquired: harness pid 65345
+exit: 0
+$ bin/fm-lock.sh status
+lock: held by live harness pid 65345
+exit: 0
+$ bin/fm-lock.sh 
+lock acquired: harness pid 65345
+exit: 0
+Observed: public session acquire waits without publishing while a live directory claim lock is held; pid=56627
+lock acquired: harness pid 65345
+$ bin/fm-lock.sh 
+lock acquired: harness pid 65345
+exit: 0
+Observed: stale session and dead directory claim lock reclaimed; real harness pid=65345
+$ bin/fm-lock.sh 
+lock acquired: harness pid 65345
+exit: 0
+Observed: ordinary raw dead-pid claim directory reclaimed through public session acquire.
+--- actual publication records ---
+ln -s copied capability probe
+published directory /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-lab/state/.lock.acquire pid=55508
+.
+..
+.owner.vJ2CQ2
+pid
+ln -s copied capability probe
+published directory /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-lab/state/.lock.acquire pid=56135
+.
+..
+.owner.o8JXgt
+pid
+ln -s copied capability probe
+published directory /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-lab/state/.lock.acquire pid=56627
+.
+..
+.owner.1jfsm3
+pid
+ln -s copied capability probe
+published directory /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-lab/state/.lock.acquire pid=57137
+.
+..
+.owner.m8x08T
+pid
+ln -s copied capability probe
+published directory /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-lab/state/.lock.acquire.steal pid=59366
+.
+..
+.owner.ol4ErI
+pid
+published directory /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-lab/state/.lock.acquire pid=59366
+.
+..
+.owner.FXGh6l
+pid
+ln -s copied capability probe
+published directory /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-lab/state/.lock.acquire.steal pid=60725
+.
+..
+.owner.Ryv5zG
+pid
+published directory /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-lab/state/.lock.acquire pid=60725
+.
+..
+.owner.7W8lMT
+pid
+

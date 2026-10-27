@@ -1,0 +1,12 @@
+ok - lifecycle wrappers use Bash without shell interpolation and preserve failure mapping
+ok - POSIX lifecycle Bash resolution ignores an exported BASH
+ok - N1: the host admits an inherited directory lifecycle lock and retires it without residue
+ok - N2/N3: a host killed before, after or during its retirement leaves a lock the shell recovers
+ok - N4: a paused host cannot retire a successor's directory lifecycle lock
+ok - N5: a junk entry leaves only a husk after the host deletes its generation
+ok - N6: an ambiguous directory record is rejected without retirement
+ok - an absent home-local registry is inert, state-free, and ignores project/environment discovery
+error[binding-failed]: error[internal]: EACCES: permission denied, rename '/Users/gu_yifu/.no-mistakes/evidence/01M5XRNJJKHASFVM5CC394Y6HF/runtime/fm-extension-binding.6mQllE/homes/good/data/extensions/packages/org.example.good/1.2.3/.install-59801-774c1aa7e98a8e46' -> '/Users/gu_yifu/.no-mistakes/evidence/01M5XRNJJKHASFVM5CC394Y6HF/runtime/fm-extension-binding.6mQllE/homes/good/data/extensions/packages/org.example.good/1.2.3/d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9'
+not ok - bind does not finish before the live handshake (missing: 'verified: process-event-adapter/1')
+--- output ---
+

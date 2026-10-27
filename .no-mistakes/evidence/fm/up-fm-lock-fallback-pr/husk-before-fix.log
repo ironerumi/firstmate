@@ -1,0 +1,2 @@
+ok - disposable watcher refuses inherited state outside its marked lab
+not ok - D4c: orphaned acquire-boundary cleanup changed the live successor's pid or generation

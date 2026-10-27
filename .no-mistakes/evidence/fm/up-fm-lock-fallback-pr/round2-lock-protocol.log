@@ -1,0 +1,181 @@
+ok - disposable watcher refuses inherited state outside its marked lab
+
+SCENARIO test_lock_single_winner_under_concurrency
+ok - concurrent fm_lock_try_acquire yields exactly one winner
+
+SCENARIO test_lock_steals_dead_pid_lock
+ok - dead-pid stale lock is reclaimed by a single acquirer
+
+SCENARIO test_lock_stale_steal_single_winner_under_concurrency
+ok - concurrent stale-lock steal yields exactly one winner
+
+SCENARIO test_lock_reclaims_dead_steal_owner_without_nested_markers
+ok - dead steal owner is reclaimed once without a nested steal marker
+
+SCENARIO test_lock_recovers_dead_nested_steal_chain
+ok - dead nested steal chain from an interrupted reclaim is recovered
+
+SCENARIO test_lock_steal_reap_cannot_remove_successor
+ok - a competing reaper cannot remove the successor's steal mutex
+
+SCENARIO test_lock_reclaims_self_held_steal_mutex
+ok - a steal mutex abandoned by this process does not block its own reclaim
+
+SCENARIO test_lock_resumes_own_interrupted_steal_reap
+ok - a steal reap interrupted in this process is resumed from its own tombstone
+
+SCENARIO test_lock_live_steal_mutex_is_not_reclaimed
+ok - live steal mutex is not reclaimed
+
+SCENARIO test_lock_does_not_steal_live_lock
+ok - live-held lock is not stolen
+
+SCENARIO test_direct_directory_reaper_cannot_remove_live_successor
+ok - raw-directory reaper leaves main recovery and its live successor untouched
+
+SCENARIO test_direct_directory_lock_release_and_reap
+ok - direct directory locks release and recover through the shared paths
+
+SCENARIO test_link_mode_layout_is_unchanged
+ok - real-symlink locks keep the link layout through acquire, role, re-entry, recovery, handoff and release
+
+SCENARIO test_lock_without_real_symlinks
+ok - copied-link fallback matches native acquire, re-entry, refusal, dead-owner recovery and release
+
+SCENARIO test_directory_lock_single_winner_under_load
+ok - directory lock has exactly one winner in 10 event-synchronized rounds of 8 contenders
+
+SCENARIO test_dirlock_identity_cases_per_shell
+protocol event: a publish:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d1-bash-5.3/state/.d.lock pid=46543 caller=46451
+protocol event: b held pid=46668
+protocol event: a done rc=1
+ok - D1-bash-5.3: a staged directory record stays private and its creator discards it on refusal
+protocol event: a publish:post:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d2-bash-5.3/state/.d.lock pid=47368 caller=47027
+ok - D2-bash-5.3: a just-published directory record is complete and owned by its live publisher
+protocol event: a held pid=47952
+protocol event: a held pid=49306
+ok - D3-bash-5.3: a dead directory holder is recovered at once regardless of age
+ok - D7-bash-5.3: an empty handoff pid is held exactly while the generation's pid lives
+protocol event: a held pid=50998
+ok - D17-bash-5.3: a background-subshell publisher records its own frame identity
+protocol event: a publish:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d1-bash-3.2/state/.d.lock pid=51752 caller=51589
+protocol event: b held pid=51755
+protocol event: a done rc=1
+ok - D1-bash-3.2: a staged directory record stays private and its creator discards it on refusal
+protocol event: a publish:post:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d2-bash-3.2/state/.d.lock pid=52016 caller=51901
+ok - D2-bash-3.2: a just-published directory record is complete and owned by its live publisher
+protocol event: a held pid=52356
+protocol event: a held pid=52652
+ok - D3-bash-3.2: a dead directory holder is recovered at once regardless of age
+ok - D7-bash-3.2: an empty handoff pid is held exactly while the generation's pid lives
+protocol event: a held pid=53554
+ok - D17-bash-3.2: a background-subshell publisher records its own frame identity
+
+SCENARIO test_dirlock_d1b_failed_claim_leaves_generation_to_retirement
+protocol event: a discard:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d1b/state/.d.lock pid=55421 caller=54049
+protocol event: a finished out=refused
+ok - D1b: a claim that fails after publication leaves its generation to retirement
+
+SCENARIO test_dirlock_d4_crashed_release_is_finished
+protocol event: a retire:post:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4-retire/state/.d.lock pid=58679 caller=57849
+protocol event: a discard:partial:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4-discard/state/.d.lock pid=59852 caller=59201
+protocol event: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4-husk/state/.d.lock pid=60889 caller=60404
+ok - D4: a release killed after commit, mid-delete or before the final rmdir is finished by the next acquirer
+
+SCENARIO test_dirlock_d4b_handoff_release_recovers_caller
+protocol event: c ready
+protocol event: c retire:post:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4b/state/.d.lock pid=61980 caller=61463
+ok - D4b: a handed-off release killed after commit is recovered as the caller
+
+SCENARIO test_dirlock_d4c_orphan_husk_cleanup_preserves_successor
+protocol event: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4c-acquire/state/.d.lock pid=63092 caller=62481
+protocol event: b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4c-acquire/state/.d.lock pid=63592 caller=63237
+protocol event: c held pid=63634
+protocol event: b done rc=1
+protocol event: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4c-reap/state/.d.lock.steal pid=65709 caller=64968
+protocol event: b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4c-reap/state/.d.lock.steal pid=66023 caller=65908
+protocol event: c held pid=66063
+protocol event: b done rc=1
+protocol event: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4c-acquire-boundary/state/.d.lock pid=68443 caller=67501
+protocol event: b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4c-acquire-boundary/state/.d.lock pid=69080 caller=68613
+protocol event: c held pid=69206
+protocol event: b done rc=1
+protocol event: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4c-reap-boundary/state/.d.lock.steal pid=71019 caller=70246
+protocol event: b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d4c-reap-boundary/state/.d.lock.steal pid=71289 caller=71199
+protocol event: c held pid=71346
+protocol event: b done rc=1
+ok - D4c: orphaned husk cleanup cannot unlink a live successor's pid or generation
+
+SCENARIO test_dirlock_d5_orphan_retirement_cannot_touch_successor
+protocol event: a retire:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d5/state/.d.lock pid=72949 caller=72447
+protocol event: b held pid=72971
+protocol event: a done rc=0
+ok - D5: an orphaned retirement child resumed after recovery cannot touch the successor
+
+SCENARIO test_dirlock_d5b_stealer_retires_only_captured_generation
+protocol event: s retire:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d5b/state/.d.lock pid=74902 caller=74587
+ok - D5': a paused stealer's retirement is addressed only to the generation it validated
+
+SCENARIO test_dirlock_d5c_acquirer_retires_captured_generation
+protocol event: s remove:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d5c/state/.d.lock
+protocol event: s finished out=held=27846
+ok - D5c: stale acquisition retires only its captured generation
+
+SCENARIO test_dirlock_d6_late_publication_is_ordinary_recovery
+protocol event: a publish:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d6-held/state/.d.lock pid=77150 caller=76838
+protocol event: b held pid=77297
+protocol event: a done rc=1
+protocol event: a publish:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d6-released/state/.d.lock pid=78532 caller=78107
+protocol event: b held pid=78673
+protocol event: a done rc=0
+ok - D6: a late publication by a dead publisher fails onto a holder or becomes an ordinary dead-held record
+
+SCENARIO test_dirlock_d7b_bounded_helper_killed_by_deadline
+protocol event: h held pid=80059
+protocol event: c helper-start
+protocol event: c publish:post:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d7b/state/.d.lock pid=80893 caller=80816
+ok - D7': a bounded helper killed by its deadline after acquiring leaves the caller holding
+
+SCENARIO test_dirlock_d8_dead_steal_mutex_observers_compose
+protocol event: a retire:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d8/state/.d.lock.steal pid=81894 caller=81862
+protocol event: b retire:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d8/state/.d.lock.steal pid=81928 caller=81896
+protocol event: a done rc=0
+protocol event: a publish:post:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d8/state/.d.lock pid=82053 caller=81862
+protocol event: b done rc=0
+protocol event: b result held=81862
+ok - D8: two observers of a dead directory steal mutex compose and cannot disturb the winner
+
+SCENARIO test_dirlock_d8b_reaper_retires_captured_generation
+protocol event: r remove:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d8b/state/.d.lock
+protocol event: r finished out=refused
+ok - D8b: a paused direct reaper retires only the generation it rechecked
+
+SCENARIO test_dirlock_d9_uncommitted_retirement_keeps_record
+protocol event: a retire:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d9/state/.d.lock pid=82448 caller=82394
+protocol event: a retire:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d9/state/.d.lock pid=82458 caller=82394
+protocol event: a held pid=82394
+ok - D9: an uncommitted retirement leaves the complete held record and deletes nothing
+
+SCENARIO test_dirlock_d10_committed_retirement_is_finished
+protocol event: a retire:skip-role:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.bUHjsN/dirlock-d10/state/.d.lock pid=82637 caller=82534
+ok - D10: a committed retirement blocked by a remaining known file is finished by the next acquirer
+
+SCENARIO test_dirlock_d11_ambiguous_generation_is_refused
+protocol event: a held pid=82955
+ok - D11: a record with more than one generation is invalid and never released or taken
+
+SCENARIO test_dirlock_d11b_dead_ambiguous_generation_is_refused
+ok - D11b: an invalid dead record fails closed before destructive cleanup
+ok - D11c: an invalid dead watcher record is refused before downtime evidence is published
+
+SCENARIO test_dirlock_d12_staging_litter_is_never_consulted
+ok - D12: staging directories beside a directory lock are never read or removed
+
+SCENARIO test_lock_empty_pid_uses_minimum_grace
+ok - empty mid-acquire lock keeps a minimum grace
+
+SCENARIO test_lock_late_claim_loses_after_recreate
+ok - late original claimant cannot claim a recreated lock
+
+SCENARIO test_lock_paused_mid_acquire_claim_fails_during_steal
+ok - paused mid-acquire claimant backs off to active stealer

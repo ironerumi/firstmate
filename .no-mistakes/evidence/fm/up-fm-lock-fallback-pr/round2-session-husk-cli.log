@@ -1,0 +1,33 @@
+ok - disposable watcher refuses inherited state outside its marked lab
+Public fm-lock releaser killed after retiring its generation: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.lBLmXw/public-session-husk-child/state/.lock.acquire pid=7853 caller=7043
+Recovery paused (child): b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.lBLmXw/public-session-husk-child/state/.lock.acquire pid=8808 caller=7928
+Successor CLI holds pid=8831 generation=.owner.Va1o68
+Resumed orphan refused (rc=1); live successor public pid, generation pid and entire state tree unchanged
+a.log: 
+c.log: lock acquired: harness pid 77392
+Public session-lock claim fully released (child)
+
+Public fm-lock releaser killed after retiring its generation: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.lBLmXw/public-session-husk-boundary/state/.lock.acquire pid=11526 caller=10797
+Recovery paused (boundary): b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.lBLmXw/public-session-husk-boundary/state/.lock.acquire pid=12295 caller=11586
+Successor CLI holds pid=12328 generation=.owner.t7sLIx
+Resumed orphan refused (rc=1); live successor public pid, generation pid and entire state tree unchanged
+a.log: 
+c.log: lock acquired: harness pid 77392
+Public session-lock claim fully released (boundary)
+
+Public fm-lock releaser killed after retiring its generation: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.lBLmXw/public-session-husk-reap-child/state/.lock.acquire.steal pid=14530 caller=13894
+Recovery paused (reap-child): b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.lBLmXw/public-session-husk-reap-child/state/.lock.acquire.steal pid=15098 caller=14634
+Successor CLI holds pid=15130 generation=.owner.DvKnMm
+Resumed orphan refused (rc=1); live successor public pid, generation pid and entire state tree unchanged
+a.log: 
+c.log: lock acquired: harness pid 77392
+Public session-lock claim fully released (reap-child)
+
+Public fm-lock releaser killed after retiring its generation: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.lBLmXw/public-session-husk-reap-boundary/state/.lock.acquire.steal pid=17685 caller=16618
+Recovery paused (reap-boundary): b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.lBLmXw/public-session-husk-reap-boundary/state/.lock.acquire.steal pid=18352 caller=17769
+Successor CLI holds pid=18418 generation=.owner.QdHqF1
+Resumed orphan refused (rc=1); live successor public pid, generation pid and entire state tree unchanged
+a.log: 
+c.log: lock acquired: harness pid 77392
+Public session-lock claim fully released (reap-boundary)
+

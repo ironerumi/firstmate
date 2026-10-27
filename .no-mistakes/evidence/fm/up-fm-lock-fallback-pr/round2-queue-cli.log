@@ -1,0 +1,100 @@
+ok - an abandoned same-process lock hold is reclaimed; a parent's live hold is not
+ok - a lock wait returns within its bound once its directory is removed
+ok - without BASHPID a subshell cannot release or reclaim its parent lock and owns its own hold
+ok - bounded acquire hands ownership to the waiting caller after contention
+ok - bounded acquire hands ownership to the waiting caller after contention
+ok - test_bounded_lock_handoff_after_contention also holds with copied-link directory locks
+ok - presentation lock waits are bounded and retriable without weakening acknowledgement atomicity
+ok - presentation lock waits are bounded and retriable without weakening acknowledgement atomicity
+ok - test_live_presentation_holder_is_deadlined_without_weakening_ack also holds with copied-link directory locks
+
+--- product output presentation-lock-deadline/ack-held.out ---
+
+
+--- product output presentation-lock-deadline/first.out ---
+1793076486	1	signal	task.status	signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.URTphM/presentation-lock-deadline/state/task.status
+STATUS PRESENTATION SKIPPED: lock remains held by live pid 90478 after 1s; retry on the next drain.
+
+
+--- product output presentation-lock-deadline/queue.out ---
+WAKE DRAIN SKIPPED: queue lock remains held by live pid 89781 after 1s; retry on the next drain.
+
+
+--- product output presentation-lock-deadline/replay.out ---
+1793076486	1	signal	task.status	signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.URTphM/presentation-lock-deadline/state/task.status
+OPEN DECISIONS (still open, folded from the durable status logs - not just the latest line):
+task [key=fixture] needs-decision: presentation remains retriable
+OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'
+
+
+--- product output presentation-lock-deadline/second.out ---
+1793076486	1	signal	task.status	signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.URTphM/presentation-lock-deadline/state/task.status
+wake annotation: latest wake-EVENT observed at drain, not current state: task.status: needs-decision [key=fixture]: presentation remains retriable
+OPEN DECISIONS (still open, folded from the durable status logs - not just the latest line):
+task [key=fixture] needs-decision: presentation remains retriable
+OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'
+
+
+--- product output presentation-lock-deadline-copied-link/ack-held.out ---
+
+
+--- product output presentation-lock-deadline-copied-link/first.out ---
+1793076511	1	signal	task.status	signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.URTphM/presentation-lock-deadline-copied-link/state/task.status
+STATUS PRESENTATION SKIPPED: lock remains held by live pid 99691 after 1s; retry on the next drain.
+
+
+--- product output presentation-lock-deadline-copied-link/queue.out ---
+WAKE DRAIN SKIPPED: queue lock remains held by live pid 98851 after 1s; retry on the next drain.
+
+
+--- product output presentation-lock-deadline-copied-link/replay.out ---
+1793076511	1	signal	task.status	signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.URTphM/presentation-lock-deadline-copied-link/state/task.status
+OPEN DECISIONS (still open, folded from the durable status logs - not just the latest line):
+task [key=fixture] needs-decision: presentation remains retriable
+OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'
+
+
+--- product output presentation-lock-deadline-copied-link/second.out ---
+1793076511	1	signal	task.status	signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.URTphM/presentation-lock-deadline-copied-link/state/task.status
+wake annotation: latest wake-EVENT observed at drain, not current state: task.status: needs-decision [key=fixture]: presentation remains retriable
+OPEN DECISIONS (still open, folded from the durable status logs - not just the latest line):
+task [key=fixture] needs-decision: presentation remains retriable
+OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'
+
+
+--- product output presentation-lock-deadline/ack-held.err ---
+
+
+--- product output presentation-lock-deadline/first.err ---
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 89427.1793076486.3hPCfr
+
+
+--- product output presentation-lock-deadline/queue.err ---
+
+
+--- product output presentation-lock-deadline/replay.err ---
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 89427.1793076486.3hPCfr
+
+
+--- product output presentation-lock-deadline/second.err ---
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 89427.1793076486.3hPCfr
+
+
+--- product output presentation-lock-deadline-copied-link/ack-held.err ---
+Terminated: 15             sleep 0.1
+
+
+--- product output presentation-lock-deadline-copied-link/first.err ---
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 98634.1793076511.riJHvN
+
+
+--- product output presentation-lock-deadline-copied-link/queue.err ---
+
+
+--- product output presentation-lock-deadline-copied-link/replay.err ---
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 98634.1793076511.riJHvN
+
+
+--- product output presentation-lock-deadline-copied-link/second.err ---
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 98634.1793076511.riJHvN
+

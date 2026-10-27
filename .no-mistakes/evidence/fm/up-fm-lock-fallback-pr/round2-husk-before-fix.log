@@ -1,0 +1,14 @@
+ok - disposable watcher refuses inherited state outside its marked lab
+protocol event: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.l9BlTb/dirlock-d4c-acquire/state/.d.lock pid=24953 caller=23313
+protocol event: b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.l9BlTb/dirlock-d4c-acquire/state/.d.lock pid=26402 caller=25535
+protocol event: c held pid=26466
+protocol event: b done rc=1
+protocol event: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.l9BlTb/dirlock-d4c-reap/state/.d.lock.steal pid=29987 caller=29368
+protocol event: b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.l9BlTb/dirlock-d4c-reap/state/.d.lock.steal pid=30158 caller=30111
+protocol event: c held pid=30187
+protocol event: b done rc=1
+protocol event: a husk:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.l9BlTb/dirlock-d4c-acquire-boundary/state/.d.lock pid=31421 caller=31081
+protocol event: b cleanup:pre:/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-watcher-lock-tests.l9BlTb/dirlock-d4c-acquire-boundary/state/.d.lock pid=31613 caller=31477
+protocol event: c held pid=31626
+protocol event: b done rc=1
+not ok - D4c: orphaned acquire-boundary cleanup changed the live successor's pid or generation

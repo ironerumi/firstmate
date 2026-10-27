@@ -1,0 +1,8 @@
+/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/husk-cli-lab
+Public session acquire: releaser killed after deleting its generation; persisted empty claim-lock husk.
+Acquirer A=99962: paused its real rmdir child=438 at aged-husk removal.
+Public acquirer B=533: recovered A's dead steal mutex and published a complete live generation .owner.1b5nul.
+Orphan resumed: rmdir: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/husk-cli-lab/state/.lock.acquire: Directory not empty
+Successor persisted state after orphan resumed: {".owner.1b5nul": "<directory>", ".owner.1b5nul/pid": "533\n", "pid": "533\n"}
+lock acquired: harness pid 65345
+Observed: live successor pid and generation survived byte-identically; public acquire completed and released its claim lock.

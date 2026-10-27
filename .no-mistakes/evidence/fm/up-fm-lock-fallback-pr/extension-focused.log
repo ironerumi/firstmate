@@ -1,0 +1,48 @@
+ok - N1: the host admits an inherited directory lifecycle lock and retires it without residue
+ok - N2/N3: a host killed before, after or during its retirement leaves a lock the shell recovers
+ok - N4: a paused host cannot retire a successor's directory lifecycle lock
+ok - N5: a junk entry leaves only a husk after the host deletes its generation
+ok - N6: an ambiguous directory record is rejected without retirement
+Disposable preinstalled package: /Users/gu_yifu/.no-mistakes/evidence/01M5XRNJJKHASFVM5CC394Y6HF/runtime/fm-extension-binding.PiVDlC/homes/directory-lock/data/extensions/packages/org.example.good/1.2.3/d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+bound: org.example.good@1.2.3
+binding: /Users/gu_yifu/.no-mistakes/evidence/01M5XRNJJKHASFVM5CC394Y6HF/runtime/fm-extension-binding.PiVDlC/homes/directory-lock/config/extensions.d/org.example.good.json
+binding-digest: sha256:8810f4762a4e0dc056a2f97aed851b18cb0c672d0ccfe13ee622a0367857c6a8
+package: /Users/gu_yifu/.no-mistakes/evidence/01M5XRNJJKHASFVM5CC394Y6HF/runtime/fm-extension-binding.PiVDlC/homes/directory-lock/data/extensions/packages/org.example.good/1.2.3/d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+package-digest: sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+verified: process-event-adapter/1 (ext-good)
+copied ln -s capability probe
+EXTENSION VERSION CAPABILITY ADAPTERS PACKAGE_DIGEST
+org.example.good 1.2.3 process-event-adapter/1 ext-good sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+{
+  "capabilities": [
+    {
+      "adapter_names": [
+        "ext-good"
+      ],
+      "name": "process-event-adapter",
+      "version": 1
+    }
+  ],
+  "consents": {
+    "artifact_references": false,
+    "credential_store": false,
+    "network": false,
+    "task_metadata": false,
+    "trusted_same_user_code": true
+  },
+  "entrypoint": "entrypoint.py",
+  "entrypoint_sha256": "sha256:6151c4078c06b1515f5ff0dab1f0fe1bc0c84a26bb40eda5b7b6c15673c9f35c",
+  "extension_id": "org.example.good",
+  "extension_version": "1.2.3",
+  "host_protocol": 1,
+  "manifest_sha256": "sha256:610bdd9fe3265674afe84071c827597ad8c3af381f0ff3f82844ae928d86ce72",
+  "package_digest": "sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9",
+  "package_root": "/Users/gu_yifu/.no-mistakes/evidence/01M5XRNJJKHASFVM5CC394Y6HF/runtime/fm-extension-binding.PiVDlC/homes/directory-lock/data/extensions/packages/org.example.good/1.2.3/d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9",
+  "schema": "firstmate.extension-binding.v1",
+  "source": {
+    "kind": "local-directory",
+    "path": "/Users/gu_yifu/.no-mistakes/evidence/01M5XRNJJKHASFVM5CC394Y6HF/runtime/fm-extension-binding.PiVDlC/packages/good"
+  },
+  "timeout_ms": 1000
+}
+Observed: public binding verified and listed; lifecycle lock and generation removed.

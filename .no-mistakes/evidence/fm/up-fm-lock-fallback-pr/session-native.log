@@ -1,0 +1,29 @@
+/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab
+$ bin/fm-lock.sh 
+lock acquired: harness pid 65345
+exit: 0
+$ bin/fm-lock.sh status
+lock: held by live harness pid 65345
+exit: 0
+$ bin/fm-lock.sh 
+lock acquired: harness pid 65345
+exit: 0
+Observed: public session acquire waits without publishing while a live directory claim lock is held; pid=66443
+lock acquired: harness pid 65345
+$ bin/fm-lock.sh 
+lock acquired: harness pid 65345
+exit: 0
+Observed: stale session and dead directory claim lock reclaimed; real harness pid=65345
+--- actual publication records ---
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.Hzo1pH/.symlink-probe -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.Hzo1pH/pid
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.Hzo1pH
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.RpBf6K/.symlink-probe -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.RpBf6K/pid
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.RpBf6K
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.ClAOd2/.symlink-probe -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.ClAOd2/pid
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.ClAOd2
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.sV6BIT/.symlink-probe -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.sV6BIT/pid
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.sV6BIT
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.steal.owner.iUah2n/.symlink-probe -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.steal.owner.iUah2n/pid
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.steal -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.steal.owner.iUah2n
+real symlink /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire -> /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/session-native-lab/state/.lock.acquire.owner.Brz4Uc
+

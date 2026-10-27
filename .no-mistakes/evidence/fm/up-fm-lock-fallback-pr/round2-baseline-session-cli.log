@@ -1,0 +1,9 @@
+upstream-native: timed_out=False exit=0
+stdout: lock acquired: harness pid 77392
+stderr: (none)
+upstream-copying: timed_out=True exit=-9
+stdout: (none)
+stderr: (none)
+target-copying: timed_out=False exit=0
+stdout: lock acquired: harness pid 77392
+stderr: (none)

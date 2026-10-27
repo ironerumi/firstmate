@@ -1,0 +1,33 @@
+ok - N1: the host admits an inherited directory lifecycle lock and retires it without residue
+ok - N2/N3: a host killed before, after or during its retirement leaves a lock the shell recovers
+ok - N4: a paused host cannot retire a successor's directory lifecycle lock
+ok - N5: a junk entry leaves only a husk after the host deletes its generation
+ok - N6: an ambiguous directory record is rejected without retirement
+Prepared immutable package dataset: sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+
+PUBLIC extension-bind (native locks)
+bound: org.example.good@1.2.3
+binding: /private/tmp/fm-extension-binding.rMeza5/homes/public-native/config/extensions.d/org.example.good.json
+binding-digest: sha256:68138483820230c652b23e642706a58277e40256d595e1959fe866be9a8214fa
+package: /private/tmp/fm-extension-binding.rMeza5/homes/public-native/data/extensions/packages/org.example.good/1.2.3/d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+package-digest: sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+verified: process-event-adapter/1 (ext-good)
+EXTENSION VERSION CAPABILITY ADAPTERS PACKAGE_DIGEST
+org.example.good 1.2.3 process-event-adapter/1 ext-good sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+verified: org.example.good@1.2.3 sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+Persisted binding: {"extension_id": "org.example.good", "extension_version": "1.2.3", "package_digest": "sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9", "host_protocol": 1, "capabilities": [{"adapter_names": ["ext-good"], "name": "process-event-adapter", "version": 1}]}
+Lifecycle release: public lock and all owner generations absent
+Prepared immutable package dataset: sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+
+PUBLIC extension-bind (copied locks)
+bound: org.example.good@1.2.3
+binding: /private/tmp/fm-extension-binding.rMeza5/homes/public-copied/config/extensions.d/org.example.good.json
+binding-digest: sha256:4e48ef1ebf97dda0c2be5e9c2d3576e1b9e60351f050fa5f71346433045f8afc
+package: /private/tmp/fm-extension-binding.rMeza5/homes/public-copied/data/extensions/packages/org.example.good/1.2.3/d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+package-digest: sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+verified: process-event-adapter/1 (ext-good)
+EXTENSION VERSION CAPABILITY ADAPTERS PACKAGE_DIGEST
+org.example.good 1.2.3 process-event-adapter/1 ext-good sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+verified: org.example.good@1.2.3 sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9
+Persisted binding: {"extension_id": "org.example.good", "extension_version": "1.2.3", "package_digest": "sha256:d9a0c3b5436ef78a8255b90ac161a44cc74e76cee91ff05fa6dd75e275e55dd9", "host_protocol": 1, "capabilities": [{"adapter_names": ["ext-good"], "name": "process-event-adapter", "version": 1}]}
+Lifecycle release: public lock and all owner generations absent

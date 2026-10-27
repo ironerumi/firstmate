@@ -1,0 +1,5 @@
+ok - bounded acquire hands ownership to the waiting caller after contention
+ok - bounded acquire hands ownership to the waiting caller after contention
+ok - test_bounded_lock_handoff_after_contention also holds with copied-link directory locks
+ok - presentation lock waits are bounded and retriable without weakening acknowledgement atomicity
+ok - test_live_presentation_holder_is_deadlined_without_weakening_ack also holds with copied-link directory locks

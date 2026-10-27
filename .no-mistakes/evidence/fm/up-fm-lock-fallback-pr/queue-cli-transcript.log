@@ -1,0 +1,35 @@
+
+--- queue.out ---
+WAKE DRAIN SKIPPED: queue lock remains held by live pid 44034 after 1s; retry on the next drain.
+
+--- queue.err ---
+
+--- first.out ---
+1793075988	1	signal	task.status	signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.7AhXSH/presentation-lock-deadline-copied-link/state/task.status
+STATUS PRESENTATION SKIPPED: lock remains held by live pid 45519 after 1s; retry on the next drain.
+
+--- first.err ---
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 43849.1793075988.fxf6nL
+
+--- second.out ---
+1793075988	1	signal	task.status	signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.7AhXSH/presentation-lock-deadline-copied-link/state/task.status
+wake annotation: latest wake-EVENT observed at drain, not current state: task.status: needs-decision [key=fixture]: presentation remains retriable
+OPEN DECISIONS (still open, folded from the durable status logs - not just the latest line):
+task [key=fixture] needs-decision: presentation remains retriable
+OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'
+
+--- second.err ---
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 43849.1793075988.fxf6nL
+
+--- replay.out ---
+1793075988	1	signal	task.status	signal: /Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.7AhXSH/presentation-lock-deadline-copied-link/state/task.status
+OPEN DECISIONS (still open, folded from the durable status logs - not just the latest line):
+task [key=fixture] needs-decision: presentation remains retriable
+OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'
+
+--- replay.err ---
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 43849.1793075988.fxf6nL
+
+--- persisted acknowledgement and replay state ---
+/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.7AhXSH/presentation-lock-deadline-copied-link/state/.wake-queue.seq
+/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/fm-wake-tests.7AhXSH/presentation-lock-deadline-copied-link/state/.wake-queue

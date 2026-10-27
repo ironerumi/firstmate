@@ -1,0 +1,8 @@
+/Users/gu_yifu/.no-mistakes/worktrees/20081ee8b96b/01M5XRNJJKHASFVM5CC394Y6HF/.gate-test-tmp/husk-boundary-lab
+Public session acquire: releaser killed after deleting its generation; persisted empty claim-lock husk.
+Acquirer A=40212: paused before entering shared removal; captured-husk continuation child=40407 after stale-husk validation.
+Public acquirer B=40413: recovered A's dead steal mutex and published a complete live generation .owner.JoOLlH.
+Orphan resumed: rmdir-only boundary cleanup returned 1
+Successor persisted state after orphan resumed: {".owner.JoOLlH": "<directory>", ".owner.JoOLlH/pid": "40413\n", "pid": "40413\n"}
+lock acquired: harness pid 65345
+Observed: live successor pid and generation survived byte-identically; public acquire completed and released its claim lock.
