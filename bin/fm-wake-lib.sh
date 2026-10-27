@@ -711,6 +711,10 @@ fm_lock_try_create() {
 
 fm_lock_remove_path() {
   local lockdir=$1 ownerdir=${2:-} explicit=${2+x}
+  if [ "${3:-}" = husk ]; then
+    rmdir "$lockdir" 2>/dev/null
+    return
+  fi
   if [ -z "$ownerdir" ] && ! ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null); then
     [ -L "$lockdir" ] || return 1
   fi
@@ -723,9 +727,7 @@ fm_lock_remove_path() {
     _fm_lock_retire_generation "$lockdir" "$ownerdir"
     return
   else
-    if [ -e "$lockdir/pid" ]; then
-      fm_lock_clean_known_files "$lockdir"
-    fi
+    fm_lock_clean_known_files "$lockdir"
     rmdir "$lockdir" 2>/dev/null || return 1
   fi
   if [ -n "$ownerdir" ] && [ "$ownerdir" != "$lockdir" ]; then
@@ -1315,6 +1317,9 @@ fm_lock_reap_dead_link() {
       # Raw records with a pid stay with fm_lock_try_acquire's steal path;
       # an empty directory is reaped only after the bounded grace.
       return 1
+    else
+      fm_lock_remove_path "$lockdir" "$owner" husk
+      return
     fi
     fm_lock_remove_path "$lockdir" "$owner"
     return
@@ -1465,7 +1470,11 @@ fm_lock_try_acquire() {
     FM_LOCK_OWNER_DIR=
     return 1
   fi
-  fm_lock_remove_path "$lockdir" "$primary_owner" || true
+  if [ -z "$cur" ] && { [ -z "$primary_owner" ] || [ "$primary_owner" = "$lockdir" ]; }; then
+    fm_lock_remove_path "$lockdir" "$primary_owner" husk || true
+  else
+    fm_lock_remove_path "$lockdir" "$primary_owner" || true
+  fi
   rc=1
   if fm_lock_try_create "$lockdir" "$steal_owner"; then
     rc=0

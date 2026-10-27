@@ -1243,9 +1243,10 @@ test_dirlock_d4_crashed_release_is_finished() {
 
 test_dirlock_d4c_orphan_husk_cleanup_preserves_successor() {
   local mode dir lock holder acquirer successor orphan generation before after pid private_pid rc
-  for mode in acquire reap; do
+  for mode in acquire reap acquire-boundary reap-boundary; do
     dir=$(dirlock_case "dirlock-d4c-$mode")
     lock="$dir/state/.d.lock"
+    case "$mode" in reap*) lock="$lock.steal" ;; esac
     dirlock_open "$dir" a b c
     dirlock_spawn "$dir" a "husk:pre:kill:$lock" '
       fm_lock_try_acquire "$1" || exit 10
@@ -1253,13 +1254,34 @@ test_dirlock_d4c_orphan_husk_cleanup_preserves_successor() {
     holder=$!
     dirlock_expect "a husk:pre:$lock" "D4c: releaser did not leave a husk"
     wait "$holder" 2>/dev/null
-    [ -d "$lock" ] && [ "$(dirlock_tree "$dir")" = ./.d.lock ] \
+    [ -d "$lock" ] && [ "$(dirlock_tree "$dir")" = "./${lock##*/}" ] \
       || fail "D4c: crashed releaser did not leave an empty husk"
     touch -t 200001010000 "$lock"
     dirlock_spawn "$dir" b "cleanup:pre:wait:$lock" '
+      case "$2" in *-boundary)
+        target=$1
+        original=$(declare -f fm_lock_remove_path)
+        eval "${original/fm_lock_remove_path/_fm_original_remove_path}"
+        fm_lock_remove_path() {
+          if [ "$1" != "$target" ]; then
+            _fm_original_remove_path "$@"
+            return
+          fi
+          local rc=0
+          FM_TEST_BARRIERS= bash -c '\''
+            . "$0"
+            printf "%s cleanup:pre:%s pid=%s caller=%s\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"
+            IFS= read -r _ < "$FM_TEST_RESUME"
+            rc=0; fm_lock_remove_path "$@" || rc=$?
+            printf "%s done rc=%s\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"
+            exit "$rc"
+          '\'' "$0" "$@" || rc=$?
+          return "$rc"
+        }
+      esac
       case "$2" in
-        acquire) fm_lock_try_acquire "$1" ;;
-        reap) fm_lock_reap_dead_link "$1" ;;
+        acquire*) fm_lock_try_acquire "$1" ;;
+        reap*) fm_lock_reap_dead_link "$1" ;;
       esac' "$lock" "$mode" &
     acquirer=$!
     dirlock_expect "b cleanup:pre:$lock" "D4c: $mode did not reach husk cleanup"
