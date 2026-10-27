@@ -2818,10 +2818,12 @@ SH
 test_live_presentation_holder_is_deadlined_without_weakening_ack() {
   local dir state status queue_out queue_err first_out first_err second_out second_err replay_out replay_err
   local queue_holder presentation_holder ack_holder i start elapsed rc advisory_count
-  # The one-second timeout bounds lock waiting, not executable startup, copied
-  # lock publication/recovery, or queue rendering. Allow loaded hosts that
-  # overhead, but still require return well before the holder's 30-second exit.
-  local drain_budget=15
+  # The one-second timeout bounds lock waiting, not executable startup or queue
+  # rendering. The copied-link rerun adds directory-lock publication and
+  # recovery overhead, so it alone gets a wider budget, still well before the
+  # holder's 30-second exit.
+  local drain_budget=4
+  [ -z "${FM_TEST_CASE_SUFFIX:-}" ] || drain_budget=15
   dir=$(make_case presentation-lock-deadline)
   state="$dir/state"
   status="$state/task.status"

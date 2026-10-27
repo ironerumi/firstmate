@@ -884,6 +884,33 @@ $out"
   pass "real-symlink locks keep the link layout through acquire, role, re-entry, recovery, handoff and release"
 }
 
+# Real symlinks keep main's removal semantics: removing a link discards only
+# the owner's known files, so an unknown entry keeps the owner directory, and a
+# stale-lock clear removes a link whose owner directory is already gone.
+test_link_mode_removal_is_unchanged() {
+  local dir state out
+  dir=$(make_case link-mode-removal)
+  state="$dir/state"
+  out=$(FM_STATE_OVERRIDE="$state" bash -c '
+    . "$1"
+    lock="$STATE/.removal.lock"
+    bash -c '\''. "$1"; fm_lock_try_create "$2"'\'' _ "$1" "$lock" || exit 1
+    owner=$(readlink "$lock") || exit 2
+    printf "x\n" > "$owner/unknown"
+    fm_lock_remove_path "$lock" || exit 3
+    [ ! -e "$lock" ] && [ ! -L "$lock" ] || exit 4
+    [ -f "$owner/unknown" ] && [ ! -e "$owner/pid" ] || exit 5
+    printf "removed link, kept owner with unknown entry\n"
+    rm -rf "$owner"
+    bash -c '\''. "$1"; fm_lock_try_create "$2"'\'' _ "$1" "$lock" || exit 6
+    rm -rf "$(readlink "$lock")"
+    fm_recovery_transition "$STATE/.watcher-down" clear-stale-lock "$lock" downtime || exit 7
+    [ ! -e "$lock" ] && [ ! -L "$lock" ] || exit 8
+    printf "cleared dangling link\n"
+  ' _ "$LIB") || fail "link-mode removal changed (exit $?): $out"
+  pass "real-symlink locks keep main's owner discard and dangling stale-lock clear"
+}
+
 test_lock_without_real_symlinks() {
   local native copied native_out copied_out real_ln
   native=$(make_case lock-native-parity)
@@ -1262,9 +1289,9 @@ test_dirlock_d4c_orphan_husk_cleanup_preserves_successor() {
     dirlock_spawn "$dir" b "cleanup:pre:wait:$lock" '
       case "$2" in *-boundary)
         target=$1
-        original=$(declare -f fm_lock_remove_path)
-        eval "${original/fm_lock_remove_path/_fm_original_remove_path}"
-        fm_lock_remove_path() {
+        original=$(declare -f _fm_lock_dir_remove_path)
+        eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"
+        _fm_lock_dir_remove_path() {
           if [ "$1" != "$target" ]; then
             _fm_original_remove_path "$@"
             return
@@ -1274,7 +1301,7 @@ test_dirlock_d4c_orphan_husk_cleanup_preserves_successor() {
             . "$0"
             printf "%s cleanup:pre:%s pid=%s caller=%s\n" "$FM_TEST_SUBJECT" "$1" "$$" "$PPID" >> "$FM_TEST_EVENTS"
             IFS= read -r _ < "$FM_TEST_RESUME"
-            rc=0; fm_lock_remove_path "$@" || rc=$?
+            rc=0; _fm_lock_dir_remove_path "$@" || rc=$?
             printf "%s done rc=%s\n" "$FM_TEST_SUBJECT" "$rc" >> "$FM_TEST_EVENTS"
             exit "$rc"
           '\'' "$0" "$@" || rc=$?
@@ -1448,15 +1475,15 @@ test_dirlock_d5b_stealer_retires_only_captured_generation() {
   pass "D5': a paused stealer's retirement is addressed only to the generation it validated"
 }
 
-# A subject script that pauses its first fm_lock_remove_path of <lock> (the
-# mutation after its stale recheck), runs <call> on <lock>, and reports
+# A subject script that pauses its first directory-record removal of <lock>
+# (the mutation after its stale recheck), runs <call> on <lock>, and reports
 # "<subject> finished out=<result>" so a wrong outcome fails within the event
 # deadline instead of blocking on the pause.
 # shellcheck disable=SC2016 # Expanded by the subject shell.
 DIRLOCK_PAUSE_REMOVE='target=$1 paused=
-original=$(declare -f fm_lock_remove_path)
-eval "${original/fm_lock_remove_path/_fm_original_remove_path}"
-fm_lock_remove_path() {
+original=$(declare -f _fm_lock_dir_remove_path)
+eval "${original/_fm_lock_dir_remove_path/_fm_original_remove_path}"
+_fm_lock_dir_remove_path() {
   if [ -z "$paused" ] && [ "$1" = "$target" ]; then
     paused=1
     printf "%s remove:pre:%s\n" "$FM_TEST_SUBJECT" "$target" >> "$FM_TEST_EVENTS"
@@ -2789,6 +2816,7 @@ test_lock_does_not_steal_live_lock
 test_direct_directory_reaper_cannot_remove_live_successor
 test_direct_directory_lock_release_and_reap
 test_link_mode_layout_is_unchanged
+test_link_mode_removal_is_unchanged
 test_lock_without_real_symlinks
 test_directory_lock_single_winner_under_load
 test_dirlock_identity_cases_per_shell
