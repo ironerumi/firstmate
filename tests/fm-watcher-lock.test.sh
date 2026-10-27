@@ -1248,6 +1248,7 @@ test_dirlock_d4c_orphan_husk_cleanup_preserves_successor() {
     lock="$dir/state/.d.lock"
     case "$mode" in reap*) lock="$lock.steal" ;; esac
     dirlock_open "$dir" a b c
+    # shellcheck disable=SC2016 # The script body is expanded by the subject shell.
     dirlock_spawn "$dir" a "husk:pre:kill:$lock" '
       fm_lock_try_acquire "$1" || exit 10
       fm_lock_release "$1"' "$lock" &
@@ -1257,6 +1258,7 @@ test_dirlock_d4c_orphan_husk_cleanup_preserves_successor() {
     [ -d "$lock" ] && [ "$(dirlock_tree "$dir")" = "./${lock##*/}" ] \
       || fail "D4c: crashed releaser did not leave an empty husk"
     touch -t 200001010000 "$lock"
+    # shellcheck disable=SC2016 # The script body is expanded by the subject shell.
     dirlock_spawn "$dir" b "cleanup:pre:wait:$lock" '
       case "$2" in *-boundary)
         target=$1
