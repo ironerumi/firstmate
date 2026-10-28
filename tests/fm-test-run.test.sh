@@ -992,6 +992,21 @@ test_exclude_family() {
   pass "exclude-family drops the named primary family after selection"
 }
 
+test_tern_family_selection() {
+  local listed families
+  families=$("$RUNNER" --list-families)
+  printf '%s\n' "$families" | grep -qx tern || fail "--list-families must name the tern family"
+  listed=$("$RUNNER" --list --family tern)
+  assert_contains "$listed" "tests/fm-backend-tern.test.sh" "family tern must select the fake-CLI suite"
+  assert_contains "$listed" "tests/fm-backend-tern-smoke.test.sh" "family tern must select the real-binary smoke test"
+  assert_not_contains "$listed" "tests/tern-test-safety.sh" "the safety helper is a shared library, not a runnable suite"
+  assert_not_contains "$listed" "tests/fm-backend-cmux.test.sh" "family tern must not absorb the cmux suite"
+  # The scripts are real members of the portable lanes, so the coverage guard
+  # (every tests/*.test.sh belongs to exactly one lane) sees them.
+  "$RUNNER" --list-lanes >/dev/null || fail "--list-lanes failed with the tern scripts present"
+  pass "fm-test-run: family tern selects the tern suite and smoke test, and the lane coverage guard accepts them"
+}
+
 test_list_scheduled_proven_isolated_uses_serial_weights() {
   local tmp
   tmp=$(fm_test_tmproot fm-test-run-proven-schedule)
@@ -1446,6 +1461,39 @@ test_changed_shared_fixture_selects_its_readers() {
   pass "a changed shared test fixture selects its readers while an unread tests/ path still refuses"
 }
 
+# Suites outside backend-dispatch source the T3 fake and the T3 adapter, so a
+# change to either selects the suites that read them as well.
+test_changed_t3_sources_select_their_readers() {
+  local tmp repo listed
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-t3.XXXXXX")
+  repo="$tmp/repo"
+  init_changed_fixture_repo "$repo"
+  mkdir -p "$repo/bin/backends"
+  : >"$repo/bin/backends/t3code.sh"
+  : >"$repo/tests/t3-fake-lib.sh"
+  printf '#!/usr/bin/env bash\n# tests/lib.sh\n. tests/t3-fake-lib.sh\n' >"$repo/tests/fm-secondmate-restart.test.sh"
+  chmod +x "$repo/tests/fm-secondmate-restart.test.sh"
+  printf '# bin/backends/t3code.sh\n' >>"$repo/bin/fm-supervisor-target-lib.sh"
+  git -C "$repo" add .
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm t3
+
+  printf '\n' >>"$repo/tests/t3-fake-lib.sh"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  assert_contains "$listed" "tests/fm-secondmate-restart.test.sh" \
+    "a changed T3 fake selects the suite that sources it"
+  git -C "$repo" checkout -q -- tests/t3-fake-lib.sh
+
+  printf '\n' >>"$repo/bin/backends/t3code.sh"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  assert_contains "$listed" "tests/fm-backend.test.sh" \
+    "a changed T3 adapter still selects backend-dispatch"
+  assert_contains "$listed" "tests/fm-daemon.test.sh" \
+    "a changed T3 adapter selects the curated family of a script that consumes it"
+
+  rm -rf "$tmp"
+  pass "a changed T3 fake or adapter selects the suites that read it beyond backend-dispatch"
+}
+
 # Workers are handed scripts in order, so the slowest script must start first or
 # it runs alone at the tail and throws away most of the concurrency.
 test_concurrent_runs_are_ordered_longest_first() {
@@ -1535,9 +1583,10 @@ SH
 # green but whose wall clock outgrew its caller's invocation budget. The caller
 # gets killed mid-run and retries invisibly, so an over-budget run has to be a
 # failure, not a note in the log.
-# tests/fm-watch-triage.test.sh finishes in about 434s alone and about 698s
-# under CI load, so the automatic --changed bound must leave a slow but healthy
-# watcher-wake-lock script room while still bounding a genuinely hung one
+# tests/fm-watch-triage.test.sh is the slowest watcher-wake-lock member at about
+# 593s under CI load (pause and wedge-defer siblings are 467s and 527s), so the
+# automatic --changed bound must leave a slow but healthy watcher-wake-lock
+# script room while still bounding a genuinely hung one
 # (upstream issue #3869). The stub records the bound the runner hands it.
 test_changed_bound_gives_slow_watcher_suites_headroom() {
   local tmp repo script bound rc
@@ -1868,6 +1917,7 @@ test_a_run_that_ran_records_no_skip_reason
 test_live_guards_expect_a_capability_skip_class
 test_fail_on_gate_skip_token
 test_exclude_family
+test_tern_family_selection
 test_list_scheduled_proven_isolated_uses_serial_weights
 test_list_scheduled_non_lane_selections_use_serial_weights
 test_portable_shard_union_and_coverage_guard
@@ -1880,6 +1930,7 @@ test_jobs_requires_proven_isolated
 test_jobs_admits_a_concurrent_safe_family
 test_unmapped_new_test_never_inherits_family_concurrency
 test_changed_shared_fixture_selects_its_readers
+test_changed_t3_sources_select_their_readers
 test_concurrent_runs_are_ordered_longest_first
 test_per_script_timeout_bounds_a_hang
 test_changed_bound_gives_slow_watcher_suites_headroom
