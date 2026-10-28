@@ -1,0 +1,13 @@
+External no-mistakes boundary: injected parked human-gate verdict; NOT live end-to-end evidence.
+First watcher cycle:
+Outcome: woke
+check: ask-user gate parked: task=gate-task run=01RUNA step=ci
+Persisted wake queue:
+1793196506	1	check	parked-gate-gate-task-01RUNA-ci-aaa111	check: ask-user gate parked: task=gate-task run=01RUNA step=ci
+Committed marker:
+01RUNA|ci|aaa111
+After acknowledgement, identical gate:
+Outcome: quiet
+Changed findings at same run/step:
+Outcome: woke
+check: ask-user gate parked: task=gate-task run=01RUNA step=ci

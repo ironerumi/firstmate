@@ -1,0 +1,2 @@
+ok - the parked human-decision component is derived from the findings table's action column
+ok - a human-owed parked gate carries a stable digest of its raw findings table

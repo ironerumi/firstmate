@@ -1,0 +1,21 @@
+
+COMMAND: TMPDIR="$PWD/.test-tmp" FM_TEST_ONLY=test_parked_gate_wake_is_off_without_its_flag bash tests/fm-watch-triage.test.sh
+ok - with config/parked-gate-wake absent a parked human-owed gate wakes nothing
+
+COMMAND: TMPDIR="$PWD/.test-tmp" FM_TEST_ONLY=test_parked_human_gate_wakes_once_per_gate bash tests/fm-watch-triage.test.sh
+ok - a parked human-owed gate wakes once per run, step and findings checksum, past a paused: line
+
+COMMAND: TMPDIR="$PWD/.test-tmp" FM_TEST_ONLY=test_parked_gate_wake_keeps_a_durable_row_when_delivery_is_lost bash tests/fm-watch-triage.test.sh
+ok - a parked-gate wake remains queued when delivery is not acknowledged
+
+COMMAND: TMPDIR="$PWD/.test-tmp" FM_TEST_ONLY=test_parked_gate_wake_without_a_status_log_still_wakes bash tests/fm-watch-triage.test.sh
+ok - a parked human-owed gate on a ship with no status log still wakes
+
+COMMAND: TMPDIR="$PWD/.test-tmp" FM_TEST_ONLY=test_parked_gate_wake_skips_an_existing_symlinked_status bash tests/fm-watch-triage.test.sh
+ok - an existing symlinked status stays indeterminate until a readable regular record exists
+
+COMMAND: TMPDIR="$PWD/.test-tmp" FM_TEST_ONLY=test_parked_human_gate_with_a_decision_record_does_not_wake bash tests/fm-watch-triage.test.sh
+ok - a parked gate with a decision record for its run stays quiet, while another run's record does not
+
+COMMAND: TMPDIR="$PWD/.test-tmp" FM_TEST_ONLY=test_parked_gate_wake_skips_running_crewmate_owed_and_scout bash tests/fm-watch-triage.test.sh
+ok - a running step, a crewmate-owed gate, an unkeyable verdict and a scout do not wake
