@@ -2664,10 +2664,10 @@ _crew_state_line_human_gate_run() {  # <fm-crew-state-line> -> <run-id> on stdou
 # checksum is the FM_GATE_FINDINGS_CHECKSUM_PREFIX component. A verdict naming no
 # step or no checksum cannot key a once-per-gate notice, so it fails.
 # Same cost and caveat as crew_absorb_class: one fm-crew-state.sh read.
-crew_parked_human_gate() {  # <id> -> "<run>\t<step>\t<checksum>" on stdout
+crew_parked_human_gate() {  # <id> <read-budget-seconds> -> "<run>\t<step>\t<checksum>"
   local id=$1 line run step='' checksum='' rest part
   [ -n "$id" ] || return 1
-  line=$("$FM_CREW_STATE_BIN" "$id" 2>/dev/null) || true
+  line=$(fm_run_timed "$2" "$FM_CREW_STATE_BIN" "$id" 2>/dev/null) || return 1
   run=$(_crew_state_line_human_gate_run "$line") || return 1
   rest="$line · "
   while [ -n "$rest" ]; do

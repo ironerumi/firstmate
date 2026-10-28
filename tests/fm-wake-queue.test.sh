@@ -3059,6 +3059,21 @@ test_historical_annotation_skips_announced_status() {
   pass "historical annotations replay nothing already announced and keep everything new"
 }
 
+# The durable queue is the public persisted contract: pruning a retired task
+# must remove its gate notice, not another task's notice (teardown contract).
+test_wake_queue_prune_task_parked_gate() {
+  local dir state keys
+  dir=$(make_case prune-parked-gate); state="$dir/state"
+  append_wake "$state" check 'parked-gate-task-a-01RUN-ci-abc' 'check: retired task gate'
+  append_wake "$state" check 'parked-gate-task-b-01RUN-ci-abc' 'check: live task gate'
+  FM_STATE_OVERRIDE="$state" bash -c '. "$0/bin/fm-wake-lib.sh"; fm_wake_queue_prune_task "$1" task-a' "$ROOT" "$state" \
+    || fail "parked-gate prune failed"
+  keys=$(awk -F '\t' '$3 == "check" { print $4 }' "$state/.wake-queue")
+  [ "$keys" = 'parked-gate-task-b-01RUN-ci-abc' ] \
+    || fail "prune did not remove only the retired task gate: $keys"
+  pass "task pruning removes its parked-gate notice and preserves another task's notice"
+}
+
 test_wake_queue_prune_task() {
   local dir state queue
   dir=$(make_case prune)
@@ -3680,6 +3695,7 @@ test_branch_stale_ack_that_consumes_nothing_names_its_granted_wake
 test_recovery_ack_failure_is_reported
 test_interruption_before_and_after_raw_commit
 test_wake_queue_prune_task
+test_wake_queue_prune_task_parked_gate
 test_drain_rotates_orphaned_scratch
 test_secondmate_liveness_tick_relaunches_dead_endpoint_once
 test_secondmate_liveness_tick_relaunches_missing_endpoint

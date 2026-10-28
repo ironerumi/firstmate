@@ -4902,6 +4902,37 @@ gate_verdict() {  # <run> <step> <checksum>
   printf 'state: parked · source: run-step · parked at %s: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: %s · run: %s\n' "$2" "$3" "$1"
 }
 
+# Oracle: the requested shared-budget/round-robin contract. A slow external
+# reader must not reach the later ship in this cycle, but must reach it next.
+# This rejects both an unbounded scan and restarting at the hung ship each time.
+test_parked_gate_budget_defers_ships_to_next_cycle() {
+  local dir
+  dir=$(gate_wake_case gate-wake-budget 'paused: waiting' armed)
+  fm_write_meta "$dir/state/z-later.meta" 'kind=ship'
+  cat > "$dir/fakebin/slow-crew-state" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = gate-task ]; then
+  sleep 30
+  exit 1
+fi
+printf '%s\n' 'state: parked · source: run-step · parked at ci: 1 finding(s) · ask-user: authority decision · ask-user findings checksum: abc123 · run: 01LATER'
+EOF
+  chmod +x "$dir/fakebin/slow-crew-state"
+  FM_STATE_OVERRIDE="$dir/state" FM_CONFIG_OVERRIDE="$dir/config" \
+    FM_CREW_STATE_BIN="$dir/fakebin/slow-crew-state" bash -c '
+      . "$1"
+      wake() { :; }
+      started=$SECONDS
+      parked_gate_tick
+      [ "$((SECONDS - started))" -lt 9 ] || exit 11
+      [ ! -e "$STATE/.parked-gate-wake-z-later" ] || exit 12
+      parked_gate_tick
+      [ "$(cat "$STATE/.parked-gate-wake-z-later")" = "01LATER|ci|abc123" ] || exit 13
+      awk -F "\t" '\''$3 == "check" && $4 == "parked-gate-z-later-01LATER-ci-abc123" { n++ } END { exit n != 1 }'\'' "$STATE/.wake-queue"
+    ' _ "$WATCH" || fail "shared gate-read budget did not defer and resume the later ship"
+  pass "parked-gate reads share a bounded cycle and resume at deferred ships"
+}
+
 test_parked_gate_wake_is_off_without_its_flag() {
   local dir r
   dir=$(gate_wake_case gate-wake-unarmed 'paused [at=1]: waiting on CI' unarmed)
@@ -5169,6 +5200,7 @@ fm_test_run \
   test_quoted_exit_picker_stays_ordinary_stale \
   test_secondmate_exit_picker_stays_quiet \
   test_closed_exit_picker_drops_saved_dialog_name \
+  test_parked_gate_budget_defers_ships_to_next_cycle \
   test_parked_gate_wake_is_off_without_its_flag \
   test_parked_human_gate_wakes_once_per_gate \
   test_parked_gate_wake_keeps_a_durable_row_when_delivery_is_lost \

@@ -1685,15 +1685,31 @@ wedge_wait_evidence() {  # <task> -> one wait_record on stdout
 # It complements config/wedge-defer-parked-gate rather than overlapping it: that
 # flag only changes how the ladder treats a gate firstmate WAS told about (an open
 # decision for the run), which is exactly the case this tick skips.
+# Share five seconds of CLI wait across the scan; resume after the last attempted
+# ship next cycle, including after a timeout, so a hung ship cannot starve peers.
 parked_gate_tick() {
   local meta task gate run step checksum marker marker_tmp reason key notify_key queued status statusf
+  local deadline remaining count start offset index
+  local -a ships=()
   [ -e "$CONFIG/parked-gate-wake" ] || return 0
+  deadline=$((SECONDS + 5))
   for meta in "$STATE"/*.meta; do
     [ -e "$meta" ] || continue
     [ "$(fm_meta_get "$meta" kind)" = ship ] || continue
+    ships+=("$meta")
+  done
+  count=${#ships[@]}
+  [ "$count" -gt 0 ] || return 0
+  start=$((${PARKED_GATE_NEXT:-0} % count))
+  for ((offset=0; offset<count; offset++)); do
+    remaining=$((deadline - SECONDS))
+    [ "$remaining" -gt 0 ] || break
+    index=$(((start + offset) % count))
+    PARKED_GATE_NEXT=$(((index + 1) % count))
+    meta=${ships[$index]}
     task=${meta##*/}
     task=${task%.meta}
-    gate=$(crew_parked_human_gate "$task") || continue
+    gate=$(crew_parked_human_gate "$task" "$remaining") || continue
     IFS=$'\t' read -r run step checksum <<EOF
 $gate
 EOF
