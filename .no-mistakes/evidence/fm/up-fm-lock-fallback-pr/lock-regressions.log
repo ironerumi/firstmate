@@ -2,6 +2,7 @@ ok - disposable watcher refuses inherited state outside its marked lab
 ok - raw-directory reaper leaves main recovery and its live successor untouched
 ok - direct directory locks release and recover through the shared paths
 ok - real-symlink locks keep the link layout through acquire, role, re-entry, recovery, handoff and release
+ok - real-symlink locks keep main's owner discard and dangling stale-lock clear
 ok - copied-link fallback matches native acquire, re-entry, refusal, dead-owner recovery and release
 ok - directory lock has exactly one winner in 10 event-synchronized rounds of 8 contenders
 ok - D1-bash-5.3: a staged directory record stays private and its creator discards it on refusal
@@ -31,3 +32,4 @@ ok - D11: a record with more than one generation is invalid and never released o
 ok - D11b: an invalid dead record fails closed before destructive cleanup
 ok - D11c: an invalid dead watcher record is refused before downtime evidence is published
 ok - D12: staging directories beside a directory lock are never read or removed
+TARGETED_LOCK_COMPLETE
