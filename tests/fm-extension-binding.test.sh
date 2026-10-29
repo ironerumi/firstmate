@@ -760,13 +760,15 @@ dirlock_node_recover() {  # <home> <expected-recovered-pid> <failure>
 dirlock_node_case n1
 exec 6<> "$H_DIRLOCK/events"
 dirlock_rc=0
-dirlock_out=$(dirlock_node_host "$H_DIRLOCK" "" 2>&1) || dirlock_rc=$?
+# shellcheck disable=SC2016 # Expanded by the acquiring shell.
+dirlock_out=$(dirlock_node_host "$H_DIRLOCK" "" 'printf "%s\n" 12345 > "$2/pid-start"' 2>&1) || dirlock_rc=$?
 dirlock_node_expect "host locked pid=" "N1: shell did not acquire a directory lifecycle lock"
 [ "$dirlock_rc" -eq 1 ] && [ "$dirlock_out" = "error[lifecycle-lock-invalid]: extension lifecycle binding command is invalid" ] \
   || fail "N1: host did not admit the inherited lock and run its command: rc=$dirlock_rc $dirlock_out"
 [ -z "$(dirlock_node_tree "$H_DIRLOCK")" ] || fail "N1: host left lock residue: $(dirlock_node_tree "$H_DIRLOCK")"
+dirlock_node_recover "$H_DIRLOCK" "" "N1: reacquisition after retiring recorded pid-start"
 exec 6>&-
-pass "N1: the host admits an inherited directory lifecycle lock and retires it without residue"
+pass "N1: the host retires a directory lifecycle lock with recorded pid-start and permits reacquisition"
 
 # N2 and N3: a host killed before its first rename, after committing, or in the
 # middle of deleting its generation leaves a state the shell finishes.

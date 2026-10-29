@@ -2124,7 +2124,7 @@ async function claimInheritedLifecycleLock(home) {
 }
 
 // The known files of fm_lock_clean_known_files in fm-wake-lib.sh.
-const LIFECYCLE_LOCK_KNOWN_FILES = ["pid", "role", "fm-home", "pid-identity", "watcher-path"];
+const LIFECYCLE_LOCK_KNOWN_FILES = ["pid", "role", "fm-home", "pid-identity", "pid-start", "watcher-path"];
 
 // Mirrors _fm_lock_retire_generation in fm-wake-lib.sh: every mutation is
 // addressed to this generation, and moving pid into it is the commit point.
