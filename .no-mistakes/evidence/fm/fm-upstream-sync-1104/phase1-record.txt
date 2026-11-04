@@ -1,0 +1,22 @@
+Initial bin/fm-test-run.sh --list --changed timed out after 200 seconds without output.
+elapsed=3m scenario=tests/fm-timeout-lib.test.sh
+tests/fm-timeout-lib.test.sh exit=0
+elapsed=4m scenario=tests/fm-test-tap-verify.test.sh
+tests/fm-test-tap-verify.test.sh exit=0
+elapsed=4m scenario=tests/fm-record-export.test.sh
+tests/fm-record-export.test.sh exit=1
+elapsed=4m scenario=tests/fm-backend-t3code.test.sh
+tests/fm-backend-t3code.test.sh exit=1
+elapsed=9m scenario=tests/fm-git-strip-ai-trailers.test.sh
+tests/fm-git-strip-ai-trailers.test.sh exit=0
+elapsed=10m scenario=tests/fm-task-inbox.test.sh
+tests/fm-task-inbox.test.sh exit=0
+elapsed=13m scenario=tests/fm-wake-drain-outcome-backstop.test.sh
+tests/fm-wake-drain-outcome-backstop.test.sh untested: time bound
+
+Final classification:
+PASS: timeout-lib, test-tap-verify, git-strip-ai-trailers, task-inbox.
+FAIL: record-export assertion; BSD sed mutation errors precede extra-entry failure (test portability issue, not demonstrated product corruption).
+UNTESTED: backend-t3code hit per-script 300s time bound (inner exit 124; runner exit 1); not a product failure.
+UNTESTED: wake-drain-outcome-backstop and remaining changed scripts: time bound; no new suites after minute 12.
+Phase 2 skipped: phase 1 failed. No suite rerun and no code fix attempted.

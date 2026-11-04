@@ -1,0 +1,26 @@
+Current test round, target 6cf6487581c0c1e8cd895e33de336f52cfbc90bc
+Phase 1 checkpoint: elapsed 14 minutes.
+
+Discovery:
+- bin/fm-test-run.sh --list --changed exceeded the tool's 60-second limit.
+- Explicit-base discovery exceeded a 180-second tool limit; selected-suites.txt is empty, not evidence of an empty selection.
+- Narrowing used the supplied base-to-target diff and the public spawn guard fix's changed test.
+
+Passed with recorded runner exit=0:
+- tests/fm-record-export.test.sh (including all six corrupt-manifest variants and concurrent archive source changes)
+- tests/fm-timeout-lib.test.sh
+- tests/fm-test-tap-verify.test.sh
+- tests/fm-git-strip-ai-trailers.test.sh
+- tests/fm-task-inbox.test.sh
+- tests/fm-record-export-remote-home.test.sh
+
+Incomplete invocation:
+- Multi-script runner tool call exceeded 210 seconds during tests/fm-nm-guard.test.sh. Its bounded child continued and printed all assertions through the final 'ok - fm-nm-guard.test.sh', then exited. The runner's FM_TEST_END and aggregate summary were lost with the parent; do not claim a recorded suite exit. Guard checks used a boundary fake for no-mistakes, not a real running pipeline.
+
+Time bound:
+- tests/fm-backend-t3code.test.sh hit 300 seconds, recorded exit=124. It reached tracked-config refusal and cleanup cases, but did not reach the new public-spawn guard binding cases. The suite uses a fake T3 server; it is not a live T3 product proof. Per runbook, timeout is untested and the suite was not rerun.
+
+Own-assertion failures: none observed.
+No additional suite started after minute 12. Phase 2 could not start before minute 12. Other changed runtime areas, real harness/backend operation, the new T3 worker guard binding, and Claude working-boat visual spacing remain untested in this round (time bound). No screenshot was captured.
+No source changes or test fixes were made. git status --short was empty after testing; no matching test runner or fake T3 server remained in the process check.
+Verdict: inconclusive. Targeted record-export regression is proven, but broad merge compatibility and the new T3 binding lack sufficient current live evidence. CI owns broad regression coverage; this phase did not invoke CI, push, PR, or another pipeline.

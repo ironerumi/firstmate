@@ -1,0 +1,169 @@
+FM_TEST_BEGIN 2026-11-04T08:28:52Z tests/fm-timeout-lib.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - fm_run_timed preserves exact inherited pipe stdin through timeout
+ok - fm_run_timed preserves exact pipeline pipe stdin through timeout
+ok - fm_run_timed preserves exact inherited pipe stdin through gtimeout
+ok - fm_run_timed preserves exact pipeline pipe stdin through gtimeout
+ok - fm_run_timed preserves exact inherited pipe stdin through perl
+ok - fm_run_timed preserves exact pipeline pipe stdin through perl
+ok - fm_run_timed preserves exact inherited pipe stdin through bash
+ok - fm_run_timed preserves exact pipeline pipe stdin through bash
+ok - fm_exec_timed passes a command's status and output through unchanged
+ok - system Bash top-level and subshell calls preserve success, failure, and signal status
+Terminated: 15             "$@"
+ok - fm_run_timed reports 124 when the bound TERMs a read whose wrapper recorded 143
+ok - fm_run_timed passes a natural exit through when the bound fired after completion
+ok - fm_run_timed keeps stdout and nonzero status when a function shadows timeout
+ok - fm_run_timed delivers piped stdin through every available mechanism
+ok - fm_exec_timed sends TERM at the bound and a cooperative command ends there
+ok - fm_exec_timed kills a TERM-ignoring command once the grace has passed
+ok - fm_exec_timed replaces the calling shell instead of wrapping it
+ok - fm_exec_timed reaps a descendant that would otherwise hold the output past the bound
+ok - fm_exec_timed forwards a TERM it receives to the bounded command
+ok - fm_exec_timed ends the command when its named owner is already gone
+ok - fm_exec_timed ends the command when its owner dies during watchdog startup
+ok - fm_exec_timed preserves a top-level shell's parent across exec startup
+ok - fm_exec_timed prefers its perl watchdog over timeout
+ok - fm_exec_timed refuses instead of running unbounded when no mechanism exists
+ok - fm_exec_timed rejects a zero, padded, non-numeric, or missing bound and a missing command
+tests/fm-timeout-lib.test.sh: line 29: 90123 Killed: 9                  ( . "$ROOT/bin/fm-timeout-lib.sh"; PATH=$path fm_exec_timed "$@" )
+ok - fm_exec_timed's GNU timeout fallback kills a TERM-ignoring command once the grace has passed
+ok - fm_timed_out accepts 124 and 137 and nothing else
+FM_TEST_END 2026-11-04T08:29:10Z tests/fm-timeout-lib.test.sh exit=0 duration_ms=18032 gate_skip=false
+FM_TEST_BEGIN 2026-11-04T08:29:10Z tests/fm-test-tap-verify.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - a complete matching suite passes
+ok - an early exit 0 fails even when some ok lines printed
+ok - a not-ok line fails even when the suite exits 0
+ok - a nonzero process status fails even with a matching TAP plan
+ok - planned count must equal the number of ok lines
+ok - fm_test_run derives N from the registered names
+ok - a test function that exits 0 before later tests fail completeness
+ok - a completeness failure prints an error annotation
+FM_TEST_END 2026-11-04T08:29:11Z tests/fm-test-tap-verify.test.sh exit=0 duration_ms=1313 gate_skip=false
+FM_TEST_BEGIN 2026-11-04T08:29:11Z tests/fm-git-strip-ai-trailers.test.sh family=backend-dispatch expected_gate_skip=none
+ok - a Cursor --trailer commit object has no AI co-author and keeps the captain identity
+ok - the Command Code trailer a worker writes into its own message is stripped
+ok - a human Co-authored-by trailer survives next to a stripped Cursor trailer
+ok - a human co-author at a vendor domain survives; only the exact bot address is stripped
+ok - a hook manager resolving the pane hooks dir fails instead of displacing the strip
+ok - a relaunch reinstall replaces the read-only strip dir and still strips
+ok - install chains the previous commit-msg hook after stripping
+ok - a relative project core.hooksPath resolves against the worktree and still runs
+ok - an inherited GIT_CONFIG hooksPath does not become the chained previous hooks
+ok - a project hook that appears after install still runs for the rest of the task
+ok - a pane GIT_CONFIG hooksPath still chains the repository git is actually in
+ok - an empty project core.hooksPath runs no repository hook and still strips the trailer
+ok - an unresolvable project core.hooksPath still refuses the commit
+ok - a valueless project core.hooksPath still refuses the commit
+ok - the repository's pre-push runs and can refuse under every hooksPath override channel
+ok - a git -c hooksPath override still strips the trailer and chains the project's hooks
+ok - the repository's own hook keeps inherited GIT_CONFIG entries such as a scoped credential helper
+ok - env-file writes the canonical hooks path so wrappers still chain the repository hook
+ok - Cortex Code's Generated with line and co-author trailer are stripped; a human at its vendor domain is kept
+ok - commit-msg file mode strips the trailer and keeps the subject
+ok - install --no-strip leaves commit messages untouched while still chaining
+ok - install --push-guard writes a read-only pre-push that runs the guard before chaining
+# all fm-git-strip-ai-trailers tests passed
+FM_TEST_END 2026-11-04T08:29:36Z tests/fm-git-strip-ai-trailers.test.sh exit=0 duration_ms=24638 gate_skip=false
+FM_TEST_BEGIN 2026-11-04T08:29:36Z tests/fm-task-inbox.test.sh family=watcher-wake-lock expected_gate_skip=none
+ok - inbox: a steer is written durably and round-trips byte-exact with a self-describing doorbell
+ok - inbox: a hostile-name doorbell executes as a no-op in bare shells
+ok - inbox: terminal-control inbox names are rejected without typing
+ok - inbox: the ring skips dead or missing endpoints and still rings live or unclassifiable endpoints
+ok - inbox: the ring submits its own stuck doorbell, skips other pending text, and retries a lost Enter once on both paths
+ok - inbox: on herdr the ring submits an unsubmitted doorbell only with an idle proof
+ok - inbox: stuck-busy presses Enter only for a composer proven to hold exactly our doorbell
+ok - inbox: the idempotent enqueue dedups an exact re-run onto the same record, handled or not
+ok - inbox: unrelated pending and handled history avoids per-record parsing and comparison
+ok - inbox: prefilter preserves multiline, blank, legacy and delivery-mode exact matching
+ok - inbox: a prefilter error falls back without duplicating an exact retry
+ok - inbox: pending prefilter precedes handled and finds an ack before grep opens the record in both modes
+ok - inbox: idempotent enqueue follows a record concurrently moved to handled
+ok - inbox: the handled mv is the idempotent ack and sequences are never reissued
+ok - inbox: concurrent writers serialize on the sequence lock and lose nothing
+ok - inbox: a writer retries when a competing lock vanishes after its failed claim
+ok - inbox: ladder bookkeeping ignores a concurrently removed inbox
+ok - inbox: fire-and-forget records stay durable and outside the ladder
+ok - inbox: a fire-and-forget record whose ring did not land is owed exactly one retry
+ok - inbox: without config/wait-no-turns a fire-and-forget retry mark stays quiet
+ok - inbox: the re-ring ladder paces by grace, escalates once, and resets on ack
+ok - watcher: an unhandled aged message on an idle pane re-rings without waking firstmate, and the ack silences it
+ok - watcher: busy deferrals survive restart, escalate once at the bound, and never type
+ok - watcher: stuck-busy submits a proven pending doorbell before escalating and never touches foreign text
+ok - watcher: delivery and acknowledgement reset the durable busy budget
+ok - watcher: unwritable busy bookkeeping surfaces without typing
+ok - watcher: idle successor surfaces once despite unremovable predecessor bookkeeping
+ok - watcher: busy successor surfaces once despite unremovable predecessor bookkeeping
+ok - watcher: persistent idle busy-reset failure escalates once and later instructions still deliver
+ok - watcher: persistent protected busy-reset failure escalates once and later instructions still deliver
+ok - watcher: busy limit '999999999999999999999999999999' escalates exactly once at 2
+ok - watcher: busy limit '1000000000' escalates exactly once at 2
+ok - watcher: busy limit '0' escalates exactly once at 2
+ok - watcher: busy limit '000' escalates exactly once at 2
+ok - watcher: busy limit '' escalates exactly once at 2
+ok - watcher: busy limit 'invalid' escalates exactly once at 2
+ok - watcher: busy limit '1' escalates exactly once at 1
+ok - watcher: busy limit '3' escalates exactly once at 3
+ok - watcher: unremovable obsolete busy state does not block or escalate a fire-and-forget retry
+ok - watcher: busy successor escalates once despite stale predecessor ring history
+ok - watcher: dead successor escalates once despite stale predecessor ring history
+ok - watcher: missing successor escalates once despite stale predecessor ring history
+ok - watcher: unwritable successor escalates once despite stale predecessor ring history
+ok - watcher: a non-busy protected delivery breaks the busy streak and preserves the attempt ladder
+ok - watcher: a non-busy failed delivery breaks the busy streak and preserves the attempt ladder
+ok - watcher: a healthy or empty inbox stays completely silent
+ok - watcher: acknowledgement silences an unwritable ladder without a stale wake
+ok - watcher: unwritable ladder bookkeeping surfaces a stale wake after the doorbell
+ok - watcher: a fire-and-forget record's owed retry rings exactly once and never escalates
+ok - watcher: a fire-and-forget retry waits out the worker's own decision, then rings once
+ok - watcher: spending a retry keeps a newer record's mark written during its ring
+ok - watcher: a spent ring budget emits exactly one ordinary stale wake for recovery
+ok - watcher: a positively dead pane is never typed into and surfaces exactly one stale wake
+ok - watcher: dead-pane recovery overrides stale busy state
+FM_TEST_END 2026-11-04T08:32:05Z tests/fm-task-inbox.test.sh exit=0 duration_ms=149299 gate_skip=false
+FM_TEST_BEGIN 2026-11-04T08:32:05Z tests/fm-record-export-remote-home.test.sh family=unclassified expected_gate_skip=none
+ok - configured remote-home teardown commits its archive before deleting live records
+ok - configured remote-home teardown preserves every source when archive publication fails
+ALL TESTS PASSED
+FM_TEST_END 2026-11-04T08:32:12Z tests/fm-record-export-remote-home.test.sh exit=0 duration_ms=6733 gate_skip=false
+FM_TEST_BEGIN 2026-11-04T08:32:12Z tests/fm-nm-guard.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - a second axi run is refused while a run is live
+ok - a flagless axi run reattaches to the live run
+ok - rerun is refused while a run is live
+ok - aborting a working run is refused and names the run
+ok - a superseding push is refused while a run is live
+ok - push option operands cannot bypass the own-branch guard
+ok - no-refspec push policy is not over-blocked
+ok - every form of pushing the own branch to its own remote is refused
+ok - a push of another ref to the own remote is allowed
+ok - configured push URLs, remote groups, and mappings are classified
+ok - a push from another repository is judged against that repository
+ok - a push to a remote other than the branch's own is allowed
+ok - inspection and reconnection stay permitted under a live run
+ok - the axi respond continuation path is permitted and passes arguments through
+ok - help for a refused subcommand stays readable
+ok - unrelated git commands and dry-run pushes are never refused
+ok - abandoning an answerable gate is refused and points at the gate response
+ok - the parked gate can still be answered
+ok - a replacement run after an unreported failure is refused with the evidence path
+ok - recording the failure clears the refusal
+ok - a failed run outside this worktree's history never gates it
+ok - a run cancelled at a gate stays terminal and clears through the reporting path
+ok - a gate row never bypasses the failed-run code-identity test
+ok - an unrecognized run word stays permissive even with a gate row
+ok - a genuinely new run and push after a terminal run are not interfered with
+ok - another branch's run never gates this one
+ok - a task with no branch of its own is never gated
+ok - an unreadable pipeline answer fails open
+ok - an absent no-mistakes binary fails open
+ok - FM_NM_GUARD_ALLOW=1 allows an authorized recovery
+ok - a review fix response is allowed however many rounds have run
+ok - argv classification is exact for every documented shape
+ok - the decision table matches the documented contract
+ok - a refusal appends one keyed blocked line, idempotent per refusal code
+ok - a reset status file does not strand a refusal claim
+ok - a resolved refusal report re-opens on the next refusal
+ok - the guard's own report cannot count as the worker's failure report
+ok - a refusal without a status record still refuses
+ok - fm-spawn wires the shims once, through the backend-agnostic pane environment
+ok - both shims are one owner reached under two names
+ok - fm-nm-guard.test.sh
