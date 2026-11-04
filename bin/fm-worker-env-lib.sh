@@ -16,9 +16,17 @@ fm_worker_env_quote() { # <value>
   printf "'"
 }
 
+fm_worker_guard_status_path() {
+  printf '%s/%s.status' "$1" "$2"
+}
+
+fm_worker_guard_shim_path() {
+  printf '%s/shims' "$1"
+}
+
 fm_worker_guard_export_line() { # <state-dir> <task-id> <firstmate-bin-dir>
   # shellcheck disable=SC2016 # $PATH must reach the pane unexpanded.
   printf 'export FM_NM_GUARD_STATUS=%s PATH=%s:$PATH' \
-    "$(fm_worker_env_quote "$1/$2.status")" \
-    "$(fm_worker_env_quote "$3/shims")"
+    "$(fm_worker_env_quote "$(fm_worker_guard_status_path "$1" "$2")")" \
+    "$(fm_worker_env_quote "$(fm_worker_guard_shim_path "$3")")"
 }
