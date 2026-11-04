@@ -123,7 +123,9 @@ pass "rerun is refused while a run is live"
 run_in_repo no-mistakes axi abort
 assert_refused nm-abandon-run "abort of a working run"
 assert_contains "$OUT" "01LIVE" "the refusal names the run id"
-pass "aborting a working run is refused and names the run"
+assert_contains "$OUT" "FM_NM_GUARD_ALLOW=1 no-mistakes axi abort" "the refusal names the authorized abort path"
+assert_contains "$OUT" "never add the override yourself" "the refusal forbids self-granting"
+pass "aborting a working run is refused and names the run and the authorized path"
 
 run_in_repo git push origin fm/task-x
 assert_refused nm-push-supersedes "push under a live run"
@@ -267,6 +269,7 @@ set_run running 01PARKED '    review,awaiting_approval,3,900'
 run_in_repo no-mistakes axi abort
 assert_refused nm-abandon-gate "abort of a parked run"
 assert_contains "$OUT" "axi respond" "the refusal names the continuation path"
+assert_contains "$OUT" "FM_NM_GUARD_ALLOW=1 no-mistakes axi abort" "the gate refusal names the authorized abort path"
 pass "abandoning an answerable gate is refused and points at the gate response"
 
 run_in_repo no-mistakes axi respond --action approve
@@ -374,6 +377,12 @@ set_run running 01LIVE
 OUT=$( (cd "$REPO" && FM_NM_GUARD_ALLOW=1 no-mistakes axi run) 2>&1 )
 CODE=$?
 assert_allowed "the authorized escape"
+set_run running 01LIVE
+OUT=$( (cd "$REPO" && FM_NM_GUARD_ALLOW=1 no-mistakes axi abort) 2>&1 )
+CODE=$?
+assert_allowed "the authorized abort"
+run_in_repo no-mistakes axi abort
+assert_refused nm-abandon-run "an unauthorized abort stays refused"
 pass "FM_NM_GUARD_ALLOW=1 allows an authorized recovery"
 
 # --- 9. review fix responses are never budgeted -----------------------------
