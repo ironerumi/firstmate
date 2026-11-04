@@ -4932,7 +4932,7 @@ test_pi_stream_publication_lock_revalidation() {
       real_cat=$(command -v cat)
       cat > "$fakebin/cat" <<SH
 #!/usr/bin/env bash
-if [ "\${!#}" = "$lock/pid" ] && [ -d "$lock" ]; then printf '1\n' > "$dir/append-blocked"; fi
+if [ "\${!#}" = "$lock/pid" ] && [ -e "$dir/lock-created" ]; then printf '1\n' > "$dir/append-blocked"; fi
 exec "$real_cat" "\$@"
 SH
       chmod +x "$fakebin/cat"

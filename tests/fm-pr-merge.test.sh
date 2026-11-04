@@ -1792,7 +1792,7 @@ test_help_prints_usage_and_exits_zero() {
     expect_code 0 "$rc" "help: fm-pr-merge $flag must exit 0"
     assert_grep 'fm-pr-merge.sh <task-id> <pr-url>' "$case_dir/stdout" \
       "help: $flag must print the usage line from the header on stdout"
-    assert_grep 'Merge method on GitHub defaults to --squash' "$case_dir/stdout" \
+    assert_grep 'Merge method on GitHub, when the caller passes none' "$case_dir/stdout" \
       "help: $flag must print the whole header, not a truncated range"
     assert_no_grep '^#' "$case_dir/stdout" \
       "help: $flag must strip the comment markers"

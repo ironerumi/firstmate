@@ -1680,7 +1680,8 @@ test_dirlock_d6_late_publication_is_ordinary_recovery() {
       [ "$(dirlock_tree "$dir")" = "./${staging##*/}
 ./${staging##*/}/.owner.${staging##*.owner.}
 ./${staging##*/}/.owner.${staging##*.owner.}/pid
-./${staging##*/}/pid" ] || fail "D6: unexpected leftovers besides the one inert staging directory: $(dirlock_tree "$dir")"
+./${staging##*/}/pid
+./${staging##*/}/pid-start" ] || fail "D6: unexpected leftovers besides the one inert staging directory: $(dirlock_tree "$dir")"
     else
       printf 'go\n' >&8
       wait "$contender" || fail "D6: contender could not release"
@@ -1850,7 +1851,7 @@ test_dirlock_d10_committed_retirement_is_finished() {
   holder=$!
   dirlock_expect "a retire:skip-role:$lock" "D10: retirement did not reach its rename"
   wait "$holder" || fail "D10: remove_path did not report the unfinished retirement"
-  expected=$(cd "$lock" && printf './%s\n' role .owner.* .owner.*/pid .owner.*/pid.retired | LC_ALL=C sort)
+  expected=$(cd "$lock" && printf './%s\n' role .owner.* .owner.*/pid .owner.*/pid-start.retired .owner.*/pid.retired | LC_ALL=C sort)
   [ "$(cd "$lock" && find . -mindepth 1 -print | LC_ALL=C sort)" = "$expected" ] \
     || fail "D10: committed retirement left an unexpected record: $(dirlock_tree "$dir")"
   # shellcheck disable=SC2016
