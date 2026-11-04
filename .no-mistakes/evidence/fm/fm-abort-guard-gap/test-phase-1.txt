@@ -1,0 +1,10 @@
+Phase 1 targeted validation
+Initial bin/fm-test-run.sh --list --changed exited 2 because the test agent temporarily recorded its timer in .test-phase-t0. That transient file was removed immediately; the repeated listing succeeded.
+Scope from base e2c7b939b431d8accc005a2e1934c49572e5fa97 to fcdf17bc16eae7fe5dc22ce9475b07c3c816a3db: guard library, validation-supervision skill, guard documentation, and tests/fm-nm-guard.test.sh.
+Ran: bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-nm-guard.test.sh
+Exit: 0. Duration: 26973 ms. All assertions passed. No failures or time bounds.
+Relevant assertions: active abort refused with run ID and authorized command; parked abort refused with continuation and authorized command; FM_NM_GUARD_ALLOW=1 allows abort dispatch; subsequent unprefixed abort remains refused.
+This suite executes the actual guard shims but supplies a fake no-mistakes binary and synthetic status. It proves guard behavior at that mocked external boundary, not live pipeline cancellation or model interpretation of the skill.
+No other changed suite or matching tests/fm-nm-guard-lib.test.sh exists. No gate configuration change.
+Phase 2 omitted: phase 1 covers all modified executable behavior as required by the trusted runbook. Independently, this test-phase agent is forbidden to execute axi abort or control any pipeline; no live cancellation was attempted.
+No source files edited. No background children started.
