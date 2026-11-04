@@ -102,7 +102,8 @@ The Claude `env` block keeps entries Firstmate did not write, such as a secondma
 The [validation-owner guard](nm-validation-owner-guard.md#reach-one-mechanism-every-runtime-and-every-backend) also uses this channel for both harnesses.
 The thread's `GIT_CONFIG_*` entries are Firstmate's own `core.hooksPath` hook entry only: inherited `GIT_CONFIG_*` values are never written to these files, because they can carry credentials.
 That hook entry sets `GIT_CONFIG_COUNT=1` and index 0, so numbered `GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` entries in the T3 server's environment do not apply in the thread; with `config/keep-ai-trailers` no hook entry is written and they apply unchanged, except on a [`forge=external`](external-review-forge.md) ship, whose push guard always installs the hook entry.
-Spawn copies no arbitrary inherited environment entries; the guard's explicit `PATH` binding prepends the shim directory to the spawning process's `PATH`.
+Other inherited environment values are not copied wholesale into these files either, because they can carry credentials.
+Only the explicit launch bindings described here are written; the guard's `PATH` binding is an intentional exception that prepends the shim directory to the spawning process's `PATH`.
 A T3 server whose agents need extra Git config, such as a `credential.helper`, supplies it through Git config files, which the hook entry leaves alone: for example the service user's global config, or `GIT_CONFIG_GLOBAL` in its service environment.
 Firstmate-created untracked environment files are git-excluded and removed at teardown; in a secondmate home, teardown removes only the keys `FM_T3CODE_ENV_KEYS` lists from the home's own `.claude/settings.local.json`.
 An existing untracked `.codex/config.toml` without Firstmate's marker is preserved and refused.
