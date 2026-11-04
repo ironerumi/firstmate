@@ -720,6 +720,11 @@ fm_procevent_group_alive() {
 # its numeric id still has members. That group may be the old generation or a
 # leaderless group created after PID/PGID reuse, so cleanup preserves the claim
 # without signalling the group or starting a replacement.
+#
+# A live runner from before fm_pid_identity's UTC pin holds a claim in the
+# rendering fm_pid_identity_ambient_zone reads, so either rendering matches. A
+# mismatch counts as stale only once both were read: a rendering that cannot be
+# read leaves the identity uncertain.
 fm_procevent_pid_state() {
   local pid=$1 expected=$2 actual
   if ! fm_pid_alive "$pid"; then
@@ -728,7 +733,10 @@ fm_procevent_pid_state() {
   fi
   if actual=$(fm_pid_identity "$pid" 2>/dev/null); then
     [ "$actual" = "$expected" ] && return 0
-    return 1
+    if actual=$(fm_pid_identity_ambient_zone "$pid" 2>/dev/null); then
+      [ "$actual" = "$expected" ] && return 0
+      return 1
+    fi
   fi
   fm_pid_alive "$pid" || { fm_procevent_group_alive "$pid" && return 3; return 1; }
   return 2

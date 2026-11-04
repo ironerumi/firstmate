@@ -137,10 +137,35 @@ fm_pid_identity() {
   # autoarm abandonment proof already reclaims a mismatched claim, at the cost of
   # the one-extra-continuation residual docs/turnend-guard.md describes. Only the
   # supervise-daemon lock (fm_afk_daemon_owns_supervision, daemon_pid_matches)
-  # keeps the residual by design.
-  out=$(COLUMNS=10000 LC_ALL=C TZ=UTC0 ps -p "$pid" -o lstart= -o command= 2>/dev/null) || return 1
+  # keeps the residual by design. A process-event claim has no next claim to
+  # clear it, because its runner can poll indefinitely, so
+  # fm_procevent_pid_state also accepts fm_pid_identity_ambient_zone.
+  TZ=UTC0 _fm_pid_identity_ps "$pid"
+}
+
+# Portable identity read, rendered in the caller's time zone.
+_fm_pid_identity_ps() {  # <pid>
+  local out
+  out=$(COLUMNS=10000 LC_ALL=C ps -p "$1" -o lstart= -o command= 2>/dev/null) || return 1
   [ -n "$out" ] || return 1
   printf '%s\n' "$out" | sed 's/^[[:space:]]*//'
+}
+
+# fm_pid_identity_ambient_zone <pid>
+# The identity a release before fm_pid_identity's UTC pin recorded for this
+# process, for a record whose holder can outlive an update. Only the ps fallback
+# renders a time zone, so a /proc host reads the same value as fm_pid_identity.
+fm_pid_identity_ambient_zone() {
+  local pid=$1 proc_root
+  case "$pid" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  proc_root=${FM_PROC_ROOT_OVERRIDE:-/proc}
+  if [ -r "$proc_root/$pid/stat" ] && [ -r "$proc_root/$pid/cmdline" ]; then
+    fm_pid_identity "$pid"
+    return
+  fi
+  _fm_pid_identity_ps "$pid"
 }
 
 # fm_pid_start_time <pid>
