@@ -151,11 +151,11 @@ jobs:
           set -eu
           npm install -g tasks-axi
           tasks-axi --version
-      # Pi is pinned to 0.87.1 deliberately (main's last green CI); raising it is tracked separately.
+      # Pi is pinned to 1.4.0, the version the fleet runs.
       - name: Install the Pi package for the Pi extension tests
         run: |
           set -eu
-          npm install -g @earendil-works/pi-coding-agent@0.87.1
+          npm install -g @earendil-works/pi-coding-agent@1.4.0
           npm ls -g --depth 0 @earendil-works/pi-coding-agent
       - name: Run portable parallel shard 1
         run: |
@@ -258,11 +258,11 @@ jobs:
       # Runtime-facing Pi extension probes need the installed public package
       # to avoid capability skips. tests/fm-pi-primary-types.test.sh owns its
       # separate compiler dependencies.
-      # Pi is pinned to 0.87.1 deliberately (main's last green CI); raising it is tracked separately.
+      # Pi is pinned to 1.4.0, the version the fleet runs.
       - name: Install the Pi package for the Pi extension tests
         run: |
           set -eu
-          npm install -g @earendil-works/pi-coding-agent@0.87.1
+          npm install -g @earendil-works/pi-coding-agent@1.4.0
           npm ls -g --depth 0 @earendil-works/pi-coding-agent
       - name: Run portable serial shard ${{ matrix.shard }}
         env:
