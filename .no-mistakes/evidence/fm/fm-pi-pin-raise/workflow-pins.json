@@ -1,0 +1,10 @@
+[
+  {
+    "job": "tests-portable-parallel-1",
+    "package": "@earendil-works/pi-coding-agent@1.4.0"
+  },
+  {
+    "job": "tests-portable-serial",
+    "package": "@earendil-works/pi-coding-agent@1.4.0"
+  }
+]
