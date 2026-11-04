@@ -32,7 +32,7 @@ GitHub Actions and Dependabot are exempt so their automation keeps working, but 
 
 ### The `full-ci` label
 
-CI on a pull request from an author without write access runs only the quick checks at first: `Test coverage guard`, `Repo invariants`, and the no-mistakes body check.
+On the upstream repository, CI on a pull request from an author without write access runs only the quick checks at first: `Test coverage guard`, `Repo invariants`, and the no-mistakes body check.
 Lint and the behavior suites wait for a maintainer, or the maintainer's fleet, to add the `full-ci` label when the pull request is picked up for review.
 Until then the `Full suite` check fails with a message naming the label; that is expected and needs no action from you.
 Adding the label runs the full suite, and every later push to that pull request runs it again.
@@ -53,7 +53,7 @@ Add required status checks with `strict_required_status_checks_policy: false`; a
 Bind the checks to the GitHub Actions app already producing them, rather than accepting the same context from any integration.
 No new app installation or manual runner setup is needed for that setting.
 
-For the upstream repository, require the actual job contexts: `Full suite`, `Lint 1`, `Lint 2`, `Test coverage guard`, `Repo invariants`, `Stock macOS Bash snapshot compatibility`, `Behavior portable parallel 1`, `Behavior portable parallel 2`, `Behavior portable serial 1` through `Behavior portable serial 10`, `Behavior tests (Herdr)`, `Behavior timing aggregate`, and `PR must be raised via no-mistakes`.
+For the upstream repository, require the actual job contexts: `Full suite`, `Lint 1`, `Lint 2`, `Test coverage guard`, `Repo invariants`, `Stock macOS Bash snapshot compatibility`, `Behavior portable parallel 1`, `Behavior portable parallel 2`, `Behavior portable serial 1` through `Behavior portable serial 10`, `Behavior tests (Herdr)`, `Behavior tests (herdr-core)`, `Behavior timing aggregate`, and `PR must be raised via no-mistakes`.
 The last name is the compliance job context, not its workflow title; its existing automation exceptions remain unchanged.
 The timing aggregate is not a substitute for individual jobs because it can succeed while collecting evidence from a failed run.
 The individual lanes skip on an outside pull request until it has the `full-ci` label, and a skipped job satisfies a required check, so `Full suite` must be required too: it fails until the label is on and whenever a lane failed or was cancelled.
@@ -145,7 +145,7 @@ Upstream CI owns broad regression across required portable parallel shards, the 
 On a fork, `ci.yml` runs only the coverage guard and invariants on pushes to `main` and pull requests targeting `main`, because no-mistakes already ran lint and targeted tests before the push; [`.github/workflows/fork-ci.yml`](.github/workflows/fork-ci.yml) runs the full CI job set on manual dispatch only, and a fork's required-check list must name only the checks that run per pull request.
 Pushing a new head to a pull request cancels that pull request's still-running CI so only the current head is validated, and a newer push to `main` cancels the older `main` run so only the newest merge's run finishes; the workflow owns that contract, the `full-ci` gate described under [The `full-ci` label](#the-full-ci-label), and their rationale.
 A fork can set the repository variable `FM_CI_SKIP_PUSH` to `1` to skip the push run of `CI`, and `FM_CI_SKIP_MACOS` to `1` to skip the stock macOS Bash job, without a tracked edit that drifts from upstream.
-Each skip is a job-level condition, so a skipped job reports success rather than leaving the pull request pending, and with neither variable set every job runs on upstream and on every fork exactly as before.
+Each skip is a job-level condition, so a skipped job reports success rather than leaving the pull request pending; these variables do not override the fork or `full-ci` gates above.
 Use `bin/fm-test-run.sh --list-lanes` for exact lane names and `--help` for `--jobs` rules and required gate-skip flags when reproducing a lane locally.
 Leave the `sleep 0.1` cadence in the suites' bounded condition waits alone.
 Those sleeps look like recoverable overhead - the watch-triage suite (`fm-watch-triage.test.sh`, `fm-watch-triage-pause.test.sh`, and `fm-watch-triage-wedge-defer.test.sh`) issues about 1,900 of them, each paying a flat ~100ms scheduler wake-up penalty on macOS - but they are not overhead added to the clock; they are how a test waits for a subject that only moves on `fm-watch.sh`'s own one-second `FM_POLL` cadence.
