@@ -5,7 +5,7 @@ This document is the authoritative human-readable contract for the watcher arm P
 `bin/fm-arm-pretool-check.sh` is only the stable harness transport and output renderer.
 The tracked harness adapters forward command text without classifying it.
 `bin/fm-arm-command-policy.mjs` is also the sole owner of firstmate's shell classification: it exports the tokenizer and command-position analysis, which the sibling cd-guard seatbelt (`bin/fm-cd-pretool-check.sh`, `docs/cd-guard.md`) reuses instead of duplicating shell lexing.
-This seatbelt and its siblings guard the firstmate PRIMARY; the worker-side guard is the validation-owner guard (`docs/nm-validation-owner-guard.md`), which reaches a worker through the pane's shim PATH rather than a harness hook because most worker runtimes have no usable PreToolUse surface.
+This seatbelt and its siblings guard the firstmate PRIMARY; the [validation-owner guard](nm-validation-owner-guard.md#reach-one-mechanism-every-runtime-and-every-backend) owns worker-side interception and its backend-specific delivery.
 
 ## Purpose and boundary
 
@@ -28,6 +28,7 @@ It tokenizes the bytes and classifies lexical execution positions only.
 - `--command <exact string>` for OpenCode, Pi, pi-signed, and omp.
 - `--background` as a compatibility-only field that never changes the decision.
 - `--claude` to preserve Claude's stderr-only deny requirement.
+- `--agy` for Antigravity CLI, reading stdin JSON from `.toolCall.args.CommandLine`, `.toolCall.args.command`, `.toolInput.command`, or `.tool_input.command`, denying redundant manual arming when a watcher is healthy, and emitting `{"decision":"deny","reason":...}` on stdout with exit 0.
 
 The wrapper discovers the code root from its own location.
 The active firstmate home is `${FM_HOME:-<code-root>}`.

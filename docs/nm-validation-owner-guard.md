@@ -83,27 +83,34 @@ It is deliberately visible in the command that used it rather than hidden in ses
 
 ## Reach: one mechanism, every runtime and every backend
 
-The shims sit at the tool boundary rather than at any harness's hook surface, which is what makes the coverage complete.
+The shims sit at the tool boundary rather than at any harness's hook surface, because most worker runtimes have no usable PreToolUse surface.
+Workers receive a shim PATH rather than a harness hook; the primary-session seatbelts do not provide worker-side interception.
 
-`bin/fm-spawn.sh` sends one line into the crewmate's pane before the harness launches, through `spawn_send_text_line`:
+`bin/fm-worker-env-lib.sh` owns the task-status and shim-directory bindings used by `bin/fm-spawn.sh` on both launch channels.
+On pane-backed runtimes, spawn sends one line before the harness launches, through `spawn_send_text_line`:
 
 ```sh
 export FM_NM_GUARD_STATUS='<state>/<id>.status' PATH='<fm-root>/bin/shims':$PATH
 ```
 
-- **Worker runtimes.** Every supported harness - `claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, `cursor`, `muse` - is launched as a command in that pane shell, so each inherits the environment, and each passes it to the shells its own tool calls run in. There is no per-harness hook to write, no trust dialog to clear, and no harness-specific payload shape to parse. A harness added later is covered on the day it is launched this way.
-- **Session providers.** `spawn_send_text_line` is the backend-agnostic text path, so the same line reaches a task on `tmux`, `herdr`, `zellij`, `orca`, and `cmux` without a per-backend branch.
-- **Secondmate homes.** A secondmate is launched through the same path and receives the same shims; the guard is inert there because a secondmate does not drive a validation run of its own.
+- **Pane-backed runtimes.** Every supported harness launched as a command in the pane shell inherits the binding and passes it to the shells its tool calls run in.
+  The guard needs no per-harness hook, trust dialog, or harness-specific payload parsing on this channel; a future harness is covered as soon as it is launched this way.
+- **Session providers.** `spawn_send_text_line` is the shared text path carrying that same export on `tmux`, `herdr`, `zellij`, `orca`, `cmux`, `paseo`, `rex`, `tern`, and `hc`, without a guard-specific backend branch.
+- **T3 Code threads.** Spawn delivers the same binding through `T3CODE_ENV` to both Claude and Codex using the existing [per-directory harness environment](t3code-backend.md#per-directory-harness-environment) channel, including its trust and cleanup constraints.
+- **Secondmate homes.** A secondmate receives the same shims through its backend's environment channel; the guard is inert there because a secondmate does not drive a validation run of its own.
 - **The primary session.** Firstmate's own shell never receives the shim PATH, so nothing firstmate runs is affected.
 
-Nothing is written into the worktree, and nothing is written into any project repository: the binding is one environment variable and one PATH entry, so teardown has nothing to clean up and no lane can inherit another lane's guard.
+The pane channel writes no guard configuration into the worktree.
+T3's directory-local binding is removed through that channel's ordinary cleanup rather than a separate guard mechanism.
 
 ### Accepted non-goals
 
 The threat model is a worker's mistake under pressure, the same as every other firstmate seatbelt:
 
-- An invocation that resolves past the pane's PATH is not intercepted: an absolute path (`/usr/bin/git push`), `command -p`, or `env -i`. Plain `command git push` and `env git push` still search the inherited PATH and are intercepted.
-- A login shell that rebuilds PATH from scratch would drop the shim entry; the fleet's harnesses inherit the exported PATH rather than rebuilding it.
+- An invocation that resolves past the worker's PATH is not intercepted: an absolute path (`/usr/bin/git push`), `command -p`, or `env -i`.
+  Plain `command git push` and `env git push` still search the inherited PATH and are intercepted.
+- A login shell that rebuilds PATH from scratch drops the shim entry.
+  Pane-launched harnesses inherit the exported PATH rather than rebuilding it; T3 Codex's command shell is a login-shell exception, with its startup-file constraint documented in the [T3 lifecycle reference](t3code-backend.md#current-lifecycle-and-safety).
 - The pipeline's own push, and its own fix agents, run as children of the shared no-mistakes daemon and never inherit this PATH, so the guard cannot interfere with the pipeline doing its own work.
 
 ## Exit contract
@@ -138,6 +145,8 @@ For any wrapper that still does that, each shim carries a pid-marked backstop th
 ## Automated validation
 
 `tests/fm-nm-guard.test.sh` owns the acceptance matrix: the permitted continuation and inspection commands under a live run, each refused duplicate-run, own-branch push, and abort path, the pushes to other refs, remotes, and repositories that stay allowed, the terminal-failed recovery sequence in both its unreported and reported forms, a genuinely new run after a terminal run, a review fix response past any round count staying allowed, non-no-mistakes tasks and unrelated commands, the fail-open degradations, and the shim's exec-through behavior including argument fidelity.
+
+`tests/fm-backend-t3code.test.sh` covers both T3 harness environment bindings through the public spawn interface.
 
 Run:
 

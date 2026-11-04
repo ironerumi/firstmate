@@ -3,10 +3,8 @@
 # the Claude auto-arm (claim pin, claim read-back, mid-turn health) must accept
 # the tagged win:<pid> holder bin/fm-session-lock-lib.sh writes on Git Bash, and
 # must still fail closed when that Windows process is gone, is a different
-# executable, or the tag appears off Windows.
-#
-# Fork-added: these cases cover the fork's Windows consumer fix, so they live
-# in their own file rather than inside upstream's session-lock suite.
+# executable, or the tag appears off Windows. Every untagged value must reach
+# the generic numeric helpers unchanged, so POSIX behaviour stays identical.
 # shellcheck disable=SC2016 # single quotes are deliberate: each expression expands inside the fixture child
 set -u
 
@@ -87,9 +85,11 @@ make_home() {  # <name> <lock-value>
 # session that may be running this suite is scrubbed; the case publishes
 # CLAUDE_PID=7204 and CLAUDE_CODE_SESSION_ID=S1 as a Windows Claude session does.
 # self_proc gives the expression's own shell a /proc entry so its local
-# identity reads as it does on Git Bash.
-lib_eval() {  # <windows|posix> <home> <expression>
+# identity reads as it does on Git Bash. Arguments after <expression> become the
+# expression's $0, $1, and so on.
+lib_eval() {  # <windows|posix> <home> <expression> [$0 [args...]]
   local shape=$1 home=$2 expr=$3 path=$PATH
+  shift 3
   [ "$shape" = windows ] && path="$FAKEBIN:$PATH"
   env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_PID CLAUDE_CODE_SESSION_ID=S1 CLAUDE_PID=7204 \
     FM_TEST_WIN_TABLE="${FM_TEST_WIN_TABLE:-$WIN_TABLE}" PATH="$path" \
@@ -103,7 +103,7 @@ lib_eval() {  # <windows|posix> <home> <expression>
       }
       . "$FM_ROOT_OVERRIDE/bin/fm-wake-lib.sh" || exit 97
       . "$FM_ROOT_OVERRIDE/bin/fm-supervision-engine-lib.sh" || exit 98
-      '"$expr"
+      '"$expr" "$@"
 }
 
 test_supervision_main_key_reads_a_windows_session_lock() {
@@ -176,6 +176,34 @@ test_autoarm_midturn_health_follows_a_windows_lock_holder() {
   pass "auto-arm: mid-turn health accepts a rewake bound to a live win:<pid> holder and drops it when that holder exits"
 }
 
+test_untagged_values_reach_the_numeric_helpers_unchanged() {
+  local home live dead out
+  home=$(make_home parity 1)
+  sleep 300 &
+  live=$!
+  sh -c 'exit 0' &
+  dead=$!
+  wait "$dead" 2>/dev/null || true
+  out=$(lib_eval posix "$home" '
+    _fm_wake_require_session_lock
+    for v in "$1" "$2" "" abc 12x win:7204; do
+      a=$(fm_session_pid_identity "$v" 2>&1); ra=$?
+      b=$(fm_pid_identity "$v" 2>&1); rb=$?
+      [ "$ra:$a" = "$rb:$b" ] || echo "identity-diverged value=[$v] session=[$ra:$a] generic=[$rb:$b]"
+      fm_session_pid_alive "$v"; ra=$?
+      fm_pid_alive "$v"; rb=$?
+      [ "$ra" = "$rb" ] || echo "alive-diverged value=[$v] session=$ra generic=$rb"
+    done
+    fm_session_pid_identity "$1" >/dev/null || echo live-identity-missing
+    fm_session_pid_alive "$1" || echo live-not-alive
+  ' _ "$live" "$dead")
+  kill "$live" 2>/dev/null
+  wait "$live" 2>/dev/null || true
+  [ -z "$out" ] || fail "an untagged lock value did not reach the numeric helpers unchanged: $out"
+  pass "untagged lock values: the session-pid helpers answer exactly as fm_pid_identity and fm_pid_alive do"
+}
+
+test_untagged_values_reach_the_numeric_helpers_unchanged
 test_supervision_main_key_reads_a_windows_session_lock
 test_autoarm_claim_pins_a_windows_lock_holder_and_reads_it_back
 test_autoarm_midturn_health_follows_a_windows_lock_holder
