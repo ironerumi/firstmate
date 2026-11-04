@@ -78,7 +78,7 @@ A guard that refused work because it could not read the pipeline would cost more
 ## The escape
 
 `FM_NM_GUARD_ALLOW=1` in the environment of the command allows a refused command deliberately.
-Firstmate hands that prefix to a worker verbatim when it has authorized the recovery - it is the mechanism behind "firstmate decides whether to spend a replacement run".
+Firstmate hands that prefix to a worker verbatim when it has authorized the recovery - for an abort, the supersession steer carries `FM_NM_GUARD_ALLOW=1 no-mistakes axi abort`, and a worker never adds it on its own - it is the mechanism behind "firstmate decides whether to spend a replacement run".
 It is deliberately visible in the command that used it rather than hidden in session state, so an authorized exception is legible afterwards.
 
 ## Reach: one mechanism, every runtime and every backend
