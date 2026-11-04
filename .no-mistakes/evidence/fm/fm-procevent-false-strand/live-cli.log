@@ -1,0 +1,62 @@
+
+SCENARIO Three pre-update runners stay live, produce no stranded wakes, and can retire (elapsed minutes=6)
+registered: legacy-one (lavish)
+reconciled: published=0 started=1 stopped=0 uncertain=0 failed=0
+source=legacy-one pid=46920
+UTC claim: Wed Nov  4 16:11:07 2026     bash {run-worktree}/bin/fm-procevent.sh _start legacy-one
+Legacy persisted identity: Thu Nov  5 01:11:07 2026     bash {run-worktree}/bin/fm-procevent.sh _start legacy-one
+registered: legacy-two (lavish)
+reconciled: published=0 started=1 stopped=0 uncertain=0 failed=0
+source=legacy-two pid=48039
+UTC claim: Wed Nov  4 16:11:09 2026     bash {run-worktree}/bin/fm-procevent.sh _start legacy-two
+Legacy persisted identity: Thu Nov  5 01:11:09 2026     bash {run-worktree}/bin/fm-procevent.sh _start legacy-two
+registered: legacy-three (lavish)
+reconciled: published=0 started=1 stopped=0 uncertain=0 failed=0
+source=legacy-three pid=49818
+UTC claim: Wed Nov  4 16:11:10 2026     bash {run-worktree}/bin/fm-procevent.sh _start legacy-three
+Legacy persisted identity: Thu Nov  5 01:11:10 2026     bash {run-worktree}/bin/fm-procevent.sh _start legacy-three
+reconciled: published=0 started=0 stopped=0 uncertain=0 failed=0
+SOURCE                       ADAPTER      OWNER      PENDING
+legacy-one                   lavish       live       0
+legacy-three                 lavish       live       0
+legacy-two                   lavish       live       0
+legacy-one: live process confirmed, stranded wakes=0
+retired: legacy-one
+legacy-two: live process confirmed, stranded wakes=0
+retired: legacy-two
+legacy-three: live process confirmed, stranded wakes=0
+retired: legacy-three
+PASS legacy runners
+
+SCENARIO A claim naming a different start time is orphaned, not accepted or relaunched (elapsed minutes=6)
+registered: reused-source (lavish)
+reconciled: published=0 started=1 stopped=0 uncertain=0 failed=0
+reconciled: published=0 started=0 stopped=0 uncertain=1 failed=0
+SOURCE                       ADAPTER      OWNER      PENDING
+reused-source                lavish       orphaned   0
+stranded wakes=1; unrelated live PID preserved
+PASS mismatched generation
+
+SCENARIO Unreadable legacy rendering refuses retirement without killing the runner (elapsed minutes=6)
+SOURCE                       ADAPTER      OWNER      PENDING
+reused-source                lavish       uncertain  0
+retire exit=1
+error: cannot confirm runner identity; source remains registered: reused-source
+claim retained; runner remains alive
+PASS unreadable identity (ps boundary fault injection)
+retired: reused-source
+
+SCENARIO A genuinely dead legacy runner with surviving group is still reported stranded (elapsed minutes=6)
+registered: dead-source (lavish)
+reconciled: published=0 started=1 stopped=0 uncertain=0 failed=0
+reconciled: published=0 started=0 stopped=0 uncertain=1 failed=0
+SOURCE                       ADAPTER      OWNER      PENDING
+dead-source                  lavish       orphaned   0
+stranded wakes=1
+PASS dead runner
+
+Persisted watcher wakes:
+1793808675	1	check	procevent:reused-source:stranded:.claim.62Hhfh-53344	check: process-event source reused-source is registered but nothing can arm it: its claim names a dead runner whose process group still has members, so reconcile preserves that claim and starts no replacement. Check that nothing is still polling the source, then reclaim it with: bin/fm-procevent.sh start reused-source - that reclaims it provided the dead generation's reservation records can still be tidied, and otherwise refuses with: cannot claim source
+1793808678	2	check	procevent:dead-source:stranded:.claim.2N40JY-55083	check: process-event source dead-source is registered but nothing can arm it: its runner died and its polling child may still be attached to the source's session, so reconcile preserves that claim and starts no replacement, and nothing automatic will touch that group. Verify whether anything is still polling dead-source; once that process group is empty, the next reconcile reclaims the source on its own.
+
+ALL LIVE CLI SCENARIOS PASSED
