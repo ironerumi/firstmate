@@ -79,11 +79,12 @@ META_TMP=$(mktemp "$STATE/.fm-remote-relaunch-meta.XXXXXX") || {
   printf 'effort=%s\n' "$NEW_EFFORT"
 } >> "$META_TMP"
 # Every other line is preserved in its original relative order after the
-# refreshed harness/model/effort. A pr= line's identity block (pr_head= and
-# the x_* fields fm_pr_metadata_identity_parse allows after it) must remain
-# after those refreshed fields; endpoint_retired=<epoch> may follow that block,
-# while any other key following pr= still breaks PR movement monitoring on a
-# task that already had one armed.
+# refreshed harness/model/effort. A pr= line's own identity region (pr_head=
+# and the control_relaunch_tx/x_* lifecycle and relay fields
+# fm_pr_metadata_identity_parse allows after it) must remain after those
+# refreshed fields; endpoint_retired=<epoch> may follow that region, while any
+# other key following pr= still breaks PR movement monitoring on a task that
+# already had one armed.
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
     harness=*|model=*|effort=*) ;;
