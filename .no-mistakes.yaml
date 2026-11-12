@@ -30,8 +30,8 @@ document:
     evidence destination, and unique safety facts, then review the complete
     branch diff again after every documentation or lint fix.
 
-# Pin lint to the same owner CI invokes instead of leaving it to no-mistakes'
-# default handling, which does not invoke the repository's canonical lint gate.
+# Run canonical lint, the coverage guard, and repo invariants locally instead of
+# relying on GitHub CI, which is disabled on this fork.
 # `bin/fm-lint.sh` owns the context-sensitive ShellCheck modes and GitHub
 # workflow lint via pinned actionlint in `bin/fm-lint-workflows.sh`.
 # Invocation wiring is asserted by `tests/fm-lint.test.sh` and
@@ -41,7 +41,20 @@ document:
 # The existing type-regression owner also runs in the required portable CI lane.
 # Keep commands.test absent; the firstmate-coding-guidelines skill owns this policy.
 commands:
-  lint: 'bin/fm-lint.sh && bash tests/fm-pi-primary-types.test.sh'
+  lint: |
+    set -eu
+    bin/fm-lint.sh
+    bash tests/fm-pi-primary-types.test.sh
+    bash bin/fm-test-run.sh --check-coverage
+    [ ! -L CLAUDE.md ] || { echo 'CLAUDE.md must be a real @AGENTS.md pointer file, not a symlink'; exit 1; }
+    printf '%s\n' '<!-- Points Claude at AGENTS.md via import; edit AGENTS.md, not this file. -->' '@AGENTS.md' |
+      cmp -s CLAUDE.md - || { echo 'CLAUDE.md must be the canonical @AGENTS.md pointer'; exit 1; }
+    [ "$(readlink .claude/skills)" = '../.agents/skills' ] || { echo '.claude/skills must be a symlink to ../.agents/skills'; exit 1; }
+    tracked=$(git ls-files -- data state config projects .no-mistakes)
+    if [ -n "$tracked" ]; then
+      printf 'Personal fleet paths are tracked in git:\n%s\n' "$tracked"
+      exit 1
+    fi
 
 # Publish each run's test evidence to the orphan no-mistakes/evidence branch linked from the PR.
 # The evidence is not committed to the feature or default branch.
