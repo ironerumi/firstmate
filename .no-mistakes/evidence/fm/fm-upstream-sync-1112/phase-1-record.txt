@@ -1,0 +1,13 @@
+Phase 1 bounded targeted validation
+Base: 427a52dc2af97c2c628e6980eb1b3a4bfd822094
+Target: 70d1e65017aefaa767caaaa97c5eb9f0e4085a2c
+
+The required first selection command bin/fm-test-run.sh --list --changed did not complete within 60 seconds; a second attempt did not complete within 180 seconds. selected-suites.txt is empty, not a successful selection. No suite tree walk or broad suite was executed. Explicit suites were chosen from changed test paths and the merge's intended replacements.
+.no-mistakes.yaml is unchanged relative to the supplied base, so the mandatory gate-config contract suite condition does not apply.
+
+Executed serially with --jobs 1 --per-script-timeout-secs 300:
+- tests/fm-busy-state.test.sh: exit 0, 22.993 seconds. Includes actual busy-event execution and filesystem lock contention/recovery (#6944 upstream fix).
+- tests/fm-park.test.sh: exit 0, 264.101 seconds. Executes real local parking decision/state machinery with synthetic Git worktrees; forge, lifecycle, and backend boundaries are stubbed. This is not live forge, harness stop/relaunch, or fleet validation.
+- tests/fm-watch-triage-pause.test.sh: runner exit 1 because per-script exit 124 at 300.171 seconds. Classified UNTESTED: time bound, not a product assertion failure. Initial opt-in supersession, no-opt-in cadence, and away-mode checks printed success before termination; full suite completion is not established. Never rerun.
+
+No suite failed its own assertions. No debug or product/test changes made. The twelve-minute start cutoff was reached during the paused-wait suite; no additional suite or phase-2 scenario was started. Full watcher completion and retained-fork relaunch/control coverage remain untested: time bound. Broad CI belongs to the outer executor.
