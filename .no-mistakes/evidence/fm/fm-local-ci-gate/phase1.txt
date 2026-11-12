@@ -1,0 +1,1 @@
+Phase 1: ran tests/fm-nm-test-contract.test.sh; exit=0. No other changed scripts or matching bin suites. No time bounds hit.
