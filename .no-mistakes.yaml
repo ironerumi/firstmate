@@ -30,15 +30,15 @@ document:
     evidence destination, and unique safety facts, then review the complete
     branch diff again after every documentation or lint fix.
 
-# Run canonical lint, the coverage guard, and repo invariants locally instead of
-# relying on GitHub CI, which is disabled on this fork.
+# Local gate defaults: docs/configuration.md "Gate defaults (.no-mistakes.yaml)".
+# Fork merge policy: CONTRIBUTING.md "Maintaining required checks".
 # `bin/fm-lint.sh` owns the context-sensitive ShellCheck modes and GitHub
 # workflow lint via pinned actionlint in `bin/fm-lint-workflows.sh`.
 # Invocation wiring is asserted by `tests/fm-lint.test.sh` and
 # `tests/fm-lint-workflows.test.sh`.
 #
 # Strict dual-SDK compilation belongs to this compiler-owning phase, not Test.
-# The existing type-regression owner also runs in the required portable CI lane.
+# The existing type-regression owner also runs in upstream's portable CI lane.
 # Keep commands.test absent; the firstmate-coding-guidelines skill owns this policy.
 commands:
   lint: |
