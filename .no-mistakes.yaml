@@ -30,8 +30,10 @@ document:
     evidence destination, and unique safety facts, then review the complete
     branch diff again after every documentation or lint fix.
 
-# Local gate defaults: docs/configuration.md "Gate defaults (.no-mistakes.yaml)".
-# Fork merge policy: CONTRIBUTING.md "Maintaining required checks".
+# Gate defaults: docs/configuration.md "Gate defaults (.no-mistakes.yaml)".
+# On ironerumi/firstmate, GitHub CI is not a merge requirement; keep cheap
+# coverage and repository-invariant checks local instead of adding a fork workflow.
+# CONTRIBUTING.md describes upstream's required-check setup.
 # `bin/fm-lint.sh` owns the context-sensitive ShellCheck modes and GitHub
 # workflow lint via pinned actionlint in `bin/fm-lint-workflows.sh`.
 # Invocation wiring is asserted by `tests/fm-lint.test.sh` and

@@ -9,7 +9,7 @@ We require this to reduce the maintainer's burden of reviewing and merging contr
 `no-mistakes` puts a local git proxy in front of your real remote.
 Pushing through it runs an AI-driven review/test/lint pipeline in an isolated worktree, forwards the push upstream only after every check passes, and opens a clean PR automatically.
 
-On upstream, a GitHub Actions check (`Require no-mistakes`) runs on PRs targeting `main` and requires both the deterministic signature and a parseable structured attestation from no-mistakes v1.46.0 or newer.
+A GitHub Actions check (`Require no-mistakes`) runs on PRs targeting `main` and requires both the deterministic signature and a parseable structured attestation from no-mistakes v1.46.0 or newer.
 The attestation must bind to the current PR head commit and report the review, test, and document steps as completed, so a stale attestation, a missing `head_sha`, or a skipped required step fails.
 It evaluates every PR opening and body edit independently, reruns after head synchronization or reopening, and prevents a later edit from replacing an earlier pending compliance check.
 GitHub Actions and Dependabot are exempt so their automation keeps working, but other contributor PRs that do not satisfy the attestation contract will not be reviewed or merged.
@@ -46,10 +46,6 @@ See the [no-mistakes quick start](https://kunchenguid.github.io/no-mistakes/star
 Before dispatching an agent-driven contribution, follow the [Firstmate role and task-consent policy](docs/configuration.md#firstmate-role-configfirstmate-role); clone-and-run use alone grants no publication authority.
 
 ## Maintaining required checks
-
-The `ironerumi/firstmate` fork does not require GitHub CI for merging: Actions is disabled on that repository, and its required-check list is empty.
-Use the [local gate defaults](docs/configuration.md#gate-defaults-no-mistakesyaml) rather than adding a fork-specific workflow.
-The following required-check maintenance procedure applies to upstream, not this fork.
 
 GitHub required checks are configured in the repository's existing main ruleset, not activated by committing workflow YAML.
 When applying this CI layout, preserve its existing pull-request, merge-method, linear-history, deletion, non-fast-forward, and administrator-bypass settings.
@@ -111,7 +107,7 @@ Firstmate's wrapper still matters: crewmates route every `ask-user` finding to f
 [`docs/configuration.md`](docs/configuration.md#gate-defaults-no-mistakesyaml) owns the tracked `.no-mistakes.yaml` gate defaults.
 The `firstmate-coding-guidelines` skill owns the rule that local no-mistakes Test stays intent-targeted rather than configuring `commands.test`.
 Verify with `bin/fm-test-run.sh` and the subjects you care about rather than chaining `bash tests/a.test.sh && bash tests/b.test.sh`; the no-mistakes Test step owns its separate bounded, serial gate procedure in [`.no-mistakes.yaml`](.no-mistakes.yaml).
-The pipeline publishes that evidence itself, so never hand-commit `.no-mistakes/` paths onto a feature branch; the [local gate](docs/configuration.md#gate-defaults-no-mistakesyaml) rejects tracked personal fleet paths.
+The pipeline publishes that evidence itself, so never hand-commit `.no-mistakes/` paths onto a feature branch; CI rejects them as tracked personal fleet paths.
 
 Check and test the toolbelt before pushing:
 
@@ -149,8 +145,7 @@ Portable shard balance evidence lives in `docs/fm-test-portable-shards.md`.
 Its header owns selection, runtime detection, and exit codes.
 Family selection is the ordinary local path; `--all` is deliberate full regression only.
 Upstream CI owns broad regression across required portable parallel shards, the portable serial lane's separate-runner shards, the Herdr lane, lint, invariants, the coverage guard, and stock macOS Bash compatibility in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-For forks with Actions available, `ci.yml` selects only the coverage guard and invariants on pushes to `main` and pull requests targeting `main`; the existing [`.github/workflows/fork-ci.yml`](.github/workflows/fork-ci.yml) selects the full CI job set on manual dispatch only.
-See [Maintaining required checks](#maintaining-required-checks) for this fork's merge policy.
+On a fork, `ci.yml` runs only the coverage guard and invariants on pushes to `main` and pull requests targeting `main`, because no-mistakes already ran lint and targeted tests before the push; [`.github/workflows/fork-ci.yml`](.github/workflows/fork-ci.yml) runs the full CI job set on manual dispatch only, and a fork's required-check list must name only the checks that run per pull request.
 Pushing a new head to a pull request cancels that pull request's still-running CI so only the current head is validated, and a newer push to `main` cancels the older `main` run so only the newest merge's run finishes; the workflow owns that contract, the `full-ci` gate described under [The `full-ci` label](#the-full-ci-label), and their rationale.
 A fork can set the repository variable `FM_CI_SKIP_PUSH` to `1` to skip the push run of `CI`, and `FM_CI_SKIP_MACOS` to `1` to skip the stock macOS Bash job, without a tracked edit that drifts from upstream.
 Each skip is a job-level condition, so a skipped job reports success rather than leaving the pull request pending; these variables do not override the fork or `full-ci` gates above.
