@@ -216,23 +216,18 @@ wedge_threshold_round() {  # <state> <fakebin> <out> <capture> <window> <verdict
 # wedge_timer_check only for a hash whose timer is already running, so a case on
 # that path must arm it rather than assume the plain non-terminal route.
 wedge_threshold_fixture() {  # <name> <status-log> <status-age-secs> [<wedge-timer-age-secs>]
-  local name=$1 log=$2 age=$3 timer=${4-} dir state statusf window key text back kind
+  local name=$1 log=$2 age=$3 timer=${4-} dir state statusf window key text back
   dir=$(make_case "$name"); state="$dir/state"
   window="test:fm-wedge"
   statusf="$state/wedge.status"
   text='waiting at the gate'
   printf '%s' "$text" > "$dir/pane.txt"
-  # The parked-gate and validating-run cases pin the WEDGE LADDER's own reading of
-  # the run state. parked_gate_tick reads every live ship task's run state on each
-  # cycle, which these cases are not about, so they run as a scout and their
-  # current-state read counts stay the ladder's own.
-  case "$name" in parked-gate-*|validating-*) kind=scout ;; *) kind=ship ;; esac
-  printf 'window=%s\nkind=%s\nharness=grok\nbackend=tmux\n' "$window" "$kind" > "$state/wedge.meta"
+  printf 'window=%s\nkind=ship\nharness=grok\nbackend=tmux\n' "$window" > "$state/wedge.meta"
   printf '%s\n' "$log" > "$statusf"
   back=$(( $(date +%s) - age ))
   set_mtime "$back" "$statusf"
   printf '%s' "$(seen_sig "$statusf")" > "$state/.seen-wedge_status"
-  key=$(printf '%s' "$window" | tr ':/.' '___')
+  key=$(watch_window_key "$window")
   printf '%s' "$(hash_text "$text")" > "$state/.hash-$key"
   printf '1\n' > "$state/.count-$key"
   # Already surfaced once, as it is after the supervision turn that handled the
