@@ -15,6 +15,10 @@ All artifact records were cross-checked against the corresponding job's markers.
 This covered all 24 parallel and 201 serial members at that refresh; an existing live-capability skip is a portable-runner measurement, not a timing claim for the unavailable live integration.
 Observed maxima provide conservative packing weights, not an upper bound on future durations.
 
+The 2026-11-12 serial hints for `tests/fm-assertions.test.sh` (127 ms), `tests/fm-remote-job-claim-retention.test.sh` (147 ms), and `tests/fm-fleet-snapshot-contribution-input.test.sh` (219 ms) are the slowest successful `duration_ms` across Ubuntu CI runs [43209319634](https://github.com/kunchenguid/firstmate/actions/runs/43209319634) (upstream `a9ae3c0c`), [43177783470](https://github.com/kunchenguid/firstmate/actions/runs/43177783470), and [43148560146](https://github.com/kunchenguid/firstmate/actions/runs/43148560146).
+Each path has three successful, non-gate-skipped records in those runs' `fm-test-timing-aggregate.json` artifacts; failed and gate-skipped samples are excluded.
+These three previously unhinted members are the minimum needed to fit eleven shards within the unchanged 1200000 ms budget.
+
 Two serial-5 jobs were cancelled at their 30-minute cap and uploaded no artifact.
 Their completed log markers supplement the complete runs, but a cancelled job's wall time is only a lower bound and its unfinished or never-started scripts have no completed sample.
 A failed script's duration is excluded even when its lane uploaded an artifact.
