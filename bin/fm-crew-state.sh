@@ -24,7 +24,7 @@
 # Output is one stable, parseable, token-tight line firstmate can read every
 # heartbeat:
 #
-#   state: <working|parked|done|blocked|paused|failed|unknown> · source: <run-step|pane|status-log|remote-endpoint|none> · <detail>
+#   state: <working|parked|done|blocked|paused|failed|unknown> · source: <run-step|pane|status-log|remote-endpoint|review-park|none> · <detail>
 #
 # A run-step reading whose run came from inventory selection ends its detail
 # with a `run: <id>` field naming that run, and a terminal one appends
@@ -35,7 +35,9 @@
 # from (rule 2b).
 #
 # Logic, numbered for reference; rules 2b and 3 each record that rule 3's
-# status-log reconciliation is applied before rule 2b:
+# status-log reconciliation is applied before rule 2b. A lane parked on review
+# by bin/fm-park.sh short-circuits after the worktree check: paused, or blocked
+# when its relaunch failed.
 #   1. Resolve worktree + backend target + kind from state/<id>.meta. A meta
 #      recording remote_host= is a remote secondmate: its worktree and endpoint
 #      live on that host, so the local worktree and pane reads are skipped and
@@ -313,6 +315,23 @@ if [ -z "$REMOTE_HOST" ] && { [ -z "$WT" ] || [ ! -d "$WT" ]; }; then
   emit unknown none "worktree gone (torn down?)"
 fi
 
+# A lane parked on review (bin/fm-park.sh) stopped its agent on purpose; its
+# record, not the stopped pane or an old run, is the current state.
+PARK_RECORD=$STATE/$ID.review-park
+if [ -f "$PARK_RECORD" ]; then
+  PARK_PR=$(fm_meta_get "$PARK_RECORD" pr)
+  PARK_HEAD=$(fm_meta_get "$PARK_RECORD" head)
+  PARK_AT=$(fm_meta_get "$PARK_RECORD" parked_at)
+  PARK_WHEN=$(date -u -r "$PARK_AT" +%Y-%m-%dT%H:%MZ 2>/dev/null || date -u -d "@$PARK_AT" +%Y-%m-%dT%H:%MZ 2>/dev/null || printf '%s' "$PARK_AT")
+  if [ -n "$(fm_meta_get "$PARK_RECORD" resume_error)" ]; then
+    emit blocked review-park "parked on review: PR $PARK_PR at ${PARK_HEAD:0:12}; the relaunch on review activity failed - run bin/fm-park.sh resume"
+  fi
+  if [ -n "$(fm_meta_get "$PARK_RECORD" pending)" ]; then
+    emit paused review-park "parking on review: PR $PARK_PR at ${PARK_HEAD:0:12} since $PARK_WHEN; the agent's stop is not yet confirmed"
+  fi
+  emit paused review-park "parked on review: PR $PARK_PR at ${PARK_HEAD:0:12} since $PARK_WHEN; agent stopped, relaunches on review activity"
+fi
+
 # --- status log ------------------------------------------------------------
 
 # Map a status-log verb onto a canonical state for the fallback path. `paused` is
@@ -323,6 +342,12 @@ fi
 # A ship `done:` is not current-state done while bin/fm-dod-lib.sh refuses the
 # named-head reachability gate: that claim is blocked so a disposable copy is
 # not treated as finished-and-safe.
+# This read never refreshes remote-tracking refs: a fetch bounded at 30 seconds
+# per remote does not fit a caller's per-task bound (bin/fm-fleet-snapshot.sh
+# defaults to 10 seconds) and would repeat on every read. bin/fm-pr-check.sh,
+# which runs when a ready report is registered, and on each watcher sweep when
+# config/pr-register-scan is on, refreshes the same copy before it refuses, so
+# a read after it sees the fetched head.
 emit_ship_status_done() {  # [extra-detail]
   local extra=${1:-} reason
   if reason=$(fm_dod_accept_ship_done "$KIND" "$(meta_value mode)" "$WT" "$(meta_value project)" "$LOG_LINE" "$STATE" "$ID" "$META"); then
@@ -717,22 +742,8 @@ nm_gate_findings_count() {
 # Residual bound, which no unquoted positional parse of this table escapes: a
 # comma inside a whitelisted field's own value (a path with a comma in it, say)
 # still shifts the walk.
-#
-GATE_FINDINGS_CHECKSUM=''
-nm_findings_checksum() {
-  if command -v shasum >/dev/null 2>&1; then
-    LC_ALL=C shasum -a 256 | awk '{print $1}'
-  elif command -v sha256sum >/dev/null 2>&1; then
-    LC_ALL=C sha256sum | awk '{print $1}'
-  elif command -v cksum >/dev/null 2>&1; then
-    LC_ALL=C cksum | awk '{print $1 ":" $2}'
-  else
-    return 1
-  fi
-}
 nm_gate_awaits_human_decision() {
-  local header count cols idx i name field rows row rest found=1
-  GATE_FINDINGS_CHECKSUM=''
+  local header count cols idx i name field rows row rest
   header=$(printf '%s\n' "$RUN_OUT" | grep -E '^[[:space:]]*findings\[[0-9]+\]\{[^}]*\}:' | head -1)
   [ -n "$header" ] || return 1
   count=$(printf '%s' "$header" | sed -n 's/^[[:space:]]*findings\[\([0-9][0-9]*\)\].*/\1/p')
@@ -745,12 +756,9 @@ nm_gate_awaits_human_decision() {
   while [ -n "$cols" ]; do
     i=$((i + 1))
     name=$(strip_quotes "$(trim "${cols%%,*}")")
-    if [ "$name" = action ]; then
-      idx=$i
-      break
-    fi
+    if [ "$name" = action ]; then idx=$i; break; fi
     case "$name" in
-      severity|file|line|id) ;;
+      id|severity|file|line) ;;
       *) return 1 ;;
     esac
     case "$cols" in *,*) cols=${cols#*,} ;; *) cols='' ;; esac
@@ -758,8 +766,6 @@ nm_gate_awaits_human_decision() {
   [ "$idx" -gt 0 ] || return 1
   rows=$(printf '%s\n' "$RUN_OUT" \
     | awk -v n="$count" 'f { print; if (++c >= n) exit; next } /^[[:space:]]*findings\[[0-9]+\]\{/ { f = 1 }')
-  GATE_FINDINGS_CHECKSUM=$(printf '%s\n%s\n' "$header" "$rows" \
-    | nm_findings_checksum) || GATE_FINDINGS_CHECKSUM=''
   while IFS= read -r row; do
     case "$row" in *,*) ;; *) continue ;; esac
     rest=$row
@@ -770,12 +776,11 @@ nm_gate_awaits_human_decision() {
     done
     [ -n "$rest" ] || continue
     field=$(strip_quotes "$(trim "${rest%%,*}")")
-    [ "$field" = ask-user ] || continue
-    found=0
+    [ "$field" = ask-user ] && return 0
   done <<EOF
 $rows
 EOF
-  return "$found"
+  return 1
 }
 log_reports_ci_ready() {
   [ "$LOG_VERB" = "done" ] || return 1
@@ -1359,7 +1364,6 @@ if [ "$HAVE_RUN" = 1 ]; then
       # later note happens to contain can mint it.
       if nm_gate_awaits_human_decision; then
         RUN_DETAIL="$RUN_DETAIL${SEP}$FM_GATE_HUMAN_DECISION"
-        [ -z "$GATE_FINDINGS_CHECKSUM" ] || RUN_DETAIL="$RUN_DETAIL${SEP}$FM_GATE_FINDINGS_CHECKSUM_PREFIX$GATE_FINDINGS_CHECKSUM"
       fi
     else
       case "$status" in
@@ -1545,13 +1549,6 @@ fi
 # verdict reports unknown rather than trusting a possibly-stale status log as
 # the current state.
 [ -n "$BACKEND_TARGET" ] || emit unknown none "no backend target recorded"
-# A retired endpoint (bin/fm-endpoint-retire-lib.sh) is absent by design: the worker
-# finished and only the armed merge poll waits, so its absence is not death. Only a
-# latest status of `done` reads this way; anything newer falls through to the
-# ordinary reads below.
-if [ -n "$(meta_value endpoint_retired)" ] && [ "$LOG_VERB" = "done" ]; then
-  emit_ship_status_done "endpoint retired, waiting on merge"
-fi
 if ! pane_readable "$BACKEND_TARGET"; then
   # A failed probe is not itself evidence the pane is gone: the herdr CLI can
   # error or stall under load, and tmux can fail to be executed at all (a

@@ -17,7 +17,7 @@ fm_fork_family_for_basename() {  # <basename>
     fm-spawn-claude-attribution.test.sh)
       printf '%s\n' backend-dispatch
       ;;
-    fm-pr-merge-admin.test.sh|fm-endpoint-retire.test.sh)
+    fm-pr-merge-admin.test.sh)
       printf '%s\n' pr-forge
       ;;
     fm-wake-autoack.test.sh)
@@ -37,7 +37,6 @@ fm_fork_serial_weight_hints() {
   cat 2>/dev/null <<'HINTS'
 tests/fm-brief-repo-guard.test.sh 14000
 tests/fm-classify-decision-key-extra.test.sh 1200
-tests/fm-endpoint-retire.test.sh 51700
 tests/fm-nm-guard.test.sh 57600
 tests/fm-pr-merge-admin.test.sh 38500
 tests/fm-spawn-claude-attribution.test.sh 25800
