@@ -59,6 +59,26 @@ test_fork_weight_hints_stay_quiet_when_the_reader_stops_early() {
   pass "fm_fork_serial_weight_hints stays silent when its reader stops early"
 }
 
+test_changed_workflow_helper_selects_both_consumers() {
+  local tmp repo listed expected
+  tmp=$(fm_test_tmproot fm-fork-workflow-discovery)
+  repo="$tmp/repo"
+  mkdir -p "$repo/bin" "$repo/tests"
+  cp "$RUNNER" "$ROOT/bin/fm-test-run-fork.sh" "$repo/bin/"
+  cp "$ROOT/tests/lib.sh" "$ROOT/tests/fork-ci-context-helpers.sh" \
+    "$ROOT/tests/fm-ci-workflow.test.sh" "$ROOT/tests/fm-fork-ci-workflow.test.sh" "$repo/tests/"
+  git -C "$repo" init -q
+  git -C "$repo" add .
+  git -C "$repo" commit -qm 'workflow discovery fixture'
+  printf '\n# changed helper\n' >>"$repo/tests/fork-ci-context-helpers.sh"
+  listed=$(cd "$repo" && bash bin/fm-test-run.sh --list --changed --base HEAD) \
+    || fail 'changed workflow helper must have a runnable selection'
+  expected=$(printf '%s\n' tests/fm-ci-workflow.test.sh tests/fm-fork-ci-workflow.test.sh)
+  [ "$listed" = "$expected" ] \
+    || fail "changed workflow helper must select both workflow consumers, got: $listed"
+  pass 'changed workflow helper selects the upstream and fork workflow suites'
+}
+
 test_preserves_guard_shims_on_path() {
   local tmp fixture out fake_shims
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-shims.XXXXXX")
@@ -99,4 +119,5 @@ test_non_local_only_mode_refuses() {
 
 test_fork_weight_hints_stay_quiet_when_the_reader_stops_early
 test_preserves_guard_shims_on_path
+test_changed_workflow_helper_selects_both_consumers
 test_non_local_only_mode_refuses
