@@ -1,0 +1,6 @@
+Phase 1 targeted validation:
+- Initial --list --changed refused because a transient timer file was untracked; removed the file immediately and repeated successfully.
+- tests/fm-nm-test-contract.test.sh: exit 0, parsed YAML contract passed.
+- tests/fm-fork-surface-budget.test.sh: exit 0, all six cases drove the real --check-fork-surface CLI against disposable real Git histories. Exact budget/exclusions, line growth, file growth, rename/binary accounting, absent reference and malformed budget passed.
+- tests/fm-lint.test.sh: exit 124 after 300 seconds; time bound, not an assertion failure. Completed interface cases passed; capability skips and full details are retained in lint-interface.log. Not rerun; remaining regression coverage belongs to CI.
+No assertion failures or source changes. Full lint/static analysis and other pipeline phases were not invoked.

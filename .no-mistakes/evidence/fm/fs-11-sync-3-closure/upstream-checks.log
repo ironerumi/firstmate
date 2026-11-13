@@ -1,0 +1,100 @@
+=== upstream 07409e73f3bdb6de2970869fce16cbe498011d62 check runs ===
+checks[22]{conclusion,name,status}:
+  success,Full suite,completed
+  success,Behavior timing aggregate,completed
+  success,Behavior portable serial 4,completed
+  success,Behavior portable serial 9,completed
+  success,Behavior portable serial 11,completed
+  success,Behavior portable serial 10,completed
+  success,Behavior portable serial 3,completed
+  success,Stock macOS Bash snapshot compatibility,completed
+  success,Behavior portable serial 1,completed
+  success,Behavior tests (herdr-core),completed
+  success,Lint 2,completed
+  success,Behavior portable serial 2,completed
+  success,Behavior portable serial 7,completed
+  success,Behavior portable serial 8,completed
+  success,Behavior portable serial 6,completed
+  success,Behavior portable serial 5,completed
+  success,Behavior tests (Herdr),completed
+  success,Test coverage guard,completed
+  success,Behavior portable parallel 2,completed
+  success,Repo invariants,completed
+  success,Lint 1,completed
+  success,Behavior portable parallel 1,completed
+total_count: 22
+=== upstream d44427a3 check runs ===
+checks[22]{conclusion,name,status}:
+  failure,Full suite,completed
+  success,Behavior timing aggregate,completed
+  cancelled,Behavior portable serial 9,completed
+  cancelled,Behavior portable serial 6,completed
+  cancelled,Behavior portable serial 10,completed
+  cancelled,Behavior portable serial 8,completed
+  cancelled,Behavior portable serial 5,completed
+  cancelled,Behavior portable serial 7,completed
+  cancelled,Behavior portable serial 1,completed
+  cancelled,Behavior portable serial 4,completed
+  cancelled,Behavior portable serial 2,completed
+  cancelled,Behavior portable parallel 2,completed
+  cancelled,Behavior portable serial 11,completed
+  cancelled,Behavior portable parallel 1,completed
+  cancelled,Behavior portable serial 3,completed
+  cancelled,Stock macOS Bash snapshot compatibility,completed
+  success,Repo invariants,completed
+  cancelled,Lint 1,completed
+  cancelled,Behavior tests (Herdr),completed
+  cancelled,Lint 2,completed
+  cancelled,Behavior tests (herdr-core),completed
+  success,Test coverage guard,completed
+total_count: 22
+=== upstream 34c77d54 check runs ===
+checks[22]{conclusion,name,status}:
+  success,Behavior timing aggregate,completed
+  failure,Full suite,completed
+  cancelled,Behavior portable serial 7,completed
+  cancelled,Behavior portable serial 6,completed
+  cancelled,Stock macOS Bash snapshot compatibility,completed
+  cancelled,Behavior portable serial 3,completed
+  cancelled,Behavior portable serial 11,completed
+  cancelled,Behavior portable serial 9,completed
+  cancelled,Behavior portable serial 4,completed
+  success,Repo invariants,completed
+  cancelled,Behavior portable serial 2,completed
+  cancelled,Behavior portable serial 10,completed
+  cancelled,Behavior portable parallel 2,completed
+  cancelled,Behavior portable serial 5,completed
+  cancelled,Lint 1,completed
+  cancelled,Behavior portable serial 1,completed
+  cancelled,Lint 2,completed
+  cancelled,Behavior tests (herdr-core),completed
+  cancelled,Test coverage guard,completed
+  cancelled,Behavior portable serial 8,completed
+  cancelled,Behavior portable parallel 1,completed
+  cancelled,Behavior tests (Herdr),completed
+total_count: 22
+=== upstream 427056c4 check runs ===
+checks[22]{conclusion,name,status}:
+  failure,Full suite,completed
+  success,Behavior timing aggregate,completed
+  success,Behavior portable parallel 2,completed
+  success,Behavior portable serial 2,completed
+  success,Test coverage guard,completed
+  success,Behavior portable parallel 1,completed
+  success,Behavior tests (Herdr),completed
+  success,Behavior portable serial 5,completed
+  success,Behavior tests (herdr-core),completed
+  success,Behavior portable serial 8,completed
+  success,Behavior portable serial 11,completed
+  success,Behavior portable serial 10,completed
+  success,Behavior portable serial 9,completed
+  success,Lint 2,completed
+  success,Behavior portable serial 3,completed
+  success,Behavior portable serial 7,completed
+  success,Stock macOS Bash snapshot compatibility,completed
+  success,Lint 1,completed
+  success,Repo invariants,completed
+  success,Behavior portable serial 1,completed
+  success,Behavior portable serial 6,completed
+  cancelled,Behavior portable serial 4,completed
+total_count: 22

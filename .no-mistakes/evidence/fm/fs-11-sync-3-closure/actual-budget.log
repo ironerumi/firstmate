@@ -1,0 +1,13 @@
+From github.com:kunchenguid/firstmate
+ * [new branch]        main       -> reference/main
+=== actual fork-budget CLI ===
+budget CLI exit=0
+merge base=07409e73f3bdb6de2970869fce16cbe498011d62
+=== independent upstream-owned file/line measurement ===
+files=78 added=1873 deleted=392 total=2265
+=== stored budget ===
+78 2265
+=== upstream commits ahead ===
+427056c4 fix(hermes): tolerate empty args under bash 3.2 set -u (#8399)
+34c77d54 feat(bin): settle declared captain holds from forge PR events (#8422)
+d44427a3 fix: read Grok 1.0.77's Fast model composer as empty (#8418)

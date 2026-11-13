@@ -1,0 +1,14 @@
+FM_TEST_BEGIN 2026-11-13T17:45:09Z tests/fm-fork-surface-budget.test.sh family=unclassified expected_gate_skip=none
+1..6
+ok - exact budget passes; additive and upstream-only paths excluded
+ok - over-budget lines fail with actual and permitted values
+ok - over-budget files fail independently of line budget
+ok - renames retain upstream deletion cost and binaries retain file cost
+ok - missing reference refuses measurement
+ok - malformed budget refuses comparison
+FM_TEST_COMPLETE
+FM_TEST_END 2026-11-13T17:45:14Z tests/fm-fork-surface-budget.test.sh exit=0 duration_ms=4316 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=4408
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=4316 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-fork-surface-budget.test.sh duration_ms=4316
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M7B026KTWGZ60SS810RT5NND/fork-budget.json
