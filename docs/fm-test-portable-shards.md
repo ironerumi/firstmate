@@ -17,7 +17,26 @@ Observed maxima provide conservative packing weights, not an upper bound on futu
 
 The 2026-11-12 serial hints for `tests/fm-assertions.test.sh` (127 ms), `tests/fm-remote-job-claim-retention.test.sh` (147 ms), and `tests/fm-fleet-snapshot-contribution-input.test.sh` (219 ms) are the slowest successful `duration_ms` across Ubuntu CI runs [43209319634](https://github.com/kunchenguid/firstmate/actions/runs/43209319634) (upstream `a9ae3c0c`), [43177783470](https://github.com/kunchenguid/firstmate/actions/runs/43177783470), and [43148560146](https://github.com/kunchenguid/firstmate/actions/runs/43148560146).
 Each path has three successful, non-gate-skipped records in those runs' `fm-test-timing-aggregate.json` artifacts; failed and gate-skipped samples are excluded.
-These three previously unhinted members are the minimum needed to fit eleven shards within the unchanged 1200000 ms budget.
+These previously unhinted members use successful Ubuntu measurements rather than default weights.
+
+The 2026-11-13 serial refresh uses the slowest successful, non-gate-skipped `duration_ms` from three green Ubuntu CI aggregates: [43209319634](https://github.com/kunchenguid/firstmate/actions/runs/43209319634), [43331691300](https://github.com/kunchenguid/firstmate/actions/runs/43331691300), and [43359484992](https://github.com/kunchenguid/firstmate/actions/runs/43359484992).
+Each refreshed path has three successful samples.
+It refreshes the two growing lock/home-summary suites and replaces ten unmeasured defaults without changing shard count, packing budget, or fork-owned provisional measurements.
+
+| Suite (`tests/`) | Hint (ms) |
+|---|---:|
+| `fm-git-push-guard.test.sh` | 1316 |
+| `fm-hc-lab.test.sh` | 776 |
+| `fm-home-summary-refresh.test.sh` | 55389 |
+| `fm-parent-channel-scan-exclusion.test.sh` | 4468 |
+| `fm-pipeline-spend.test.sh` | 3015 |
+| `fm-project-mode.test.sh` | 678 |
+| `fm-record-export-remote-home.test.sh` | 3914 |
+| `fm-remote-inherit-generation.test.sh` | 4874 |
+| `fm-remote-job-claim-reap.test.sh` | 3716 |
+| `fm-review-check.test.sh` | 1957 |
+| `fm-send-kiro-confirm.test.sh` | 1382 |
+| `fm-watcher-lock.test.sh` | 141417 |
 
 Two serial-5 jobs were cancelled at their 30-minute cap and uploaded no artifact.
 Their completed log markers supplement the complete runs, but a cancelled job's wall time is only a lower bound and its unfinished or never-started scripts have no completed sample.
