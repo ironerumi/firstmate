@@ -19,6 +19,12 @@
 # The default (no explicit-path) path also runs bin/fm-lint-workflows.sh so a
 # malformed GitHub workflow, including a self-broken ci.yml, fails locally
 # before merge instead of only failing to run as CI.
+# --check-fork-surface checks .fork-surface-budget's two integers: maximum
+# upstream-owned files and maximum added+deleted lines. The local invariant
+# gate invokes it separately from shell lint. Measurement uses the merge base
+# with reference/main, excludes fork-added paths, disables rename detection,
+# and includes tracked working-tree edits. Binary changes count as files with
+# zero textual lines. This mode requires the budget file and reference/main.
 #
 # With no explicit paths, the file set and source-following posture depend
 # on context:
@@ -468,6 +474,34 @@ fm_lint_usage() {
     { exit }
   ' "$SELF"
 }
+
+fm_lint_check_fork_surface() {
+  local base stats files lines budget_files budget_lines
+  if ! awk 'NR != 1 || NF != 2 || $1 !~ /^[0-9]+$/ || $2 !~ /^[0-9]+$/ { bad=1 }
+      END { exit (bad || NR != 1) }' "$ROOT/.fork-surface-budget"; then
+    printf 'fm-lint.sh: fork surface budget must contain two nonnegative integers (files lines); repair .fork-surface-budget.\n' >&2
+    return 1
+  fi
+  read -r budget_files budget_lines < "$ROOT/.fork-surface-budget"
+  base=$(git merge-base HEAD reference/main) || {
+    printf 'fm-lint.sh: fork surface base unavailable; fetch reference/main.\n' >&2
+    return 1
+  }
+  stats=$(git diff --no-ext-diff --no-textconv --no-renames --numstat --diff-filter=MDT "$base" --) || return 1
+  read -r files lines <<EOF
+$(printf '%s\n' "$stats" | awk 'NF { files++; lines += $1 + $2 } END { print files+0, lines+0 }')
+EOF
+  if [ "$files" -gt "$budget_files" ] || [ "$lines" -gt "$budget_lines" ]; then
+    printf 'fork surface measured: %s upstream files, %s changed lines\n' "$files" "$lines" >&2
+    printf 'fork surface budget: %s upstream files, %s changed lines; reduce edits or deliberately update .fork-surface-budget.\n' "$budget_files" "$budget_lines" >&2
+    return 1
+  fi
+}
+
+if [ "${1:-}" = --check-fork-surface ]; then
+  fm_lint_check_fork_surface
+  exit $?
+fi
 
 # Default no-args lint also validates GitHub workflows. Explicit paths stay a
 # ShellCheck-only override so callers can target one shell root.

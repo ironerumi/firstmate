@@ -45,6 +45,9 @@ document:
 commands:
   lint: |
     set -eu
+    # Pipeline copies have only origin; populate the budget check's upstream ref.
+    git fetch --no-tags https://github.com/kunchenguid/firstmate.git main:refs/remotes/reference/main
+    bash bin/fm-lint.sh --check-fork-surface
     bin/fm-lint.sh
     bash tests/fm-pi-primary-types.test.sh
     bash bin/fm-test-run.sh --check-coverage
