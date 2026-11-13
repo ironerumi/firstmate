@@ -1,0 +1,12 @@
+Focused repair-phase reproduction:
+- Initial --list --changed was blocked by a transient timing file; removed it immediately, then listing passed.
+- Ran bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-extension-binding.test.sh exactly once.
+- FAILED, exit 1 after 39 seconds: not ok - an isolated extension conformance section failed.
+- Several isolated sections passed; this reproduction did not emit the earlier orphan-source deadline assertion, so its underlying cause is not established.
+- No suite hit its time bound.
+- Transcript: repair-extension-binding.log.
+- git diff --quiet 07409e73 HEAD -- tests/fm-extension-binding.test.sh exited 0: restored host retains upstream text.
+- No debugging, reruns, or repairs performed, as required by the trusted runbook after an assertion failure. Editing the restored host would also conflict with the required upstream-text restoration; no human decision authorizing that exception was supplied.
+- Other suites untested in this focused repair turn: only the reported failing suite was selected, per focused-verification rules.
+- Phase 2 untested: phase 1 failed.
+- No source changes; git status --short clean. Root-cause repair remains unresolved and requires a scoped human decision if it would alter the restored host. No production-code change is justified by this reproduction.

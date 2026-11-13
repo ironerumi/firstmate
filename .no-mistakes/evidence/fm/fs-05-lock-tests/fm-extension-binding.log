@@ -1,0 +1,27 @@
+FM_TEST_BEGIN 2026-11-13T10:39:51Z tests/fm-extension-binding.test.sh family=standalone expected_gate_skip=none
+ok - unknown extension conformance section selectors fail before setup
+error[path-unsafe]: package source must not be inside a Git project or task copy
+error[binding-failed]: error[path-unsafe]: package source must not be inside a Git project or task copy
+not ok - local bind returned no binding retirement identity
+error[binding-failed]: error[path-unsafe]: package source must not be inside a Git project or task copy
+error[binding-failed]: error[path-unsafe]: package source must not be inside a Git project or task copy
+error[adapter-unbound]: no home-local extension binding enables adapter: file-signal
+error: extension adapter verification failed: file-signal
+error[binding-failed]: {run-worktree}/.phase-test-tmp/fm-extension-binding.LNY5cf/remote-root/bin/fm-procevent.sh: line 259: {run-worktree}/.phase-test-tmp/fm-extension-binding.LNY5cf/remote-root/bin/fm-task-inbox-lib.sh: No such file or directory
+{run-worktree}/.phase-test-tmp/fm-extension-binding.LNY5cf/remote-root/bin/fm-procevent.sh: line 261: {run-worktree}/.phase-test-tmp/fm-extension-binding.LNY5cf/remote-root/bin/fm-backend.sh: No such file or directory
+error[json-invalid]: package transfer is empty
+ok - real deadline startup
+ok - the section coordinator propagates ordered failures and bounded cleanup
+not ok - an isolated extension conformance section failed
+Traceback (most recent call last):
+  File "<stdin>", line 135, in <module>
+AssertionError: CalledProcessError(1, ['node', '{run-worktree}/bin/fm-extension.mjs', 'bind', '{run-worktree}/.phase-test-tmp/fm-extension-binding.cUfSiq/deadline-invoke/package', '--adapter', 'ext-sleep', '--trust-same-user-code', '--timeout-ms', '1000'])
+AssertionError('deadline fixture did not reach its control boundary')
+AssertionError('deadline fixture did not reach its control boundary')
+CalledProcessError(1, ['node', '{run-worktree}/bin/fm-extension.mjs', 'bind', '{run-worktree}/.phase-test-tmp/fm-extension-binding.cUfSiq/deadline-stalled/package', '--adapter', 'ext-sleep', '--trust-same-user-code', '--timeout-ms', '1000'])
+CalledProcessError(1, ['node', '{run-worktree}/bin/fm-extension.mjs', 'bind', '{run-worktree}/.phase-test-tmp/fm-extension-binding.cUfSiq/deadline-suspended-stall/package', '--adapter', 'ext-sleep', '--trust-same-user-code', '--timeout-ms', '1000'])
+FM_TEST_END 2026-11-13T10:40:53Z tests/fm-extension-binding.test.sh exit=1 duration_ms=62187 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=1 skipped_gate=0 duration_ms=62273
+FM_TEST_SUMMARY_FAMILY family=standalone count=1 duration_ms=62187 failed=1
+FM_TEST_SLOWEST rank=1 script=tests/fm-extension-binding.test.sh duration_ms=62187
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M7A4Z3VRTSTAKHQAZTCD6376/fm-extension-binding.json

@@ -1,0 +1,59 @@
+[
+  {
+    "run": 1,
+    "command": [
+      "bash",
+      "bin/fm-test-run.sh",
+      "tests/fm-directory-lock-node.test.sh",
+      "--jobs",
+      "1"
+    ],
+    "env": {
+      "HOME": "~",
+      "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:~/.nvm/versions/node/v25.8.1/bin"
+    },
+    "exit": 0,
+    "wall_ms": 8092,
+    "duration_ms": 7926,
+    "tap_rows": 6,
+    "tap_identical": true
+  },
+  {
+    "run": 2,
+    "command": [
+      "bash",
+      "bin/fm-test-run.sh",
+      "tests/fm-directory-lock-node.test.sh",
+      "--jobs",
+      "1"
+    ],
+    "env": {
+      "HOME": "~",
+      "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:~/.nvm/versions/node/v25.8.1/bin"
+    },
+    "exit": 0,
+    "wall_ms": 7708,
+    "duration_ms": 7566,
+    "tap_rows": 6,
+    "tap_identical": true
+  },
+  {
+    "run": 3,
+    "command": [
+      "bash",
+      "bin/fm-test-run.sh",
+      "tests/fm-directory-lock-node.test.sh",
+      "--jobs",
+      "1"
+    ],
+    "env": {
+      "HOME": "~",
+      "PATH": "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:~/.nvm/versions/node/v25.8.1/bin"
+    },
+    "exit": 0,
+    "wall_ms": 7508,
+    "duration_ms": 7357,
+    "tap_rows": 6,
+    "tap_identical": true
+  }
+]

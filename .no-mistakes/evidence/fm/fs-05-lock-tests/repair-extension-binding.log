@@ -1,0 +1,45 @@
+FM_TEST_BEGIN 2026-11-13T10:33:57Z tests/fm-extension-binding.test.sh family=standalone expected_gate_skip=none
+ok - unknown extension conformance section selectors fail before setup
+ok - real deadline startup
+ok - the section coordinator propagates ordered failures and bounded cleanup
+/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-procevent.sh: line 259: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-task-inbox-lib.sh: No such file or directory
+/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-procevent.sh: line 261: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-backend.sh: No such file or directory
+ok - real deadline stalled
+ok - real deadline invoke
+ok - real deadline launch
+ok - real deadline handshake
+not-autohandled: flow-source (left for the handler; still unacknowledged)
+ok - real deadline suspended-stall
+ok - invoke, handshake, readiness and release survive suspension while awake stalls time out
+
+all extension-binding tests passed
+not-autohandled: example-file (left for the handler; still unacknowledged)
+/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-procevent.sh: line 259: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-task-inbox-lib.sh: No such file or directory
+/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-procevent.sh: line 261: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-backend.sh: No such file or directory
+/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-procevent.sh: line 259: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-task-inbox-lib.sh: No such file or directory
+/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-procevent.sh: line 261: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-backend.sh: No such file or directory
+ok - one external adapter registers, invokes, captures unhandled evidence, classifies, and terminally retires end to end
+ok - the shipped file-signal package is a runnable end-to-end external adapter
+not-autohandled: remote-source (left for the handler; still unacknowledged)
+ok - register-extension and reconcile of an unhandled extension result take their locks in one order
+
+all extension-binding tests passed
+/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-procevent.sh: line 259: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-task-inbox-lib.sh: No such file or directory
+/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-procevent.sh: line 261: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-backend.sh: No such file or directory
+/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-procevent.sh: line 259: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-task-inbox-lib.sh: No such file or directory
+/private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-procevent.sh: line 261: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-extension-binding.Z5w4GG/remote-root/bin/fm-backend.sh: No such file or directory
+ok - serialized remote binding crosses fm-on through addressed-home capture and retirement
+
+all extension-binding tests passed
+ok - inner result.silent host crash releases the parent lifecycle lock before terminal retry
+not-autohandled: example-symlinked (left for the handler; still unacknowledged)
+ok - a home reached through a symlinked ancestor captures external evidence normally
+ok - local binding retirement requires its exact identity and disables invocation
+ok - handshake execution rejects and reaps foreground descendants
+
+all extension-binding tests passed
+not ok - an isolated extension conformance section failed
+FM_TEST_END 2026-11-13T10:34:36Z tests/fm-extension-binding.test.sh exit=1 duration_ms=38950 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=1 skipped_gate=0 duration_ms=39050
+FM_TEST_SUMMARY_FAMILY family=standalone count=1 duration_ms=38950 failed=1
+FM_TEST_SLOWEST rank=1 script=tests/fm-extension-binding.test.sh duration_ms=38950

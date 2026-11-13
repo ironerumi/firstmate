@@ -1,0 +1,8 @@
+fm-directory-lock-node exit=0
+fm-directory-lock-wake-queue exit=0
+fm-directory-lock-interleavings exit=0
+fm-directory-lock-recovery exit=0
+fm-watcher-lock exit=0
+fm-extension-binding exit=1
+fm-wake-queue exit=0
+fm-test-run exit=1

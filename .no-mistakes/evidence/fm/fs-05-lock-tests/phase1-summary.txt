@@ -1,0 +1,10 @@
+Target: 38a7be1df61c12e09651db591b71de68f4f5aae7
+Phase 1: initial --list --changed was blocked by an agent-created timing marker; marker removed immediately and listing succeeded. Narrowed to four relocated suites, three restored hosts, and the runner contract suite. All suites ran serially with --jobs 1 --per-script-timeout-secs 300.
+Passed: fm-directory-lock-interleavings, fm-directory-lock-recovery, fm-directory-lock-wake-queue, fm-watcher-lock.
+Partial Node evidence: N1, N2/N3, N4, N5, N6 passed against real Bash/Node lock implementations. Public binding case failed before binding because package source was inside the Git worktree.
+Setup failures: fm-directory-lock-node and fm-extension-binding exited 1. The agent selected TMPDIR=$PWD/.phase-test-tmp to isolate test writes. This placed package fixtures inside a Git project, which the real product rejects with error[path-unsafe]. These results do not establish a product regression or successful binding/conformance. No failed suite was rerun or debugged. Prior-round orphan recovery failure was not independently reproduced in an admissible package setup here.
+Time bound (untested, not product failures): fm-test-run and fm-wake-queue each terminated at 300 seconds with exit 124. Neither rerun.
+Phase 2 skipped: phase 1 suites failed; runbook prohibits additional scenarios in that case. No new suites started after minute 12.
+Explicit source-byte acceptance check: all three restored host files matched upstream 07409e73 using git show | cmp. This is a required text contract, not live behavior evidence. No production lock implementation changes were present in the checked paths.
+No source edits, fixes, commits, lint, formatter, broad suite execution, or pipeline-control commands performed. Worktree-local temporary test data removed during finalization; no processes referencing the run worktree remained on the process check.
+Verdict: inconclusive. Binding/conformance evidence is missing because of agent-selected setup; full runner and queue completion is not established because of the prescribed time bounds.

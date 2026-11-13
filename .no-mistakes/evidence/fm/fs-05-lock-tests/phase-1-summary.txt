@@ -1,0 +1,5 @@
+Phase 1: node, interleavings, recovery, directory-lock-wake-queue and restored watcher suites passed.
+Restored extension-binding suite failed its isolated-section coordinator assertion (exit 1); not rerun or modified.
+Runner-contract and restored wake-queue suites each hit the 300-second bound (exit 124): untested, CI coverage required; not rerun.
+Phase 2 skipped because phase 1 failed.
+All three restored host files compare byte-for-byte to upstream 07409e73. Production lock sources unchanged.

@@ -1,0 +1,20 @@
+FM_TEST_BEGIN 2026-11-13T10:36:27Z tests/fm-directory-lock-recovery.test.sh family=watcher-wake-lock expected_gate_skip=none
+ok - D1-bash-5.3: a staged directory record stays private and its creator discards it on refusal
+ok - D2-bash-5.3: a just-published directory record is complete and owned by its live publisher
+ok - D3-bash-5.3: a dead directory holder is recovered at once regardless of age
+ok - D7-bash-5.3: an empty handoff pid is held exactly while the generation's pid lives
+ok - D17-bash-5.3: a background-subshell publisher records its own frame identity
+ok - D1-bash-3.2: a staged directory record stays private and its creator discards it on refusal
+ok - D2-bash-3.2: a just-published directory record is complete and owned by its live publisher
+ok - D3-bash-3.2: a dead directory holder is recovered at once regardless of age
+ok - D7-bash-3.2: an empty handoff pid is held exactly while the generation's pid lives
+ok - D17-bash-3.2: a background-subshell publisher records its own frame identity
+ok - D4: a release killed after commit, mid-delete or before the final rmdir is finished by the next acquirer
+ok - D4b: a handed-off release killed after commit is recovered as the caller
+ok - D7': a bounded helper killed by its deadline after acquiring leaves the caller holding
+ok - D16: a dead pre-v2 directory record is recovered as raw, leaving its private directory inert
+FM_TEST_END 2026-11-13T10:36:50Z tests/fm-directory-lock-recovery.test.sh exit=0 duration_ms=22245 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=22336
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=22245 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-directory-lock-recovery.test.sh duration_ms=22245
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M7A4Z3VRTSTAKHQAZTCD6376/fm-directory-lock-recovery.json

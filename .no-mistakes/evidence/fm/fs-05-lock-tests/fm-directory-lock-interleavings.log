@@ -1,0 +1,22 @@
+FM_TEST_BEGIN 2026-11-13T10:36:08Z tests/fm-directory-lock-interleavings.test.sh family=watcher-wake-lock expected_gate_skip=none
+ok - direct directory locks release and recover through the shared paths
+ok - copied-link fallback matches native acquire, re-entry, refusal, dead-owner recovery and release
+ok - directory lock has exactly one winner in 10 event-synchronized rounds of 8 contenders
+ok - D1b: a claim that fails after publication leaves its generation to retirement
+ok - D5: an orphaned retirement child resumed after recovery cannot touch the successor
+ok - D5': a paused stealer's retirement is addressed only to the generation it validated
+ok - D5c: stale acquisition retires only its captured generation
+ok - D6: a late publication by a dead publisher fails onto a holder or becomes an ordinary dead-held record
+ok - D8: two observers of a dead directory steal mutex compose and cannot disturb the winner
+ok - D8b: a paused direct reaper retires only the generation it rechecked
+ok - D9: an uncommitted retirement leaves the complete held record and deletes nothing
+ok - D10: a committed retirement blocked by a remaining known file is finished by the next acquirer
+ok - D11: a record with more than one generation is invalid and never released or taken
+ok - D11b: an invalid dead record fails closed before destructive cleanup
+ok - D11c: an invalid dead watcher record is refused before downtime evidence is published
+ok - D12: staging directories beside a directory lock are never read or removed
+FM_TEST_END 2026-11-13T10:36:27Z tests/fm-directory-lock-interleavings.test.sh exit=0 duration_ms=18949 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=19045
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=18949 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-directory-lock-interleavings.test.sh duration_ms=18949
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M7A4Z3VRTSTAKHQAZTCD6376/fm-directory-lock-interleavings.json

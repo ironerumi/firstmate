@@ -1,0 +1,3 @@
+MATCH upstream 07409e73 tests/fm-watcher-lock.test.sh
+MATCH upstream 07409e73 tests/fm-extension-binding.test.sh
+MATCH upstream 07409e73 tests/fm-wake-queue.test.sh

@@ -1,0 +1,10 @@
+{
+  "restored_hosts_identical": [
+    "tests/fm-watcher-lock.test.sh",
+    "tests/fm-extension-binding.test.sh",
+    "tests/fm-wake-queue.test.sh"
+  ],
+  "production_unchanged": true,
+  "node_hint_ms": 8800,
+  "packing_margin_ms": 31305
+}

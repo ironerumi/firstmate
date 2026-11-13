@@ -1,0 +1,3 @@
+tests/fm-directory-lock-node.test.sh
+tests/fm-extension-binding.test.sh
+tests/fm-procevent-extension-errors.test.sh

@@ -1,0 +1,17 @@
+fm-directory-lock-node elapsed=0m
+fm-directory-lock-node runner_exit=1
+fm-directory-lock-wake-queue elapsed=0m
+fm-directory-lock-wake-queue runner_exit=0
+fm-directory-lock-interleavings elapsed=1m
+fm-directory-lock-interleavings runner_exit=0
+fm-directory-lock-recovery elapsed=1m
+fm-directory-lock-recovery runner_exit=0
+fm-watcher-lock elapsed=1m
+fm-watcher-lock runner_exit=0
+fm-extension-binding elapsed=4m
+fm-extension-binding runner_exit=1
+fm-test-run elapsed=6m
+fm-test-run runner_exit=1
+fm-wake-queue elapsed=11m
+fm-wake-queue runner_exit=1
+Phase 1 completed elapsed=16m; no failed suites rerun.
