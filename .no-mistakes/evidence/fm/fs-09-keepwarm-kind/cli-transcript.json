@@ -1,0 +1,121 @@
+[
+  {
+    "command": "fm-operational-input.sh encode session-start",
+    "input": "synthetic CLI payload",
+    "exit": 0,
+    "stdout": "\u2063FIRSTMATE_OP: v1 session-start: synthetic CLI payload",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh kind",
+    "input": "\u2063FIRSTMATE_OP: v1 session-start: synthetic CLI payload",
+    "exit": 0,
+    "stdout": "session-start\n",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh encode watcher",
+    "input": "synthetic CLI payload",
+    "exit": 0,
+    "stdout": "\u2063FIRSTMATE_OP: v1 watcher: synthetic CLI payload",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh kind",
+    "input": "\u2063FIRSTMATE_OP: v1 watcher: synthetic CLI payload",
+    "exit": 0,
+    "stdout": "watcher\n",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh encode turn-end-guard",
+    "input": "synthetic CLI payload",
+    "exit": 0,
+    "stdout": "\u2063FIRSTMATE_OP: v1 turn-end-guard: synthetic CLI payload",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh kind",
+    "input": "\u2063FIRSTMATE_OP: v1 turn-end-guard: synthetic CLI payload",
+    "exit": 0,
+    "stdout": "turn-end-guard\n",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh encode away-supervisor",
+    "input": "synthetic CLI payload",
+    "exit": 0,
+    "stdout": "\u2063FIRSTMATE_OP: v1 away-supervisor: synthetic CLI payload",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh kind",
+    "input": "\u2063FIRSTMATE_OP: v1 away-supervisor: synthetic CLI payload",
+    "exit": 0,
+    "stdout": "away-supervisor\n",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh encode launch-brief",
+    "input": "synthetic CLI payload",
+    "exit": 0,
+    "stdout": "\u2063FIRSTMATE_OP: v1 launch-brief: synthetic CLI payload",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh kind",
+    "input": "\u2063FIRSTMATE_OP: v1 launch-brief: synthetic CLI payload",
+    "exit": 0,
+    "stdout": "launch-brief\n",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh encode branch-outcome",
+    "input": "synthetic CLI payload",
+    "exit": 0,
+    "stdout": "\u2063FIRSTMATE_OP: v1 branch-outcome: synthetic CLI payload",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh kind",
+    "input": "\u2063FIRSTMATE_OP: v1 branch-outcome: synthetic CLI payload",
+    "exit": 0,
+    "stdout": "branch-outcome\n",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh encode from-firstmate",
+    "input": "synthetic CLI payload",
+    "exit": 0,
+    "stdout": "[fm-from-firstmate]\u2063synthetic CLI payload",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh kind",
+    "input": "[fm-from-firstmate]\u2063synthetic CLI payload",
+    "exit": 0,
+    "stdout": "from-firstmate\n",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh encode keep-warm",
+    "input": "synthetic heartbeat",
+    "exit": 2,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh kind",
+    "input": "\u2063FIRSTMATE_OP: v1 keep-warm: OBSOLETE_KIND_VISIBLE",
+    "exit": 1,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": "fm-operational-input.sh classify",
+    "input": "\u2063FIRSTMATE_OP: v1 keep-warm: OBSOLETE_KIND_VISIBLE",
+    "exit": 0,
+    "stdout": "legacy-operational\n",
+    "stderr": ""
+  }
+]
