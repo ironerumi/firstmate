@@ -202,23 +202,6 @@ PROBE
 # Nothing re-checks it, so a worker that later changes directory into the
 # repository's primary checkout would run this branch-switching suite in the one
 # checkout every linked worktree resolves against. The runner refuses that.
-# A caller that finds its hint and stops reading (portable_serial_weight_for
-# returns at the first match) closes the pipe while the fork's hint line is still
-# unwritten. Where SIGPIPE is ignored, as under some CI parents, the builtin
-# printf then reports "write error: Broken pipe" on stderr for every such lookup.
-test_fork_weight_hints_stay_quiet_when_the_reader_stops_early() {
-  local tmp err
-  tmp=$(fm_test_tmproot fm-test-run-fork-hints)
-  err="$tmp/hints.err"
-  ( trap '' PIPE
-    # shellcheck source=bin/fm-test-run-fork.sh
-    . "$ROOT/bin/fm-test-run-fork.sh"
-    fm_fork_serial_weight_hints
-  ) 2>"$err" | { exec <&-; sleep 0.3; }
-  [ ! -s "$err" ] || fail "the fork's weight hints wrote to stderr when their reader stopped early: $(cat "$err")"
-  pass "fm_fork_serial_weight_hints stays silent when its reader stops early"
-}
-
 test_task_marker_refuses_the_primary_checkout() {
   local tmp repo linked out rc
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-primary.XXXXXX")
@@ -777,7 +760,7 @@ assert doc["scripts"] == []
 assert doc["families"] == []
 ' "$json" || { rm -rf "$tmp"; fail "empty selection JSON summary is wrong"; }
   fake_bin="$tmp/fake-bin"
-  real_git=$(fm_real_tool git)
+  real_git=$(command -v git)
   mkdir -p "$fake_bin"
   cat >"$fake_bin/git" <<'SH'
 #!/usr/bin/env bash
@@ -1939,37 +1922,10 @@ assert len(doc["scripts"])==3
   pass "aggregate-json merges lane timing artifacts"
 }
 
-test_preserves_guard_shims_on_path() {
-  local tmp fixture out fake_shims
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-shims.XXXXXX")
-  fake_shims="$tmp/fake-home/bin/shims"
-  mkdir -p "$fake_shims"
-  ln -s "$ROOT/bin/fm-nm-guard-shim.sh" "$fake_shims/git"
-  fixture="$tmp/probe.test.sh"
-  out="$tmp/out.txt"
-  cat >"$fixture" <<'SH'
-#!/usr/bin/env bash
-resolved=$(command -v git)
-[ "$resolved" = "$EXPECTED_GIT" ] || {
-  echo "runner resolved git outside the inherited guard shims: $resolved" >&2
-  exit 1
-}
-echo "ok - probe"
-SH
-  chmod +x "$fixture"
-  EXPECTED_GIT="$fake_shims/git" PATH="$fake_shims:$PATH" "$RUNNER" "$fixture" >"$out" 2>&1 \
-    || { rm -rf "$tmp"; fail "runner should preserve guard shims for test children: $(cat "$out")"; }
-  grep -q '^ok - probe$' "$out" || { rm -rf "$tmp"; fail "probe fixture did not run: $(cat "$out")"; }
-  rm -rf "$tmp"
-  pass "runner preserves inherited guard shims for test children"
-}
-
 test_list_all_exact_suite_coverage
-test_preserves_guard_shims_on_path
 test_family_selection
 test_single_script_selection
 test_changed_file_selection_is_conservative
-test_fork_weight_hints_stay_quiet_when_the_reader_stops_early
 test_task_marker_refuses_the_primary_checkout
 test_changed_runner_surfaces_select_their_family
 test_shell_line_ending_policy_selects_runner_contract

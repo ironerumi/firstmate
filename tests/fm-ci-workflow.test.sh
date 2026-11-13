@@ -725,51 +725,8 @@ RUBY
   pass "CI matrices cover every executable serial lane and canonical lint root exactly once"
 }
 
-# The fork's automatic events run just the two guards; a full manual call
-# restores the same complete inventory the upstream-variable matrix checks.
-# A missing repository/full context or a guard mistakenly joining the expensive
-# jobs would fail this table rather than silently change the expected job set.
-test_fork_automatic_guards_and_manual_full_call() {
-  local all event full skip_push skip_macos expected want actual
-  all=$(workflow_jobs) || fail "could not list ci.yml jobs"
-  while read -r event full skip_push skip_macos expected; do
-    [ "$skip_push" != - ] || skip_push=
-    [ "$skip_macos" != - ] || skip_macos=
-    case "$expected" in
-      guards) want=$(printf '%s\n' test-coverage invariants) ;;
-      all) want=$all ;;
-      none) want= ;;
-      all-but-macos) want=$(printf '%s\n' "$all" | grep -vx macos-stock-bash) ;;
-      *) fail "unknown fork expectation $expected" ;;
-    esac
-    actual=$(jobs_running_under event="$event" repository=ironerumi/firstmate head=ironerumi/firstmate \
-      full="$full" skip_push="$skip_push" skip_macos="$skip_macos") \
-      || fail "could not resolve fork $event full=$full conditions"
-    [ "$actual" = "$want" ] \
-      || fail "fork $event full=$full must run $expected jobs, got: $actual"
-  done <<'TABLE'
-push              false - - guards
-pull_request      false - - guards
-push              false 1 - none
-pull_request      false 1 1 guards
-workflow_dispatch true  - - all
-workflow_dispatch true  1 - all
-workflow_dispatch true  - 1 all-but-macos
-TABLE
-  actual=$(job_runs_under tests-timing-aggregate repository=ironerumi/firstmate head=ironerumi/firstmate needs=failure) \
-    || fail "could not resolve fork automatic aggregate"
-  [ "$actual" = false ] || fail "the aggregate must not run in a lightweight fork event"
-  actual=$(job_runs_under tests-timing-aggregate event=workflow_dispatch repository=ironerumi/firstmate full=true needs=failure) \
-    || fail "could not resolve fork full aggregate"
-  [ "$actual" = true ] || fail "the full fork aggregate must run even after a failed lane"
-  run_full_suite_verdict event=workflow_dispatch repository=ironerumi/firstmate full=true >/dev/null \
-    || fail "a passing full fork run must conclude a passing Full suite verdict"
-  if run_full_suite_verdict event=workflow_dispatch repository=ironerumi/firstmate full=true needs=failure >/dev/null; then
-    fail "a full fork run with a failed lane must conclude a failing Full suite verdict"
-  fi
-  pass "fork automatic CI retains guards and manual full calls restore all eligible jobs"
-}
-
+# The fork suite sources these helpers without executing upstream cases.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
 test_ci_matrices_match_executable_partitions
 test_pr_pushes_supersede_within_one_pr
 test_separate_prs_do_not_cancel_each_other
@@ -782,10 +739,10 @@ test_unrelated_label_starts_no_job
 test_late_unrelated_label_run_never_masks_a_full_ci_pass
 test_unrelated_label_never_masks_an_earlier_failure
 test_fork_skip_variables_are_opt_in
-test_fork_automatic_guards_and_manual_full_call
 test_timing_aggregate_still_runs_after_a_failed_lane
 test_every_job_has_a_finite_timeout
 test_every_job_belongs_to_exactly_one_timeout_tier
 test_fast_tier_shares_one_short_tripwire
 test_normal_tier_shares_one_budget
 test_heavy_tier_keeps_a_step_tripwire_under_a_job_backstop
+fi

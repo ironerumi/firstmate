@@ -11,7 +11,8 @@
 
 fm_fork_family_for_basename() {  # <basename>
   case "$1" in
-    fm-brief-repo-guard.test.sh|fm-nm-guard.test.sh|fm-classify-decision-key-extra.test.sh)
+    fm-brief-repo-guard.test.sh|fm-nm-guard.test.sh|fm-classify-decision-key-extra.test.sh|\
+    fm-fork-runner-local.test.sh|fm-fork-ci-workflow.test.sh)
       printf '%s\n' pure-contract-unit
       ;;
     fm-spawn-claude-attribution.test.sh|fm-worker-slot-safety.test.sh|fm-worker-pool-safety.test.sh)
@@ -20,7 +21,7 @@ fm_fork_family_for_basename() {  # <basename>
     fm-pr-merge-admin.test.sh)
       printf '%s\n' pr-forge
       ;;
-    fm-worker-role-extensions.test.sh|fm-procevent-identity.test.sh)
+    fm-worker-role-extensions.test.sh|fm-procevent-identity.test.sh|fm-claude-stop-autoack.test.sh)
       printf '%s\n' standalone
       ;;
     fm-doorbell-recovery.test.sh|fm-wake-autoack.test.sh|fm-directory-lock-interleavings.test.sh|\
@@ -34,8 +35,9 @@ fm_fork_family_for_basename() {  # <basename>
 }
 
 # Provisional local macOS weights until fork CI measures them on Ubuntu.
-# Brief-guard, nm-guard, merge-admin, directory-lock, doorbell and process-event
-# identity hints use the slowest of at least three clean runs plus 10%, rounded
+# Brief-guard, nm-guard, merge-admin, directory-lock, doorbell, process-event
+# identity, Stop-autoack and fork contract hints use the slowest of at least
+# three clean runs plus 10%, rounded
 # up to 100 ms.
 # Other hints retain their initial local measurements (twice one run for older
 # suites). Without hints each file packs at the 45000 ms default and overfills
@@ -60,5 +62,8 @@ tests/fm-directory-lock-node.test.sh 8800
 tests/fm-directory-lock-wake-queue.test.sh 10900
 tests/fm-procevent-identity.test.sh 34900
 tests/fm-doorbell-recovery.test.sh 15200
+tests/fm-claude-stop-autoack.test.sh 14200
+tests/fm-fork-runner-local.test.sh 3100
+tests/fm-fork-ci-workflow.test.sh 2100
 HINTS
 }
