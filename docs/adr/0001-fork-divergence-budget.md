@@ -2,7 +2,15 @@
 
 This repo is a fork of `kunchenguid/firstmate` that merges upstream continuously (measured 2026-08-16: 35 ahead / 9 behind, merge-base one day old; measured again 2026-09-28: 66 ahead / 226 behind, 23 conflicting files, with 87% of the 7,114 inserted lines in fork-added files and only 877 lines across 75 modified upstream files). Merge pain comes exclusively from overlapping edits to upstream-owned files — and churn is extreme where it matters: `AGENTS.md` saw 188 upstream commits in 60 days, `bin/fm-brief.sh` 35 (22 of them in its Definition-of-done heredoc region alone). New files never conflict.
 
-**Decision**: divergence is budgeted per upstream-owned file, weighted by its upstream churn; fork-added files and directories are free. Fork behavior therefore ships preferentially as fork-added surfaces (new `bin/` scripts, fork-added `.agents/skills/`, wrapper scripts that call upstream tooling unchanged) rather than as edits to hot upstream files. Prose additions to `AGENTS.md` are the most expensive change in the repo and are rationed accordingly.
+**Decision**: divergence is capped by aggregate upstream-owned file count and changed-line count; fork-added files and directories are free.
+Upstream churn guides where to avoid edits, but does not weight the enforced budget.
+Fork behavior therefore ships preferentially as fork-added surfaces (new `bin/` scripts, fork-added `.agents/skills/`, wrapper scripts that call upstream tooling unchanged) rather than as edits to hot upstream files.
+Prose additions to `AGENTS.md` are the most expensive change in the repo and are rationed accordingly.
+
+[`.fork-surface-budget`](../../.fork-surface-budget) owns the numeric ceilings.
+The no-mistakes lint command in [`.no-mistakes.yaml`](../../.no-mistakes.yaml) refreshes the upstream reference and enforces the budget separately from ordinary shell lint; ordinary lint and CI do not implicitly run that check.
+[`bin/fm-lint.sh`](../../bin/fm-lint.sh)'s header owns the measurement rules and standalone check interface.
+[`tests/fm-fork-surface-budget.test.sh`](../../tests/fm-fork-surface-budget.test.sh) exercises exact-budget acceptance, independent file and line overruns, exclusions, renames, binaries, and invalid prerequisites against real Git histories.
 
 Three corollaries:
 
