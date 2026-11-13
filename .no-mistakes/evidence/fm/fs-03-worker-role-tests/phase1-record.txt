@@ -1,0 +1,16 @@
+Phase 1 targeted validation
+fm-worker-role-extensions runner_exit=0
+fm-pi-branch-extension runner_exit=0
+fm-pi-watch-extension runner_exit=0
+fm-backend-orca runner_exit=0
+fm-tangle-guard runner_exit=0
+fm-worker-slot-safety runner_exit=0
+fm-worker-pool-safety runner_exit=0
+fm-spawn-pool-base-freshen runner_exit=0
+fm-test-run UNTESTED time bound (not started)
+fm-secondmate-safety UNTESTED time bound (not started)
+
+Eight suites passed; no assertion failures; no suite timed out.
+Not started at minute 12: fm-test-run, fm-secondmate-safety (time bound).
+Phase 2 not started: minute-12 start cutoff; relocated behavior exercised by phase-1 suites, with mocked SDK/backend boundaries, not real vendor harnesses.
+Initial list attempt exited 2 because an elapsed-time marker was accidentally visible to changed selection; marker removed immediately, list rerun successfully before suites.

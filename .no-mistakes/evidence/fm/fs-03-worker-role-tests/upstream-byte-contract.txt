@@ -1,0 +1,7 @@
+Exact-byte restoration contract against merged upstream a9ae3c0c
+MATCH tests/fm-backend-orca.test.sh blob=a38e030356dfdc38837c85c6bbc4ec66e1b86a43
+MATCH tests/fm-pi-branch-extension.test.sh blob=0b2ce20c8add972b53e5d303e3f15bea2d19ce70
+MATCH tests/fm-pi-watch-extension.test.sh blob=62756b8beaccf35daa5d7c88baaac5c984071e5c
+MATCH tests/fm-secondmate-safety.test.sh blob=862d6c8d58896aeaeaaa28de091d27c00087b5cc
+MATCH tests/fm-spawn-pool-base-freshen.test.sh blob=6deb48dec9cf0130004c2fe7e0c481eb315bb311
+MATCH tests/fm-tangle-guard.test.sh blob=b27cda730fb3565b40ebf2b58c19c0e35a8e2dc3
