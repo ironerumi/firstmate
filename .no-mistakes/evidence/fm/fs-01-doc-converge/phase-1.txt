@@ -1,0 +1,9 @@
+Suite: tests/fm-shared-captain-inheritance.test.sh
+Exit status: 0
+
+Passed: tests/fm-shared-captain-inheritance.test.sh (exit 0, 27 seconds).
+Failed suites: none.
+Time-bound suites: none.
+Phase 2: skipped; changes are human documentation and behavior-equivalent fixture spelling, with no changed runtime surface. The targeted suite covers the affected fixture.
+Baseline: initial --list --changed attempt refused the temporary clock file; removed it, moved the clock to evidence, and repeated successfully.
+Read-only scope checks: AGENTS.md unchanged; no runtime source changes; working tree clean.

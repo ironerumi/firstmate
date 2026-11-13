@@ -1,0 +1,19 @@
+FM_TEST_BEGIN 2026-11-13T00:37:02Z tests/fm-shared-captain-inheritance.test.sh family=secondmate expected_gate_skip=none
+ok - shared captain first copy, unchanged copy, and source-only edit stay quiet
+ok - shared captain true divergence after inherit is still quarantined
+ok - interrupted publication that already matches source heals without quarantine
+ok - remote receiver accepts a source-only edit quietly and still quarantines real drift
+ok - shared captain drift is quarantined collision-safely and repeated convergence is idempotent
+ok - missing primary shared file mirrors absence only after quarantining a local copy
+ok - unsafe shared captain artifacts are rejected and failure restores read-only mode
+ok - spawn convergence point propagates data/captain-shared.md from FM_DATA_OVERRIDE
+ok - bootstrap convergence point propagates data/captain-shared.md from FM_DATA_OVERRIDE
+ok - fm-config-push convergence point updates changed shared captain source bytes from FM_DATA_OVERRIDE
+ok - fm-config-push source-only edit after inherit stays quiet
+ok - session-start digest renders data/captain-shared.md with the shared read-only label
+ok - the header check names the first required phrase it did not find, without widening the accept set
+# all fm-shared-captain-inheritance tests passed
+FM_TEST_END 2026-11-13T00:37:29Z tests/fm-shared-captain-inheritance.test.sh exit=0 duration_ms=27143 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=27238
+FM_TEST_SUMMARY_FAMILY family=secondmate count=1 duration_ms=27143 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-shared-captain-inheritance.test.sh duration_ms=27143
