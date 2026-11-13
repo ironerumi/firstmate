@@ -1,0 +1,7 @@
+tests/fm-task-inbox.test.sh: byte-identical to upstream 07409e73f3bdb6de2970869fce16cbe498011d62: True
+tests/fm-composer-lib.test.sh: byte-identical to upstream 07409e73f3bdb6de2970869fce16cbe498011d62: True
+test_herdr_ring_submits_a_typed_doorbell_left_pending: exact body preserved=True, invoked=True
+test_herdr_stuck_busy_submits_only_a_proven_doorbell: exact body preserved=True, invoked=True
+test_watcher_stuck_busy_submits_pending_doorbell: exact body preserved=True, invoked=True
+test_herdr_claude_wrapped_doorbell_is_pending: exact body preserved=True, invoked=True
+Production inbox, composer, recovery, and backend files unchanged; change limited to three suites and fork runner registration/hints.

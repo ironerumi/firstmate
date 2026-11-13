@@ -1,0 +1,12 @@
+Phase 1 completed within 11 minutes.
+Initial --list --changed encountered the temporary clock marker as an unmapped path; the marker was removed immediately and selection succeeded. No source edits.
+Serial targeted suites:
+- tests/fm-composer-lib.test.sh: exit 0, 43168 ms, no gate skip.
+- tests/fm-doorbell-recovery.test.sh: exit 0, 15339 ms, all four relocated cases executed, no gate skip.
+- tests/fm-task-inbox.test.sh: exit 0, 150679 ms, no gate skip.
+Additional directly relevant runner regression:
+- tests/fm-test-run.test.sh: terminated at the mandated 300-second bound (script exit 124, runner exit 1); untested: time bound, not an assertion failure; not rerun, remaining regression coverage belongs to CI.
+Coverage consumer: exit 0, serial_budget_ms=1200000, serial_max_ms=1169405, margin=30595 ms.
+Owned byte-contract verification: both restored hosts exactly match upstream Git object 07409e73f3bdb6de2970869fce16cbe498011d62; all four moved test bodies are unchanged from base and invoked in the new suite. Production files unchanged.
+Phase 2 skipped: targeted checks cover the changed test relocation and runner registration; no production behavior changed. Mocked terminal regression cases are not live Herdr/Claude validation.
+Final process check found no remaining matching test children; worktree clean.
