@@ -1,0 +1,3 @@
+Explicit extraction text contract: PASS (moved 103-line block is byte-for-byte unchanged)
+Explicit upstream host text contract against 07409e73: PASS (byte-for-byte equal)
+Phase 2 skipped: extracted CLI suite already drives all four changed identity behaviors; no broader lifecycle scenario added.

@@ -1,0 +1,11 @@
+FM_TEST_BEGIN 2026-11-13T11:37:08Z tests/fm-procevent-identity.test.sh family=standalone expected_gate_skip=none
+ok - a live runner from before the UTC identity pin stays live and stoppable
+ok - a pre-pin claim naming another process stays stranded
+ok - an unreadable pre-pin rendering preserves the claim and signals nothing
+ok - a truly dead pre-pin runner is still reported
+
+all procevent identity tests passed
+FM_TEST_END 2026-11-13T11:37:25Z tests/fm-procevent-identity.test.sh exit=0 duration_ms=16915 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=17099
+FM_TEST_SUMMARY_FAMILY family=standalone count=1 duration_ms=16915 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-procevent-identity.test.sh duration_ms=16915

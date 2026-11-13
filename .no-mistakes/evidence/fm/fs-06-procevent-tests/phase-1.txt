@@ -1,0 +1,5 @@
+Phase 1 targeted suites, serial with --per-script-timeout-secs 300:
+PASS tests/fm-procevent-identity.test.sh (exit 0): all four moved regressions executed the real process-event CLI against disposable homes and real blocking processes.
+UNTESTED (time bound) tests/fm-test-run.test.sh: exit 124 at 300s; completed assertions shown in runner-suite.log, no assertion failure before timeout. Not rerun; CI owns remaining coverage.
+UNTESTED (time bound) tests/fm-procevent.test.sh: exit 124 at 300s; completed assertions shown in host-suite.log, no assertion failure before timeout. Not rerun; CI owns remaining coverage.
+No suite failed its own assertions. No source changes made.
