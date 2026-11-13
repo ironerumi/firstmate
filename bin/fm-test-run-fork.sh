@@ -55,7 +55,7 @@ tests/fm-worker-slot-safety.test.sh 10453
 tests/fm-session-lock-windows-consumers.test.sh 6299
 tests/fm-directory-lock-interleavings.test.sh 23800
 tests/fm-directory-lock-recovery.test.sh 27400
-tests/fm-directory-lock-node.test.sh 7300
+tests/fm-directory-lock-node.test.sh 8800
 tests/fm-directory-lock-wake-queue.test.sh 10900
 HINTS
 }
