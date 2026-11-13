@@ -1,0 +1,4 @@
+tests/fm-ci-workflow.test.sh: bytes_equal=True mode_equal=True
+tests/fm-claude-stop-autoarm.test.sh: bytes_equal=True mode_equal=True
+tests/fm-merge-local.test.sh: bytes_equal=True mode_equal=True
+tests/fm-test-run.test.sh: bytes_equal=True mode_equal=True

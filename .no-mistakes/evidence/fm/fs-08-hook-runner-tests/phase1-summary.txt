@@ -1,0 +1,18 @@
+Phase 1 results
+Discovery command: bin/fm-test-run.sh --list --changed
+Exit 2: fm-test-run: no changed-test mapping for source path: tests/fork-ci-context-helpers.sh
+
+Each suite executed serially with bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 <path>:
+PASS tests/fm-fork-runner-local.test.sh
+PASS tests/fm-ci-workflow.test.sh
+PASS tests/fm-fork-ci-workflow.test.sh
+PASS tests/fm-claude-stop-autoack.test.sh
+PASS tests/fm-claude-stop-autoarm.test.sh
+PASS tests/fm-merge-local.test.sh
+UNTESTED tests/fm-test-run.test.sh: time bound; child exit 124 after 300209ms, outer runner exit 1. No assertion failure observed before termination. Not rerun.
+
+Byte-contract verification: git diff --exit-code 07409e73f3bdb6de2970869fce16cbe498011d62 HEAD -- tests/fm-ci-workflow.test.sh tests/fm-claude-stop-autoarm.test.sh tests/fm-merge-local.test.sh tests/fm-test-run.test.sh
+Exit 0: all four upstream hosts restored exactly, including file modes.
+
+No phase 2: phase 1 discovery failed; existing targeted suites also cover the relocated behaviors. Workflow simulator and Stop-hook stub coverage are not claimed as live GitHub or Claude validation.
+No source edits. git status --short was empty after testing. Process inspection found no remaining fm-test-run/autoack/shim fixture commands. No background work was launched by this agent.

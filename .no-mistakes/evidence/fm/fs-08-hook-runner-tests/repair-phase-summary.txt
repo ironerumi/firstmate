@@ -1,0 +1,14 @@
+Repair phase: changed workflow-helper discovery
+Reproduced bin/fm-test-run.sh --list --changed exit 2: no changed-test mapping for tests/fork-ci-context-helpers.sh.
+Root cause: direct suite-reference scan cannot follow the helper loaded indirectly through tests/lib.sh.
+Added a narrow mapping for the upstream and fork workflow consumers; upstream hosts remain unchanged.
+Added behavioral regression in tests/fm-fork-runner-local.test.sh using a disposable Git repository and the real --list --changed CLI.
+Before fix: focused suite exited 1 at changed workflow helper selection.
+After fix: bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-fork-runner-local.test.sh exited 0; all four cases passed (3382 ms total).
+Final bin/fm-test-run.sh --list --changed exited 0 and selected both workflow consumers; output in repair-discovery.txt.
+An intermediate discovery command included temporary untracked timing/output files and exited 2 on that unrelated input; removed these files and repeated the original command successfully.
+Exact upstream-host comparison against 07409e73f3bdb6de2970869fce16cbe498011d62 exited 0 for all four restored hosts.
+No checks hit the time bound. No linters, broad suite, or other pipeline phases run.
+Other previously validated suites not rerun: repair verification restricted to the reported failure and focused regression.
+Phase 2 not run: changed discovery behavior covered by tests/fm-fork-runner-local.test.sh and real repository --list --changed verification.
+Working-tree transient artifacts removed; only intended runner and fork-test changes remain.

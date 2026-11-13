@@ -1,0 +1,8 @@
+Target 3ba20fb93add01966eb936c214a9ebb588528037; baseline c1e95441cdf485f7aa65d32efd33904579af5767.
+Initial --list --changed attempt rejected an incidental timer file; removed timer file and repeated successfully. Narrowed to all seven changed test scripts. No suite families or lanes executed.
+Each invocation: bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/<suite>.test.sh
+Passed: fm-fork-ci-workflow (2846ms), fm-fork-runner-local (2662ms), fm-claude-stop-autoack (13317ms), fm-ci-workflow (18014ms), fm-merge-local (20244ms), fm-claude-stop-autoarm (161699ms).
+Time bound, untested completion: fm-test-run (exit 124 after 300201ms). Its completed assertions through serial packing passed; complete suite result not established. Not rerun, per trusted runbook. Author's 900-second suggestion does not override runbook's 300-second cap.
+No assertion failures. Logs retained separately.
+Hook tests use fake Claude and stub wake/host/autoack boundaries; workflow tests use an expression simulator, not GitHub Actions. These are regression evidence, not live vendor proofs.
+Phase 2 skipped: targeted suites cover relocated cases; no production hook/workflow behavior changed.

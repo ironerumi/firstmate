@@ -1,0 +1,22 @@
+Focused repair phase
+
+Reproduction: comparison against pinned upstream 07409e73f3bdb6de2970869fce16cbe498011d62 reproduced the reported workflow-host byte-contract mismatch. The pre-fix fork workflow suite itself passed (exit 0); this was an acceptance/restoration failure, not an assertion failure.
+
+Root cause: repository/full simulated-context additions and a source-only execution guard remained in the upstream host so the fork suite could share it.
+Repair: restore the workflow host byte-for-byte; keep context adaptation in tests/fork-ci-context-helpers.sh, loaded only for the workflow host from tests/lib.sh. The fork suite now sources and executes the unmodified upstream suite before its existing fork case. No assertions or production policies changed. Update its timing hint to 23400 ms from the observed 21231 ms plus 10%, rounded upward to 100 ms.
+
+Passed after repair (serial runner, --jobs 1 --per-script-timeout-secs 300):
+- tests/fm-fork-ci-workflow.test.sh: exit 0, 19 cases, 21231 ms; workflow-repair-fork.log
+- tests/fm-ci-workflow.test.sh: exit 0, 18 cases, 18528 ms; workflow-repair-upstream.log
+- tests/fm-fork-runner-local.test.sh: exit 0, 3 cases, 3090 ms; workflow-repair-runner.log
+
+Acceptance check: cmp against git-show upstream bytes passes for all four required hosts: fm-ci-workflow, fm-claude-stop-autoarm, fm-merge-local, fm-test-run. All retain their tracked executable modes (100755).
+
+Listing: --list --changed completed after removing a transient timer file that initially interfered with change mapping. No timer file remains.
+Failures in this repair turn: none. Time-bound suites in this repair turn: none.
+
+Not rerun: tests/fm-test-run.test.sh previously hit the mandatory 300-second bound without an assertion failure; it remains incomplete (time bound), and the runbook forbids rerunning it. Unchanged hook and merge cases were not rerun: focused repair is workflow compatibility only; their preceding phase evidence remains separate. No full-suite pass is claimed.
+
+Phase 2 omitted: workflow behavior covered by tests/fm-fork-ci-workflow.test.sh and tests/fm-ci-workflow.test.sh; runner/local behavior covered by tests/fm-fork-runner-local.test.sh. These are semantic simulations and real local CLI checks, not live GitHub Actions or vendor-harness proofs. No production hook behavior changed; live hook scenarios were not repeated. CI remains the outer executor's responsibility.
+
+No linters, formatters, static analyzers, broad test walks, pipeline controls, commits, or pushes were run. All required commands were awaited and exit statuses inspected. Test-created timer artifact removed; only intentional source/test changes remain.

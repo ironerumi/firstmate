@@ -1,0 +1,6 @@
+fm-fork-runner-local exit=0
+fm-claude-stop-autoack exit=0
+fm-ci-workflow exit=0
+fm-merge-local exit=0
+fm-claude-stop-autoarm exit=0
+fm-test-run exit=1

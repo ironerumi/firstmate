@@ -1,0 +1,13 @@
+FM_TEST_BEGIN 2026-11-13T13:56:21Z tests/fm-claude-stop-autoack.test.sh family=standalone expected_gate_skip=none
+ok - auto-arm: an acknowledged wake re-arms in the same hook and the next real wake rings with a note
+ok - auto-arm: a presentation the seam consumed but could not acknowledge is carried into the banner
+ok - auto-arm: a large hand-back presentation is preserved
+ok - auto-arm: a wake the seam leaves alone rings exactly as before
+ok - auto-arm: a missing seam script changes nothing
+ok - auto-arm: the acknowledgement cap backstops loops and names repeating wakes
+ok - auto-arm: a supervision-host line is never offered for acknowledgement
+ok - auto-arm: a superseded owner never reaches the acknowledgement seam
+FM_TEST_END 2026-11-13T13:56:34Z tests/fm-claude-stop-autoack.test.sh exit=0 duration_ms=12666 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=12757
+FM_TEST_SUMMARY_FAMILY family=standalone count=1 duration_ms=12666 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-claude-stop-autoack.test.sh duration_ms=12666

@@ -1,0 +1,10 @@
+fm-fork-runner-local runner_exit=0
+fm-merge-local runner_exit=0
+fm-claude-stop-autoack runner_exit=0
+fm-ci-workflow runner_exit=0
+fm-fork-ci-workflow runner_exit=0
+fm-claude-stop-autoarm runner_exit=0
+fm-test-run runner_exit=1
+Phase 1 finished at 10 minutes
+
+Classification: six suites passed; fm-test-run exit 124 is UNTESTED (time bound), not assertion failure. No suite rerun. Phase 2 omitted: changed behavior is covered by targeted suites; full runner remains bounded/incomplete.
