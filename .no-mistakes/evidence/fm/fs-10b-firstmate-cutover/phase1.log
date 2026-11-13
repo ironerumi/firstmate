@@ -1,0 +1,60 @@
+FM_TEST_BEGIN 2026-11-13T17:04:18Z tests/fm-tool-update-check.test.sh family=watcher-wake-lock expected_gate_skip=none
+ok - published herdr, tasks-axi and gnhf report older fixtures and stay silent when equal or ahead
+ok - unreachable and unparseable published sources fail for their own tool and the sweep continues
+ok - published probes obey their bound and incomplete sweeps record their findings
+ok - complete and partial late sweeps record findings and retain cadence
+ok - a skipped published probe reports its budget failure once and skipped probes record their findings
+ok - arm and sweep refuse the whole registry for malformed entries
+ok - published sources compose with PATH skew, announcements and git, with changed and returning update dedupe
+ok - published versions compare numeric components without overflow and require a successful installed answer
+ok - PATH skew is reported by asking every copy on PATH for its own version
+ok - no report when PATH already resolves the newest installed copy
+ok - two copies of the same version are not skew
+ok - one copy reached through two PATH entries is probed once as one install
+ok - a copy that reports no version is a check failure, not a pass
+ok - a version probe that exits non-zero still reports its version
+ok - a watched command missing from PATH is reported
+ok - a tool's own update announcement is read from its output
+ok - an announcement naming an already-installed version is not also reported as an available update
+ok - an announcement naming a version newer than every installed copy is still reported as available
+ok - an announcement carried by another command is read from that command
+ok - an announce_pattern that cannot be used is reported instead of read as silence
+ok - a broken pattern is reported for its own tool and the rest of the sweep still reports
+ok - an announcement source the budget could not reach is reported, not read as current
+ok - an announcement probe that does not answer is reported, not read as current
+ok - a tool that announces nothing stays silent
+ok - a version_url newer than every installed copy is reported as an available update
+ok - a version_url no newer than an installed copy reports only PATH skew when needed
+ok - a version_url that matches the PATH version is silent
+ok - a version_url that does not answer with a version is a check failure
+ok - a missing curl is a check failure
+ok - version_url is validated as one https URL beside a command
+ok - an entry may not set both published and version_url
+ok - commits behind the origin branch are reported without touching the repository
+ok - an omitted branch is detected from the remote's default branch
+ok - the default branch is asked of the remote when the clone has no local record
+ok - a repository that is current or ahead of its origin branch is silent
+ok - an unusable git source is reported as a check failure
+ok - a remote that cannot be read is reported as unreadable, not as a missing branch
+ok - a branch a readable remote does not have is still reported as missing
+ok - git probes stop and name their tool once the sweep budget is gone
+ok - a git probe that does not answer is reported as a failure, never as an update
+ok - a stalled repository probe is reported as no answer, not as not a repository
+ok - no watched tool registry means no output at all
+ok - a malformed registry is reported instead of quietly skipped
+ok - the same pending update is reported once, and a change is reported again
+ok - an over-long report is cut with the shared truncation marker
+ok - a finding that lands past the cut is still reported as news
+ok - probes run once per interval, not on every poll
+ok - a budget that cannot fit the watcher bound is cut and reported, and the sweep keeps working
+ok - an out of range bound or unknown action refuses instead of guessing
+ok - arm registers a trusted check and disarm removes every trace
+ok - a symlink at the shim path is refused instead of followed
+ok - a failed registration never leaves a shim without a matching trust binding
+ok - a re-arm that loses the trust binding leaves no shim behind
+ok - a relative home is resolved before it is persisted into the shim
+ok - the armed check reaches the watcher as an ordinary check wake
+FM_TEST_END 2026-11-13T17:05:31Z tests/fm-tool-update-check.test.sh exit=0 duration_ms=73460 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=73547
+FM_TEST_SUMMARY_FAMILY family=watcher-wake-lock count=1 duration_ms=73460 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-tool-update-check.test.sh duration_ms=73460

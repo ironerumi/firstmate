@@ -1,0 +1,5 @@
+phase 2 / cadence elapsed minutes: 2
+At +0s: probes=1; output bytes=0
+At +899s: probes=1; output bytes=0
+At +900s: probes=2; output bytes=0
+Default cadence: no early probe at 899s; second probe exactly at 900s.

@@ -1,0 +1,5 @@
+Phase 1: selected only tests/fm-tool-update-check.test.sh (changed test and matching changed executable).
+Ran bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-tool-update-check.test.sh.
+Exit 0; all assertions passed; no failures, time bounds, or skipped selected suites.
+Real watcher CLI executed against disposable homes, synthetic command sources and isolated git fixtures. Covers immediate separate announcement timeout reporting, persistence/deduplication, explicit cadence, and watcher registration/wake integration.
+Default 900-second cadence remains for phase 2 boundary verification.
