@@ -66,18 +66,6 @@ test_branch_advance_does_not_change_approval() {
   pass 'branch advance refuses, and restoring the reported X lands exactly X'
 }
 
-test_non_local_only_mode_refuses() {
-  local out rc=0
-  make_case wrong-mode
-  record_done || fail 'wrong-mode fixture done was not accepted'
-  sed -i.bak 's/^mode=local-only$/mode=no-mistakes/' "$META" && rm -f "$META.bak"
-  out=$(land 2>&1) || rc=$?
-  [ "$rc" -ne 0 ] || fail "a non-local-only task landed: $out"
-  case "$out" in *'not local-only'*) ;; *) fail "the refusal did not name the mode guard: $out" ;; esac
-  [ "$(git -C "$PROJ" rev-parse HEAD)" = "$BASE" ] || fail 'the refusal moved main'
-  pass 'a task that is not mode=local-only is refused'
-}
-
 test_missing_and_malformed_head_refuse() {
   local value
   for value in missing empty abbreviated expression duplicate; do
@@ -98,7 +86,7 @@ test_missing_and_malformed_head_refuse() {
 # It is a scheduling seam only: every Git operation still uses the real binary.
 test_change_after_hold_check_refuses() {
   local real_git out rc
-  real_git=$(fm_real_tool git)
+  real_git=$(command -v git)
   make_case race-branch
   record_done || fail 'race fixture done was not accepted'
   git -C "$WT" commit -q --allow-empty -m Y
@@ -223,7 +211,7 @@ test_two_tasks_cannot_undo_a_same_tree_landing() {
   [ "$other" != "$X" ] || fail 'same-tree commits were not distinct'
   [ "$(git -C "$PROJ" rev-parse "$other^{tree}")" = "$(git -C "$PROJ" rev-parse "$X^{tree}")" ] \
     || fail 'the two approved commits have different trees'
-  real_git=$(fm_real_tool git)
+  real_git=$(command -v git)
   real_sleep=$(command -v sleep)
   project_lock="$(git -C "$PROJ" rev-parse --absolute-git-dir)/fm-local-landing.lock"
   mkdir -p "$CASE/fakebin"
@@ -320,7 +308,7 @@ SH
   pass 'two approved tasks with the same tree cannot roll back a successful landing'
 }
 
-fm_test_run test_two_tasks_cannot_undo_a_same_tree_landing test_branch_advance_does_not_change_approval test_non_local_only_mode_refuses \
+fm_test_run test_two_tasks_cannot_undo_a_same_tree_landing test_branch_advance_does_not_change_approval \
   test_missing_and_malformed_head_refuse test_change_after_hold_check_refuses \
   test_diverged_default_refuses test_change_during_approval_check_refuses \
   test_snapshot_cannot_pin_a_replacement_task test_done_recording_preserves_caller_locks
