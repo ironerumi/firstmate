@@ -985,7 +985,7 @@ test_non_polytoken_refused_launch_keeps_its_window() {
 # sees the worktree stop being isolated.
 install_isolation_flip_git() {  # <fakebin> <worktree>
   local fakebin=$1 wt=$2 real_git
-  real_git=$(fm_real_tool git)
+  real_git=$(command -v git)
   cat > "$fakebin/git" <<SH
 #!/usr/bin/env bash
 if [ "\$1" = -C ] && [ "\$2" = '$wt' ] && [ "\$3" = rev-parse ] && [ "\$4" = --show-toplevel ]; then
