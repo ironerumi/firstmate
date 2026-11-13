@@ -3279,7 +3279,7 @@ Ownership is machine-wide per canonical source, because separate homes can share
 - A live identity-matched owner is never displaced, and release removes only the exact generation the caller acquired.
 - On hosts using the `ps` identity fallback, matching accepts either the current UTC rendering or the reader's ambient-time-zone rendering used before the UTC pin, so an earlier-version runner still polling across an update remains live when that ambient rendering matches its claim.
 - A live PID is stale only when both renderings are readable and neither matches; an unreadable required rendering leaves ownership `uncertain`, preserving the claim without signalling or starting a replacement.
-  [`fm_procevent_pid_state`](../bin/fm-procevent-lib.sh) owns the classifier, and `tests/fm-procevent.test.sh` covers pre-pin claims, unreadable renderings, PID reuse, and dead leaders.
+  [`fm_procevent_pid_state`](../bin/fm-procevent-lib.sh) owns the classifier, and [`tests/fm-procevent-identity.test.sh`](../tests/fm-procevent-identity.test.sh) covers pre-pin claims, unreadable renderings, PID reuse, and dead leaders.
 
 **Prove ownership before stopping a runner**
 
