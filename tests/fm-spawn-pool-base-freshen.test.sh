@@ -438,73 +438,6 @@ test_dirty_pool_refuses_without_discarding_work() {
   pass "a dirty pooled worktree is refused without discarding its local work"
 }
 
-test_pool_slot_with_retired_home_leftovers_is_refused() {
-  local rec id out status leftover
-  for leftover in marker parent state; do
-    id="pool-home-residue-$leftover-r1"
-    rec=$(make_case "home-residue-$leftover" "$id")
-    read_case_record "$rec"
-    case "$leftover" in
-      marker) printf 'retired\n' > "$POOL_DIR/.fm-secondmate-home" ;;
-      parent) printf 'schema=fm-secondmate-parent.v1\nroute=local\n' > "$POOL_DIR/.fm-secondmate-parent" ;;
-      state)
-        # A firstmate checkout keeps its runtime records in gitignored dirs.
-        mkdir -p "$POOL_DIR/bin" "$POOL_DIR/state"
-        : > "$POOL_DIR/AGENTS.md" && : > "$POOL_DIR/bin/fm-spawn.sh"
-        printf 'state/\n' > "$POOL_DIR/.gitignore"
-        git -C "$POOL_DIR" add -f AGENTS.md bin/fm-spawn.sh .gitignore
-        git -C "$POOL_DIR" -c user.name='Firstmate Tests' -c user.email='tests@example.invalid' commit -qm firstmate-shaped
-        printf 'x\n' > "$POOL_DIR/state/retired.status"
-        ;;
-    esac
-
-    out=$(run_spawn "$id" --mode no-mistakes --yolo off)
-    status=$?
-    [ "$status" -ne 0 ] || fail "spawn succeeded in a pooled worktree carrying a retired home's $leftover"
-    assert_contains "$out" "retired firstmate home's leftovers" "spawn did not name the retired home's leftovers ($leftover)"
-    [ ! -e "$HOME_DIR/state/$id.meta" ] || fail "a refused slot still published a task record ($leftover)"
-    case "$leftover" in
-      marker) assert_grep 'retired' "$POOL_DIR/.fm-secondmate-home" "spawn removed the marker it refused on" ;;
-      parent) [ -f "$POOL_DIR/.fm-secondmate-parent" ] || fail "spawn removed the parent record it refused on" ;;
-      state) assert_grep 'x' "$POOL_DIR/state/retired.status" "spawn removed the state it refused on" ;;
-    esac
-  done
-  pass "a pooled worktree carrying a retired home's markers or state is refused and left untouched"
-}
-
-test_pool_slot_with_empty_home_dirs_launches() {
-  local rec id out status name
-  for name in state data config projects; do
-    id="pool-empty-$name-r1"
-    rec=$(make_case "empty-$name" "$id")
-    read_case_record "$rec"
-    mkdir -p "$POOL_DIR/bin" "$POOL_DIR/$name"
-    : > "$POOL_DIR/AGENTS.md" && : > "$POOL_DIR/bin/fm-spawn.sh"
-    printf '%s/\n' "$name" > "$POOL_DIR/.gitignore"
-    git -C "$POOL_DIR" add -f AGENTS.md bin/fm-spawn.sh .gitignore
-    git -C "$POOL_DIR" -c user.name='Firstmate Tests' -c user.email='tests@example.invalid' commit -qm firstmate-shaped
-    out=$(run_spawn "$id" --mode no-mistakes --yolo off)
-    status=$?
-    expect_code 0 "$status" "an empty $name/ dir is not a retired home's leftover"$'\n'"$out"
-  done
-  pass "an empty state/data/config/projects dir does not block a worker launch"
-}
-
-test_pool_slot_with_ordinary_project_data_dirs_launches() {
-  local rec id out status
-  id='pool-project-data-r1'
-  rec=$(make_case project-data "$id")
-  read_case_record "$rec"
-  mkdir -p "$POOL_DIR/data" "$POOL_DIR/state"
-  printf 'state/\ndata/\n' > "$POOL_DIR/.gitignore"
-  git -C "$POOL_DIR" add .gitignore
-  git -C "$POOL_DIR" -c user.name='Firstmate Tests' -c user.email='tests@example.invalid' commit -qm ignore-project-dirs
-  out=$(run_spawn "$id" --mode no-mistakes --yolo off)
-  status=$?
-  expect_code 0 "$status" "another project's own ignored data/ and state/ dirs are not a retired home's leftovers"$'\n'"$out"
-  pass "a non-firstmate project's ignored data/state dirs do not block a worker launch"
-}
-
 test_unresolved_remote_default_refuses_pool() {
   local rec id out status before
   id='pool-unresolved-default-r5'
@@ -1052,7 +985,7 @@ test_non_polytoken_refused_launch_keeps_its_window() {
 # sees the worktree stop being isolated.
 install_isolation_flip_git() {  # <fakebin> <worktree>
   local fakebin=$1 wt=$2 real_git
-  real_git=$(fm_real_tool git)
+  real_git=$(command -v git)
   cat > "$fakebin/git" <<SH
 #!/usr/bin/env bash
 if [ "\$1" = -C ] && [ "\$2" = '$wt' ] && [ "\$3" = rev-parse ] && [ "\$4" = --show-toplevel ]; then
@@ -1453,9 +1386,6 @@ test_non_polytoken_refused_launch_keeps_its_window
 test_treehouse_isolation_refusal_points_at_what_survives
 test_linked_spawning_home_rejects_primary_before_refresh
 test_stale_pool_base_refreshes_before_branching
-test_pool_slot_with_retired_home_leftovers_is_refused
-test_pool_slot_with_empty_home_dirs_launches
-test_pool_slot_with_ordinary_project_data_dirs_launches
 test_named_base_branch_starts_from_that_branch
 test_base_branch_must_agree_with_the_brief
 test_prose_base_branch_line_is_ignored

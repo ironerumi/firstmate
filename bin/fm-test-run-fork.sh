@@ -14,11 +14,14 @@ fm_fork_family_for_basename() {  # <basename>
     fm-brief-repo-guard.test.sh|fm-nm-guard.test.sh|fm-classify-decision-key-extra.test.sh)
       printf '%s\n' pure-contract-unit
       ;;
-    fm-spawn-claude-attribution.test.sh)
+    fm-spawn-claude-attribution.test.sh|fm-worker-slot-safety.test.sh|fm-worker-pool-safety.test.sh)
       printf '%s\n' backend-dispatch
       ;;
     fm-pr-merge-admin.test.sh)
       printf '%s\n' pr-forge
+      ;;
+    fm-worker-role-extensions.test.sh)
+      printf '%s\n' standalone
       ;;
     fm-wake-autoack.test.sh)
       printf '%s\n' watcher-wake-lock
@@ -30,7 +33,9 @@ fm_fork_family_for_basename() {  # <basename>
 }
 
 # Provisional weights: twice one local macOS `bin/fm-test-run.sh` run of each
-# file, until fork CI timing artifacts measure them on Ubuntu. Without them each
+# existing file; relocated worker suites and the previously unhinted Windows
+# lock consumer use clean-environment local durations until fork CI measures
+# them on Ubuntu. Without them each
 # file packs at the 45000 ms default and overfills the serial shards. A reader
 # that stops at its first match closes the pipe early, so cat stays quiet.
 fm_fork_serial_weight_hints() {
@@ -42,5 +47,9 @@ tests/fm-pr-merge-admin.test.sh 38500
 tests/fm-spawn-claude-attribution.test.sh 25800
 tests/fm-wake-autoack.test.sh 28200
 tests/fm-worker-role-inert.test.sh 6100
+tests/fm-worker-role-extensions.test.sh 578
+tests/fm-worker-pool-safety.test.sh 28070
+tests/fm-worker-slot-safety.test.sh 10453
+tests/fm-session-lock-windows-consumers.test.sh 6299
 HINTS
 }
