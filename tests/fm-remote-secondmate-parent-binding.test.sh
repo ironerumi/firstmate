@@ -71,7 +71,7 @@ PUBLISH_FAKEBIN=$(fm_fakebin "$TMP_ROOT/publication-fake")
 PUBLISH_ENTERED="$TMP_ROOT/publication-marker-entered"
 PUBLISH_RELEASE="$TMP_ROOT/publication-marker-release"
 PUBLISH_MANIFEST="$TMP_ROOT/publication.manifest"
-REAL_MV=$(fm_real_tool mv)
+REAL_MV=$(command -v mv)
 cat > "$PUBLISH_FAKEBIN/mv" <<'SH'
 #!/usr/bin/env bash
 destination=${!#}

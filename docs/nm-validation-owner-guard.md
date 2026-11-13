@@ -138,9 +138,8 @@ It names the tool and code only, never the refusal text, because that text can c
 
 The shim has to be able to hand off to the tool it fronts under every arrangement of `PATH`.
 Its walk skips its own directory, skips any OTHER firstmate home's shim of the same name - a worker pane already carries one shim directory, so a task working on a second firstmate checkout would otherwise have two shims exec each other - and falls back to the standard system locations when `PATH` yields no usable candidate at all.
-The canonical test runner preserves inherited `bin/shims` entries so every test child retains the guard's command interception.
-`fm_real_tool` in `tests/lib.sh` is how a fixture reaches an underlying tool without capturing the shim; it also avoids the one arrangement resolution cannot repair, where a wrapper that execs a captured shim as its "real tool" would trade places with the shim inside a single process forever.
-For any wrapper that still does that, each shim carries a pid-marked backstop that stops with a diagnosable error instead of hanging.
+Fixture isolation and real-tool lookup are documented in [CONTRIBUTING.md](../CONTRIBUTING.md#development).
+If a wrapper execs a captured shim as its "real tool" and loops back into itself, each shim carries a pid-marked backstop that stops with a diagnosable error instead of hanging.
 
 ## Automated validation
 

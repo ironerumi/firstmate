@@ -36,7 +36,7 @@ install_remote_herdr_fixture "$FAKEBIN-root" "$TMP_ROOT/herdr.state" "$TMP_ROOT/
   "$TMP_ROOT/herdr-send-fail" "$TMP_ROOT/herdr.sock"
 mv "$FAKEBIN-root/bin/herdr" "$FAKEBIN/herdr"
 rmdir "$FAKEBIN-root/bin" "$FAKEBIN-root"
-ln -sf "$(fm_real_tool git)" "$FAKEBIN/git"
+ln -sf "$(command -v git)" "$FAKEBIN/git"
 ln -sf "$(command -v jq)" "$FAKEBIN/jq"
 ln -sf "$(command -v node)" "$FAKEBIN/node"
 cat > "$FAKEBIN/omp" <<'SH'
