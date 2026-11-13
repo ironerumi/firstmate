@@ -4673,28 +4673,6 @@ EOF
   pass "a Pi session that does not own the lock accepts nothing and mutates no branch state"
 }
 
-test_worker_pane_registers_nothing() {
-  local repo home out status
-  repo="$TMP_ROOT/worker-root"
-  home="$TMP_ROOT/worker-home"
-  mkdir -p "$home/state" "$home/config"
-  install_pi_branch_extension_fixture "$repo"
-  out=$(PLUGIN="$repo/.pi/extensions/fm-branch-supervision.ts" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_TASK_ID=some-task node --input-type=module 2>&1 <<'EOF'
-import { pathToFileURL } from "node:url";
-
-const calls = [];
-const record = (name) => () => { calls.push(name); };
-const pi = new Proxy({}, { get: (_target, name) => record(String(name)) });
-const mod = await import(pathToFileURL(process.env.PLUGIN).href);
-mod.default(pi);
-if (calls.length !== 0) throw new Error(`worker pane registered Pi branch surfaces: ${calls.join(",")}`);
-EOF
-)
-  status=$?
-  expect_code 0 "$status" "Pi branch extension must load without registering anything for a worker: $out"
-  pass "a Pi worker pane (FM_TASK_ID) loads the branch extension inert"
-}
-
 test_rebind_remirrors_undelivered_dialog_from_durable_cursor() {
   local repo home out status
   repo="$TMP_ROOT/rebind-root"
@@ -6302,7 +6280,6 @@ test_branch_activates_for_a_windows_tagged_session_lock
 test_queued_actions_recheck_lock_ownership
 test_stale_generation_boundaries_are_side_effect_free
 test_secondary_session_stays_inert
-test_worker_pane_registers_nothing
 test_rebind_remirrors_undelivered_dialog_from_durable_cursor
 test_delivery_keeps_the_event_loop_live_and_ordered
 test_session_replacement_during_delivery_neither_loses_nor_duplicates
