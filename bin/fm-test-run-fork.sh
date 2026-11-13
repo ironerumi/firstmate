@@ -36,10 +36,9 @@ fm_fork_family_for_basename() {  # <basename>
 
 # Provisional local macOS weights until fork CI measures them on Ubuntu.
 # Brief-guard, nm-guard, merge-admin, directory-lock, doorbell, process-event
-# identity, Stop-autoack and runner/local contract hints use the slowest of at
-# least three clean runs plus 10%, rounded up to 100 ms.
-# The workflow hint includes the upstream cases it now runs when sourcing the
-# restored host, rounded up from the focused repair measurement plus 10%.
+# identity, Stop-autoack and fork contract hints use the slowest of at least
+# three clean runs plus 10%, rounded
+# up to 100 ms.
 # Other hints retain their initial local measurements (twice one run for older
 # suites). Without hints each file packs at the 45000 ms default and overfills
 # the serial shards. A reader that stops at its first match closes the pipe
@@ -65,6 +64,6 @@ tests/fm-procevent-identity.test.sh 34900
 tests/fm-doorbell-recovery.test.sh 15200
 tests/fm-claude-stop-autoack.test.sh 14200
 tests/fm-fork-runner-local.test.sh 3100
-tests/fm-fork-ci-workflow.test.sh 23400
+tests/fm-fork-ci-workflow.test.sh 2100
 HINTS
 }

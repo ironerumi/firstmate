@@ -27,14 +27,6 @@ if [ -n "${FM_TEST_LIB_SOURCED:-}" ]; then
 fi
 FM_TEST_LIB_SOURCED=1
 
-# Keep the fork's workflow-context adapter outside the restored upstream host.
-case "${BASH_SOURCE[1]##*/}" in
-  fm-ci-workflow.test.sh)
-    # shellcheck source=tests/fork-ci-context-helpers.sh
-    . "$(dirname "${BASH_SOURCE[0]}")/fork-ci-context-helpers.sh"
-    ;;
-esac
-
 # Pin the fixture umask. Firstmate's state-root and process-event contracts
 # refuse group- or world-writable state directories, and a permissive ambient
 # umask (e.g. 0002) makes every `mkdir state` fixture fail that contract before

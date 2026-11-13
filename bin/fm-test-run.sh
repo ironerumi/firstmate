@@ -1903,11 +1903,6 @@ families_for_changed_path() {
     docs/configuration.md|docs/supervision-protocols/*)
       printf '%s\n' pure-contract-unit
       ;;
-    tests/fork-ci-context-helpers.sh)
-      # Loaded indirectly through lib.sh only for the upstream workflow host;
-      # the fork workflow suite sources that host and inherits the adapter.
-      printf '%s\n' __script__:fm-ci-workflow.test.sh __script__:fm-fork-ci-workflow.test.sh
-      ;;
     tests/git-config-helpers.sh)
       # The reference scan is not transitive, so match the two helpers that
       # source this one as well: most suites inherit it only through them.

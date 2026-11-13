@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Fork automatic/manual CI policy, extending the unmodified upstream suite.
-# Sourcing it runs its cases and shares its evaluator and YAML execution helpers.
+# Fork automatic/manual CI policy, using the upstream suite's expression
+# evaluator and YAML execution helpers rather than a duplicate simulator.
 set -u
 
 # shellcheck source=tests/fm-ci-workflow.test.sh
