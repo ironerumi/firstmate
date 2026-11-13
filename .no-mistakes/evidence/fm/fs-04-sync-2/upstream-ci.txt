@@ -1,0 +1,9 @@
+[8]{conclusion,created_at,head_sha,html_url,name,status}:
+  cancelled,"2026-11-13T07:31:26Z",427056c4181c41074ad24f051f79919330df0fa5,"https://github.com/kunchenguid/firstmate/actions/runs/43386352925",CI,completed
+  cancelled,"2026-11-13T07:30:30Z",34c77d54ea3a6144475ba2e460bde2b88ebe0f2e,"https://github.com/kunchenguid/firstmate/actions/runs/43386237114",CI,completed
+  cancelled,"2026-11-13T07:29:44Z",d44427a3e9891eb4d087b72570017ac1872e080b,"https://github.com/kunchenguid/firstmate/actions/runs/43386142661",CI,completed
+  success,"2026-11-13T03:31:03Z",07409e73f3bdb6de2970869fce16cbe498011d62,"https://github.com/kunchenguid/firstmate/actions/runs/43359484992",CI,completed
+  cancelled,"2026-11-13T03:30:22Z",33809d3fe3ccca0591fcc132ff01521f71b60626,"https://github.com/kunchenguid/firstmate/actions/runs/43359405871",CI,completed
+  success,"2026-11-12T23:46:44Z",ed7fbb84fbd84d6d20a65e0503898d1bee8e4e05,"https://github.com/kunchenguid/firstmate/actions/runs/43331691300",CI,completed
+  cancelled,"2026-11-12T23:46:33Z",42ec97fe409a8a62c07d7cb31d6a25cd4f747e4f,"https://github.com/kunchenguid/firstmate/actions/runs/43331666289",CI,completed
+  success,"2026-11-12T20:02:19Z",bf0f34680a7618aa5baf36464fe77530fa79fa23,"https://github.com/kunchenguid/firstmate/actions/runs/43296251257",CI,completed

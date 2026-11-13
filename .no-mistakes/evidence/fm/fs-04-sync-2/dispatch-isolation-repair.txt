@@ -1,0 +1,9 @@
+Focused repair phase
+Reproduced tests/fm-dispatch-resolve.test.sh through bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 with OPENROUTER_API_KEY=test-inherited-openrouter-canary: exit 1, .env OpenRouter credential assertion received inherited canary instead of fixture key.
+Root cause: suite inherited provider credentials/settings while testing environment absence and .env precedence; product environment precedence is correct.
+Fix: clear public provider settings and credentials at suite entry; individual cases still explicitly provide their own values.
+Focused verification: same suite and runner with synthetic inherited TYPESAFE_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, FM_DISPATCH_API_KEY, FM_DISPATCH_PROVIDER, FM_DISPATCH_MODEL, FM_DISPATCH_BASE_URL and TYPESAFE_BASE: exit 0, all cases passed, duration 43.896 seconds. Updated probability assertions were reached and passed.
+No suite hit its time bound. No linters or broad regression run.
+Initial --list --changed refused the transient clock-marker file; removed it and listing succeeded. No clock-marker artifact remains.
+Other previously recorded validation scenarios were not rerun: repair-phase scope requires only focused verification. This repair does not claim a complete live-validation verdict or resolve prior untested runner/wake-queue coverage.
+Phase 2 not run: focused repair scope; dispatch probability formatting covered by tests/fm-dispatch-resolve.test.sh with mocked external provider responses.

@@ -1,0 +1,20 @@
+fm-classify-decision-key START elapsed=1m
+fm-classify-decision-key EXIT=0 elapsed=1m
+fm-on START elapsed=1m
+fm-on EXIT=0 elapsed=1m
+fm-fleet-snapshot-view START elapsed=1m
+fm-fleet-snapshot-view EXIT=0 elapsed=2m
+fm-session-lock-windows-consumers START elapsed=2m
+fm-session-lock-windows-consumers EXIT=0 elapsed=2m
+fm-dispatch-resolve START elapsed=2m
+fm-dispatch-resolve EXIT=0 elapsed=2m
+fm-test-run START elapsed=2m
+fm-test-run EXIT=1 elapsed=7m
+fm-home-summary-refresh START elapsed=7m
+fm-home-summary-refresh EXIT=0 elapsed=8m
+fm-remote-job START elapsed=8m
+fm-remote-job EXIT=0 elapsed=11m
+fm-bootstrap START elapsed=11m
+fm-bootstrap EXIT=1 elapsed=16m
+fm-wake-queue NOT_STARTED time bound elapsed=16m
+fm-watcher-lock NOT_STARTED time bound elapsed=16m

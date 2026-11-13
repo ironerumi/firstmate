@@ -1,0 +1,26 @@
+FM_TEST_BEGIN 2026-11-13T08:44:08Z tests/fm-fleet-snapshot-view.test.sh family=snapshot-bearings expected_gate_skip=optional-binary
+1..18
+ok - empty fleet snapshot and view use explicit absence markers
+ok - fixture snapshot covers task rows, backlog rows, pointers, stable ordering, and emission-time event age
+ok - home-summary excludes kind=secondmate from unowned_current and terminal_in_flight
+ok - undated captain holds age after a configurable threshold, decided only from structured fields
+ok - captain-hold buckets are total, mutually exclusive, and never decided by prose
+ok - main_inventory discloses orphan/unstructured and clears when inventory is consistent
+ok - backlog normalization preserves strict roles and resolves every blocker compatibly
+ok - snapshot event hints follow reconciled current state
+ok - durable fold keeps an open decision past a later unrelated event
+ok - a live secondmate endpoint preserves unrelated open decisions
+ok - durable captain-held transfer closes the duplicate live status decision
+ok - durable fold clears a decision only on a keyed resolution
+ok - a completed scout's stale decision surfaces as a report pointer, not pending
+ok - a scout still parked at a decision stays pending (terminal clear does not over-fire)
+ok - snapshot includes durable scout reports after teardown
+ok - snapshot parses tasks-axi rows and respects operational overrides
+ok - fleet view renders the snapshot without secondmate peek guidance
+ok - fleet view renders secondmate agent liveness
+FM_TEST_COMPLETE
+FM_TEST_END 2026-11-13T08:44:35Z tests/fm-fleet-snapshot-view.test.sh exit=0 duration_ms=26326 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=26379
+FM_TEST_SUMMARY_FAMILY family=snapshot-bearings count=1 duration_ms=26326 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-fleet-snapshot-view.test.sh duration_ms=26326
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M79ZW5Z4NSFFG4602A3QRNCC/fm-fleet-snapshot-view.json

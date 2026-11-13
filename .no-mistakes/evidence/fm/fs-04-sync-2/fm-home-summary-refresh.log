@@ -1,0 +1,54 @@
+FM_TEST_BEGIN 2026-11-13T08:50:20Z tests/fm-home-summary-refresh.test.sh family=snapshot-bearings expected_gate_skip=optional-binary
+ok - watcher-carried status append publishes the real home summary
+ok - large backlog snapshots and home-summary publication stay within exec limits
+ok - fleet snapshot transport does not require or mutate operational state
+ok - parent snapshot consumes large child ledgers without argument transport
+ok - live watcher cadence bounds publication staleness without signals
+ok - fleet snapshot consumes the published local ledger by default
+ok - writer kill and replacement preserve an atomic JSON ledger
+ok - best-effort publication logs and continues
+Terminated: 15             sleep 0.1
+Terminated: 15             sleep 0.1
+ok - best-effort refresh bounds publication lock acquisition
+Terminated: 15             jq -e --arg home "$FM_HOME" '
+    .schema == "fm-secondmate-home-summary.v1"
+    and .hold_classifier_schema == "fm-captain-hold-buckets.v1"
+    and .home == $home
+    and (.generated | type) == "string"
+    and (.generated | length) > 0
+    and (.generated_epoch | type) == "number"
+    and .generated_epoch >= 0
+    and (.generated_epoch | floor) == .generated_epoch
+    and (.valid | type) == "boolean"
+    and (.state | type) == "string"
+    and (.invalidity | type) == "object"
+    and (.active_children | type) == "array"
+    and (.decisions_open | type) == "array"
+    and (.holds | type) == "array"
+    and (.queued | type) == "array"
+    and (.landed | type) == "array"
+    and (.endpoints | type) == "array"
+    and (.counts | type) == "object"
+    and (.omitted | type) == "array"
+  ' "$HOME_SUMMARY_TMP" > /dev/null 2>&1
+ok - best-effort refresh bounds validation and publication
+ok - best-effort refresh bounds state initialization
+ok - best-effort refresh logs worker termination
+ok - best-effort refresh bounds failure reporting fallback
+ok - valid publication ignores an unavailable failure record
+ok - publication completes on a home carrying accumulated status history
+ok - a refresh killed while collecting keeps the last complete summary
+ok - task rows are composed concurrently and publish within the refresh deadline
+ok - an incident-shaped fleet publishes inside the default deadline
+ok - producer skips remote per-task state probes
+ok - a stalled publication does not delay the watcher liveness beacon
+ok - publication remains single-flight across watcher restart
+ok - bootstrap scopes retained failures to the current publication
+Terminated: 15             sleep 0.1
+ok - failure records preserve refresh attempt ordering
+ok - repeated publication failure is reported at session start until it clears
+FM_TEST_END 2026-11-13T08:51:17Z tests/fm-home-summary-refresh.test.sh exit=0 duration_ms=56661 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=56710
+FM_TEST_SUMMARY_FAMILY family=snapshot-bearings count=1 duration_ms=56661 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-home-summary-refresh.test.sh duration_ms=56661
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M79ZW5Z4NSFFG4602A3QRNCC/fm-home-summary-refresh.json

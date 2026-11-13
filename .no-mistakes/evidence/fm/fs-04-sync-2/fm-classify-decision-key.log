@@ -1,0 +1,29 @@
+FM_TEST_BEGIN 2026-11-13T08:43:38Z tests/fm-classify-decision-key.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - a stated [key=X] opens X whether it precedes or follows the verb colon
+ok - a keyless needs-decision still opens and closes the default key
+ok - a resolution closes its decision regardless of either line's key position
+ok - blocked [key=X] opens X in both key positions
+ok - two colon-form keyed decisions never collapse into one shared bucket
+ok - a [key=x] mentioned mid-note is prose, never an opened or closed key
+ok - a malformed stated key is rejected in both positions, never folded as default
+ok - status_line_verb strips every bracket tag before the colon, in any order, and recovers the bare verb
+ok - a [corr=...] tag ahead of [key=...] no longer swallows the verb: opens and closes under the stated key
+ok - a [corr=...] tag with no stated key opens under 'default', exactly like a bare needs-decision line
+ok - a [key=x] tag alone (no corr tag) still opens x - no regression from the tag-stripping fix
+ok - blocked/resolved parse their bare verb with any bracket-tag order preceding the colon
+ok - the incremental fold matches the full fold across appends in both key positions
+ok - status_key_closing_verb separates resolution, durable transfer, and still-open
+ok - status_key_closing_verb reports the last real transition, in either key position
+ok - per-key reads retain resolutions without subprocess work growing with unrelated history
+ok - overridden resolve and durable-transfer verbs still close keys behind unrelated history
+ok - per-key filtering retains ship/scout terminals, reopenings, and secondmate blockers
+ok - prose without a colon cannot impersonate a ship or scout terminal declaration
+ok - a stated default retraction closes its decision and leaves an unrelated keyless wait standing
+ok - a declared wait outlives answers for other keys beyond the event window, and its own resolved line retracts it
+ok - only a colon-bearing or keyed line is a decision transition in the fold
+ok - a recorded line stays recorded across a later resolve
+FM_TEST_END 2026-11-13T08:43:42Z tests/fm-classify-decision-key.test.sh exit=0 duration_ms=3799 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=3868
+FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=1 duration_ms=3799 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-classify-decision-key.test.sh duration_ms=3799
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M79ZW5Z4NSFFG4602A3QRNCC/fm-classify-decision-key.json

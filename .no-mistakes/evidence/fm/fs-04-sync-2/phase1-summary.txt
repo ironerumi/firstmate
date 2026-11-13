@@ -1,0 +1,13 @@
+Target: 6129a89e6e37331ed3ac751e395459c9d95b4527
+Base: a5bc1b063ae63ec48d7e50c4525a75b7fb09def8
+All suites invoked serially via bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 --json <evidence>/<suite>.json tests/<suite>.test.sh.
+Passed: fm-classify-decision-key, fm-on, fm-fleet-snapshot-view, fm-session-lock-windows-consumers, fm-dispatch-resolve, fm-home-summary-refresh, fm-remote-job.
+Time bound (not assertion failures): fm-test-run, fm-bootstrap; each script exit 124 at 300 seconds. Neither rerun.
+Not started: fm-wake-queue, fm-watcher-lock (time bound; elapsed 16 minutes after bootstrap completed). Broad regression remains for CI, not established here.
+Phase 2 not started: elapsed 16 minutes exceeds minute-12 start cutoff.
+Bootstrap reached its Treehouse reporting and opt-in assertions successfully before its later timeout. The complete bootstrap suite remains untested.
+Dispatch reached .env/OpenRouter credential precedence and probability-floor assertions successfully; provider HTTP and credential boundaries use synthetic fixtures, not real provider services.
+Remote-job executes the real worker against a disposable local queue and verifies USER/LOGNAME propagation. Snapshot suites execute real producers and consumer against synthetic local homes; terminal/backend endpoints are fixtures.
+Git metadata check: merge-base --is-ancestor 07409e73 HEAD exited 0. Merge fa8e0fb04cf8c0160c6526aa03b70eeb579d3f0e retains second parent 07409e73f3bdb6de2970869fce16cbe498011d62. Newest upstream and upstream CI freshness were not queried in this Test phase; publication/CI belong to the outer executor.
+Initial --list --changed attempt was refused because a transient clock file appeared unmapped; removed that file immediately and repeated inspection successfully. No source changes. Final git status --short empty. Process inspection found no remaining child command naming this worktree; unrelated fleet processes left untouched.
+Verdict: inconclusive. Changed stale-directory recovery and adversarial lock safety were not exercised within the assigned clock bounds. No assertion failure was observed.
