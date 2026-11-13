@@ -21,7 +21,8 @@ These previously unhinted members use successful Ubuntu measurements rather than
 
 The 2026-11-13 serial refresh uses the slowest successful, non-gate-skipped `duration_ms` from three green Ubuntu CI aggregates: [43209319634](https://github.com/kunchenguid/firstmate/actions/runs/43209319634), [43331691300](https://github.com/kunchenguid/firstmate/actions/runs/43331691300), and [43359484992](https://github.com/kunchenguid/firstmate/actions/runs/43359484992).
 Each refreshed path has three successful samples.
-It refreshes the two growing lock/home-summary suites and replaces ten unmeasured defaults without changing shard count, packing budget, or fork-owned provisional measurements.
+It refreshes the home-summary suite and replaces ten unmeasured defaults without changing shard count, packing budget, or fork-owned provisional measurements.
+After directory-lock regressions moved into fork-added suites, the current watcher-lock and directory-lock packing hints are owned by `portable_serial_weight_hints` in [`bin/fm-test-run.sh`](../bin/fm-test-run.sh) and `fm_fork_serial_weight_hints` in [`bin/fm-test-run-fork.sh`](../bin/fm-test-run-fork.sh), respectively.
 
 | Suite (`tests/`) | Hint (ms) |
 |---|---:|
@@ -36,7 +37,6 @@ It refreshes the two growing lock/home-summary suites and replaces ten unmeasure
 | `fm-remote-job-claim-reap.test.sh` | 3716 |
 | `fm-review-check.test.sh` | 1957 |
 | `fm-send-kiro-confirm.test.sh` | 1382 |
-| `fm-watcher-lock.test.sh` | 141417 |
 
 Two serial-5 jobs were cancelled at their 30-minute cap and uploaded no artifact.
 Their completed log markers supplement the complete runs, but a cancelled job's wall time is only a lower bound and its unfinished or never-started scripts have no completed sample.

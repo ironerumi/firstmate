@@ -23,7 +23,8 @@ fm_fork_family_for_basename() {  # <basename>
     fm-worker-role-extensions.test.sh)
       printf '%s\n' standalone
       ;;
-    fm-wake-autoack.test.sh)
+    fm-wake-autoack.test.sh|fm-directory-lock-interleavings.test.sh|\
+    fm-directory-lock-recovery.test.sh|fm-directory-lock-node.test.sh|fm-directory-lock-wake-queue.test.sh)
       printf '%s\n' watcher-wake-lock
       ;;
     *)
@@ -35,7 +36,8 @@ fm_fork_family_for_basename() {  # <basename>
 # Provisional weights: twice one local macOS `bin/fm-test-run.sh` run of each
 # existing file; relocated worker suites and the previously unhinted Windows
 # lock consumer use clean-environment local durations until fork CI measures
-# them on Ubuntu. Without them each
+# them on Ubuntu. Directory-lock suites use the slowest of three clean macOS
+# runs plus 10%, rounded up to 100 ms. Without them each
 # file packs at the 45000 ms default and overfills the serial shards. A reader
 # that stops at its first match closes the pipe early, so cat stays quiet.
 fm_fork_serial_weight_hints() {
@@ -51,5 +53,9 @@ tests/fm-worker-role-extensions.test.sh 578
 tests/fm-worker-pool-safety.test.sh 28070
 tests/fm-worker-slot-safety.test.sh 10453
 tests/fm-session-lock-windows-consumers.test.sh 6299
+tests/fm-directory-lock-interleavings.test.sh 23800
+tests/fm-directory-lock-recovery.test.sh 27400
+tests/fm-directory-lock-node.test.sh 8800
+tests/fm-directory-lock-wake-queue.test.sh 10900
 HINTS
 }
