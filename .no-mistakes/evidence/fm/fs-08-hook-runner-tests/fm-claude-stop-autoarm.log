@@ -1,4 +1,4 @@
-FM_TEST_BEGIN 2026-11-13T14:10:58Z tests/fm-claude-stop-autoarm.test.sh family=standalone expected_gate_skip=none
+FM_TEST_BEGIN 2026-11-13T14:51:15Z tests/fm-claude-stop-autoarm.test.sh family=standalone expected_gate_skip=none
 ok - auto-arm: inert in a linked child worktree even when in-flight
 ok - auto-arm: inert with no session lock
 ok - auto-arm: a demonstrably dead recorded session owner is reclaimed through fm-lock.sh before arming
@@ -71,8 +71,8 @@ ok - auto-arm: a host that died without a close is retried, then reported as a f
 ok - auto-arm: --help, -h, and an unknown argument arm nothing; the Stop path still arms
 ok - fm-lock: shared session-lock lib preserves the status path
 ok - auto-arm: stands down only on a pi-code-delivered transcript_path (/.pi/)
-FM_TEST_END 2026-11-13T14:13:38Z tests/fm-claude-stop-autoarm.test.sh exit=0 duration_ms=160145 gate_skip=false
-FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=160237
-FM_TEST_SUMMARY_FAMILY family=standalone count=1 duration_ms=160145 failed=0
-FM_TEST_SLOWEST rank=1 script=tests/fm-claude-stop-autoarm.test.sh duration_ms=160145
-fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M7AHGJ26RNX67S3WKQJMW52E/fm-claude-stop-autoarm.json
+FM_TEST_END 2026-11-13T14:53:56Z tests/fm-claude-stop-autoarm.test.sh exit=0 duration_ms=161217 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=161313
+FM_TEST_SUMMARY_FAMILY family=standalone count=1 duration_ms=161217 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-claude-stop-autoarm.test.sh duration_ms=161217
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M7ANR9ZD1JHTC2EWF9Z5CT6G/fm-claude-stop-autoarm.json

@@ -2,16 +2,16 @@
   "families": [
     {
       "count": 1,
-      "duration_ms": 19156,
+      "duration_ms": 18613,
       "failed": 0,
       "name": "unclassified"
     }
   ],
-  "finished_at": "2026-11-13T14:10:38Z",
-  "run_id": "fm-test-run-1794579019297-75871",
+  "finished_at": "2026-11-13T14:50:54Z",
+  "run_id": "fm-test-run-1794581435618-15487",
   "scripts": [
     {
-      "duration_ms": 19156,
+      "duration_ms": 18613,
       "exit": 0,
       "expected_gate_skip": "none",
       "family": "unclassified",
@@ -21,9 +21,9 @@
     }
   ],
   "selection": "scripts;jobs=1",
-  "started_at": "2026-11-13T14:10:19Z",
+  "started_at": "2026-11-13T14:50:35Z",
   "summary": {
-    "duration_ms": 19250,
+    "duration_ms": 18703,
     "failed": 0,
     "skipped_gate": 0,
     "total": 1

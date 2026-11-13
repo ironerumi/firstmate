@@ -1,0 +1,12 @@
+fm-fork-ci-workflow runner_exit=0
+fm-fork-runner-local runner_exit=0
+fm-claude-stop-autoack runner_exit=0
+fm-ci-workflow runner_exit=0
+fm-merge-local runner_exit=0
+fm-claude-stop-autoarm runner_exit=0
+fm-test-run runner_exit=1
+
+Passed: fm-fork-ci-workflow, fm-fork-runner-local, fm-claude-stop-autoack, fm-ci-workflow, fm-merge-local, fm-claude-stop-autoarm.
+Assertion failures: none.
+Untested/incomplete: fm-test-run reached 300-second per-script time bound (exit 124); not rerun, remaining coverage belongs to CI.
+Phase 2 skipped: targeted phase 1 suites cover the changed suite relocation and classification behavior. No hook or landing production implementation changed.
