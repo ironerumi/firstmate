@@ -1,0 +1,25 @@
+fm-nm-guard exit=0
+fm-test-fixtures exit=0
+fm-test-run exit=1
+fm-timeout-lib exit=0
+fm-arm-pretool-check exit=0
+fm-cd-pretool-check exit=0
+fm-claude-trust exit=0
+fm-remote-secondmate-omp exit=0
+fm-remote-secondmate-parent-binding exit=0
+fm-wake-drain-outcome-backstop not-started time bound
+fm-pr-check-security not-started time bound
+fm-inactive-reconcile not-started time bound
+fm-watch-arm not-started time bound
+fm-bootstrap-network-parallel not-started time bound
+fm-backlog-atomicity not-started time bound
+fm-backlog-handoff not-started time bound
+fm-remote-backlog-handoff not-started time bound
+fm-fleet-sync not-started time bound
+fm-control-relaunch not-started time bound
+fm-remote-herdr-guard not-started time bound
+fm-remote-job not-started time bound
+fm-secondmate-sync not-started time bound
+fm-on not-started time bound
+fm-branch-supervision not-started time bound
+fm-x-mode not-started time bound

@@ -1,0 +1,49 @@
+FM_TEST_BEGIN 2026-11-13T05:27:17Z tests/fm-nm-guard.test.sh family=pure-contract-unit expected_gate_skip=none
+ok - a second axi run is refused while a run is live
+ok - a flagless axi run reattaches to the live run
+ok - rerun is refused while a run is live
+ok - aborting a working run is refused and names the run and the authorized path
+ok - a superseding push is refused while a run is live
+ok - push option operands cannot bypass the own-branch guard
+ok - no-refspec push policy is not over-blocked
+ok - every form of pushing the own branch to its own remote is refused
+ok - a push of another ref to the own remote is allowed
+ok - configured push URLs, remote groups, and mappings are classified
+ok - a push from another repository is judged against that repository
+ok - a push to a remote other than the branch's own is allowed
+ok - inspection and reconnection stay permitted under a live run
+ok - the axi respond continuation path is permitted and passes arguments through
+ok - help for a refused subcommand stays readable
+ok - unrelated git commands and dry-run pushes are never refused
+ok - abandoning an answerable gate is refused and points at the gate response
+ok - the parked gate can still be answered
+ok - a replacement run after an unreported failure is refused with the evidence path
+ok - recording the failure clears the refusal
+ok - a failed run outside this worktree's history never gates it
+ok - a run cancelled at a gate stays terminal and clears through the reporting path
+ok - a gate row never bypasses the failed-run code-identity test
+ok - an unrecognized run word stays permissive even with a gate row
+ok - a genuinely new run and push after a terminal run are not interfered with
+ok - another branch's run never gates this one
+ok - a task with no branch of its own is never gated
+ok - an unreadable pipeline answer fails open
+ok - an absent no-mistakes binary fails open
+ok - FM_NM_GUARD_ALLOW=1 allows an authorized recovery
+ok - a review fix response is allowed however many rounds have run
+ok - argv classification is exact for every documented shape
+ok - the decision table matches the documented contract
+ok - a refusal appends one keyed blocked line, idempotent per refusal code
+ok - a reset status file does not strand a refusal claim
+ok - a resolved refusal report re-opens on the next refusal
+ok - the guard's own report cannot count as the worker's failure report
+ok - a refusal without a status record still refuses
+ok - fm-spawn wires the shims once, through the backend-agnostic pane environment
+grep (BSD grep, GNU compatible) 2.6.0-FreeBSD
+ok - fixture initialization breaks wrapper loops and the emitted worker environment still refuses a replacement run
+ok - both shims are one owner reached under two names
+ok - fm-nm-guard.test.sh
+FM_TEST_END 2026-11-13T05:27:37Z tests/fm-nm-guard.test.sh exit=0 duration_ms=19520 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=19586
+FM_TEST_SUMMARY_FAMILY family=pure-contract-unit count=1 duration_ms=19520 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-nm-guard.test.sh duration_ms=19520
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M79NH1CEFDSN7DAQQY9TVVB4/fm-nm-guard.json

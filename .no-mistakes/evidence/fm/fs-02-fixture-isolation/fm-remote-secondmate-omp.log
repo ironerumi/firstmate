@@ -1,0 +1,11 @@
+FM_TEST_BEGIN 2026-11-13T05:37:49Z tests/fm-remote-secondmate-omp.test.sh family=unclassified expected_gate_skip=none
+ok - A host-local launch accepts omp and records the fm-remote Herdr endpoint
+ok - B host-local relaunch accepts omp and reaches the control plane
+ok - C the parent-side remote spawn gate accepts omp
+ok - D host-local retirement removes an omp mate's home and succeeds
+ALL TESTS PASSED
+FM_TEST_END 2026-11-13T05:37:57Z tests/fm-remote-secondmate-omp.test.sh exit=0 duration_ms=8095 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=8145
+FM_TEST_SUMMARY_FAMILY family=unclassified count=1 duration_ms=8095 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-remote-secondmate-omp.test.sh duration_ms=8095
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M79NH1CEFDSN7DAQQY9TVVB4/fm-remote-secondmate-omp.json

@@ -1,0 +1,31 @@
+{
+  "families": [
+    {
+      "count": 1,
+      "duration_ms": 19520,
+      "failed": 0,
+      "name": "pure-contract-unit"
+    }
+  ],
+  "finished_at": "2026-11-13T05:27:37Z",
+  "run_id": "fm-test-run-1794547637896-62269",
+  "scripts": [
+    {
+      "duration_ms": 19520,
+      "exit": 0,
+      "expected_gate_skip": "none",
+      "family": "pure-contract-unit",
+      "gate_skip": false,
+      "gate_skip_reason": "",
+      "path": "tests/fm-nm-guard.test.sh"
+    }
+  ],
+  "selection": "scripts;jobs=1",
+  "started_at": "2026-11-13T05:27:17Z",
+  "summary": {
+    "duration_ms": 19586,
+    "failed": 0,
+    "skipped_gate": 0,
+    "total": 1
+  }
+}

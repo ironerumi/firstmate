@@ -1,0 +1,33 @@
+FM_TEST_BEGIN 2026-11-13T05:37:57Z tests/fm-remote-secondmate-parent-binding.test.sh family=standalone expected_gate_skip=none
+ok - remote provisioning publishes durable parent state before its completion marker
+ok - a remote secondmate's finished worker cleans up when the remote code root's own .env looked relay-active
+ok - a remote secondmate's finished worker cleans up when only an ambient exported token looked relay-active
+ok - a remote secondmate's finished worker cleans up with no relay signal anywhere
+ok - a remote secondmate's own committed relay token still refuses cleanup
+ok - remote secondmate publication refuses targets outside its home
+ALL TESTS PASSED
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/pre-rebase: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/pre-applypatch: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/pre-auto-gc: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/pre-merge-commit: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/post-commit: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/sendemail-validate: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/applypatch-msg: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/prepare-commit-msg: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/post-checkout: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/post-applypatch: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/post-rewrite: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/commit-msg: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/pre-push: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/post-merge: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks/pre-commit: Permission denied
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route/ios.git-hooks: Directory not empty
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state/parent-route: Directory not empty
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home/state: Directory not empty
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo/remote-home: Directory not empty
+rm: /private/var/folders/l8/tyd57dc53v3938ttkwmw5kgr0000gp/T/fm-remote-parent-binding.iKRxjo: Directory not empty
+FM_TEST_END 2026-11-13T05:39:49Z tests/fm-remote-secondmate-parent-binding.test.sh exit=0 duration_ms=111914 gate_skip=false
+FM_TEST_SUMMARY total=1 failed=0 skipped_gate=0 duration_ms=111966
+FM_TEST_SUMMARY_FAMILY family=standalone count=1 duration_ms=111914 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-remote-secondmate-parent-binding.test.sh duration_ms=111914
+fm-test-run: wrote timing artifact: ~/.no-mistakes/evidence/01M79NH1CEFDSN7DAQQY9TVVB4/fm-remote-secondmate-parent-binding.json
