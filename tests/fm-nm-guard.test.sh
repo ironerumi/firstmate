@@ -517,6 +517,43 @@ WORKER_ENV=$(env -i PATH=/usr/bin:/bin bash -c "$WORKER_LINE; printf '%s\n' \"\$
   || fail "the export must prepend the shim directory rather than replace PATH"
 pass "fm-spawn wires the shims once, through the backend-agnostic pane environment"
 
+# A fresh fixture shell must break the captured-git exec loop without changing
+# the worker environment used by cases that explicitly exercise the guard.
+mkdir -p "$TMP/state dir" "$TMP/guard-alias" "$TMP/ordinary/shims"
+ln -s "$SHIMS/git" "$TMP/guard-alias/git"
+set_run running 01FIXTURE
+: > "$NM_FAKE_LOG"
+OUT=$(bash -s -- "$ROOT" "$WORKER_LINE" "$TMP" "$REPO" <<'SH'
+set -eu
+root=$1 worker_line=$2 tmp=$3 repo=$4
+eval "$worker_line"
+PATH="$tmp/guard-alias:$tmp/ordinary/shims::$PATH:"
+# shellcheck source=tests/lib.sh
+. "$root/tests/lib.sh"
+[ -z "${FM_NM_GUARD_STATUS:-}" ] || fail "fixture retained the worker status binding"
+case ":$PATH:" in *":$tmp/guard-alias:"*|*":$root/bin/shims:"*) fail "fixture retained a guard directory" ;; esac
+case "$PATH" in "$tmp/ordinary/shims::"*:) ;; *) fail "fixture changed ordinary or empty PATH entries" ;; esac
+real_git=$(command -v git)
+mkdir -p "$tmp/wrapper"
+printf '#!/usr/bin/env bash\nexec %q "$@"\n' "$real_git" > "$tmp/wrapper/git"
+chmod +x "$tmp/wrapper/git"
+PATH="$tmp/wrapper:$PATH" git --version
+# Rebinding uses the actual emitted export, not a hand-built guard environment.
+eval "$worker_line"
+rc=0
+(cd "$repo" && no-mistakes axi run --intent fixture-wrong-input) > "$tmp/fixture-refusal" 2>&1 || rc=$?
+expect_code 3 "$rc" "a replacement run under the rebound worker environment"
+assert_contains "$(cat "$tmp/fixture-refusal")" '[nm-run-active]' "wrong input lost the guard refusal"
+(cd "$repo" && no-mistakes --version)
+SH
+)
+CODE=$?
+expect_code 0 "$CODE" "fixture initialization and explicit guard rebinding: $OUT"
+assert_contains "$OUT" 'git version' "the fixture wrapper must reach real git"
+nm_called_with 'axi run --intent fixture-wrong-input' && fail "the refused replacement reached the tool"
+nm_called_with '--version' || fail "ordinary commands must still reach the tool after rebinding"
+pass "fixture initialization breaks wrapper loops and the emitted worker environment still refuses a replacement run"
+
 for tool in no-mistakes git; do
   [ -L "$SHIMS/$tool" ] || fail "$SHIMS/$tool must be a symlink to the one shim owner"
   [ -x "$SHIMS/$tool" ] || fail "$SHIMS/$tool must be executable"

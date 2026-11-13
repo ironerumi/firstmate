@@ -544,7 +544,7 @@ SH
 
 break_meta_removal() {  # <case-dir> <meta-path>
   local case_dir=$1 meta=$2 real
-  real=$(fm_real_tool rm)
+  real=$(command -v rm)
   cat > "$case_dir/fakebin/rm" <<SH
 #!/usr/bin/env bash
 for arg in "\$@"; do
@@ -557,7 +557,7 @@ SH
 
 break_busy_removal() {  # <case-dir> <id>
   local case_dir=$1 id=$2 real state
-  real=$(fm_real_tool rm)
+  real=$(command -v rm)
   state="$(home_of "$case_dir")/state"
   cat > "$case_dir/fakebin/rm" <<SH
 #!/usr/bin/env bash
@@ -593,7 +593,7 @@ SH
 
 break_meta_publication() {  # <case-dir> <meta-path>
   local case_dir=$1 meta=$2 real
-  real=$(fm_real_tool mv)
+  real=$(command -v mv)
   cat > "$case_dir/fakebin/mv" <<SH
 #!/usr/bin/env bash
 for arg in "\$@"; do

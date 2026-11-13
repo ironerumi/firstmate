@@ -20,7 +20,7 @@ TMP_ROOT=$(fm_test_tmproot fm-pr-check-security)
 fm_git_identity fmtest fmtest@example.invalid
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 REAL_CP=$(command -v cp)
-REAL_MV=$(fm_real_tool mv)
+REAL_MV=$(command -v mv)
 REAL_STAT=$(command -v stat)
 REAL_CHMOD=$(command -v chmod)
 # The merge path reads a merge request's JSON with the real jq, and BASE_PATH is

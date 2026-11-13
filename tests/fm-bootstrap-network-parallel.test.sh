@@ -25,7 +25,7 @@ unset TMUX TMUX_PANE HERDR_ENV HERDR_PANE_ID HERDR_SESSION HERDR_SOCKET_PATH \
 command -v python3 >/dev/null 2>&1 \
   || fail "python3 is required to decode the fm-on.sh argv payload"
 
-REAL_GIT=$(fm_real_tool git) || fail "git is required"
+REAL_GIT=$(command -v git) || fail "git is required"
 REAL_MKTEMP=$(command -v mktemp) || fail "mktemp is required"
 fm_git_identity fmtest fmtest@example.invalid
 
