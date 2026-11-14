@@ -7,6 +7,17 @@ Upstream churn guides where to avoid edits, but does not weight the enforced bud
 Fork behavior therefore ships preferentially as fork-added surfaces (new `bin/` scripts, fork-added `.agents/skills/`, wrapper scripts that call upstream tooling unchanged) rather than as edits to hot upstream files.
 Prose additions to `AGENTS.md` are the most expensive change in the repo and are rationed accordingly.
 
+A change is placed at the first destination that can carry it:
+
+1. `dotfiles`: machine state, what an install script places at a fixed path.
+2. `harness-tools` in `ironerumi/ironerumi-tools`: behavior every agent should have, not only firstmate crews.
+3. A firstmate extension: only a process-event source (poll a source, classify the result). The binding carries no lifecycle hooks, instruction injection, task mutation, or merges ([`docs/extension-bindings.md`](../extension-bindings.md)).
+4. The Home repo's command layer or Home server (`ironerumi/ironerumi-tools`): dispatch gates and anything that writes GitHub state labels.
+5. A fork-added file in this repo, free under the budget.
+6. A seam hunk in an upstream-owned file, which spends the budget; last resort.
+
+Each step down costs more divergence or reaches fewer agents.
+
 [`.fork-surface-budget`](../../.fork-surface-budget) owns the numeric ceilings.
 The no-mistakes lint command in [`.no-mistakes.yaml`](../../.no-mistakes.yaml) refreshes the upstream reference and enforces the budget separately from ordinary shell lint; ordinary lint and CI do not implicitly run that check.
 [`bin/fm-lint.sh`](../../bin/fm-lint.sh)'s header owns the measurement rules and standalone check interface.
