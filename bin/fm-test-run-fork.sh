@@ -45,7 +45,7 @@ fm_fork_family_for_basename() {  # <basename>
 # early, so cat stays quiet.
 fm_fork_serial_weight_hints() {
   cat 2>/dev/null <<'HINTS'
-tests/fm-brief-repo-guard.test.sh 5100
+tests/fm-brief-repo-guard.test.sh 4500
 tests/fm-classify-decision-key-extra.test.sh 1200
 tests/fm-nm-guard.test.sh 38800
 tests/fm-pr-merge-admin.test.sh 24100

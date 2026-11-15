@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Tests for bin/fm-brief-repo-guard.sh, the fork-added wrapper that appends a
-# control-plane boundary section to worker briefs targeting Firstmate's repo.
+# Tests for bin/fm-brief-repo-guard.sh, the fork-added wrapper that appends
+# fork-local sections to worker briefs scaffolded by bin/fm-brief.sh.
 #
 # Matrix:
 #   (a) a Firstmate-repo secondmate charter is byte-identical to a raw scaffold
 #   (b) Firstmate-repo ship and scout briefs gain the boundary exactly once
-#   (c) a non-firstmate target produces byte-identical brief content to a raw
-#       bin/fm-brief.sh run with the same arguments
-#   (d) a same-named project with a foreign origin remains byte-identical
+#   (c) a non-firstmate ship brief, in every mode, equals a raw scaffold plus
+#       only the falsification section; a non-firstmate scout brief is
+#       byte-identical to a raw scaffold
+#   (d) a same-named project with a foreign origin gets no boundary
 #   (e) equivalent supported origin spellings identify the Firstmate repo
+#   (f) --port appends the porting contract to a ship brief and nothing else
+#   (g) a Firstmate-repo ship brief orders falsification, porting contract,
+#       boundary; a Firstmate-repo scout brief carries only the boundary
+#   (h) --port on a scout or secondmate scaffold is refused before scaffolding
+#   (i) a failing scaffold appends nothing
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -40,33 +46,90 @@ run_brief() {
     "$script" "$@"
 }
 
-test_non_firstmate_target_is_byte_identical() {
-  local case_dir raw_brief wrapped_brief rc
-  case_dir=$(make_case foreign-target notfirstmate)
+# The section bodies the guard must append, verbatim from the issue.
+FALSIFICATION_BODY='For every gate a change ADDS or MODIFIES — a test, CI job, route manifest, lint/coverage rule, alarm — demonstrate it can FAIL: show it red against a deliberate violation, then restore and show it green. A falsification that fails to fail is a COVERAGE HOLE to close, not a pass.'
+PORT_BODY='- Never retype oracle constants. Extract rule tables / regex alternations / enum maps mechanically (AST or introspection dump) and convert programmatically; record the extraction script in the PR. Ported tests usually derive from the same retyped source, so retyping is a silent-corruption channel no test catches.
+- Sweep the cross-language seam: Python \d/\w/\s are Unicode-aware, JS'"'"'s are ASCII-only; re.sub replaces all, .replace() without g replaces first.
+- Corpus bar: generate inputs covering every literal alternative in every table; diff oracle vs port byte-exact.'
 
-  run_brief "$case_dir" "$RAW" notfirstmate taska1 some-project --mode no-mistakes \
-    > "$case_dir/raw.stdout" 2>&1 || fail "foreign-target: the raw scaffold failed"
-  raw_brief="$case_dir/raw-brief.md"
-  cp "$case_dir/home/data/taska1/brief.md" "$raw_brief"
-  rm -rf "$case_dir/home/data/taska1"
-
-  set +e
-  run_brief "$case_dir" "$GUARD" notfirstmate taska1 some-project --mode no-mistakes \
-    > "$case_dir/wrapped.stdout" 2>&1
-  rc=$?
-  set -e
-  expect_code 0 "$rc" "foreign-target: the wrapper must pass a normal scaffold through"
-  wrapped_brief="$case_dir/home/data/taska1/brief.md"
-
-  cmp -s "$raw_brief" "$wrapped_brief" \
-    || fail "foreign-target: the wrapper changed a non-firstmate brief"
-  assert_no_grep '## Control-plane boundary' "$wrapped_brief" \
-    "foreign-target: the boundary section was appended to a non-firstmate brief"
-  pass "a non-firstmate target scaffolds byte-identically through the wrapper"
+# heading_count <brief> <heading>: number of lines equal to "## <heading>".
+heading_count() {
+  grep -c -Fx "## $2" "$1" || true
 }
 
-test_same_named_foreign_origin_is_byte_identical() {
-  local case_dir raw_brief wrapped_brief
+# section_body <brief> <heading>: the lines between "## <heading>" and the next
+# heading of level one or two, without leading or trailing blank lines.
+section_body() {
+  awk -v h="## $2" '
+    $0 == h { on = 1; next }
+    on && /^##? / { exit }
+    on { buf[++n] = $0 }
+    END {
+      first = 1; while (first <= n && buf[first] == "") first++
+      last = n; while (last >= first && buf[last] == "") last--
+      for (i = first; i <= last; i++) print buf[i]
+    }
+  ' "$1"
+}
+
+# expect_section <brief> <heading> <body> <label>: exactly one such section,
+# with exactly that body.
+expect_section() {
+  local count
+  count=$(heading_count "$1" "$2")
+  [ "$count" = 1 ] || fail "$4: expected exactly one '## $2' section, got $count"
+  [ "$(section_body "$1" "$2")" = "$3" ] || fail "$4: the '## $2' body differs from the contract text"
+}
+
+# raw_then_guard <case_dir> <root_name> <task-id> <args...>: scaffold the same
+# brief raw, then through the guard; leaves raw-brief.md beside the guarded
+# brief at home/data/<task-id>/brief.md.
+raw_then_guard() {
+  local case_dir=$1 root_name=$2 id=$3
+  shift 3
+  run_brief "$case_dir" "$RAW" "$root_name" "$id" "$@" \
+    > "$case_dir/raw.stdout" 2>&1 || fail "$id: the raw scaffold failed"
+  cp "$case_dir/home/data/$id/brief.md" "$case_dir/raw-brief.md"
+  rm -rf "$case_dir/home/data/$id"
+  run_brief "$case_dir" "$GUARD" "$root_name" "$id" "$@" \
+    > "$case_dir/wrapped.stdout" 2>&1 || fail "$id: the guarded scaffold failed"
+}
+
+# expect_raw_plus_falsification <case_dir> <task-id> <label>: the guarded brief
+# is the raw brief followed by the falsification section and nothing else.
+expect_raw_plus_falsification() {
+  local expected="$1/expected-brief.md"
+  { cat "$1/raw-brief.md"; printf '\n## Added-gate falsification\n\n%s\n' "$FALSIFICATION_BODY"; } > "$expected"
+  cmp -s "$expected" "$1/home/data/$2/brief.md" \
+    || fail "$3: the guarded ship brief is not the raw scaffold plus only the falsification section"
+}
+
+test_non_firstmate_ship_adds_only_falsification() {
+  local mode case_dir brief
+  for mode in no-mistakes direct-PR local-only; do
+    case_dir=$(make_case "foreign-ship-$mode" notfirstmate)
+    raw_then_guard "$case_dir" notfirstmate "taska-$mode" some-project --mode "$mode"
+    brief="$case_dir/home/data/taska-$mode/brief.md"
+    expect_section "$brief" 'Added-gate falsification' "$FALSIFICATION_BODY" "foreign-ship-$mode"
+    expect_raw_plus_falsification "$case_dir" "taska-$mode" "foreign-ship-$mode"
+    assert_no_grep '## Porting contract' "$brief" "foreign-ship-$mode: the porting contract appeared without --port"
+    assert_no_grep '## Control-plane boundary' "$brief" \
+      "foreign-ship-$mode: the boundary section was appended to a non-firstmate brief"
+  done
+  pass "a non-firstmate ship brief in every mode is the raw scaffold plus only the falsification section"
+}
+
+test_non_firstmate_scout_is_byte_identical() {
+  local case_dir
+  case_dir=$(make_case foreign-scout notfirstmate)
+  raw_then_guard "$case_dir" notfirstmate taskb1 some-project --scout
+  cmp -s "$case_dir/raw-brief.md" "$case_dir/home/data/taskb1/brief.md" \
+    || fail "foreign-scout: the wrapper changed a non-firstmate scout brief"
+  pass "a non-firstmate scout brief scaffolds byte-identically through the wrapper"
+}
+
+test_same_named_foreign_origin_gets_no_boundary() {
+  local case_dir
   case_dir=$(make_case same-name-foreign-origin firstmate)
   mkdir -p "$case_dir/fmroot/firstmate/projects/firstmate"
   git -C "$case_dir/fmroot/firstmate" init -q
@@ -74,21 +137,93 @@ test_same_named_foreign_origin_is_byte_identical() {
   git -C "$case_dir/fmroot/firstmate/projects/firstmate" init -q
   git -C "$case_dir/fmroot/firstmate/projects/firstmate" remote add origin git@example.test:another/firstmate.git
 
-  run_brief "$case_dir" "$RAW" firstmate taskd1 firstmate --mode no-mistakes \
-    > "$case_dir/raw.stdout" 2>&1 || fail "same-name-foreign-origin: the raw scaffold failed"
-  raw_brief="$case_dir/raw-brief.md"
-  cp "$case_dir/home/data/taskd1/brief.md" "$raw_brief"
-  rm -rf "$case_dir/home/data/taskd1"
-
-  run_brief "$case_dir" "$GUARD" firstmate taskd1 firstmate --mode no-mistakes \
-    > "$case_dir/wrapped.stdout" 2>&1 || fail "same-name-foreign-origin: the wrapped scaffold failed"
-  wrapped_brief="$case_dir/home/data/taskd1/brief.md"
-
-  cmp -s "$raw_brief" "$wrapped_brief" \
-    || fail "same-name-foreign-origin: the wrapper changed a foreign repository brief"
-  assert_no_grep '## Control-plane boundary' "$wrapped_brief" \
+  raw_then_guard "$case_dir" firstmate taskd1 firstmate --mode no-mistakes
+  expect_raw_plus_falsification "$case_dir" taskd1 same-name-foreign-origin
+  assert_no_grep '## Control-plane boundary' "$case_dir/home/data/taskd1/brief.md" \
     "same-name-foreign-origin: the boundary section was appended to a foreign repository brief"
-  pass "a same-named foreign repository scaffolds byte-identically through the wrapper"
+  pass "a same-named foreign repository gets the falsification section but no boundary"
+}
+
+test_port_appends_only_the_porting_contract() {
+  local case_dir plain ported expected
+  case_dir=$(make_case foreign-port notfirstmate)
+  run_brief "$case_dir" "$GUARD" notfirstmate taskf1 some-project --mode direct-PR \
+    > "$case_dir/plain.stdout" 2>&1 || fail "port: the guarded scaffold without --port failed"
+  plain="$case_dir/plain-brief.md"
+  cp "$case_dir/home/data/taskf1/brief.md" "$plain"
+  rm -rf "$case_dir/home/data/taskf1"
+  assert_no_grep '## Porting contract' "$plain" "port: the porting contract appeared without --port"
+
+  run_brief "$case_dir" "$GUARD" notfirstmate taskf1 --port some-project --mode direct-PR \
+    > "$case_dir/ported.stdout" 2>&1 || fail "port: the guarded scaffold with --port failed"
+  ported="$case_dir/home/data/taskf1/brief.md"
+  expect_section "$ported" 'Porting contract' "$PORT_BODY" port
+  expected="$case_dir/expected-brief.md"
+  { cat "$plain"; printf '\n## Porting contract\n\n%s\n' "$PORT_BODY"; } > "$expected"
+  cmp -s "$expected" "$ported" \
+    || fail "port: --port changed the brief beyond appending the porting contract"
+  cmp -s "$case_dir/plain.stdout" "$case_dir/ported.stdout" \
+    || fail "port: --port reached bin/fm-brief.sh and changed its output"
+  pass "--port appends exactly the porting contract to a ship brief"
+}
+
+test_firstmate_ship_orders_all_sections() {
+  local case_dir brief order
+  case_dir=$(make_case firstmate-ship-port firstmate)
+  run_brief "$case_dir" "$GUARD" firstmate taskg1 firstmate --mode no-mistakes --port \
+    > "$case_dir/stdout" 2>&1 || fail "firstmate-ship-port: the guarded scaffold failed"
+  brief="$case_dir/home/data/taskg1/brief.md"
+  expect_section "$brief" 'Added-gate falsification' "$FALSIFICATION_BODY" firstmate-ship-port
+  expect_section "$brief" 'Porting contract' "$PORT_BODY" firstmate-ship-port
+  [ "$(heading_count "$brief" 'Control-plane boundary')" = 1 ] \
+    || fail "firstmate-ship-port: expected exactly one boundary section"
+  order=$(grep -Fx -e '## Added-gate falsification' -e '## Porting contract' -e '## Control-plane boundary' "$brief" | tr '\n' '|')
+  [ "$order" = '## Added-gate falsification|## Porting contract|## Control-plane boundary|' ] \
+    || fail "firstmate-ship-port: sections out of order: $order"
+
+  case_dir=$(make_case firstmate-scout-only firstmate)
+  run_brief "$case_dir" "$GUARD" firstmate taskg2 firstmate --scout \
+    > "$case_dir/stdout" 2>&1 || fail "firstmate-scout-only: the guarded scaffold failed"
+  brief="$case_dir/home/data/taskg2/brief.md"
+  [ "$(heading_count "$brief" 'Control-plane boundary')" = 1 ] \
+    || fail "firstmate-scout-only: expected exactly one boundary section"
+  assert_no_grep '## Added-gate falsification' "$brief" "firstmate-scout-only: a scout brief got the falsification section"
+  assert_no_grep '## Porting contract' "$brief" "firstmate-scout-only: a scout brief got the porting contract"
+  pass "a Firstmate ship brief orders falsification, porting contract, boundary; a scout gets only the boundary"
+}
+
+test_port_is_refused_off_ship_briefs() {
+  local label case_dir rc
+  for label in scout secondmate; do
+    case_dir=$(make_case "port-refused-$label" notfirstmate)
+    if [ "$label" = scout ]; then
+      run_brief "$case_dir" "$GUARD" notfirstmate taskh1 some-project --scout --port \
+        > "$case_dir/stdout" 2> "$case_dir/stderr"
+    else
+      run_brief "$case_dir" "$GUARD" notfirstmate taskh1 --secondmate some-project --port \
+        > "$case_dir/stdout" 2> "$case_dir/stderr"
+    fi
+    rc=$?
+    [ "$rc" -ne 0 ] || fail "port-refused-$label: --port was accepted on a $label scaffold"
+    [ ! -e "$case_dir/home/data/taskh1" ] || fail "port-refused-$label: a brief was scaffolded despite the refusal"
+    assert_grep 'ship briefs' "$case_dir/stderr" "port-refused-$label: the refusal did not name ship briefs"
+  done
+  pass "--port is refused on scout and secondmate scaffolds before anything is written"
+}
+
+test_failed_scaffold_appends_nothing() {
+  local case_dir brief rc
+  case_dir=$(make_case failed-scaffold notfirstmate)
+  run_brief "$case_dir" "$GUARD" notfirstmate taski1 some-project --mode local-only --port \
+    > "$case_dir/first.stdout" 2>&1 || fail "failed-scaffold: the first scaffold failed"
+  brief="$case_dir/home/data/taski1/brief.md"
+  cp "$brief" "$case_dir/first-brief.md"
+  run_brief "$case_dir" "$GUARD" notfirstmate taski1 some-project --mode local-only --port \
+    > "$case_dir/second.stdout" 2>&1
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "failed-scaffold: overwriting an existing brief was not refused"
+  cmp -s "$case_dir/first-brief.md" "$brief" || fail "failed-scaffold: a failed scaffold changed the brief"
+  pass "a failing scaffold exits non-zero and appends nothing"
 }
 
 test_equivalent_origin_spellings_append_the_boundary() {
@@ -157,11 +292,18 @@ test_firstmate_secondmate_charter_is_transparent() {
     || fail "firstmate-secondmate: the wrapper changed a secondmate charter"
   assert_no_grep '## Control-plane boundary' "$wrapped_brief" \
     "firstmate-secondmate: the boundary section was appended to a secondmate charter"
+  assert_no_grep '## Added-gate falsification' "$wrapped_brief" \
+    "firstmate-secondmate: the falsification section was appended to a secondmate charter"
   pass "a Firstmate-repo secondmate charter scaffolds byte-identically through the wrapper"
 }
 
 test_firstmate_secondmate_charter_is_transparent
 test_firstmate_workers_append_the_boundary_once
-test_non_firstmate_target_is_byte_identical
-test_same_named_foreign_origin_is_byte_identical
+test_non_firstmate_ship_adds_only_falsification
+test_non_firstmate_scout_is_byte_identical
+test_same_named_foreign_origin_gets_no_boundary
 test_equivalent_origin_spellings_append_the_boundary
+test_port_appends_only_the_porting_contract
+test_firstmate_ship_orders_all_sections
+test_port_is_refused_off_ship_briefs
+test_failed_scaffold_appends_nothing
