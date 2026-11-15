@@ -1,0 +1,5 @@
+Phase 1 targeted validation
+Ran: tests/fm-brief-repo-guard.test.sh via bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300
+Passed: yes
+Failed: none
+Time bound: none
