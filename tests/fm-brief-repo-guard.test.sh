@@ -15,6 +15,12 @@
 #       boundary; a Firstmate-repo scout brief carries only the boundary
 #   (h) --port on a scout or secondmate scaffold is refused before scaffolding
 #   (i) a failing scaffold appends nothing
+#   (j) a backlog row's whip intent block lands under ## Captain's intent for
+#       ship briefs (any target) and scout briefs, once
+#   (k) no row, or a row without a begin marker, changes nothing; a secondmate
+#       charter is untouched
+#   (l) a malformed block or a failing backlog read exits non-zero, naming the
+#       row and the fault, and inserts nothing
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -297,6 +303,193 @@ test_firstmate_secondmate_charter_is_transparent() {
   pass "a Firstmate-repo secondmate charter scaffolds byte-identically through the wrapper"
 }
 
+# --- intent block intake --------------------------------------------------
+
+# shellcheck source=bin/fm-brief-heading-lib.sh
+. "$ROOT/bin/fm-brief-heading-lib.sh"
+
+# The block exactly as the Home repo's `whip dispatch` writes it: its lines go
+# under ## Captain's intent; the marker lines do not.
+INTENT_BLOCK='Acceptance criteria:
+- [ ] the guard copies "quoted" text and é unchanged
+- [ ] a closed fence may hold heading-like lines
+```text
+## not a heading inside a fence
+```
+### a level-3 heading stays inside the subsection
+
+Out of scope:
+- anything else'
+
+# whip_body <block-lines>: a row body in the shape whip dispatch writes.
+whip_body() {
+  printf 'Issue: ironerumi/example#7\n\n<!-- whip:intent -->\n%s\n<!-- /whip:intent -->\n\nDispatch note.\n' "$1"
+}
+
+# backlog_home <case_dir>: give the case home a markdown backlog that Firstmate
+# transitions, so the guard reads rows from it through the real tasks-axi.
+backlog_home() {
+  fm_test_tasks_toml "$1/home/.tasks.toml"
+  : > "$1/home/data/backlog.md"
+}
+
+# add_row <case_dir> <id> <body>: add one backlog row through the real
+# tasks-axi, which stores the body and shows it as one JSON-quoted line.
+add_row() {
+  local body_args=()
+  if [ -n "$3" ]; then
+    printf '%s' "$3" > "$1/row-body"
+    body_args=(--body-file "$1/row-body")
+  fi
+  FM_HOME="$1/home" FM_DATA_OVERRIDE="$1/home/data" \
+    "$ROOT/bin/fm-tasks-axi.sh" add "$2" "intent probe" --kind ship ${body_args[@]+"${body_args[@]}"} \
+    > "$1/add.out" 2>&1 || fail "add_row $2: tasks-axi add failed: $(cat "$1/add.out")"
+}
+
+# with_block <brief> <block> <out>: the brief with the block's lines and one
+# blank line inserted directly under the first "## Captain's intent" line.
+with_block() {
+  INTENT_BLOCK_LINES=$2 awk '
+    { print }
+    !done && $0 == "## Captain'"'"'s intent" { print ENVIRON["INTENT_BLOCK_LINES"]; print ""; done = 1 }
+  ' "$1" > "$3"
+}
+
+test_intent_block_lands_under_captains_intent() {
+  local target root case_dir id brief intent
+  for target in some-project firstmate; do
+    root=notfirstmate
+    [ "$target" = some-project ] || root=firstmate
+    case_dir=$(make_case "intent-ship-$target" "$root")
+    backlog_home "$case_dir"
+    id="ironerumi-tools-$target"
+    add_row "$case_dir" "$id" "$(whip_body "$INTENT_BLOCK")"
+    # The same scaffold with no row is the wrapper's output without the copy.
+    run_brief "$case_dir" "$GUARD" "$root" "$id-norow" "$target" --mode no-mistakes \
+      > "$case_dir/norow.stdout" 2>&1 || fail "intent-ship-$target: the row-less scaffold failed"
+    run_brief "$case_dir" "$GUARD" "$root" "$id" "$target" --mode no-mistakes \
+      > "$case_dir/stdout" 2>&1 || fail "intent-ship-$target: the guarded scaffold failed: $(cat "$case_dir/stdout")"
+    brief="$case_dir/home/data/$id/brief.md"
+    sed "s/$id-norow/$id/g" "$case_dir/home/data/$id-norow/brief.md" > "$case_dir/norow-brief.md"
+    with_block "$case_dir/norow-brief.md" "$INTENT_BLOCK" "$case_dir/expected-brief.md"
+    cmp -s "$case_dir/expected-brief.md" "$brief" \
+      || fail "intent-ship-$target: the brief is not the row-less brief plus the block under Captain's intent"
+    intent=$(fm_brief_task_heading_body "$brief" "## Captain's intent")
+    [ "$intent" = "$INTENT_BLOCK"$'\n\n{TASK}\n' ] \
+      || [ "$intent" = "$INTENT_BLOCK"$'\n\n{TASK}' ] \
+      || fail "intent-ship-$target: Captain's intent read by spawn's reader is not the block then {TASK}: $intent"
+    assert_no_grep 'whip:intent' "$brief" "intent-ship-$target: a marker line was copied"
+    sed -e 's/^{TASK}$/Ship the probe./' -e 's/^{FIRSTMATE_SPEC}$/Spec text./' "$brief" > "$case_dir/filled.md"
+    intent=$(fm_brief_task_heading_body "$case_dir/filled.md" "## Captain's intent")
+    case "$intent" in
+      "$INTENT_BLOCK"$'\n\nShip the probe.'*) ;;
+      *) fail "intent-ship-$target: the filled --intent body does not carry the block: $intent" ;;
+    esac
+  done
+
+  case_dir=$(make_case intent-scout notfirstmate)
+  backlog_home "$case_dir"
+  add_row "$case_dir" scout-7 "$(whip_body "$INTENT_BLOCK")"
+  run_brief "$case_dir" "$GUARD" notfirstmate scout-7 some-project --scout \
+    > "$case_dir/stdout" 2>&1 || fail "intent-scout: the guarded scaffold failed: $(cat "$case_dir/stdout")"
+  intent=$(fm_brief_task_heading_body "$case_dir/home/data/scout-7/brief.md" "## Captain's intent")
+  case "$intent" in
+    "$INTENT_BLOCK"$'\n\n{TASK}'*) ;;
+    *) fail "intent-scout: the scout brief's Captain's intent does not start with the block: $intent" ;;
+  esac
+
+  # Scaffolding the same brief again is refused by the scaffolder and leaves
+  # exactly one copy of the block.
+  cp "$case_dir/home/data/scout-7/brief.md" "$case_dir/first-brief.md"
+  run_brief "$case_dir" "$GUARD" notfirstmate scout-7 some-project --scout > "$case_dir/again.stdout" 2>&1 \
+    && fail "intent-scout: re-scaffolding an existing brief was accepted"
+  cmp -s "$case_dir/first-brief.md" "$case_dir/home/data/scout-7/brief.md" \
+    || fail "intent-scout: re-scaffolding changed the brief"
+  pass "a row's intent block lands under Captain's intent for ship (any target) and scout briefs, once"
+}
+
+test_rows_without_block_are_byte_identical() {
+  local case_dir label body
+  case_dir=$(make_case intent-none notfirstmate)
+  backlog_home "$case_dir"
+  raw_then_guard "$case_dir" notfirstmate missing-row some-project --mode no-mistakes
+  expect_raw_plus_falsification "$case_dir" missing-row "intent-none: no row"
+  for label in plain endonly nobody; do
+    case "$label" in
+      plain) body='A row added by hand.' ;;
+      endonly) body=$'Text\n<!-- /whip:intent -->\nmore' ;;
+      nobody) body= ;;
+    esac
+    add_row "$case_dir" "row-$label" "$body"
+    raw_then_guard "$case_dir" notfirstmate "row-$label" some-project --mode no-mistakes
+    expect_raw_plus_falsification "$case_dir" "row-$label" "intent-none: row without a block ($label)"
+  done
+
+  add_row "$case_dir" mate "$(whip_body "$INTENT_BLOCK")"
+  run_brief "$case_dir" "$RAW" notfirstmate mate --secondmate some-project > /dev/null 2>&1 \
+    || fail "intent-none: the raw secondmate scaffold failed"
+  cp "$case_dir/home/data/mate/brief.md" "$case_dir/raw-mate.md"
+  rm -rf "$case_dir/home/data/mate"
+  run_brief "$case_dir" "$GUARD" notfirstmate mate --secondmate some-project > /dev/null 2>&1 \
+    || fail "intent-none: the guarded secondmate scaffold failed"
+  cmp -s "$case_dir/raw-mate.md" "$case_dir/home/data/mate/brief.md" \
+    || fail "intent-none: a secondmate charter changed although its row carries a block"
+  pass "no row, or a row without a begin marker, leaves the brief byte-identical; a secondmate charter is untouched"
+}
+
+# expect_refusal <case_dir> <id> <label> <fault-text>: the guarded ship scaffold
+# exits non-zero naming the row and the fault, and the brief is the raw scaffold
+# plus only the section appended before the read.
+expect_refusal() {
+  local case_dir=$1 id=$2 label=$3 fault=$4 rc
+  run_brief "$case_dir" "$RAW" notfirstmate "$id" some-project --mode no-mistakes > /dev/null 2>&1 \
+    || fail "$label: the raw scaffold failed"
+  cp "$case_dir/home/data/$id/brief.md" "$case_dir/raw-brief.md"
+  rm -rf "$case_dir/home/data/$id"
+  run_brief "$case_dir" "$GUARD" notfirstmate "$id" some-project --mode no-mistakes \
+    > "$case_dir/$id.stdout" 2> "$case_dir/$id.stderr"
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "$label: the guard accepted a faulty row"
+  assert_grep "$id" "$case_dir/$id.stderr" "$label: the error does not name row $id: $(cat "$case_dir/$id.stderr")"
+  assert_grep "$fault" "$case_dir/$id.stderr" "$label: the error does not name the fault '$fault': $(cat "$case_dir/$id.stderr")"
+  expect_raw_plus_falsification "$case_dir" "$id" "$label"
+}
+
+test_malformed_blocks_are_refused() {
+  local case_dir
+  case_dir=$(make_case intent-malformed notfirstmate)
+  backlog_home "$case_dir"
+  add_row "$case_dir" bad-open $'Issue: x\n\n<!-- whip:intent -->\nAcceptance criteria:\n- [ ] one'
+  expect_refusal "$case_dir" bad-open intent-unterminated 'no end marker'
+  add_row "$case_dir" bad-h1 "$(whip_body $'Acceptance criteria:\n# Out')"
+  expect_refusal "$case_dir" bad-h1 intent-h1 'heading'
+  add_row "$case_dir" bad-h2 "$(whip_body $'Acceptance criteria:\n   ##')"
+  expect_refusal "$case_dir" bad-h2 intent-h2 'heading'
+  add_row "$case_dir" bad-fence "$(whip_body $'Acceptance criteria:\n~~~~\n## hidden\n~~~')"
+  expect_refusal "$case_dir" bad-fence intent-fence 'unclosed code fence'
+  pass "an unterminated block, a level-1 or level-2 heading line, and an unclosed fence are refused, inserting nothing"
+}
+
+test_failing_backlog_read_is_refused() {
+  local case_dir fakebin real
+  case_dir=$(make_case intent-readfail notfirstmate)
+  backlog_home "$case_dir"
+  add_row "$case_dir" read-fail "$(whip_body "$INTENT_BLOCK")"
+  fakebin=$(fm_fakebin "$case_dir")
+  real=$(command -v tasks-axi)
+  cat > "$fakebin/tasks-axi" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-}" = show ]; then
+  echo 'error: backend exploded'
+  exit 3
+fi
+exec "$real" "\$@"
+SH
+  chmod +x "$fakebin/tasks-axi"
+  PATH="$fakebin:$PATH" expect_refusal "$case_dir" read-fail intent-readfail 'backend exploded'
+  pass "a failing backlog read on a transitioning home exits non-zero naming the read error"
+}
+
 test_firstmate_secondmate_charter_is_transparent
 test_firstmate_workers_append_the_boundary_once
 test_non_firstmate_ship_adds_only_falsification
@@ -307,3 +500,7 @@ test_port_appends_only_the_porting_contract
 test_firstmate_ship_orders_all_sections
 test_port_is_refused_off_ship_briefs
 test_failed_scaffold_appends_nothing
+test_intent_block_lands_under_captains_intent
+test_rows_without_block_are_byte_identical
+test_malformed_blocks_are_refused
+test_failing_backlog_read_is_refused
