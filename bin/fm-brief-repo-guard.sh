@@ -11,7 +11,7 @@
 #   2. "Porting contract" to a ship brief scaffolded with --port;
 #   3. "Control-plane boundary" to a ship or scout brief whose target project
 #      resolves to the Firstmate repo itself.
-# Before rule 3, a ship or scout brief whose backlog row (the row whose id is
+# Before appending any section, a ship or scout brief whose backlog row (the row whose id is
 # the brief's task id, read through tasks-axi with the home's bounded row read)
 # carries a whip intent block gets that block's lines inserted directly under
 # "## Captain's intent", then one blank line, above {TASK}. The block is the
@@ -54,7 +54,7 @@ PROJECTS="${FM_PROJECTS_OVERRIDE:-$FM_HOME/projects}"
 case "${1:-}" in
   -h | --help)
     "$REAL_BRIEF" --help
-    printf '\nThis wrapper additionally appends an added-gate falsification section to every ship brief; with --port (ship briefs only), a porting-contract section; and a control-plane boundary section when a ship or scout brief targets the Firstmate repo itself. Before that boundary, a ship or scout brief whose backlog row carries the lines between <!-- whip:intent --> and <!-- /whip:intent --> gets them inserted under ## Captain'"'"'s intent above {TASK}; a malformed block or a failing backlog read exits non-zero.\n'
+    printf '\nThis wrapper additionally appends an added-gate falsification section to every ship brief; with --port (ship briefs only), a porting-contract section; and a control-plane boundary section when a ship or scout brief targets the Firstmate repo itself. Before appending any section, a ship or scout brief whose backlog row carries the lines between <!-- whip:intent --> and <!-- /whip:intent --> gets them inserted under ## Captain'"'"'s intent above {TASK}; a malformed block or a failing backlog read exits non-zero.\n'
     exit 0
     ;;
 esac

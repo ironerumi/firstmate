@@ -319,7 +319,9 @@ INTENT_BLOCK='Acceptance criteria:
 ### a level-3 heading stays inside the subsection
 
 Out of scope:
-- anything else'
+- anything else  
+
+'
 
 # whip_body <block-lines>: a row body in the shape whip dispatch writes.
 whip_body() {
