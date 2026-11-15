@@ -1,0 +1,356 @@
+$ {run-worktree}/bin/fm-lab-home.sh create {run-worktree}/.validation-tmp/live-cli/copied 
+exit= 0 
+ {run-worktree}/.validation-tmp/live-cli/copied
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-5 local synthetic note 5 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778837-TuJ3Q9","request_id":"request-5","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/1794778837-TuJ3Q9.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-6 local synthetic note 6 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778837-3WfAlw","request_id":"request-6","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/1794778837-3WfAlw.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-3 local synthetic note 3 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778837-GczbUA","request_id":"request-3","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/1794778837-GczbUA.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-4 local synthetic note 4 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778837-Yj6HcZ","request_id":"request-4","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/1794778837-Yj6HcZ.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-1 local synthetic note 1 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778837-8SywRO","request_id":"request-1","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/1794778837-8SywRO.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-7 local synthetic note 7 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778837-IyFaIo","request_id":"request-7","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/1794778837-IyFaIo.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-0 local synthetic note 0 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778837-536Npl","request_id":"request-0","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/1794778837-536Npl.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-2 local synthetic note 2 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778837-P8hI1O","request_id":"request-2","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/1794778837-P8hI1O.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778837-8SywRO local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778837-8SywRO","path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/.replies/1794778837-8SywRO"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778837-Yj6HcZ local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778837-Yj6HcZ","path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/.replies/1794778837-Yj6HcZ"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778837-P8hI1O local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778837-P8hI1O","path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/.replies/1794778837-P8hI1O"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778837-TuJ3Q9 local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778837-TuJ3Q9","path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/.replies/1794778837-TuJ3Q9"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778837-IyFaIo local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778837-IyFaIo","path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/.replies/1794778837-IyFaIo"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778837-GczbUA local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778837-GczbUA","path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/.replies/1794778837-GczbUA"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778837-536Npl local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778837-536Npl","path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/.replies/1794778837-536Npl"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778837-3WfAlw local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778837-3WfAlw","path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/.replies/1794778837-3WfAlw"}
+ 
+DURABLE REPLY 1794778837-536Npl id=1794778837-536Npl
+at=2026-11-15T21:40:40Z
+seq=7
+--
+local synthetic answer
+
+DURABLE REPLY 1794778837-8SywRO id=1794778837-8SywRO
+at=2026-11-15T21:40:39Z
+seq=1
+--
+local synthetic answer
+
+DURABLE REPLY 1794778837-P8hI1O id=1794778837-P8hI1O
+at=2026-11-15T21:40:39Z
+seq=3
+--
+local synthetic answer
+
+DURABLE REPLY 1794778837-GczbUA id=1794778837-GczbUA
+at=2026-11-15T21:40:40Z
+seq=6
+--
+local synthetic answer
+
+DURABLE REPLY 1794778837-Yj6HcZ id=1794778837-Yj6HcZ
+at=2026-11-15T21:40:39Z
+seq=2
+--
+local synthetic answer
+
+DURABLE REPLY 1794778837-TuJ3Q9 id=1794778837-TuJ3Q9
+at=2026-11-15T21:40:39Z
+seq=4
+--
+local synthetic answer
+
+DURABLE REPLY 1794778837-3WfAlw id=1794778837-3WfAlw
+at=2026-11-15T21:40:41Z
+seq=8
+--
+local synthetic answer
+
+DURABLE REPLY 1794778837-IyFaIo id=1794778837-IyFaIo
+at=2026-11-15T21:40:40Z
+seq=5
+--
+local synthetic answer
+
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-9 local synthetic note 9 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778841-RykVdq","request_id":"request-9","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/1794778841-RykVdq.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778841-RykVdq local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778841-RykVdq","path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/.replies/1794778841-RykVdq"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778841-RykVdq local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778841-RykVdq
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778841-RykVdq local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778841-RykVdq
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778841-RykVdq local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778841-RykVdq
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778841-RykVdq local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778841-RykVdq
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778841-RykVdq local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778841-RykVdq
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778841-RykVdq local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778841-RykVdq
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778841-RykVdq local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778841-RykVdq
+
+$ bash -c . "$1"; fm_lock_try_create "$2" _ {run-worktree}/bin/fm-wake-lib.sh {run-worktree}/.validation-tmp/live-cli/copied/state/.wake-queue.lock 
+exit= 0 
+  
+DEAD RECORD directory ['.owner.2ValEQ', 'pid', 'pid-start']
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-10 local synthetic note 10 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778842-RuMwoI","request_id":"request-10","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/copied/state/inbox/1794778842-RuMwoI.note"}
+ 
+PASS: copied-link CLI concurrent durable writes, single-answer refusal, dead-owner recovery and complete release
+$ {run-worktree}/bin/fm-lab-home.sh create {run-worktree}/.validation-tmp/live-cli/native 
+exit= 0 
+ {run-worktree}/.validation-tmp/live-cli/native
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-0 local synthetic note 0 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778842-lsJYHW","request_id":"request-0","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/1794778842-lsJYHW.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-2 local synthetic note 2 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778842-sFveG9","request_id":"request-2","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/1794778842-sFveG9.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-1 local synthetic note 1 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778842-iybdhh","request_id":"request-1","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/1794778842-iybdhh.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-6 local synthetic note 6 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778842-QB5liG","request_id":"request-6","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/1794778842-QB5liG.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-3 local synthetic note 3 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778842-Mgenhw","request_id":"request-3","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/1794778842-Mgenhw.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-5 local synthetic note 5 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778842-RJ3Ma6","request_id":"request-5","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/1794778842-RJ3Ma6.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-4 local synthetic note 4 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778842-JeWsQ3","request_id":"request-4","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/1794778842-JeWsQ3.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-7 local synthetic note 7 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778842-tR477O","request_id":"request-7","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/1794778842-tR477O.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778842-lsJYHW local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778842-lsJYHW","path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/.replies/1794778842-lsJYHW"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778842-JeWsQ3 local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778842-JeWsQ3","path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/.replies/1794778842-JeWsQ3"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778842-QB5liG local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778842-QB5liG","path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/.replies/1794778842-QB5liG"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778842-sFveG9 local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778842-sFveG9","path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/.replies/1794778842-sFveG9"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778842-RJ3Ma6 local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778842-RJ3Ma6","path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/.replies/1794778842-RJ3Ma6"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778842-iybdhh local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778842-iybdhh","path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/.replies/1794778842-iybdhh"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778842-Mgenhw local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778842-Mgenhw","path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/.replies/1794778842-Mgenhw"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778842-tR477O local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778842-tR477O","path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/.replies/1794778842-tR477O"}
+ 
+DURABLE REPLY 1794778842-lsJYHW id=1794778842-lsJYHW
+at=2026-11-15T21:40:44Z
+seq=1
+--
+local synthetic answer
+
+DURABLE REPLY 1794778842-iybdhh id=1794778842-iybdhh
+at=2026-11-15T21:40:45Z
+seq=6
+--
+local synthetic answer
+
+DURABLE REPLY 1794778842-sFveG9 id=1794778842-sFveG9
+at=2026-11-15T21:40:45Z
+seq=4
+--
+local synthetic answer
+
+DURABLE REPLY 1794778842-Mgenhw id=1794778842-Mgenhw
+at=2026-11-15T21:40:45Z
+seq=7
+--
+local synthetic answer
+
+DURABLE REPLY 1794778842-JeWsQ3 id=1794778842-JeWsQ3
+at=2026-11-15T21:40:44Z
+seq=2
+--
+local synthetic answer
+
+DURABLE REPLY 1794778842-RJ3Ma6 id=1794778842-RJ3Ma6
+at=2026-11-15T21:40:45Z
+seq=5
+--
+local synthetic answer
+
+DURABLE REPLY 1794778842-QB5liG id=1794778842-QB5liG
+at=2026-11-15T21:40:44Z
+seq=3
+--
+local synthetic answer
+
+DURABLE REPLY 1794778842-tR477O id=1794778842-tR477O
+at=2026-11-15T21:40:45Z
+seq=8
+--
+local synthetic answer
+
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-9 local synthetic note 9 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778845-yId1QI","request_id":"request-9","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/1794778845-yId1QI.note"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778845-yId1QI local synthetic answer 
+exit= 0 
+ {"schema":"fm-inbox-reply.v1","outcome":"created","id":"1794778845-yId1QI","path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/.replies/1794778845-yId1QI"}
+ 
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778845-yId1QI local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778845-yId1QI
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778845-yId1QI local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778845-yId1QI
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778845-yId1QI local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778845-yId1QI
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778845-yId1QI local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778845-yId1QI
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778845-yId1QI local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778845-yId1QI
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778845-yId1QI local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778845-yId1QI
+
+$ {run-worktree}/bin/fm-inbox.sh reply --json 1794778845-yId1QI local synthetic answer 
+exit= 1 
+  fm-inbox: reply already recorded for 1794778845-yId1QI
+
+$ bash -c . "$1"; fm_lock_try_create "$2" _ {run-worktree}/bin/fm-wake-lib.sh {run-worktree}/.validation-tmp/live-cli/native/state/.wake-queue.lock 
+exit= 0 
+  
+DEAD RECORD symlink ['pid', 'pid-start']
+$ {run-worktree}/bin/fm-inbox.sh note --json --request-id request-10 local synthetic note 10 
+exit= 0 
+ {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778847-PinYoq","request_id":"request-10","saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/live-cli/native/state/inbox/1794778847-PinYoq.note"}
+ 
+PASS: native-link CLI concurrent durable writes, single-answer refusal, dead-owner recovery and complete release
+$ {run-worktree}/bin/fm-lab-home.sh create {run-worktree}/.validation-tmp/live-cli/watcher 
+exit= 0 
+ {run-worktree}/.validation-tmp/live-cli/watcher
+ 
+$ bash -c . "$1"; fm_lock_try_create "$STATE/.watch.lock" _ {run-worktree}/bin/fm-wake-lib.sh 
+exit= 0 
+  
+$ {run-worktree}/bin/fm-watch.sh 
+exit= 1 
+ watcher: FAILED - startup lock {run-worktree}/.validation-tmp/live-cli/watcher/state/.watcher-down.lock held by live pid 83143
+ 
+PASS: real watcher bounded startup refusal after 1.26 seconds; live blocking pid= 83143
+$ {run-worktree}/bin/fm-lab-home.sh create {run-worktree}/.validation-tmp/live-cli/session 
+exit= 0 
+ {run-worktree}/.validation-tmp/live-cli/session
+ 
+$ {run-worktree}/bin/fm-lock.sh 
+exit= 0 
+ lock acquired: harness pid 76161
+ 
+SESSION REAL ANCESTRY RESULT: 0
+$ {run-worktree}/bin/fm-lock.sh status 
+exit= 0 
+ lock: held by live harness pid 76161
+ 
+$ {run-worktree}/bin/fm-lock.sh 
+exit= 0 
+ lock acquired: harness pid 76161
+ 
+$ {run-worktree}/bin/fm-lock.sh 
+exit= 1 
+  error: cannot reclaim lock directory {run-worktree}/.validation-tmp/live-cli/session/state/.lock.acquire; inspect its contents and permissions
+
+PASS: session CLI acquires, reclaims dead session, refuses unknown husk without deletion

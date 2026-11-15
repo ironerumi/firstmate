@@ -1,0 +1,13 @@
+{run-worktree}/.validation-tmp/orphan-cli/home
+CLI ('note', '--json', 'orphan recovery note A') exit 0 {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778921-a2Qgfc","request_id":null,"saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/orphan-cli/home/state/inbox/1794778921-a2Qgfc.note"}
+ 
+CLI ('note', '--json', 'successor note B') exit 0 {"schema":"fm-inbox-note.v1","outcome":"created","id":"1794778922-WJuAzy","request_id":null,"saved":true,"announced":true,"acknowledged":false,"path":"{run-worktree}/.validation-tmp/orphan-cli/home/state/inbox/1794778922-WJuAzy.note"}
+ 
+A classified aged husk; rmdir child 4748 paused; killing actual inbox parent 4309
+B acquired after orphan parent died; successor record: {'pid-start': '53756e204e6f762031352032313a34323a303320323032360a', 'pid': '343937350a', '.owner.F7demz/pid': '343937350a'}
+Resumed orphan rmdir refused nonempty successor; pid and generation bytes unchanged: {'pid-start': '53756e204e6f762031352032313a34323a303320323032360a', 'pid': '343937350a', '.owner.F7demz/pid': '343937350a'}
+Successor actual CLI exit 0 replied 1794778922-WJuAzy
+ 
+CLI ('reply', '1794778921-a2Qgfc', 'answer A retry') exit 0 replied 1794778921-a2Qgfc
+ 
+PASS: orphan husk cleanup preserves a live successor and both user replies remain possible

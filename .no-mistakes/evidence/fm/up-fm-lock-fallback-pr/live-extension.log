@@ -1,0 +1,9 @@
+{run-worktree}/.validation-tmp/extension-cli/home
+Real host invocation 1 exit 1 REAL HOST ENTER: pid=43042 recorded-start=Sun Nov 15 21:42:40 2026 generation={run-worktree}/.validation-tmp/extension-cli/home/state/procevent/.extension-binding-lifecycle.lock/.owner.XVaUbA
+ error[lifecycle-lock-invalid]: extension lifecycle binding command is invalid
+
+PASS: recorded pid-start and interrupted handoff temp retired; no lock residue; ready to reacquire
+Real host invocation 2 exit 1 REAL HOST ENTER: pid=43385 recorded-start=Sun Nov 15 21:42:41 2026 generation={run-worktree}/.validation-tmp/extension-cli/home/state/procevent/.extension-binding-lifecycle.lock/.owner.q6FFfA
+ error[lifecycle-lock-invalid]: extension lifecycle binding command is invalid
+
+PASS: recorded pid-start and interrupted handoff temp retired; no lock residue; reacquisition proved
