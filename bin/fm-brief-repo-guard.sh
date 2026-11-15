@@ -21,7 +21,7 @@
 # with no begin marker, or a home whose backlog Firstmate does not transition
 # inserts nothing. An unterminated block, a level-1 or level-2 heading line, an
 # unclosed code fence, or a failing backlog read exits non-zero naming the row
-# and the fault, with nothing inserted and rule 3 not applied.
+# and the fault, leaving the raw scaffold byte-identical and rule 3 not applied.
 # So no ship brief is byte-identical to a raw scaffold. A non-Firstmate scout
 # brief with no intent block and every secondmate charter are. The child's
 # stdout, stderr, and exit status always pass through. --port on a scout or
@@ -178,20 +178,6 @@ append_section() {
   { printf '\n## %s\n\n' "$1"; cat; } >> "$BRIEF"
 }
 
-if [ "$KIND" = ship ]; then
-  append_section 'Added-gate falsification' <<'EOF'
-For every gate a change ADDS or MODIFIES — a test, CI job, route manifest, lint/coverage rule, alarm — demonstrate it can FAIL: show it red against a deliberate violation, then restore and show it green. A falsification that fails to fail is a COVERAGE HOLE to close, not a pass.
-EOF
-fi
-
-if [ -n "$PORT" ]; then
-  append_section 'Porting contract' <<'EOF'
-- Never retype oracle constants. Extract rule tables / regex alternations / enum maps mechanically (AST or introspection dump) and convert programmatically; record the extraction script in the PR. Ported tests usually derive from the same retyped source, so retyping is a silent-corruption channel no test catches.
-- Sweep the cross-language seam: Python \d/\w/\s are Unicode-aware, JS's are ASCII-only; re.sub replaces all, .replace() without g replaces first.
-- Corpus bar: generate inputs covering every literal alternative in every table; diff oracle vs port byte-exact.
-EOF
-fi
-
 # copy_intent_block: when this brief's backlog row carries a whip intent block,
 # insert the block's lines directly under "## Captain's intent", then one blank
 # line, above {TASK}. The block is the lines strictly between the first line
@@ -255,6 +241,7 @@ copy_intent_block() {
       if (state == 0) { if ($0 == "<!-- whip:intent -->") state = 1; next }
       if (state != 1) next
       if ($0 == "<!-- /whip:intent -->") { state = 2; next }
+      if ($0 == "<!-- whip:intent -->") fault("its intent block contains a nested begin marker <!-- whip:intent -->")
       block[++n] = $0
       scan = $0; spaces = 0
       while (spaces < 3 && substr(scan, 1, 1) == " ") { scan = substr(scan, 2); spaces++ }
@@ -289,6 +276,20 @@ copy_intent_block() {
 }
 
 copy_intent_block
+
+if [ "$KIND" = ship ]; then
+  append_section 'Added-gate falsification' <<'EOF'
+For every gate a change ADDS or MODIFIES — a test, CI job, route manifest, lint/coverage rule, alarm — demonstrate it can FAIL: show it red against a deliberate violation, then restore and show it green. A falsification that fails to fail is a COVERAGE HOLE to close, not a pass.
+EOF
+fi
+
+if [ -n "$PORT" ]; then
+  append_section 'Porting contract' <<'EOF'
+- Never retype oracle constants. Extract rule tables / regex alternations / enum maps mechanically (AST or introspection dump) and convert programmatically; record the extraction script in the PR. Ported tests usually derive from the same retyped source, so retyping is a silent-corruption channel no test catches.
+- Sweep the cross-language seam: Python \d/\w/\s are Unicode-aware, JS's are ASCII-only; re.sub replaces all, .replace() without g replaces first.
+- Corpus bar: generate inputs covering every literal alternative in every table; diff oracle vs port byte-exact.
+EOF
+fi
 
 is_firstmate_repo "$REPO" || exit 0
 

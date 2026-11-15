@@ -438,8 +438,7 @@ test_rows_without_block_are_byte_identical() {
 }
 
 # expect_refusal <case_dir> <id> <label> <fault-text>: the guarded ship scaffold
-# exits non-zero naming the row and the fault, and the brief is the raw scaffold
-# plus only the section appended before the read.
+# exits non-zero naming the row and the fault, leaving the raw scaffold unchanged.
 expect_refusal() {
   local case_dir=$1 id=$2 label=$3 fault=$4 rc
   run_brief "$case_dir" "$RAW" notfirstmate "$id" some-project --mode no-mistakes > /dev/null 2>&1 \
@@ -452,7 +451,8 @@ expect_refusal() {
   [ "$rc" -ne 0 ] || fail "$label: the guard accepted a faulty row"
   assert_grep "$id" "$case_dir/$id.stderr" "$label: the error does not name row $id: $(cat "$case_dir/$id.stderr")"
   assert_grep "$fault" "$case_dir/$id.stderr" "$label: the error does not name the fault '$fault': $(cat "$case_dir/$id.stderr")"
-  expect_raw_plus_falsification "$case_dir" "$id" "$label"
+  cmp -s "$case_dir/raw-brief.md" "$case_dir/home/data/$id/brief.md" \
+    || fail "$label: the failed guard changed the raw scaffold"
 }
 
 test_malformed_blocks_are_refused() {
@@ -467,7 +467,9 @@ test_malformed_blocks_are_refused() {
   expect_refusal "$case_dir" bad-h2 intent-h2 'heading'
   add_row "$case_dir" bad-fence "$(whip_body $'Acceptance criteria:\n~~~~\n## hidden\n~~~')"
   expect_refusal "$case_dir" bad-fence intent-fence 'unclosed code fence'
-  pass "an unterminated block, a level-1 or level-2 heading line, and an unclosed fence are refused, inserting nothing"
+  add_row "$case_dir" bad-nested "$(whip_body $'Acceptance criteria:\n<!-- whip:intent -->\n- [ ] hidden')"
+  expect_refusal "$case_dir" bad-nested intent-nested 'nested begin marker'
+  pass "unterminated, heading, fence, and nested-marker blocks are refused without changing the raw scaffold"
 }
 
 test_failing_backlog_read_is_refused() {
