@@ -11,8 +11,19 @@
 #   2. "Porting contract" to a ship brief scaffolded with --port;
 #   3. "Control-plane boundary" to a ship or scout brief whose target project
 #      resolves to the Firstmate repo itself.
+# Before appending any section, a ship or scout brief whose backlog row (the row whose id is
+# the brief's task id, read through tasks-axi with the home's bounded row read)
+# carries a whip intent block gets that block's lines inserted directly under
+# "## Captain's intent", then one blank line, above {TASK}. The block is the
+# lines strictly between the first line that is exactly <!-- whip:intent -->
+# and the next line that is exactly <!-- /whip:intent -->, copied unchanged and
+# without the markers; the Home repo's `whip dispatch` writes it. No row, a row
+# with no begin marker, or a home whose backlog Firstmate does not transition
+# inserts nothing. An unterminated block, a level-1 or level-2 heading line, an
+# unclosed code fence, or a failing backlog read exits non-zero naming the row
+# and the fault, leaving the raw scaffold byte-identical and rule 3 not applied.
 # So no ship brief is byte-identical to a raw scaffold. A non-Firstmate scout
-# brief and every secondmate charter are: nothing is appended. The child's
+# brief with no intent block and every secondmate charter are. The child's
 # stdout, stderr, and exit status always pass through. --port on a scout or
 # secondmate scaffold is refused before bin/fm-brief.sh runs. When
 # bin/fm-brief.sh fails, nothing is appended.
@@ -30,7 +41,8 @@
 #   is authoritative for this wrapper too, with the additions above. Pass --port
 #   when a ship task re-implements an existing implementation's behavior in
 #   another language or codebase.
-#   FM_PROJECTS_OVERRIDE selects the project-clone root used by rule 3.
+#   FM_PROJECTS_OVERRIDE selects the project-clone root used by rule 3;
+#   FM_CONFIG_OVERRIDE and FM_BACKLOG_ROW_TIMEOUT_SECS apply to the row read.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,7 +54,7 @@ PROJECTS="${FM_PROJECTS_OVERRIDE:-$FM_HOME/projects}"
 case "${1:-}" in
   -h | --help)
     "$REAL_BRIEF" --help
-    printf '\nThis wrapper additionally appends an added-gate falsification section to every ship brief; with --port (ship briefs only), a porting-contract section; and a control-plane boundary section when a ship or scout brief targets the Firstmate repo itself.\n'
+    printf '\nThis wrapper additionally appends an added-gate falsification section to every ship brief; with --port (ship briefs only), a porting-contract section; and a control-plane boundary section when a ship or scout brief targets the Firstmate repo itself. Before appending any section, a ship or scout brief whose backlog row carries the lines between <!-- whip:intent --> and <!-- /whip:intent --> gets them inserted under ## Captain'"'"'s intent above {TASK}; a malformed block or a failing backlog read exits non-zero.\n'
     exit 0
     ;;
 esac
@@ -165,6 +177,105 @@ append_section() {
   fi
   { printf '\n## %s\n\n' "$1"; cat; } >> "$BRIEF"
 }
+
+# copy_intent_block: when this brief's backlog row carries a whip intent block,
+# insert the block's lines directly under "## Captain's intent", then one blank
+# line, above {TASK}. The block is the lines strictly between the first line
+# that is exactly "<!-- whip:intent -->" and the next line that is exactly
+# "<!-- /whip:intent -->", copied unchanged. tasks-axi shows a row body as one
+# JSON-quoted line, so the markers exist only after decoding it the way
+# bin/fm-backlog-transition-lib.sh's own body reader does.
+copy_intent_block() {
+  local config out status work
+  config="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
+  # shellcheck source=bin/fm-tasks-axi-lib.sh
+  . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
+  # shellcheck source=bin/fm-backlog-transition-lib.sh
+  . "$SCRIPT_DIR/fm-backlog-transition-lib.sh"
+  if fm_backlog_transition_applies "$config" "$DATA" "$KIND"; then
+    status=0
+  else
+    status=$?
+  fi
+  [ "$status" -ne 1 ] || return 0
+  if [ "$status" -ne 0 ]; then
+    echo "error: backlog row $ID: cannot read this home's backlog for its intent block: ${FM_BACKLOG_TRANSITION_ERROR:-backend unavailable}" >&2
+    exit 1
+  fi
+  if out=$(fm_backlog_row_show "$DATA" "$ID" --full); then
+    status=0
+  else
+    status=$?
+  fi
+  if [ "$status" -ne 0 ]; then
+    ! printf '%s\n' "$out" | grep -q '^code: NOT_FOUND$' || return 0
+    out=$(printf '%s\n' "$out" | sed -n '1p')
+    echo "error: backlog row $ID: reading it for its intent block failed: ${out:-tasks-axi show exited $status with no output}" >&2
+    exit 1
+  fi
+  work=$(mktemp -d "${TMPDIR:-/tmp}/fm-brief-intent.XXXXXX")
+  # shellcheck disable=SC2064  # Expand the path now.
+  trap "rm -rf -- '$work'" EXIT
+  if ! printf '%s\n' "$out" | sed -n 's/^  body: //p' | head -1 | LC_ALL=C perl -MJSON::PP -e '
+      local $/;
+      my $shown = <STDIN>;
+      $shown =~ s/\s+\z//;
+      exit 0 if $shown eq "" || $shown eq "-";
+      my $value = $shown =~ /\A"/
+        ? JSON::PP->new->utf8->allow_nonref->decode($shown) : $shown;
+      binmode STDOUT, ":raw";
+      utf8::encode($value) if utf8::is_utf8($value);
+      print $value unless $value eq "-";
+    ' > "$work/body"; then
+    echo "error: backlog row $ID: could not decode its body to read the intent block" >&2
+    exit 1
+  fi
+  [ -s "$work/body" ] || return 0
+  # Exit 3: no begin marker. Exit 4: a fault, named on stderr. A level-1 or
+  # level-2 heading would end the subsection early and an unclosed fence would
+  # pull "## Firstmate spec" into it, so both are refused with the same fence
+  # and heading rules as bin/fm-brief-heading-lib.sh.
+  if LC_ALL=C awk -v id="$ID" '
+    function fault(msg) { printf "error: backlog row %s: %s\n", id, msg > "/dev/stderr"; failed = 1; exit 4 }
+    FNR == NR {
+      if (state == 0) { if ($0 == "<!-- whip:intent -->") state = 1; next }
+      if (state != 1) next
+      if ($0 == "<!-- /whip:intent -->") { state = 2; next }
+      if ($0 == "<!-- whip:intent -->") fault("its intent block contains a nested begin marker <!-- whip:intent -->")
+      block[++n] = $0
+      scan = $0; spaces = 0
+      while (spaces < 3 && substr(scan, 1, 1) == " ") { scan = substr(scan, 2); spaces++ }
+      marker = substr(scan, 1, 1); marker_len = 0
+      if (marker == "`" || marker == "~") while (substr(scan, marker_len + 1, 1) == marker) marker_len++
+      if (marker_len >= 3) {
+        if (!fenced) { fenced = 1; fence_marker = marker; fence_len = marker_len }
+        else if (marker == fence_marker && marker_len >= fence_len && substr(scan, marker_len + 1) ~ /^[[:space:]]*$/) fenced = 0
+        next
+      }
+      if (fenced) next
+      level = 0
+      while (substr(scan, level + 1, 1) == "#") level++
+      if (level > 0 && level <= 2 && substr(scan, level + 1, 1) ~ /^[[:space:]]?$/)
+        fault("its intent block has a level-" level " heading line, which would end ## Captain'"'"'s intent early: " $0)
+      next
+    }
+    FNR == 1 {
+      if (state == 0) { failed = 1; exit 3 }
+      if (state == 1) fault("its intent block has a begin marker <!-- whip:intent --> with no end marker <!-- /whip:intent --> after it")
+      if (fenced) fault("its intent block has an unclosed code fence, which would pull ## Firstmate spec into ## Captain'"'"'s intent")
+    }
+    { print }
+    !done && $0 == "## Captain'"'"'s intent" { for (i = 1; i <= n; i++) print block[i]; print ""; done = 1 }
+    END { if (!failed && !done) fault("the brief has no ## Captain'"'"'s intent heading to receive its intent block") }
+  ' "$work/body" "$BRIEF" > "$work/brief"; then
+    cat "$work/brief" > "$BRIEF"
+  else
+    status=$?
+    [ "$status" -eq 3 ] || exit 1
+  fi
+}
+
+copy_intent_block
 
 if [ "$KIND" = ship ]; then
   append_section 'Added-gate falsification' <<'EOF'
