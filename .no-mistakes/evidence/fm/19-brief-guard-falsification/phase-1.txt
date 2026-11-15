@@ -1,0 +1,5 @@
+Phase 1: bin/fm-test-run.sh --list --changed (selection upper bound)
+Ran: tests/fm-brief-repo-guard.test.sh via bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300
+Passed: all targeted brief repo guard assertions, including --port ship section, ordering/at-most-once, refusal on scout/secondmate without writes, and raw scaffold identity boundaries.
+Failed: none
+Time bound: none
