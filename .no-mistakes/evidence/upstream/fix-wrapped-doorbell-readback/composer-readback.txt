@@ -1,0 +1,5 @@
+Live composer readback via bin/fm-composer-lib.sh
+width=100 verdict=pending matches=yes
+width=200 verdict=pending matches=yes
+adversarial=blank verdict=unknown
+adversarial=long verdict=unknown
