@@ -1324,7 +1324,7 @@ The optional local, gitignored `config/self-update-source` changes where `/updat
 It suits a home that runs its own fixes before upstream merges them, by following a branch that holds upstream's default branch plus those fixes, for example a `carry` branch on a fork.
 It holds one line, `<remote> <branch>`, for example `fork carry`, naming a remote that already exists in this repository and a branch on that remote.
 When the file is absent, `/updatefirstmate` fast-forwards from `origin` exactly as before.
-A home that follows a release branch, for example `origin release`, receives a merge to the default branch only once it is released.
+This home follows `origin`'s `release` branch (`origin release`), so a merge to `main` reaches it only when released.
 A release is cut with `git push origin <sha>:release`, fast-forward only, on a commit whose full suite is green, and a home never takes a release mid-run.
 
 When it is present, [`bin/fm-update.sh`](../bin/fm-update.sh) fetches only that branch and fast-forwards the primary to it under the same guards as the origin path: a dirty, off-default, or diverged primary is skipped and left untouched, so the named branch must only ever move forward.
