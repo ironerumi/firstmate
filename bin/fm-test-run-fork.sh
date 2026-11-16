@@ -21,10 +21,10 @@ fm_fork_family_for_basename() {  # <basename>
     fm-pr-merge-admin.test.sh)
       printf '%s\n' pr-forge
       ;;
-    fm-worker-role-extensions.test.sh|fm-procevent-identity.test.sh|fm-claude-stop-autoack.test.sh)
+    fm-worker-role-extensions.test.sh|fm-procevent-identity.test.sh)
       printf '%s\n' standalone
       ;;
-    fm-doorbell-recovery.test.sh|fm-wake-autoack.test.sh|fm-directory-lock-interleavings.test.sh|\
+    fm-doorbell-recovery.test.sh|fm-directory-lock-interleavings.test.sh|\
     fm-directory-lock-recovery.test.sh|fm-directory-lock-node.test.sh|fm-directory-lock-wake-queue.test.sh)
       printf '%s\n' watcher-wake-lock
       ;;
@@ -36,7 +36,7 @@ fm_fork_family_for_basename() {  # <basename>
 
 # Provisional local macOS weights until fork CI measures them on Ubuntu.
 # Brief-guard, nm-guard, merge-admin, directory-lock, doorbell, process-event
-# identity, Stop-autoack and fork contract hints use the slowest of at least
+# identity and fork contract hints use the slowest of at least
 # three clean runs plus 10%, rounded
 # up to 100 ms.
 # Other hints retain their initial local measurements (twice one run for older
@@ -50,7 +50,6 @@ tests/fm-classify-decision-key-extra.test.sh 1200
 tests/fm-nm-guard.test.sh 38800
 tests/fm-pr-merge-admin.test.sh 24100
 tests/fm-spawn-claude-attribution.test.sh 25800
-tests/fm-wake-autoack.test.sh 28200
 tests/fm-worker-role-inert.test.sh 6100
 tests/fm-worker-role-extensions.test.sh 578
 tests/fm-worker-pool-safety.test.sh 28070
@@ -62,7 +61,6 @@ tests/fm-directory-lock-node.test.sh 8800
 tests/fm-directory-lock-wake-queue.test.sh 10900
 tests/fm-procevent-identity.test.sh 34900
 tests/fm-doorbell-recovery.test.sh 15200
-tests/fm-claude-stop-autoack.test.sh 14200
 tests/fm-fork-runner-local.test.sh 3100
 tests/fm-fork-ci-workflow.test.sh 2100
 HINTS
