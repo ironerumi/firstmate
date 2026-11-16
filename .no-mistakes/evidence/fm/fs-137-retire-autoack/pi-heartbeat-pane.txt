@@ -1,0 +1,108 @@
+
+ Warning: tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf
+ and restart tmux.
+
+
+ [skill] afk (ctrl+o to expand)
+
+
+
+ I am away. This is a disposable lab home. Do not touch any other home or write outside FM_HOME. Use the bin scripts
+ from the current worktree. No tasks are running.
+
+
+ Thinking...
+
+
+ $ bin/fm-afk-launch.sh enter --words 'I am away. This is a disposable lab home. Do not touch any other home or write
+ outside FM_HOME. Use the bin scripts from the current worktree. No tasks are running.' (timeout 30s)
+
+ ... (8 earlier lines, ctrl+o to expand)
+   spend cap: 4 concurrent workers
+   reach: hold-for-return only. No phone channel is configured; anything that needs you waits for your return.
+   your words (verbatim):
+     I am away. This is a disposable lab home. Do not touch any other home or write outside FM_HOME. Use the bin
+ scripts from the current worktree. No tasks are running.
+
+ Took 0.6s
+
+
+ Thinking...
+
+ Away mode is recorded and active.
+
+ - I’m treating this as a disposable lab home.
+ - I will not touch other homes or write outside FM_HOME.
+ - I’ll use only bin/ scripts from this worktree.
+ - No tasks are currently running.
+
+ Expected return: not specified. Spend cap: 4 concurrent workers. Reach: hold-for-return only; no phone channel.
+ Nothing is pre-authorized that is destructive, irreversible, or security-sensitive. No sentence requires waiting for
+ your return.
+
+
+ [heartbeat]
+
+ Heartbeat (no new input).
+
+
+ Thinking...
+
+ Heartbeat handled; away posture remains active.
+
+
+ [heartbeat]
+
+ Heartbeat (no new input).
+
+
+ Heartbeat handled; away posture remains active.
+
+
+ [heartbeat]
+
+ Heartbeat (no new input).
+
+
+ Heartbeat handled; away posture remains active.
+
+
+ I'm back. Please report the current away posture.
+
+
+ Thinking...
+
+
+ $ bin/fm-afk-return.sh (timeout 60s)
+
+ ... (19 earlier lines, ctrl+o to expand)
+   0 outcome(s) handled by the away session (0 routine, 0 escalated above)
+   (no routine outcomes recorded in the store for this window)
+ Cost: 0 supervision outcome(s) recorded (0 routine, 0 captain); 0 task(s) live at return.
+ catch-up health: GAP: the watcher beat was 999999s old at return (grace 300s)
+ fm-afk-return: catch-up clear; ordinary captain work may proceed
+
+ Took 1.9s
+
+
+ Thinking...
+
+ Away posture is no longer active; it was archived.
+
+ - Supervisor health: GAP — watcher beat was 999999s old (300s grace).
+ - Your instructions: Recorded as provided; no action taken.
+ - Waiting on you: Nothing.
+ - Tried and failed / could not be fixed: Nothing.
+ - Landed, cleanup due: Nothing.
+ - Handled while away: 0 outcomes; 0 tasks live.
+ - Cost: 0 supervision outcomes, 0 tasks.
+ - Catch-up: Clear; ordinary work may proceed.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/.no-mistakes/worktrees/dd6dd5949f4a/01M7J52HYGCQ2XX0FPT3Z582E1 (detached)
+↑11k ↓1.3k R56k CH94.3% $0.005 (sub) 3.9%/272k (auto)                                 (openai-codex) gpt-5.6-luna • high
+To resume this session: pi --session-dir {run-worktree}/.
+nm-pi-lab/sessions --session 01a1e457-6a37-7293-963c-82ba4e21715c
+

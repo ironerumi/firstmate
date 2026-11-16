@@ -1,0 +1,43 @@
+TOOL bash {"command": "bin/fm-afk-launch.sh enter --words 'I am away. This is a disposable lab home. Do not touch any other home or write outside FM_HOME. Use the bin scripts from the current worktree. No tasks are running.'", "timeout": 30}
+
+Away mode is recorded and active.
+
+- I’m treating this as a disposable lab home.
+- I will not touch other homes or write outside `FM_HOME`.
+- I’ll use only `bin/` scripts from this worktree.
+- No tasks are currently running.
+
+Expected return: not specified. Spend cap: 4 concurrent workers. Reach: hold-for-return only; no phone channel. Nothing is pre-authorized that is destructive, irreversible, or security-sensitive. No sentence requires waiting for your return.
+
+{"at": "2026-11-16T12:31:57.140Z", "settled": 0, "away": true}
+
+Heartbeat handled; away posture remains active.
+
+{"at": "2026-11-16T12:32:01.283Z", "settled": 1, "away": true}
+
+Heartbeat handled; away posture remains active.
+
+{"at": "2026-11-16T12:32:03.680Z", "settled": 2, "away": true}
+
+Heartbeat handled; away posture remains active.
+
+{"at": "2026-11-16T12:32:06.090Z", "settled": 3, "away": true}
+
+TOOL bash {"command": "bin/fm-afk-return.sh", "timeout": 60}
+
+Away posture is no longer active; it was archived.
+
+- **Supervisor health:** GAP — watcher beat was 999999s old (300s grace).
+- **Your instructions:** Recorded as provided; no action taken.
+- **Waiting on you:** Nothing.
+- **Tried and failed / could not be fixed:** Nothing.
+- **Landed, cleanup due:** Nothing.
+- **Handled while away:** 0 outcomes; 0 tasks live.
+- **Cost:** 0 supervision outcomes, 0 tasks.
+- **Catch-up:** Clear; ordinary work may proceed.
+
+{"at": "2026-11-16T12:32:16.071Z", "settled": 4, "away": false}
+
+{"at": "2026-11-16T12:32:16.071Z", "complete": true, "away": false}
+
+{"at": "2026-11-16T12:32:16.135Z", "shutdown": true}

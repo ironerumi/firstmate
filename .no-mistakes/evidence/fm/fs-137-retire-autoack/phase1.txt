@@ -1,0 +1,21 @@
+Phase 1 (completed before phase 2)
+- Initial --list --changed was refused because a transient timer file was initially placed in the worktree. Removed that file and retained timing in this evidence directory; selection then succeeded.
+- bin/fm-test-run.sh --list --changed: succeeded; narrowed the over-selection to the unchanged Stop-hook acceptance suite and the fork-runner suite that exercises the changed fork runner.
+- bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-fork-runner-local.test.sh: exit 0.
+- bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/fm-claude-stop-autoarm.test.sh: exit 0 (about 117 seconds).
+- Failed assertions: none. Time bounds hit: none. No suite rerun, tree walk, broad suite, linter, formatter, or static analysis.
+
+Phase 2
+- Real Pi TUI, private tmux socket, nonzero 120x40 grid, marked scratch FM_HOME: entered /afk, delivered three timed heartbeat custom messages, observed the real away record after every settled turn, then sent a genuine captain-return message. Observed away, away, away, away, present.
+- Real Claude 2.1.325, normal existing login, private tmux socket, marked scratch FM_HOME, disposable plugin command whose complete prompt is Heartbeat (no new input).: entered /afk, delivered three timed plugin prompts, observed the away record at each Stop, then sent a genuine captain-return message. Observed away, away, away, away, present; retained five successful Claude turn results.
+- Claude setup attempts: interactive workspace trust refused (No/exit; no trust approval); print mode directly on a pty exited before input. Corrected to print/stream-json with a workspace-local FIFO, avoiding a persistent trust configuration change. These were setup failures, not product assertions.
+- Every phase-2 driver ran under fm_run_timed 240. Drivers completed synchronously. Private tmux servers were stopped, socket teardown verified, scratch homes and transient worktree helpers removed.
+
+Explicit textual acceptance contracts (not behavioral proof)
+- Required case-insensitive git grep: empty (exit 1).
+- Stop-hook acceptance test and .fork-surface-budget unchanged against base.
+- Stop hook, Claude protocol and watcher-continuity diff against merge-base(reference/main): empty.
+- Recomputed the specified upstream-owned MDT/no-renames numstat arithmetic without invoking the lint tool: 76 files, 2200 lines (65 below 2265); budget unchanged.
+- Release documentation inspected; no release push, updater run, broad-suite claim, PR, or CI phase attempted.
+
+No runtime product failures found. Live heartbeat checks concern isolated synthetic no-work homes, not production fleet continuity. Missing watcher-beat GAP in the no-task return brief is expected in these deliberately idle fixtures. Stop actionable rewake/no-drain semantics are covered by the unchanged hermetic Stop-hook suite, not claimed as a real-harness actionable-wake replay. No rendered UI/layout was changed; CLI transcripts and persisted posture observations are the reviewer evidence.

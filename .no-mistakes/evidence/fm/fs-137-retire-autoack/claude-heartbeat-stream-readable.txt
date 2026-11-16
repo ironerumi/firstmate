@@ -1,0 +1,119 @@
+TOOL Bash {"command": "echo \"FM_HOME=$FM_HOME\"; ls bin/fm-afk-launch.sh; ls config 2>/dev/null; ls \"$FM_HOME\"/config 2>/dev/null", "description": "Check FM_HOME and afk launcher"}
+
+TOOL RESULT FM_HOME={run-worktree}/.nm-claude-lab
+bin/fm-afk-launch.sh
+
+TOOL Bash {"command": "bin/fm-afk-launch.sh enter --words \"I am away. This is a disposable lab home. Do not touch any other home or write outside FM_HOME. No tasks are running.\" 2>&1", "description": "Write the away-posture record and print announcement"}
+
+TOOL RESULT Away posture recorded at 2026-11-16T12:37:47Z: hold-for-return only. No phone channel is configured; anything that needs you waits for your return. Your away instructions are recorded verbatim; the away session will carry them out where it can, and anything it is unsure of, or that needs you, waits for your return. Destructive, irreversible, and security-sensitive actions are never pre-authorizable, whatever the words say. Expected return: not given. Spend cap: 4 concurrent workers.
+Away posture (recorded):
+  entered: 2026-11-16T12:37:47Z
+  expected return: not given
+  spend cap: 4 concurrent workers
+  reach: hold-for-return only. No phone channel is configured; anything that needs you waits for your return.
+  your words (verbatim):
+    I am away. This is a disposable lab home. Do not touch any other home or write outside FM_HOME. No tasks are running.
+
+TOOL Bash {"command": "ls -la \"$FM_HOME/state/.afk-contract\" \"$FM_HOME/config/supervision-host-off\" 2>&1", "description": "Confirm record is in lab home and host not opted out"}
+
+TOOL RESULT Exit code 1
+ls: {run-worktree}/.nm-claude-lab/config/supervision-host-off: No such file or directory
+-rw-------@ 1 gu_yifu  staff  425 Nov 16 21:37 {run-worktree}/.nm-claude-lab/state/.afk-contract
+
+ASSISTANT: Captain, away mode is on. The away instructions were saved in this lab home at 12:37 UTC.
+
+- **How you'll be reached:** I hold things until you return. No phone channel is set up, so anything that needs you waits for your return.
+- **Your instructions:** they are saved word for word. The away session follows them where it can and holds anything it's unsure of for you. It never takes destructive, irreversible or security-sensitive actions, whatever the instructions say.
+- **Expected return:** not given.
+- **Spend cap:** at most 4 workers at once.
+
+**How I read your words:**
+- You're away and not watching the screen.
+- This home is a throwaway lab, so nothing here needs special care.
+- Nothing may be changed in any other firstmate home, and nothing may be written outside this lab home.
+- No work is under way, so there's nothing to supervise right now.
+
+I can follow all of that while you're away. Nothing in it needs you back first.
+
+**Setup:** there was nothing to start. This home's built-in automatic monitoring handles the away period, and no separate background process was launched. The only thing written was the away record, inside the lab home.
+
+Your next ordinary message ends away mode, and I'll give you a catch-up summary then.
+
+RESULT {"subtype": "success", "is_error": false, "result": "Captain, away mode is on. The away instructions were saved in this lab home at 12:37 UTC.\n\n- **How you'll be reached:** I hold things until you return. No phone channel is set up, so anything that needs you waits for your return.\n- **Your instructions:** they are saved word for word. The away session follows them where it can and holds anything it's unsure of for you. It never takes destructive, irreversible or security-sensitive actions, whatever the instructions say.\n- **Expected return:** not given.\n- **Spend cap:** at most 4 workers at once.\n\n**How I read your words:**\n- You're away and not watching the screen.\n- This home is a throwaway lab, so nothing here needs special care.\n- Nothing may be changed in any other firstmate home, and nothing may be written outside this lab home.\n- No work is under way, so there's nothing to supervise right now.\n\nI can follow all of that while you're away. Nothing in it needs you back first.\n\n**Setup:** there was nothing to start. This home's built-in automatic monitoring handles the away period, and no separate background process was launched. The only thing written was the away record, inside the lab home.\n\nYour next ordinary message ends away mode, and I'll give you a catch-up summary then."}
+
+TOOL Bash {"command": "ls \"$FM_HOME/state\" 2>&1; ls bin | grep -E 'wake|crew-state' | head", "description": "Inspect lab home state and wake tools"}
+
+TOOL RESULT observer.log
+fm-crew-state.sh
+fm-wake-drain.sh
+fm-wake-grant.sh
+fm-wake-lib.sh
+
+TOOL Bash {"command": "bin/fm-wake-drain.sh 2>&1 | head -40; echo \"---\"; bin/fm-crew-state.sh 2>&1 | head -20", "description": "Drain wake queue and check fleet state"}
+
+TOOL RESULT ---
+usage: fm-crew-state.sh <id>
+
+ASSISTANT: Captain, shipshape.
+
+RESULT {"subtype": "success", "is_error": false, "result": "Captain, shipshape."}
+
+TOOL Bash {"command": "bin/fm-wake-drain.sh 2>&1 | head -40; ls -a \"$FM_HOME/state\"", "description": "Drain wake queue and list lab state"}
+
+TOOL RESULT .
+..
+.afk-contract
+.fm-lab-tmux-dir
+.wake-queue
+observer.log
+
+ASSISTANT: Captain, shipshape.
+
+RESULT {"subtype": "success", "is_error": false, "result": "Captain, shipshape."}
+
+TOOL Bash {"command": "bin/fm-wake-drain.sh 2>&1 | head -40", "description": "Drain wake queue"}
+
+TOOL RESULT (Bash completed with no output)
+
+ASSISTANT: Captain, shipshape.
+
+RESULT {"subtype": "success", "is_error": false, "result": "Captain, shipshape."}
+
+TOOL Bash {"command": "bin/fm-afk-return.sh 2>&1", "description": "Run return procedure and render return brief"}
+
+TOOL RESULT fm-afk-launch: away-posture record archived at {run-worktree}/.nm-claude-lab/state/afk-contracts/1794832667.afk-contract
+fm-afk-launch: away mode stopped; no daemon terminal was running, .afk cleared, and the posture record archived
+=== Return brief (away 2026-11-16T12:37:47Z -> 2026-11-16T12:38:31Z, 44s) ===
+Supervisor health:
+  - GAP: the watcher beat was 999999s old at return (grace 300s)
+Your instructions:
+  your words at entry:
+    I am away. This is a disposable lab home. Do not touch any other home or write outside FM_HOME. No tasks are running.
+  the away session took no action under them.
+Waiting on you:
+  (nothing)
+Tried and failed, or could not be fixed:
+  (nothing)
+Landed, cleanup due:
+  (nothing)
+Handled while away:
+  0 outcome(s) handled by the away session (0 routine, 0 escalated above)
+  (no routine outcomes recorded in the store for this window)
+Cost: 0 supervision outcome(s) recorded (0 routine, 0 captain); 0 task(s) live at return.
+catch-up health: GAP: the watcher beat was 999999s old at return (grace 300s)
+fm-afk-return: catch-up clear; ordinary captain work may proceed
+
+ASSISTANT: Welcome back, captain. Away mode is now **off**. Your message ended it, and the away instructions are archived in the lab home.
+
+**What happened while you were away (about 44 seconds):**
+- **Your instructions:** "I am away. This is a disposable lab home. Do not touch any other home or write outside FM_HOME. No tasks are running." Nothing came up that called for acting on them.
+- **Waiting on you:** nothing.
+- **Failures:** none.
+- **Finished work needing cleanup:** none.
+- **Background handling:** none. No workers were running when you returned, and nothing was spent.
+
+**One health note:** the catch-up summary flagged a monitoring gap. The background monitor had no recent check-in when you returned, and the summary's 999,999-second figure means it never recorded a check-in at all. The three timed check-ins I answered while you were away each found an empty notification queue, so you missed nothing. Still, background monitoring never recorded a check-in in this lab home. That's harmless here with no work running, but it would matter in a home with active work.
+
+The catch-up check passed, so ordinary work can go ahead.
+
+RESULT {"subtype": "success", "is_error": false, "result": "Welcome back, captain. Away mode is now **off**. Your message ended it, and the away instructions are archived in the lab home.\n\n**What happened while you were away (about 44 seconds):**\n- **Your instructions:** \"I am away. This is a disposable lab home. Do not touch any other home or write outside FM_HOME. No tasks are running.\" Nothing came up that called for acting on them.\n- **Waiting on you:** nothing.\n- **Failures:** none.\n- **Finished work needing cleanup:** none.\n- **Background handling:** none. No workers were running when you returned, and nothing was spent.\n\n**One health note:** the catch-up summary flagged a monitoring gap. The background monitor had no recent check-in when you returned, and the summary's 999,999-second figure means it never recorded a check-in at all. The three timed check-ins I answered while you were away each found an empty notification queue, so you missed nothing. Still, background monitoring never recorded a check-in in this lab home. That's harmless here with no work running, but it would matter in a home with active work.\n\nThe catch-up check passed, so ordinary work can go ahead."}
