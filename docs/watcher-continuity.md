@@ -91,7 +91,7 @@ The hook fires on every Stop and StopFailure, covering API-error turn ends that 
 On either event, an eligible primary with supervision need admits one home-scoped owner, which foregrounds `bin/fm-watch-arm.sh` inside the hook-owned process tree.
 If a session exits mid-cycle and leaves an orphaned auto-arm hook, the replacement session's first eligible Stop or StopFailure supersedes its claim, attaches to the running watcher through `bin/fm-watch-arm.sh`, and delivers the cycle's close.
 [`turnend-guard.md`](turnend-guard.md#auto-arm-generation-claim) owns the open-claim definition.
-While supervision is still needed and away mode remains inactive, a close that remains actionable after the hook's ring-time auto-acknowledge check wakes the idle session through exit 2; qualifying queued wakes are acknowledged and re-armed without a model turn ([auto-acknowledge contract](configuration.md#wake-auto-acknowledge-claude-stop-hook)).
+While supervision is still needed and away mode remains inactive, an actionable close wakes the idle session through exit 2.
 StopFailure-driven continuations are paced rather than dropped during persistent API errors; after waiting, the hook stands down silently if away mode appeared or supervision is no longer needed.
 The script header owns the storm-bound mechanics, [configuration](configuration.md#environment-variables) lists the cooldown override, and [StopFailure verification](verification/supervision.md#stopfailure-auto-arm) records the Herdr-hosted evidence and deterministic regression entry point.
 
@@ -181,13 +181,11 @@ When restoration does not succeed, the model is never left blind.
 ### Claude handling successor
 
 With the supervision host disabled, Claude's [auto-arm hook](#claude-stop-hook) also starts one handling successor before notification.
-After a foreground close that remains actionable after ring-time reclassification, including an attached peer cycle that ended, the hook:
+After an actionable foreground close, including an attached peer cycle that ended, the hook:
 
 1. Launches `bin/fm-watch-arm.sh` with the closed arm's pid as `FM_WATCH_PREDECESSOR_ARM_PID`.
 2. Waits for that arm's one status line.
 3. Only then exits 2 with the wake.
-
-A qualifying queued wake takes the auto-acknowledge path instead: the hook acknowledges it and re-arms without starting a handling successor or exiting 2.
 
 A child of the hook cannot outlive its exit-2 rewake.
 So that successor is the one deliberate detached launch in the continuity path:

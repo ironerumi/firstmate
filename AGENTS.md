@@ -405,7 +405,8 @@ The scaffold is a safety contract, not a suggestion.
 
 ## 12. Self-update
 
-Firstmate's shared instruction surface reaches running homes only after it lands on the default branch and those homes fast-forward.
+Firstmate's shared instruction surface reaches a running home only when that home fast-forwards to the branch it follows, which [`config/self-update-source`](docs/configuration.md#self-update-source-configself-update-source) can name instead of the default branch.
+This home follows `origin`'s `release` branch, so a merge to `main` reaches it only when released: a release is `git push origin <sha>:release`, fast-forward only, on a commit whose full suite is green, and is never taken mid-run.
 Only `AGENTS.md`, `bin/`, and `.agents/skills/` are loaded by a running firstmate; public `skills/` is an installer-facing surface.
 When the captain invokes `/updatefirstmate` or asks to update firstmate, load the `/updatefirstmate` skill.
 The skill owns the guarded fleet update and restart procedure; it never touches anything under `projects/`.
