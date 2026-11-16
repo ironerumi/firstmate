@@ -1,0 +1,5 @@
+1..3
+ok - fm_wake_queue_prune_task: prunes wakes for target task without touching other tasks
+ok - task pruning removes its parked-gate notice and preserves another task's notice
+ok - pruning foo preserves foo-bar's parked-gate notice
+FM_TEST_COMPLETE

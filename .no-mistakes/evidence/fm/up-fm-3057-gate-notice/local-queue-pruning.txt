@@ -1,0 +1,13 @@
+Synthetic local queue before retiring foo:
+parked-gate-foo-01LOCAL-ci-abc
+check: ask-user gate parked: task=foo run=01LOCAL step=ci
+parked-gate-foo-bar-01LOCAL-ci-abc
+check: ask-user gate parked: task=foo-bar run=01LOCAL step=ci
+parked-gate-other-01LOCAL-ci-abc
+check: ask-user gate parked: task=other run=01LOCAL step=ci
+
+Queue after retiring foo:
+parked-gate-foo-bar-01LOCAL-ci-abc
+check: ask-user gate parked: task=foo-bar run=01LOCAL step=ci
+parked-gate-other-01LOCAL-ci-abc
+check: ask-user gate parked: task=other run=01LOCAL step=ci
