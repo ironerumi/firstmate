@@ -1,0 +1,10 @@
+2026-11-18T02:28:57.245Z [DEBUG] hooks modules not loaded until workspace trust is accepted: cc-plugin-privacy, cc-plugin-agents-md, cc-plugin-telemetry, cc-plugin-plugin-authoring, cc-plugin-diff
+2026-11-18T02:28:59.159Z [DEBUG] hooks module fm@skills-dir loaded (worker, environment 1, tier user); events: session.start,command.run,config.set,turn.step,ui.render
+2026-11-18T02:28:59.165Z [DEBUG] plugin.register: fm (user, fm@skills-dir), judged by core alone: admitted
+2026-11-18T02:28:59.262Z [DEBUG] hooks module fm@skills-dir session.start settled in 84.4ms (worker hop, next() included)
+2026-11-18T02:29:01.582Z [DEBUG] hooks module fm@skills-dir command.run settled in 34.0ms (worker hop, next() included)
+2026-11-18T02:29:01.584Z [DEBUG] hooks module fm@skills-dir ui.render settled in 11.0ms (worker hop, next() included) key=placeholder
+2026-11-18T02:29:01.584Z [DEBUG] hooks module fm@skills-dir ui.render settled in 10.7ms (worker hop, next() included) key=dcb6b45e-0700-446a-aa37-fa9dfb79d635
+2026-11-18T02:29:02.274Z [DEBUG] hooks module fm@skills-dir ui.render settled in 6.6ms (worker hop, next() included) key=dcb6b45e-0700-446a-aa37-fa9dfb79d635
+2026-11-18T02:29:02.275Z [DEBUG] hooks module fm@skills-dir ui.render settled in 7.7ms (worker hop, next() included) key=placeholder
+2026-11-18T02:29:02.280Z [DEBUG] hooks module fm@skills-dir command.run settled in 23.2ms (worker hop, next() included)

@@ -1,0 +1,38 @@
+ ▐▛███▛█   Claude Code v2.1.326
+▝▜██████▀  Opus 5.5 · API Usage Billing
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/20081ee8b96b/01M7P77CBQWD5858KKHBJHWYNE
+
+▎ Auto mode is now Claude Code's default permission mode.
+▎ Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and prompt
+▎ injection before executing, runs the ones it assesses as lower-risk, and blocks the rest.
+▎ https://code.claude.com/docs/en/permission-modes
+  1 more notice hidden (ctrl+o to expand)
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents                                                 Not logged in · Run /login
+                                                                                                                     fm: Calm on
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

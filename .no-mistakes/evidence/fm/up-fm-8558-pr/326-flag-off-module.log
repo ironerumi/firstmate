@@ -1,0 +1,4 @@
+2026-11-18T02:29:04.268Z [DEBUG] hooks modules not loaded until workspace trust is accepted: cc-plugin-privacy, cc-plugin-agents-md, cc-plugin-telemetry, cc-plugin-plugin-authoring, cc-plugin-diff
+2026-11-18T02:29:05.932Z [DEBUG] hooks module fm@skills-dir loaded (worker, environment 1, tier user); events: session.start,command.run,config.set,turn.step,ui.render
+2026-11-18T02:29:05.942Z [DEBUG] plugin.register: fm (user, fm@skills-dir), judged by core alone: admitted
+2026-11-18T02:29:05.966Z [DEBUG] hooks module fm@skills-dir session.start settled in 14.7ms (worker hop, next() included)

@@ -1,0 +1,33 @@
+2.1.326 (Claude Code)
+Validating plugin manifest: {run-worktree}/.claude/mods/firstmate-calm/.claude-plugin/plugin.json
+
+Validating hooks: {run-worktree}/.claude/mods/firstmate-calm/hooks/hooks.json
+
+  ❯ ./register.ts hooks: session.start, command.run{command=calm}, config.set{key=theme}, turn.step, ui.render{component=Spinner}, ui.render{component=ToolUse}, ui.render{component=ToolResult}, ui.render{component=ToolGroup}, ui.render{component=UserMessage}, ui.render{component=AssistantMessage}
+  ❯ ./register.ts gating hook without .catch: command.run{command=calm}
+  ❯ ./register.ts gating hook without .catch: config.set{key=theme}
+  ❯ ./register.ts calls: $.clock.every (via load, startNotes), $.clock.now (via readIfChanged), $.command.register, $.config.list (via readTheme), $.env.get (via isActivated, load, startNotes), $.fs.exists (via readIfChanged, readText), $.fs.read (via readText), $.fs.stat (via readIfChanged), $.fs.write, $.session.id (via startNotes), $.session.messages (via load), $.store.get (via readStored), $.store.set (via rememberShown), $.ui.blit (via repaintShip), $.ui.invalidate (via invalidateDrawings), $.ui.log (via followTail, pollNotes), $.ui.resolve, $.ui.toast
+  ❯ ./register.ts env writes: nothing
+  ❯ ./register.ts env reads: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS, FM_CONFIG_OVERRIDE, FM_HOME, FM_ROOT_OVERRIDE, FM_STATE_OVERRIDE
+
+Provides:
+
+  ❯ modules: hooks/register.ts
+
+Plugin directory checks for {run-worktree}/.claude/mods/firstmate-calm. The plugin directory is the catalog that plugins are submitted to; this is a subset of what it runs.
+
+⚠ Found 1 plugin directory warning:
+
+  ❯ .claude-plugin/plugin.json icon: No icon (ICON_MISSING). No icon found in the plugin. The validator looked for `icon` in plugin.json and for a file at .claude-plugin/icon.png or .svg, assets/icon.png or .svg, or a similar path.
+    Fix: Add a square PNG to the plugin folder at .claude-plugin/icon.png, or set `icon` in plugin.json to the path of a square PNG or JPEG in the plugin: 512 to 2048 px on each side, under 2 MB. SVG and WebP are not accepted. That file may become the listing icon only once: the first time the plugin is saved or submitted in the developer portal. Adding or changing it later does not change the icon.
+
+About these checks:
+
+  ❯ The repository root was taken to be {run-worktree}, the nearest parent folder with a .git folder or file. README.md and LICENSE were taken from it, because this plugin folder has none of its own. For a plugin submitted from a git repository, the repository root is the top folder of that repository, with only what is committed there, so check that the folder named above is that top folder.
+  ❯ hooks/hooks.json names a hooks module (a code file listed under `modules`). The plugin directory has rules of its own for such code, and these checks apply none of them, so passing here does not mean the directory accepts the plugin. The developer portal's own validation applies those rules.
+
+These plugin directory checks do not change the result below.
+
+The directory also runs a safety scan and a policy review that this command does not.
+
+✔ Validation passed

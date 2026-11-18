@@ -1,0 +1,4 @@
+326-flag-on: real project auto-load registered /calm; two commands persisted on then off and displayed matching toasts. No model request submitted.
+322-flag-on: real project auto-load registered /calm; two commands persisted on then off and displayed matching toasts. No model request submitted.
+326-flag-off: with persisted Calm on but activation flag unset, /calm was absent and preference stayed on. Engine rollout may load the module but the mod remains inactive. No model request submitted.
+All private tmux servers stopped and lab homes removed.
