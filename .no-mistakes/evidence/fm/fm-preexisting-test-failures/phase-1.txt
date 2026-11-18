@@ -1,0 +1,16 @@
+Target ee2ee659f79fe6ffe8358f23e3ee108b4173c53a; base 302f9ad23db3c2a12080ef98f9eeb4acb4a358e5.
+Phase 1 selection: bin/fm-test-run.sh --list --changed, narrowed to the six changed test scripts plus fm-procevent-extension-errors (executes changed lifecycle-host-errors section). No gate configuration changed.
+Each invocation: bin/fm-test-run.sh --jobs 1 --per-script-timeout-secs 300 tests/<name>.test.sh
+Serial results (script exit 0 and runner exit 0 for every invocation):
+fm-herdr-groups: 7346 ms
+fm-startup-growth-check: 19653 ms
+fm-guard-stale-banner: 27309 ms
+fm-procevent-extension-errors: 128411 ms
+fm-herdr-lab: 113470 ms
+fm-extension-binding: 61648 ms
+fm-supervision-host-park: 290247 ms
+Failed: none. Time bound: none. Gate-skipped scripts: none.
+Startup-growth notes an unrelated metadata-read-failure subcase is skipped on Darwin.
+Extension-binding emitted missing-library diagnostics from its remote-root fixture but completed its assertions and aggregate successfully.
+Phase 2 omitted: phase 1 covers every changed behavior. These are test-only changes, with no new runtime behavior. No real Herdr server or real vendor harness was driven; fixture-backed tests do not establish those surfaces or synthetic-load reliability.
+No fixes, source modifications, commits, broad suites, linters, or pipeline-control commands performed.
