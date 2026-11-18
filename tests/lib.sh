@@ -730,11 +730,12 @@ while [ "$#" -gt 0 ]; do
     gnu=$2 bsd= i=0
     while [ "$i" -lt "${#gnu}" ]; do
       c=${gnu:i:1}
-      if [ "$c" = % ] && [ $((i + 1)) -lt "${#gnu}" ]; then
+      if [ "$c" = % ]; then
         i=$((i + 1))
         case ${gnu:i:1} in
-          Y) bsd+=%m ;; Z) bsd+=%c ;; X) bsd+=%a ;; s) bsd+=%z ;; a) bsd+=%Lp ;;
-          h) bsd+=%l ;; n) bsd+=%N ;; *) bsd+=%${gnu:i:1} ;;
+          Y) bsd+=%m ;; s) bsd+=%z ;;
+          d) bsd+=%d ;; i) bsd+=%i ;;
+          *) printf 'unsupported stat specifier: %%%s\n' "${gnu:i:1}" >&2; exit 1 ;;
         esac
       else
         bsd+=$c
