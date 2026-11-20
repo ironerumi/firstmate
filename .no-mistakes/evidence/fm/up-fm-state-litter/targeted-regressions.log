@@ -1,0 +1,4 @@
+ok - disposable watcher refuses inherited state outside its marked lab
+ok - a killed acquirer's stranded lock and steal staging is reaped; published owners stay
+ok - killed inbox enqueue staging is reaped while its published owner stays
+ok - the state sweep removes only unclaimed dead-pid litter

@@ -1,0 +1,30 @@
+SIGKILL public summary writer: prior JSON ledger byte-identical; stranded ['.home-summary.json.12057.MKUhT3', '.home-summary-error.12057.z5qIFD']
+writer-recovery-session: acquired real harness session lock; exit 0
+Next session start removed killed writer files and published valid summary JSON
+top-lock: killed actual spinning acquirer; before session ['state/.meta-lab.lock.owner.14938.z0LRC6', 'state/.meta-lab.lock.owner.14991.Xm9iMQ']
+top-lock-recovery-session: acquired real harness session lock; exit 0
+top-lock: session reaped all interrupted staging; live published holder preserved
+top-lock-dead-holder-session: acquired real harness session lock; exit 0
+top-lock: dead published owner also preserved for ordinary lock recovery
+top-steal: killed actual spinning acquirer; before session ['state/.meta-lab.lock.owner.14938.z0LRC6', 'state/.meta-steal.lock.owner.22979.RIz7IX', 'state/.meta-steal.lock.steal.owner.23023.x4ZQNd']
+top-steal-recovery-session: acquired real harness session lock; exit 0
+top-steal: session reaped all interrupted staging; dead published holder preserved
+top-steal-dead-holder-session: acquired real harness session lock; exit 0
+top-steal: dead published owner also preserved for ordinary lock recovery
+inbox-lock: killed actual inbox enqueue; before session ['state/demo.inbox/.seq.lock.owner.30948.PJXbGY', 'state/demo.inbox/.seq.lock.owner.31044.8UcbSR']
+inbox-lock-recovery-session: acquired real harness session lock; exit 0
+inbox-lock: session reaped all interrupted staging; live published holder preserved
+inbox-lock-dead-holder-session: acquired real harness session lock; exit 0
+inbox-lock: dead published owner also preserved for ordinary lock recovery
+inbox-steal: killed actual inbox enqueue; before session ['state/steal.inbox/.seq.lock.owner.37316.tbB8GB', 'state/steal.inbox/.seq.lock.steal.owner.37371.sg5WKF']
+inbox-steal-recovery-session: acquired real harness session lock; exit 0
+inbox-steal: session reaped all interrupted staging; dead published holder preserved
+inbox-steal-dead-holder-session: acquired real harness session lock; exit 0
+inbox-steal: dead published owner also preserved for ordinary lock recovery
+Boundary fixture before startup: [".claude-autoarm-epoch.tmp.11882.boundary", ".claude-autoarm-epoch.tmp.46640.boundary", ".claude-autoarm-output.11882.boundary", ".claude-autoarm-output.46640.boundary", ".fm-check-output.11882.boundary", ".fm-check-output.46640.boundary", ".fm-check-output.46640.link", ".fm-custom-check.11882.boundary", ".fm-custom-check.46640.boundary", ".guard.lock.owner.11882.staging", ".guard.lock.owner.46640.dead", ".guard.lock.owner.46640.handoff", ".guard.lock.owner.46640.unknown", ".guard.lock.owner.46640.x.reaped.46640", ".guard.lock.owner.oldformat", ".guard.lock.steal.owner.46640.dead", ".home-summary-error.11882.boundary", ".home-summary-error.46640.boundary", ".home-summary.json.11882.boundary", ".home-summary.json.46640.boundary", ".watch-arm-output.11882.boundary", ".watch-arm-output.46640.boundary", "demo.inbox/.guard.lock.owner.11882.staging", "demo.inbox/.guard.lock.owner.46640.dead", "demo.inbox/.guard.lock.owner.46640.handoff", "demo.inbox/.guard.lock.owner.46640.unknown", "demo.inbox/.guard.lock.owner.46640.x.reaped.46640", "demo.inbox/.guard.lock.owner.oldformat", "demo.inbox/.guard.lock.steal.owner.46640.dead", "not-an-inbox/.seq.lock.owner.46640.stay"]
+reemit-preserves-litter: acquired real harness session lock; exit 0
+guarded-sweep-session: acquired real harness session lock; exit 0
+Guarded full startup removed all seven dead-pid temp families plus top-level/inbox lock and steal staging; preserved live pids, live recorded holder, unknown contents, legacy names, tombstones, symlinks and symlinked inbox contents. Reemit performed no sweep.
+Local real Stop hook: capture exists; stopped real arm/host child pid 51117
+TERM removed output while hook was still waiting for its SIGSTOPed real arm; subsequent SIGKILL cannot strand that output
+Local signal-cleanup ordering passed (synthetic Stop event; no Claude harness delivery claim)
