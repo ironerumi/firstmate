@@ -291,6 +291,7 @@ case " $* " in
         esac
         ;;
       *merge_trains)
+        [ "${FM_TEST_GLAB_TRAINS_HANG:-0}" = 0 ] || exec perl -MPOSIX=pause -e '$SIG{ALRM} = "IGNORE"; 1 while pause'
         if [ -n "${FM_TEST_GLAB_TRAINS+x}" ]; then
           printf '%s\n' "$FM_TEST_GLAB_TRAINS"
         elif [ "${FM_TEST_GLAB_TRAIN:-}" = gone ]; then
@@ -300,6 +301,7 @@ case " $* " in
         fi
         ;;
       *merge_requests/*)
+        [ "${FM_TEST_GLAB_RECHECK_HANG:-0}" = 0 ] || exec perl -MPOSIX=pause -e '$SIG{ALRM} = "IGNORE"; 1 while pause'
         [ "${FM_TEST_GLAB_RECHECK_FAIL:-0}" = 0 ] || exit 1
         state=${FM_TEST_GLAB_STATE:-opened}
         [ -z "${FM_TEST_GLAB_STATE_AFTER:-}" ] || [ ! -e "$FM_TEST_GLAB_LOG.train" ] || state=$FM_TEST_GLAB_STATE_AFTER
@@ -2075,7 +2077,24 @@ test_gitlab_poll_shared_deadline() {
       --validated:unreachable|--baseline:train=unknown) ;;
       *) fail "stalled GitLab car read lost its timeout classification: $mode out=$out" ;;
     esac
+    rc=0
+    out=$(FM_CHECK_TIMEOUT=6 FM_CONFIG_OVERRIDE="$dir/home/config" \
+      FM_TEST_GLAB_TRAIN=gone FM_TEST_GLAB_TRAINS_HANG=1 \
+      FM_TEST_GLAB_LOG="$dir/glab.log" PATH="$dir/fakebin:$BASE_PATH" \
+      bash "$POLL" "$mode" gitlab https://gitlab.example/group/project/-/merge_requests/7 \
+        gitlab.example group/project 7) || rc=$?
+    [ "$rc" -eq 0 ] || fail "stalled GitLab train-list read failed the poll: $mode rc=$rc"
+    case "$mode:$out" in
+      --validated:unreachable|--baseline:train=unknown) ;;
+      *) fail "stalled GitLab train-list read lost its timeout classification: $mode out=$out" ;;
+    esac
   done
+  out=$(FM_CHECK_TIMEOUT=6 FM_TEST_GLAB_TRAIN=gone FM_TEST_GLAB_RECHECK_HANG=1 run_poll "$dir")
+  [ "$out" = 'degraded train=dropped url=https://gitlab.example/group/project/-/merge_requests/7 reason=mergeable pipeline_url=https://gitlab.example/group/project/-/pipelines/941 mr_state=unconfirmed' ] \
+    || fail "stalled optional MR recheck suppressed the confirmed drop: $out"
+  out=$(FM_CHECK_TIMEOUT=6 FM_TEST_GLAB_TRAIN=gone run_poll "$dir")
+  [ "$out" = 'degraded train=dropped url=https://gitlab.example/group/project/-/merge_requests/7 reason=mergeable pipeline_url=https://gitlab.example/group/project/-/pipelines/941' ] \
+    || fail "readable train-list and MR recheck did not report the drop: $out"
   out=$(FM_CHECK_TIMEOUT=6 FM_TEST_GLAB_TRAIN=car run_poll "$dir")
   [ "$out" = ontrain ] || fail "readable GitLab car did not report ontrain: $out"
 
@@ -2087,7 +2106,7 @@ test_gitlab_poll_shared_deadline() {
   esac
   [ "$(grep -c 'pipelines/941/' "$dir/glab.log")" -eq 1 ] \
     || fail "GitLab started another detail read after exhausting the shared deadline"
-  pass "GitLab car timeouts retain their classification and detail reads share the poll deadline"
+  pass "GitLab required-read timeouts retain their classification and optional reads preserve known results"
 }
 
 test_unreachable_poll_streak_wakes_once() {

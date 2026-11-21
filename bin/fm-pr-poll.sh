@@ -390,7 +390,11 @@ case "$provider" in
             *'(HTTP 404)'*) ;;
             *) [ "$unknown" -eq 3 ] && printf '%s\n' train=unknown; exit 0 ;;
           esac
-          trains=$(gitlab_detail_read "projects/$enc/merge_trains" 2>/dev/null) || { [ "$unknown" -eq 3 ] && printf '%s\n' train=unknown; exit 0; }
+          trains=$(gitlab_detail_read "projects/$enc/merge_trains" 2>/dev/null) || {
+            trains_rc=$?
+            [ "$unknown" -ne 3 ] || { printf '%s\n' train=unknown; exit 0; }
+            read_failed "$trains_rc"
+          }
           present=$(printf '%s' "$trains" | jq -er --argjson iid "$number" '
             if type == "array" then
               [ .[].cars[]? | select(.merge_request.iid == $iid) ] | length == 0
