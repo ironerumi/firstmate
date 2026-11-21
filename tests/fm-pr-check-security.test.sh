@@ -2055,6 +2055,139 @@ test_unreachable_poll_wakes_only_on_a_persistent_streak() {
   pass "a transient unreachable forge raises no wake and a readable poll ends the streak"
 }
 
+# Block only the external forge boundary. The controller owns both FIFOs;
+# each notification proves a real read reached the stall before it was cut.
+install_fifo_forge() { # <case> <tool>
+  local dir=$1 tool=$2
+  mv "$dir/fakebin/$tool" "$dir/fakebin/$tool-readable"
+  cat > "$dir/fakebin/$tool" <<'SH'
+#!/usr/bin/env bash
+if [ "${FM_TEST_FIFO_CUTS:-99}" = 4 ] && [ "$(cat "$FM_TEST_FIFO_DIR/count" 2>/dev/null || echo 0)" -ge 4 ]; then
+  export FM_TEST_GLAB_STATE=merged
+fi
+case "$*" in
+  *"$FM_TEST_FIFO_MATCH"*)
+    n=$(($(cat "$FM_TEST_FIFO_DIR/count" 2>/dev/null || echo 0) + 1))
+    printf '%s\n' "$n" > "$FM_TEST_FIFO_DIR/count"
+    if [ "$n" -le "${FM_TEST_FIFO_CUTS:-99}" ]; then
+      trap '' ALRM
+      printf '%s\n' "$$" > "$FM_TEST_FIFO_DIR/entered"
+      read -r _ < "$FM_TEST_FIFO_DIR/release"
+      exit 1
+    fi
+    # A successful read after the stalled episode lets the watcher finish.
+    export FM_TEST_GH_STATE=MERGED FM_TEST_GLAB_STATE=merged
+    ;;
+esac
+exec "$0-readable" "$@"
+SH
+  chmod +x "$dir/fakebin/$tool"
+  mkfifo "$dir/entered" "$dir/release"
+}
+
+assert_fifo_cuts() { # <count>
+  local i pid
+  for ((i=0; i<$1; i++)); do
+    read -r -t 1 pid <&6 || fail 'forge never entered the FIFO read'
+    ! process_is_live_non_zombie "$pid" || fail "cut forge survived: $pid"
+  done
+}
+
+test_fifo_forge_deadlines() {
+  local kind dir state url forge host repo number match mode out rc started tool
+  # Oracle: the accepted outage policy wakes only on poll three, once per
+  # episode. A forge read must finish before the eight-second watcher bound.
+  for kind in github car trains; do
+    dir=$(make_case "fifo-$kind")
+    state="$dir/home/state"
+    case "$kind" in
+      github) forge=github; host=github.com; repo=o/r; number=1
+        url=https://github.com/o/r/pull/1; match=statusCheckRollup; tool=gh ;;
+      *) forge=gitlab; host=gitlab.example; repo=group/project; number=7
+        url=https://gitlab.example/group/project/-/merge_requests/7; tool=glab
+        ln -s "$REAL_JQ" "$dir/fakebin/jq"
+        if [ "$kind" = car ]; then match=merge_trains/merge_requests/; else match=merge_trains; fi ;;
+    esac
+    # For the train-list case, do not intercept its car endpoint.
+    install_fifo_forge "$dir" "$tool"
+    if [ "$kind" = trains ]; then
+      "$REAL_MV" "$dir/fakebin/glab" "$dir/fakebin/glab-fifo"
+      printf '#!/usr/bin/env bash\ncase "$*" in *merge_trains/merge_requests/*) exec "$0-readable" "$@" ;; esac\nexec "$0-fifo" "$@"\n' > "$dir/fakebin/glab"
+      chmod +x "$dir/fakebin/glab"
+      # The wrapper delegates to the original readable forge on other reads.
+      ln -s glab-readable "$dir/fakebin/glab-fifo-readable"
+    fi
+    exec 6<> "$dir/entered" 5<> "$dir/release"
+    export FM_TEST_FIFO_DIR="$dir" FM_TEST_FIFO_MATCH="$match" FM_TEST_FIFO_CUTS=99
+    for mode in --validated --baseline; do
+      started=$SECONDS; rc=0
+      out=$(FM_CHECK_TIMEOUT=8 FM_CONFIG_OVERRIDE="$dir/home/config" \
+        FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_GLAB_LOG="$dir/glab.log" FM_TEST_JQ="$REAL_JQ" \
+        PATH="$dir/fakebin:$BASE_PATH" bash "$POLL" "$mode" "$forge" "$url" "$host" "$repo" "$number") || rc=$?
+      [ "$((SECONDS-started))" -lt 8 ] || fail "$kind exceeded watcher bound"
+      case "$kind:$mode:$rc:$out" in
+        *:--validated:0:unreachable|github:--baseline:3:|car:--baseline:0:train=unknown|trains:--baseline:0:train=unknown) ;;
+        *) fail "$kind $mode lost cut-read classification: rc=$rc out=$out" ;;
+      esac
+      assert_fifo_cuts 1
+    done
+    rm -f "$dir/count"
+    export FM_TEST_FIFO_CUTS=4
+    write_poll_meta "$state" task-a "$url"
+    fm_pr_poll_prepare "$state" task-a "$forge" "$url" "$host" "$repo" "$number" "$POLL" \
+      && fm_pr_poll_publish_prepared || fail 'FIFO poll publication failed'
+    rc=0
+    FM_TEST_CHECK_TIMEOUT=8 run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/first.out" 2> "$dir/first.err" || rc=$?
+    [ "$rc" -eq 0 ] && [ "$(< "$dir/count")" = 3 ] || fail "$kind did not wake on poll three"
+    [ "$(grep -c '^check: .*: unreachable:' "$dir/first.out")" = 1 ] || fail "$kind missing outage wake"
+    assert_fifo_cuts 3
+    ack_watcher_cycle "$state" || fail 'FIFO outage acknowledgement failed'
+    rm -f "$state/.last-check"
+    rc=0
+    FM_TEST_CHECK_TIMEOUT=8 run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/second.out" 2> "$dir/second.err" || rc=$?
+    [ "$rc" -eq 0 ] && [ "$(< "$dir/count")" = "$([ "$kind" = github ] && echo 5 || echo 4)" ] || fail "$kind did not recover after outage"
+    [ "$(grep -c '^check: ' "$dir/second.out")" = 1 ] && grep -q ': merged$' "$dir/second.out" \
+      || fail "$kind repeated its outage wake"
+    assert_fifo_cuts 1
+    exec 6>&- 5>&-
+    unset FM_TEST_FIFO_DIR FM_TEST_FIFO_MATCH FM_TEST_FIFO_CUTS
+  done
+  pass 'FIFO-stalled GitHub and GitLab reads wake once on poll three and keep baselines unknown'
+}
+
+test_fifo_optional_enrichment() {
+  local kind dir out started
+  for kind in jobs bridges recheck; do
+    dir=$(make_case "fifo-detail-$kind")
+    make_poll_fixture "$dir"
+    ln -s "$REAL_JQ" "$dir/fakebin/jq"
+    printf '%s\n' gitlab https://gitlab.example/group/project/-/merge_requests/7 \
+      gitlab.example group/project 7 > "$dir/home/state/task-a.pr-poll"
+    install_fifo_forge "$dir" glab
+    exec 6<> "$dir/entered" 5<> "$dir/release"
+    export FM_TEST_FIFO_DIR="$dir" FM_TEST_FIFO_CUTS=99
+    case "$kind" in
+      jobs|bridges) export FM_TEST_FIFO_MATCH="pipelines/941/$kind" ;;
+      recheck) export FM_TEST_FIFO_MATCH='api projects/group%2Fproject/merge_requests/7' ;;
+    esac
+    started=$SECONDS
+    if [ "$kind" = recheck ]; then
+      out=$(FM_CHECK_TIMEOUT=7 FM_TEST_GLAB_TRAIN=gone run_poll "$dir")
+      case "$out" in 'degraded train=dropped '*mr_state=unconfirmed) ;; *) fail "lost confirmed train drop: $out" ;; esac
+    else
+      out=$(FM_CHECK_TIMEOUT=7 FM_TEST_GLAB_PIPELINE=failed run_poll "$dir")
+      case "$out" in 'degraded pipeline=941 url='*) ;; *) fail "lost known pipeline failure: $out" ;; esac
+    fi
+    # Seven seconds leaves a two-second poll budget; allow one tick for
+    # integer clock rounding and process cleanup, not a fresh five-second read.
+    [ "$((SECONDS-started))" -lt 4 ] || fail "$kind exceeded shared poll budget"
+    assert_fifo_cuts 1
+    exec 6>&- 5>&-
+    unset FM_TEST_FIFO_DIR FM_TEST_FIFO_MATCH FM_TEST_FIFO_CUTS
+  done
+  pass 'FIFO-stalled jobs, bridges and MR enrichment preserve known degraded results inside the shared deadline'
+}
+
 test_gitlab_poll_shared_deadline() {
   local dir state out rc mode
   dir=$(make_case gitlab-poll-shared-deadline)
@@ -3224,6 +3357,7 @@ test_teardown_removes_poll_artifacts() {
   printf 'data\n' > "$dir/home/state/task-a.pr-poll"
   printf 'registration\n' > "$dir/home/state/task-a.pr-poll-registration"
   printf 'degraded\n' > "$dir/home/state/task-a.pr-poll-degraded"
+  printf '3 notified\n' > "$dir/home/state/task-a.pr-poll-unreachable"
   printf 'trust\n' > "$dir/home/state/task-a.check-trust"
   printf 'https://github.com/o/r/pull/9\n' > "$dir/home/state/task-a.pr-register-refused"
   printf 'https://github.com/o/r/pull/9\n' > "$dir/home/state/task-a.pr-register-timed-out"
@@ -3241,6 +3375,7 @@ SH
   [ ! -e "$dir/home/state/task-a.pr-poll" ] || fail "teardown left the sidecar"
   [ ! -e "$dir/home/state/task-a.pr-poll-registration" ] || fail "teardown left the PR poll registration"
   [ ! -e "$dir/home/state/task-a.pr-poll-degraded" ] || fail "teardown left the degraded dedupe marker"
+  [ ! -e "$dir/home/state/task-a.pr-poll-unreachable" ] || fail "teardown left the unreachable streak"
   [ ! -e "$dir/home/state/task-a.check-trust" ] || fail "teardown left the custom check registration"
   [ ! -e "$dir/home/state/task-a.pr-register-refused" ] || fail "teardown left the PR registration refusal marker"
   [ ! -e "$dir/home/state/task-a.pr-register-timed-out" ] || fail "teardown left the PR registration timeout marker"
@@ -5873,6 +6008,8 @@ test_rejected_metacharacter_bytes_are_inert
 test_static_poll_contract
 test_unreachable_poll_wakes_only_on_a_persistent_streak
 test_gitlab_poll_shared_deadline
+test_fifo_forge_deadlines
+test_fifo_optional_enrichment
 test_unreachable_poll_streak_wakes_once
 test_degraded_watch_opt_in_absent_preserves_merged_only_behavior
 test_degraded_watch_flag_refreshes_each_sweep
