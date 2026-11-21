@@ -4271,11 +4271,11 @@ while :; do
             "$provider" "$url" "$host" "$path" "$number" || exit 1
           out=$FM_CHECK_RESULT
           # An unreachable forge is retried quietly on the next sweep; only a
-          # streak of FM_PR_POLL_UNREACHABLE_WAKE_AFTER consecutive unreachable
+          # streak of FM_CHECK_PERSISTENT_SWEEPS consecutive unreachable
           # polls wakes, once, and any other poll result ends the streak.
           if [ "$out" = unreachable ]; then
             unreachable_count=$(fm_pr_poll_unreachable_note "$STATE" "$id") || exit 1
-            if [ "$unreachable_count" -ne "$FM_PR_POLL_UNREACHABLE_WAKE_AFTER" ]; then
+            if [ "$unreachable_count" -ne "$FM_CHECK_PERSISTENT_SWEEPS" ]; then
               pr_poll_control_release || exit 1
               triage_log "PR poll for $id could not reach its forge ($unreachable_count consecutive); retrying next sweep"
               continue

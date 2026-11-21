@@ -1870,11 +1870,13 @@ fm_pr_poll_train_clear() {  # <state> <id>
   }
 }
 
-# A PR poll that could not reach its forge (bin/fm-pr-poll.sh's "unreachable")
-# is retried quietly on the next sweep; the watcher wakes only once this many
-# consecutive polls of one task stayed unreachable, so a transient network
-# failure raises no supervision wake while a persistent one still does.
-FM_PR_POLL_UNREACHABLE_WAKE_AFTER=3
+# A watcher check that misses one sweep for a transient reason - a PR poll
+# that could not reach its forge (bin/fm-pr-poll.sh's "unreachable"), or a
+# contribution poll that found its observation lock held (bin/fm-contributions.sh)
+# - is retried quietly on the next sweep and wakes only once this many
+# consecutive sweeps missed, so a transient failure raises no supervision wake
+# while a persistent one still does.
+FM_CHECK_PERSISTENT_SWEEPS=3
 
 # Records one more consecutive unreachable poll for the task and prints the
 # streak length; an unreadable count restarts the streak at one.
