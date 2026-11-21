@@ -158,6 +158,16 @@ case "${1:-} ${2:-}" in
             # The static PR poll's combined read: it applies its own filter
             # with the real jq, so the fixture's state and rollup are what a
             # case controls and the filter's verdict is what the poll sees.
+            # FM_TEST_GH_SEQUENCE scripts successive reads, one word per read:
+            # "hang" is a stalled connection, any other word the PR state.
+            if [ -n "${FM_TEST_GH_SEQUENCE:-}" ]; then
+              step=$(($(cat "$FM_TEST_GH_SEQUENCE_COUNT" 2>/dev/null || echo 0) + 1))
+              printf '%s\n' "$step" > "$FM_TEST_GH_SEQUENCE_COUNT"
+              # shellcheck disable=SC2086 # the sequence is split into words on purpose.
+              step=$(printf '%s\n' $FM_TEST_GH_SEQUENCE | sed -n "${step}p")
+              [ "$step" != hang ] || exec sleep 20
+              FM_TEST_GH_POLL_STATE=${step:-OPEN}
+            fi
             [ "${FM_TEST_GH_FAIL:-0}" = 0 ] || exit 1
             [ -z "${FM_TEST_GH_STATE_STARTED:-}" ] || : > "$FM_TEST_GH_STATE_STARTED"
             [ "${FM_TEST_GH_SLEEP:-0}" = 0 ] || sleep "$FM_TEST_GH_SLEEP"
@@ -1997,6 +2007,85 @@ test_static_poll_contract() {
   [ "$rc" -eq 0 ] || fail "watcher did not surface merged poll"
   [ "$(grep -c '^check: .*: merged$' "$dir/watch.out")" -eq 1 ] || fail "watcher did not convert merged output into exactly one wake"
   pass "static poll is silent except for one merged line and remains watcher-bounded"
+}
+
+test_unreachable_poll_wakes_only_on_a_persistent_streak() {
+  local dir state out rc
+  dir=$(make_case unreachable-streak)
+  state="$dir/home/state"
+  make_poll_fixture "$dir"
+
+  # The poll cuts its own stalled forge read inside the watcher's check bound:
+  # a validated poll reports unreachable, an arming baseline reports unknown.
+  rc=0
+  out=$(FM_CHECK_TIMEOUT=6 FM_TEST_GH_SEQUENCE=hang FM_TEST_GH_SEQUENCE_COUNT="$dir/seq-poll" \
+    run_poll "$dir") || rc=$?
+  { [ "$rc" -eq 0 ] && [ "$out" = unreachable ]; } \
+    || fail "a stalled forge read did not report unreachable: rc=$rc out=$out"
+  rc=0
+  out=$(FM_CHECK_TIMEOUT=6 FM_TEST_GH_SEQUENCE=hang FM_TEST_GH_SEQUENCE_COUNT="$dir/seq-baseline" \
+    FM_CONFIG_OVERRIDE="$dir/home/config" \
+    FM_TEST_GH_LOG="$dir/gh.log" FM_TEST_JQ="$REAL_JQ" PATH="$dir/fakebin:$BASE_PATH" \
+    bash "$POLL" --baseline github https://github.com/o/r/pull/1 github.com o/r 1) || rc=$?
+  { [ "$rc" -eq 3 ] && [ -z "$out" ]; } \
+    || fail "a stalled baseline read was not reported as unknown: rc=$rc out=$out"
+
+  write_poll_meta "$state" task-a https://github.com/o/r/pull/1
+  fm_pr_poll_prepare "$state" task-a github https://github.com/o/r/pull/1 github.com o/r 1 "$POLL" \
+    || fail "could not prepare the unreachable streak poll"
+  fm_pr_poll_publish_prepared || fail "could not publish the unreachable streak poll"
+
+  # Transient: two stalled sweeps, a readable one, two more stalled sweeps,
+  # then the merge. The readable sweep ends the streak, so the only wake is the
+  # merge itself, never a cut check or an unreachable streak.
+  rm -f "$state/.last-check"
+  rc=0
+  FM_TEST_CHECK_TIMEOUT=6 FM_TEST_GH_SEQUENCE="hang hang OPEN hang hang MERGED" \
+    FM_TEST_GH_SEQUENCE_COUNT="$dir/seq-transient" \
+    run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/watch-transient.out" 2> "$dir/watch-transient.err" || rc=$?
+  [ "$rc" -eq 0 ] || fail "watcher did not reach the merge through transient stalls: rc=$rc"
+  [ "$(cat "$dir/seq-transient")" = 6 ] || fail "watcher did not retry every stalled sweep: reads=$(cat "$dir/seq-transient")"
+  { [ "$(grep -c '^check: ' "$dir/watch-transient.out")" -eq 1 ] \
+    && grep -q '^check: .*task-a\.check\.sh: merged$' "$dir/watch-transient.out"; } \
+    || fail "transient stalls raised a wake other than the merge: $(cat "$dir/watch-transient.out")"
+  [ ! -e "$state/task-a.pr-poll-unreachable" ] || fail "the merge left an unreachable streak behind"
+  pass "a transient unreachable forge raises no wake and a readable poll ends the streak"
+}
+
+test_unreachable_poll_streak_wakes_once() {
+  local dir state rc
+  dir=$(make_case unreachable-persistent)
+  state="$dir/home/state"
+  write_poll_meta "$state" task-a https://github.com/o/r/pull/1
+  fm_pr_poll_prepare "$state" task-a github https://github.com/o/r/pull/1 github.com o/r 1 "$POLL" \
+    || fail "could not prepare the persistent streak poll"
+  fm_pr_poll_publish_prepared || fail "could not publish the persistent streak poll"
+
+  # Persistent: the third consecutive stalled sweep wakes, exactly once.
+  rm -f "$state/.last-check"
+  rc=0
+  FM_TEST_CHECK_TIMEOUT=6 FM_TEST_GH_SEQUENCE="hang hang hang hang MERGED" \
+    FM_TEST_GH_SEQUENCE_COUNT="$dir/seq" \
+    run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/watch-1.out" 2> "$dir/watch-1.err" || rc=$?
+  [ "$rc" -eq 0 ] || fail "watcher did not wake on a persistent unreachable streak: rc=$rc"
+  [ "$(cat "$dir/seq")" = 3 ] || fail "the streak did not wake on its third stalled sweep: reads=$(cat "$dir/seq")"
+  { [ "$(grep -c '^check: ' "$dir/watch-1.out")" -eq 1 ] \
+    && grep -q '^check: .*task-a\.check\.sh: unreachable: its forge read timed out on 3 consecutive polls$' "$dir/watch-1.out"; } \
+    || fail "a persistent streak did not raise exactly one unreachable wake: $(cat "$dir/watch-1.out")"
+  ack_watcher_cycle "$state" || fail "unreachable wake acknowledgement failed"
+
+  # A streak that continues past its wake stays silent until the forge answers.
+  rm -f "$state/.last-check"
+  rc=0
+  FM_TEST_CHECK_TIMEOUT=6 FM_TEST_GH_SEQUENCE="hang hang hang hang MERGED" \
+    FM_TEST_GH_SEQUENCE_COUNT="$dir/seq" \
+    run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/watch-2.out" 2> "$dir/watch-2.err" || rc=$?
+  [ "$rc" -eq 0 ] || fail "watcher did not reach the merge after the streak: rc=$rc"
+  [ "$(cat "$dir/seq")" = 5 ] || fail "watcher did not keep retrying past the streak wake: reads=$(cat "$dir/seq")"
+  { [ "$(grep -c '^check: ' "$dir/watch-2.out")" -eq 1 ] \
+    && grep -q '^check: .*task-a\.check\.sh: merged$' "$dir/watch-2.out"; } \
+    || fail "the continued streak woke again before the merge: $(cat "$dir/watch-2.out")"
+  pass "a persistent unreachable forge wakes once per streak"
 }
 
 test_degraded_watch_opt_in_absent_preserves_merged_only_behavior() {
@@ -5725,6 +5814,8 @@ test_watcher_sweep_records_a_reported_pr
 test_valid_recording_and_merge_derivation
 test_rejected_metacharacter_bytes_are_inert
 test_static_poll_contract
+test_unreachable_poll_wakes_only_on_a_persistent_streak
+test_unreachable_poll_streak_wakes_once
 test_degraded_watch_opt_in_absent_preserves_merged_only_behavior
 test_degraded_watch_flag_refreshes_each_sweep
 test_degraded_watch_flag_in_an_overridden_home
