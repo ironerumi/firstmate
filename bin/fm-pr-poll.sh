@@ -3,14 +3,15 @@
 # change poll sidecar.
 # It emits exactly one merged line for a merged change, exactly one degraded
 # line for a ready change that degraded after its ready report (a failing
-# check on GitHub, a failing head pipeline on GitLab), exactly one unreachable
-# line when a forge read is cut at the poll's read deadline (read_deadline
-# below), and stays silent otherwise, including on every other error, so a
-# failed lookup can never be read as a merge. A degraded line names the head
-# or pipeline that degraded, the failed jobs with the forge's failure reasons,
-# and the pipeline or check URL, so the wake says which test broke without a
-# job-log dig; the watcher dedupes one wake per transition on that
-# head/pipeline (bin/fm-watch.sh).
+# check on GitHub, a failing head pipeline or merge-train drop on GitLab),
+# exactly one unreachable line when a required forge read times out (see
+# read_deadline below), and stays silent on other errors, so a failed lookup
+# can never be read as a merge. Optional enrichment timeouts preserve a known
+# pipeline failure or confirmed train drop instead of reporting unreachable.
+# A check or pipeline degradation names the head or pipeline that degraded,
+# the failed jobs with the forge's failure reasons, and the pipeline or check
+# URL, so the wake says which test broke without a job-log dig; the watcher
+# dedupes one wake per transition on that head/pipeline (bin/fm-watch.sh).
 # The provider-tagged identity is data in the sidecar and is never
 # interpolated into this source: these bytes are identical for every task.
 # Each provider is read through its own standard CLI, gh for GitHub, glab for
