@@ -283,6 +283,7 @@ case " $* " in
         : > "$FM_TEST_GLAB_LOG.train"
         case "${FM_TEST_GLAB_TRAIN:-}" in
           car) printf '%s\n' '{"id":5,"status":"idle"}' ;;
+          hang) exec perl -MPOSIX=pause -e '$SIG{ALRM} = "IGNORE"; 1 while pause' ;;
           gone) printf '%s\n' '{"message":"404 Not found"}'; printf '%s\n' 'glab: 404 Not Found (HTTP 404)' >&2; exit 1 ;;
           fail) printf '%s\n' 'glab: 500 (HTTP 500)' >&2; exit 1 ;;
           neterr) printf '%s\n' 'glab: Get "https://gitlab.example/api/v4/projects/group%2Fproj404/merge_trains/merge_requests/1404": i/o timeout' >&2; exit 1 ;;
@@ -2050,6 +2051,43 @@ test_unreachable_poll_wakes_only_on_a_persistent_streak() {
     || fail "transient stalls raised a wake other than the merge: $(cat "$dir/watch-transient.out")"
   [ ! -e "$state/task-a.pr-poll-unreachable" ] || fail "the merge left an unreachable streak behind"
   pass "a transient unreachable forge raises no wake and a readable poll ends the streak"
+}
+
+test_gitlab_poll_shared_deadline() {
+  local dir state out rc mode
+  dir=$(make_case gitlab-poll-shared-deadline)
+  state="$dir/home/state"
+  make_poll_fixture "$dir"
+  ln -sf "$REAL_JQ" "$dir/fakebin/jq"
+  mkdir -p "$dir/home/config"
+  : > "$dir/home/config/pr-degraded-watch"
+  printf '%s\n' gitlab https://gitlab.example/group/project/-/merge_requests/7 \
+    gitlab.example group/project 7 > "$state/task-a.pr-poll"
+
+  for mode in --validated --baseline; do
+    rc=0
+    out=$(FM_CHECK_TIMEOUT=6 FM_CONFIG_OVERRIDE="$dir/home/config" FM_TEST_GLAB_TRAIN=hang \
+      FM_TEST_GLAB_LOG="$dir/glab.log" PATH="$dir/fakebin:$BASE_PATH" \
+      bash "$POLL" "$mode" gitlab https://gitlab.example/group/project/-/merge_requests/7 \
+        gitlab.example group/project 7) || rc=$?
+    [ "$rc" -eq 0 ] || fail "stalled GitLab car read failed the poll: $mode rc=$rc"
+    case "$mode:$out" in
+      --validated:unreachable|--baseline:train=unknown) ;;
+      *) fail "stalled GitLab car read lost its timeout classification: $mode out=$out" ;;
+    esac
+  done
+  out=$(FM_CHECK_TIMEOUT=6 FM_TEST_GLAB_TRAIN=car run_poll "$dir")
+  [ "$out" = ontrain ] || fail "readable GitLab car did not report ontrain: $out"
+
+  : > "$dir/glab.log"
+  out=$(FM_CHECK_TIMEOUT=6 FM_TEST_GLAB_PIPELINE=failed FM_TEST_GLAB_DETAIL_HANG=1 run_poll "$dir")
+  case "$out" in
+    'degraded pipeline=941 url='*) ;;
+    *) fail "exhausted detail budget suppressed the known pipeline failure: $out" ;;
+  esac
+  [ "$(grep -c 'pipelines/941/' "$dir/glab.log")" -eq 1 ] \
+    || fail "GitLab started another detail read after exhausting the shared deadline"
+  pass "GitLab car timeouts retain their classification and detail reads share the poll deadline"
 }
 
 test_unreachable_poll_streak_wakes_once() {
@@ -5815,6 +5853,7 @@ test_valid_recording_and_merge_derivation
 test_rejected_metacharacter_bytes_are_inert
 test_static_poll_contract
 test_unreachable_poll_wakes_only_on_a_persistent_streak
+test_gitlab_poll_shared_deadline
 test_unreachable_poll_streak_wakes_once
 test_degraded_watch_opt_in_absent_preserves_merged_only_behavior
 test_degraded_watch_flag_refreshes_each_sweep

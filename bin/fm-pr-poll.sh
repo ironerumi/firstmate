@@ -259,7 +259,9 @@ case "$provider" in
         # check timeout kills it before it prints. Without perl no read can be
         # bounded, so a detail read fails and gitlab_failure_detail makes none.
         command -v perl >/dev/null 2>&1 || return 1
-        GITLAB_HOST=$host bounded_read 5 glab api "$1"
+        local remaining=$((read_deadline - SECONDS))
+        [ "$remaining" -le 5 ] || remaining=5
+        GITLAB_HOST=$host bounded_read "$remaining" glab api "$1"
     }
     gitlab_failure_detail() {  # <pipeline>; sets detail
         # The degraded line names the failed jobs with their forge failure
@@ -380,6 +382,9 @@ case "$provider" in
           elif [ "$unknown" -eq 3 ]; then
             printf '%s\n' train=unknown
           fi
+        elif [ "$car_rc" -eq 124 ]; then
+          [ "$unknown" -ne 3 ] || { printf '%s\n' train=unknown; exit 0; }
+          read_failed "$car_rc"
         elif [ "$car_rc" -ne 0 ]; then
           case $car_err in
             *'(HTTP 404)'*) ;;
