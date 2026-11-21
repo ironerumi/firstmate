@@ -75,8 +75,9 @@ esac
 # connection holds gh for about a minute before its own client gives up. A read
 # cut at that deadline prints "unreachable" instead of letting the watcher cut
 # the whole poll, so bin/fm-watch.sh retries it quietly on the next sweep and
-# wakes only when it stays unreachable. The arming baseline read (--baseline)
-# treats a cut read as unknown, like any other failed read.
+# wakes only when it stays unreachable (the streak threshold and reset contract
+# live in bin/fm-pr-lib.sh). The arming baseline read (--baseline) treats a cut
+# read as unknown, like any other failed read.
 read_deadline=${FM_CHECK_TIMEOUT:-30}
 case "$read_deadline" in ''|0*|*[!0-9]*) read_deadline=30 ;; esac
 read_deadline=$((read_deadline - 5))
@@ -254,10 +255,11 @@ case "$provider" in
     # which keeps the merged wake for a watch armed before jq was required.
     enc=${path//\//%2F}
     gitlab_detail_read() {  # <api path>
-        # Each detail read gets its own hard limit of five seconds (bounded_read),
-        # so a hung read is cut rather than holding the poll until the watcher's
-        # check timeout kills it before it prints. Without perl no read can be
-        # bounded, so a detail read fails and gitlab_failure_detail makes none.
+        # Detail reads get at most five seconds within the remaining shared
+        # deadline, so optional enrichment cannot suppress a known failure or
+        # confirmed train drop by holding the poll until the watcher kills it.
+        # Without perl no read can be bounded, so a detail read fails and
+        # gitlab_failure_detail makes none.
         command -v perl >/dev/null 2>&1 || return 1
         local remaining=$((read_deadline - SECONDS))
         [ "$remaining" -le 5 ] || remaining=5
@@ -587,8 +589,8 @@ case "$provider" in
     # tea's single-PR view ignores field selection, so the one pull request
     # is read by number from the REST record through "tea api", which keeps
     # the credential inside tea. "tea api" exits 0 on an HTTP error with the
-    # error body as output, so only a boolean merged field of true wakes this
-    # poll and every other reading stays silent.
+    # error body as output, so only a boolean merged field of true reports a
+    # merge; other records stay silent, and read deadlines use read_failed.
     record=$(forge_read tea api --login "$login" --repo "$owner/$repo" \
       "/repos/{owner}/{repo}/pulls/$number" 2>/dev/null) || read_failed $?
     merged=$(printf '%s' "$record" | jq -r '
