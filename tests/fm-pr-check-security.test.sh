@@ -2112,7 +2112,7 @@ test_fifo_forge_deadlines() {
     install_fifo_forge "$dir" "$tool"
     if [ "$kind" = trains ]; then
       "$REAL_MV" "$dir/fakebin/glab" "$dir/fakebin/glab-fifo"
-      printf '#!/usr/bin/env bash\ncase "$*" in *merge_trains/merge_requests/*) exec "$0-readable" "$@" ;; esac\nexec "$0-fifo" "$@"\n' > "$dir/fakebin/glab"
+      printf '#!/usr/bin/env bash\ncase "%s" in *merge_trains/merge_requests/*) exec "%s-readable" "%s" ;; esac\nexec "%s-fifo" "%s"\n' "\$*" "\$0" "\$@" "\$0" "\$@" > "$dir/fakebin/glab"
       chmod +x "$dir/fakebin/glab"
       # The wrapper delegates to the original readable forge on other reads.
       ln -s glab-readable "$dir/fakebin/glab-fifo-readable"
@@ -2134,8 +2134,8 @@ test_fifo_forge_deadlines() {
     rm -f "$dir/count"
     export FM_TEST_FIFO_CUTS=4
     write_poll_meta "$state" task-a "$url"
-    fm_pr_poll_prepare "$state" task-a "$forge" "$url" "$host" "$repo" "$number" "$POLL" \
-      && fm_pr_poll_publish_prepared || fail 'FIFO poll publication failed'
+    if ! fm_pr_poll_prepare "$state" task-a "$forge" "$url" "$host" "$repo" "$number" "$POLL" || ! fm_pr_poll_publish_prepared; then
+      fail 'FIFO poll publication failed'; fi
     rc=0
     FM_TEST_CHECK_TIMEOUT=8 run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/first.out" 2> "$dir/first.err" || rc=$?
     [ "$rc" -eq 0 ] && [ "$(< "$dir/count")" = 3 ] || fail "$kind did not wake on poll three"
@@ -2146,8 +2146,8 @@ test_fifo_forge_deadlines() {
     rc=0
     FM_TEST_CHECK_TIMEOUT=8 run_watcher_bounded "$dir/home" "$dir/fakebin" > "$dir/second.out" 2> "$dir/second.err" || rc=$?
     [ "$rc" -eq 0 ] && [ "$(< "$dir/count")" = "$([ "$kind" = github ] && echo 5 || echo 4)" ] || fail "$kind did not recover after outage"
-    [ "$(grep -c '^check: ' "$dir/second.out")" = 1 ] && grep -q ': merged$' "$dir/second.out" \
-      || fail "$kind repeated its outage wake"
+    if [ "$(grep -c '^check: ' "$dir/second.out")" != 1 ] || ! grep -q ': merged$' "$dir/second.out"; then
+      fail "$kind repeated its outage wake"; fi
     assert_fifo_cuts 1
     exec 6>&- 5>&-
     unset FM_TEST_FIFO_DIR FM_TEST_FIFO_MATCH FM_TEST_FIFO_CUTS
