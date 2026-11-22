@@ -1563,6 +1563,39 @@ test_unmeasured_url_does_not_starve_the_tail() {
   pass 'rotation preserves timed-out records and refreshes every slow PR on successive cycles'
 }
 
+test_fifo_read_budget_keeps_prior_record() {
+  local home out pid
+  home=$(new_home fifo-budget)
+  forge_home "$home"
+  mutate_record "$home" delivery '.records[0].checked_at="2026-09-15T08:00:00Z"'
+  cp "$home/data/delivery/contributions.json" "$home/prior.json"
+  mv "$home/fakebin/gh" "$home/fakebin/gh-fixture"
+  mkfifo "$home/forge/entered" "$home/forge/release"
+  exec 6<> "$home/forge/entered" 5<> "$home/forge/release"
+  cat > "$home/fakebin/gh" <<'SH'
+#!/usr/bin/env bash
+if [ "$*" = 'api repos/o/r/pulls/8' ]; then
+  trap '' ALRM
+  printf '%s\n' "$$" > "$FORGE/entered"
+  read -r _ < "$FORGE/release"
+  exit 1
+fi
+exec "$0-fixture" "$@"
+SH
+  chmod +x "$home/fakebin/gh"
+  with_home "$home" "$ROOT/bin/fm-contributions.sh" arm >/dev/null || fail 'FIFO check arming failed'
+  # Oracle: a budget cut is not a forge failure. The generated check must
+  # preserve the previous observation byte-for-byte and produce no wake.
+  out=$(bounded_check "$home" 9) || fail 'FIFO contribution check exceeded its watcher bound'
+  read -r -t 1 pid <&6 || fail 'contribution read never entered its FIFO'
+  ! kill -0 "$pid" 2>/dev/null || fail 'contribution check left its blocked forge alive'
+  [ -z "$out" ] || fail "budget cut raised a wake: $out"
+  cmp -s "$home/prior.json" "$home/data/delivery/contributions.json" || fail 'budget cut changed prior records'
+  [ ! -s "$home/state/.wake-queue" ] || fail 'budget cut queued a wake'
+  exec 6>&- 5>&-
+  pass 'FIFO-stalled contribution check preserves prior records without a wake'
+}
+
 test_budget_is_cut_down_to_the_watcher_check_bound() {
   local home out
   home=$(new_home check-bound-budget)
@@ -1579,6 +1612,81 @@ test_budget_is_cut_down_to_the_watcher_check_bound() {
     || fail 'a poll observed with the full budget despite a six-second check bound'
   [ ! -s "$home/state/.wake-queue" ] || fail 'a check-bound-capped poll enqueued a wake'
   pass 'the effective budget is cut down to the watcher per-check bound with margin'
+}
+
+# Holds this home's observation lock from another live process until released.
+# The holder reports through FIFOs, so the test waits on the lock being held
+# and on its release rather than on elapsed time.
+hold_contributions_lock() {  # <home>
+  local home=$1
+  rm -f "$home/lock-held" "$home/lock-release"
+  mkfifo "$home/lock-held" "$home/lock-release"
+  FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" bash -c '
+    . "$1/bin/fm-wake-lib.sh"
+    fm_lock_acquire_wait "$2/state/.contributions.lock" || exit 1
+    printf "held\n" > "$2/lock-held"
+    read -r _ < "$2/lock-release"
+    fm_lock_release "$2/state/.contributions.lock"' bash "$ROOT" "$home" &
+  LOCK_HOLDER=$!
+  read -r _ < "$home/lock-held"
+}
+
+release_contributions_lock() {  # <home>
+  printf 'release\n' > "$1/lock-release"
+  wait "$LOCK_HOLDER"
+}
+
+# Runs the check shim the way the watcher does: cut at FM_CHECK_TIMEOUT.
+bounded_check() {  # <home> <seconds>
+  local home=$1 seconds=$2
+  # shellcheck disable=SC2016 # Perl expands its own variables.
+  with_home "$home" env FM_CHECK_TIMEOUT="$seconds" perl -e 'my $t = shift; my $pid = fork; die unless defined $pid; if (!$pid) { setpgrp(0, 0); exec @ARGV } local $SIG{ALRM} = sub { kill "KILL", -$pid; waitpid $pid, 0; exit 124 }; alarm $t; waitpid $pid, 0; exit($? >> 8)' \
+    "$seconds" bash "$home/state/contributions.check.sh"
+}
+
+# Three sweeps under a held lock: each ends inside the watcher's check bound,
+# the first two silently and the third with the one persistence report.
+held_lock_sweeps() {  # <home> <label>
+  local home=$1 label=$2 out rc sweep
+  hold_contributions_lock "$home"
+  for sweep in 1 2 3; do
+    rc=0
+    out=$(bounded_check "$home" 6) || rc=$?
+    if [ "$rc" -ne 0 ]; then
+      release_contributions_lock "$home"
+      fail "$label sweep $sweep under a held lock was cut at the check bound: rc=$rc"
+    fi
+    if [ "$sweep" -lt 3 ] && [ -n "$out" ]; then
+      release_contributions_lock "$home"
+      fail "$label sweep $sweep under a held lock was not quiet: $out"
+    fi
+    if [ "$sweep" -eq 3 ] && [ "$out" != 'contributions: observation lock held by another process for 3 consecutive polls' ]; then
+      release_contributions_lock "$home"
+      fail "$label persistently held lock did not report on its third sweep: $out"
+    fi
+  done
+  release_contributions_lock "$home"
+}
+
+test_held_observation_lock_skips_quietly_and_wakes_when_persistent() {
+  local home out rc
+  home=$(new_home held-observation-lock)
+  forge_home "$home"
+  with_home "$home" "$ROOT/bin/fm-contributions.sh" arm >/dev/null || fail 'arm failed'
+  mutate_record "$home" delivery '.records[0].checked_at="2026-09-15T08:00:00Z"'
+  cp "$home/data/delivery/contributions.json" "$home/prior.json"
+  held_lock_sweeps "$home" first
+  cmp -s "$home/prior.json" "$home/data/delivery/contributions.json" \
+    || fail 'a poll that never held the lock changed a record'
+  # Once the lock is free the poll observes normally and ends the streak, so a
+  # later held lock again needs three sweeps before it reports.
+  rc=0
+  out=$(bounded_check "$home" 6) || rc=$?
+  { [ "$rc" -eq 0 ] && [ -z "$out" ]; } || fail "the poll after release did not observe quietly: rc=$rc out=$out"
+  ! cmp -s "$home/prior.json" "$home/data/delivery/contributions.json" \
+    || fail 'the poll after release did not observe the contribution'
+  held_lock_sweeps "$home" second
+  pass 'a held observation lock skips the sweep quietly and wakes only when persistent'
 }
 
 test_arm_plumbs_a_configured_budget_into_the_check_shim() {
