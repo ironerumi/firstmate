@@ -326,6 +326,10 @@
       "audience": "public-product"
     },
     {
+      "path": "docs/adr/0001-fork-patch-stack.md",
+      "audience": "maintainer-architecture"
+    },
+    {
       "path": "docs/agent-control.md",
       "audience": "maintainer-architecture"
     },
