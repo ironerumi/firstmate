@@ -21,6 +21,7 @@ fm_fork_family_for_basename() {  # <basename>
     fm-worker-role-extensions.test.sh) printf '%s\n' standalone ;;
     fm-doorbell-recovery.test.sh) printf '%s\n' watcher-wake-lock ;;
     fm-spawn-claude-attribution.test.sh) printf '%s\n' backend-dispatch ;;
+    fm-classify-decision-key-extra.test.sh) printf '%s\n' pure-contract-unit ;;
     *)
       return 1
       ;;
@@ -43,6 +44,7 @@ tests/fm-worker-role-extensions.test.sh 578
 tests/fm-worker-role-inert.test.sh 6100
 tests/fm-doorbell-recovery.test.sh 15200
 tests/fm-spawn-claude-attribution.test.sh 25800
+tests/fm-classify-decision-key-extra.test.sh 1200
 HINTS
 # Upstream suites upstream has not hinted yet, measured as the slowest successful,
 # non-gate-skipped duration_ms in green upstream Ubuntu CI runs 43209319634,
