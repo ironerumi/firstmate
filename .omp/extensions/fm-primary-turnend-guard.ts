@@ -505,6 +505,9 @@ function runCdCheck(command: string): Promise<{ code: number; stderr: string }> 
 }
 
 export default function (pi: ExtensionAPI) {
+  // A ship or scout worker pane carries the spawn-owned FM_TASK_ID and never acts as a home,
+  // even in a slot that still holds a retired home's marker and state/ (bin/fm-primary-scope-lib.sh).
+  if (process.env.FM_TASK_ID) return;
   let sessionstartGeneration: SessionstartGeneration | null = null;
   let sessionstartExitListenerRegistered = false;
   let sessionStarts = 0;

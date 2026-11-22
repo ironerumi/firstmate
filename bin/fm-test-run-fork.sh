@@ -16,6 +16,9 @@ fm_fork_family_for_basename() {  # <basename>
     fm-fork-runner-local.test.sh) printf '%s\n' pure-contract-unit ;;
     fm-nm-guard.test.sh) printf '%s\n' pure-contract-unit ;;
     fm-fork-ci-workflow.test.sh) printf '%s\n' pure-contract-unit ;;
+    fm-worker-slot-safety.test.sh) printf '%s\n' backend-dispatch ;;
+    fm-worker-pool-safety.test.sh) printf '%s\n' backend-dispatch ;;
+    fm-worker-role-extensions.test.sh) printf '%s\n' standalone ;;
     *)
       return 1
       ;;
@@ -32,6 +35,10 @@ fm_fork_serial_weight_hints() {
 tests/fm-fork-runner-local.test.sh 3100
 tests/fm-nm-guard.test.sh 38800
 tests/fm-fork-ci-workflow.test.sh 2100
+tests/fm-worker-slot-safety.test.sh 10453
+tests/fm-worker-pool-safety.test.sh 28070
+tests/fm-worker-role-extensions.test.sh 578
+tests/fm-worker-role-inert.test.sh 6100
 HINTS
 # Upstream suites upstream has not hinted yet, measured as the slowest successful,
 # non-gate-skipped duration_ms in green upstream Ubuntu CI runs 43209319634,

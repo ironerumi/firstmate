@@ -209,6 +209,11 @@
 # leased home releases its durable treehouse lease so the pool slot is freed,
 # never left leased forever. If the treehouse return fails, teardown leaves the
 # leased home and state in place instead of hiding a still-held lease.
+# Once the return succeeds, teardown scrubs the returned slot of the retired home's
+# gitignored leftovers (state/, data/, config/, projects/, .fm-secondmate-parent, and
+# finally .fm-secondmate-home) so the next worker leased that slot does not resolve a
+# home that no longer exists; it touches nothing tracked, and only while the slot still
+# carries this home's own marker (scrub_returned_home_slot).
 # Usage: fm-teardown.sh <task-id> [--force] [--legacy-record]
 #   --force skips ordinary-task dirty and landed-work checks, skips scout report
 #   checks and closes the scout as discarded with no report recorded, and
@@ -2964,6 +2969,75 @@ EOF
   printf '%s\n' "$abs_home_path"
 }
 
+# `treehouse return` resets tracked content but leaves gitignored files, so a
+# retired home's operational dirs and identity markers would outlive its lease
+# and make the next worker in that pool slot resolve a home that no longer
+# exists. Run only after the return succeeded (a failed return keeps the home
+# and its state intact), and only while the slot still carries this home's own
+# marker, so a slot already re-leased and reseeded is left alone. The marker
+# goes last so a partial scrub is retried by the next teardown.
+scrub_returned_home_slot() {
+  local slot=$1 label=$2 expected_id=$3 name marker_id
+  [ -d "$slot" ] || return 0
+  [ -f "$slot/$SUB_HOME_MARKER" ] && [ ! -L "$slot/$SUB_HOME_MARKER" ] || return 0
+  marker_id=$(cat "$slot/$SUB_HOME_MARKER" 2>/dev/null || true)
+  [ "$marker_id" = "$expected_id" ] || return 0
+  for name in state data config projects; do
+    find "$slot/$name" -type d -exec chmod u+w {} + 2>/dev/null || true
+    rm -rf -- "${slot:?}/$name" || {
+      echo "error: returned $label $slot still holds $name; the slot keeps its home marker so teardown can be retried" >&2
+      return 1
+    }
+  done
+  rm -f -- "$slot/$SUB_HOME_PARENT_MARKER" "$slot/$SUB_HOME_MARKER"
+}
+
+# True when the slot's repository shares a root commit with this home's checkout,
+# so a firstmate fork or contribution clone qualifies while an unrelated project
+# that merely has the same file shape does not.
+slot_shares_firstmate_history() { # <slot>
+  local roots slot_roots root
+  roots=$(git -C "$FM_ROOT" rev-list --max-parents=0 HEAD 2>/dev/null) || return 1
+  slot_roots=$(git -C "$1" rev-list --max-parents=0 HEAD 2>/dev/null) || return 1
+  [ -n "$roots" ] && [ -n "$slot_roots" ] || return 1
+  for root in $roots; do
+    case $'\n'"$slot_roots"$'\n' in *$'\n'"$root"$'\n'*) return 0 ;; esac
+  done
+  return 1
+}
+
+# A worker launched into a firstmate-repo pool slot runs under that slot's own
+# checkout: the Pi extensions write their loaded-markers into its gitignored state/,
+# and the worker's scratch (validation outputs, PR drafts, failure captures) lands
+# there too. `treehouse return` leaves gitignored files, so the next spawn into the
+# slot would refuse that state/ as a retired home's leftovers. Teardown owns the
+# worker's lifetime, so it clears the worker-written state/ once the return and its
+# landed-work checks have succeeded. A slot carrying a secondmate marker is a
+# retired home, not a worker's, and keeps the spawn-time refusal; so does any slot
+# that is this home's own checkout or state.
+# The slot is checked against the task's own project clone, which it was leased
+# from, because a firstmate-repo project need not be this home's own clone: a
+# contribution checkout has its own git directory, and checking against this
+# home's checkout would skip its slots and leave the next spawn to refuse them.
+scrub_returned_worker_slot() {
+  local slot=$1 label=$2 project=$3 slot_real
+  [ -d "$slot" ] && [ -d "$slot/state" ] && [ ! -L "$slot/state" ] || return 0
+  [ -f "$slot/AGENTS.md" ] && [ -f "$slot/bin/fm-spawn.sh" ] || return 0
+  [ ! -e "$slot/$SUB_HOME_MARKER" ] && [ ! -L "$slot/$SUB_HOME_MARKER" ] || return 0
+  [ ! -e "$slot/$SUB_HOME_PARENT_MARKER" ] && [ ! -L "$slot/$SUB_HOME_PARENT_MARKER" ] || return 0
+  fm_treehouse_pool_slot "$project" "$slot" || return 0
+  slot_shares_firstmate_history "$slot" || return 0
+  slot_real=$(cd "$slot" && pwd -P) || return 0
+  [ "$slot_real" != "$(cd "$FM_ROOT" && pwd -P)" ] && [ "$slot_real" != "$(cd "$FM_HOME" && pwd -P)" ] || return 0
+  [ "$slot_real/state" != "$(cd "$STATE" 2>/dev/null && pwd -P)" ] || return 0
+  git -C "$slot" check-ignore -q -- state/ 2>/dev/null || return 0
+  find "$slot/state" -type d -exec chmod u+w {} + 2>/dev/null || true
+  rm -rf -- "${slot:?}/state" || {
+    echo "error: returned $label $slot still holds worker-written state/; the slot remains for teardown retry" >&2
+    return 1
+  }
+}
+
 # t3code_secondmate_home_shutdown_barrier: T3 detaches a provider session as a
 # separate effect after its thread's archive reads back, so the secondmate's
 # Claude or Codex process, and anything it started, can still be running in
@@ -3011,6 +3085,7 @@ remove_firstmate_home() {  # <home> <label> <task-id> <backend>
       restore_firstmate_home_process_events "$abs_home_path" "$label" "$process_event_backup" || return $?
       return 1
     }
+    scrub_returned_home_slot "$abs_home_path" "$label" "$expected_id" || return 1
     [ -z "$process_event_backup" ] || rm -rf -- "$process_event_backup"
     return 0
   fi
@@ -3644,6 +3719,7 @@ cleanup_firstmate_home_children() {
           if teardown_treehouse_return "$child_wt" "$child_proj" "child worktree"; then
             [ "$child_pool_slot" = 0 ] || teardown_note_dirty_return "$child_wt"
             fm_treehouse_slot_owner_release "$child_wt" "$child_id"
+            scrub_returned_worker_slot "$child_wt" "child worktree" "$child_proj" || return 1
           else
             child_return_rc=$?
             if [ "$child_return_rc" -eq "$TEARDOWN_TREEHOUSE_LOCK_REFUSED" ]; then
@@ -4129,6 +4205,7 @@ elif [ -d "$WT" ] && [ "$KIND" != secondmate ]; then
   # unclaimed until its next holder claims it, and leaves the claim in place
   # whenever the return did not actually happen.
   fm_treehouse_slot_owner_release "$WT" "$ID"
+  scrub_returned_worker_slot "$WT" "worktree" "$PROJ" || exit 1
 fi
 
 if [ "$BACKEND" = rex ] && [ "$KIND" = secondmate ] && [ "$TEARDOWN_WINDOWLESS" != 1 ]; then

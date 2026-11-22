@@ -127,6 +127,12 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# A ship or scout worker pane (spawn-owned FM_TASK_ID) never acts as a home, so it must
+# not start a home's watcher chain.
+if [ -n "${FM_TASK_ID:-}" ]; then
+  echo "watcher: FAILED - refusing to arm from a worker pane (FM_TASK_ID=$FM_TASK_ID); a ship or scout never acts as a firstmate home"
+  exit 3
+fi
 # shellcheck source=bin/fm-gate-refuse-lib.sh
 . "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
 if [ "${FM_GATE_REFUSE_BYPASS:-}" != 1 ]; then
