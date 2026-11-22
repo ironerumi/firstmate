@@ -59,6 +59,50 @@ export FM_TEST_SEAM=1
 # under the marker. A case that verifies the refusal sets FM_TASK_ID itself.
 unset FM_TASK_ID
 
+# A worker pane carries its own task's guard bindings (bin/fm-spawn.sh exports
+# them). A guard refusal reports itself on that status record, so a suite run
+# from a pane would report its deliberate refusals to firstmate as real ones.
+# Every suite starts unbound; a case that needs the guard sets its own record.
+unset FM_NM_GUARD_STATUS
+
+# Fixture wrappers use ordinary `command -v` lookups. In a worker environment
+# that would capture a guard shim, whose real-tool lookup then loops back into
+# the wrapper. Isolate only suites that source this fixture library, never the
+# runner's arbitrary children. Guard/composition cases rebind their own worker
+# environment after sourcing, just as they bind their own status record.
+fm_test_fixture_path() {
+  local rest=${PATH-} entry last tool link target hops skip result='' separator=''
+  while :; do
+    last=
+    case "$rest" in
+      *:*) entry=${rest%%:*}; rest=${rest#*:} ;;
+      *) entry=$rest; last=1 ;;
+    esac
+    skip=
+    for tool in git no-mistakes; do
+      link=${entry:-.}/$tool
+      hops=0
+      while [ -L "$link" ] && [ "$hops" -lt 10 ]; do
+        target=$(readlink "$link" 2>/dev/null) || break
+        case "$target" in
+          /*) link=$target ;;
+          *) link=${link%/*}/$target ;;
+        esac
+        hops=$((hops + 1))
+      done
+      case "$link" in *fm-nm-guard-shim.sh) skip=1 ;; esac
+    done
+    if [ -z "$skip" ]; then
+      result=$result$separator$entry
+      separator=:
+    fi
+    [ -z "$last" ] || break
+  done
+  printf '%s' "$result"
+}
+PATH=$(fm_test_fixture_path)
+export PATH
+
 # Clear the launcher identity, terminal marker, runtime-backend selector, and
 # home/state overrides a suite inherits from the terminal that started it. A
 # session running inside herdr exports HERDR_ENV/HERDR_PANE_ID/HERDR_SOCKET_PATH/...
@@ -745,6 +789,38 @@ fi
 exit 0
 SH
   chmod +x "$fakebin/$tool"
+}
+
+# fm_real_tool <name>: the first <name> on PATH that is NOT one of firstmate's
+# guard shims. A fixture that explicitly rebinds a guarded worker environment
+# and wraps a tool must resolve it this way: bin/shims precedes real tools, so a
+# bare `command -v` there hands back the shim, and the shim's own PATH walk then
+# hands back the fixture's wrapper - two programs exec'ing each other inside one
+# process, forever. Falls back to the bare lookup when nothing else is found.
+fm_real_tool() {
+  local name=$1 entry candidate link target hops
+  local IFS=:
+  for entry in ${PATH:-}; do
+    [ -n "$entry" ] || entry=.
+    candidate="$entry/$name"
+    [ -x "$candidate" ] && [ ! -d "$candidate" ] || continue
+    link=$candidate
+    hops=0
+    while [ -L "$link" ] && [ "$hops" -lt 10 ]; do
+      target=$(readlink "$link" 2>/dev/null) || break
+      case "$target" in
+        /*) link=$target ;;
+        *) link="${link%/*}/$target" ;;
+      esac
+      hops=$((hops + 1))
+    done
+    case "$link" in
+      *fm-nm-guard-shim.sh) continue ;;
+    esac
+    printf '%s\n' "$candidate"
+    return 0
+  done
+  command -v "$name"
 }
 
 # fm_fake_claude_outside_read_gate <fakebin>

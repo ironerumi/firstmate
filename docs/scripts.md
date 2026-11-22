@@ -122,6 +122,10 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-supervise-daemon.sh` | Presence-gated away-mode sub-supervisor: self-handle routine wakes, guard injection by the detected primary harness, escalate batched digests, alert on failed delivery |
 | `fm-crew-state.sh`       | Print one deterministic current-state line for a crew                                |
 | `fm-nm-run-lib.sh`       | Single owner of shared no-mistakes run-attribution primitives and rules             |
+| `fm-nm-guard-lib.sh`     | Own the validation-owner decision: classify what a worker command would do to a live run and read that run from the worktree (bounded invocation, TOON field, code identity, run state), then refuse only ownership-taking commands (docs/nm-validation-owner-guard.md) |
+| `fm-nm-guard-shim.sh`    | PATH-shim transport for that decision, reached as `bin/shims/no-mistakes` and `bin/shims/git` |
+| `fm-guard-refusal-lib.sh` | Own best-effort keyed `blocked:` reporting for guard refusals (see [nm-validation-owner-guard.md](nm-validation-owner-guard.md#refusals-report-themselves)) |
+| `fm-worker-env-lib.sh`   | Single owner of the guard-shim environment `fm-spawn.sh` exports into a worker pane, shared with `tests/fm-nm-guard.test.sh` |
 | `fm-pipeline-spend.sh`   | Attribute a task's no-mistakes pipeline spend to the task and keep it in the private spend ledger |
 | `fm-tangle-lib.sh`       | Shared default-branch resolution and primary-checkout tangle classification          |
 | `fm-timeout-lib.sh`      | Single owner of hard-bounded command execution and its fallback watchdog |

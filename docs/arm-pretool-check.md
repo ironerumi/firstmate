@@ -5,6 +5,7 @@ This document is the authoritative human-readable contract for the watcher arm P
 `bin/fm-arm-pretool-check.sh` is only the stable harness transport and output renderer.
 The tracked harness adapters forward command text without classifying it.
 `bin/fm-arm-command-policy.mjs` is also the sole owner of firstmate's shell classification: it exports the tokenizer and command-position analysis, which the sibling cd-guard seatbelt (`bin/fm-cd-pretool-check.sh`, `docs/cd-guard.md`) reuses instead of duplicating shell lexing.
+This seatbelt and its siblings guard the firstmate PRIMARY; the [validation-owner guard](nm-validation-owner-guard.md#reach-one-mechanism-every-runtime-and-every-backend) owns worker-side interception and its backend-specific delivery.
 
 ## Purpose and boundary
 

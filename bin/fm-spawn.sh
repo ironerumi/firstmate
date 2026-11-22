@@ -988,6 +988,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-project-capacity-lib.sh"
 # shellcheck source=bin/fm-worker-account-lib.sh
 . "$SCRIPT_DIR/fm-worker-account-lib.sh"
+# shellcheck source=bin/fm-worker-env-lib.sh
+. "$SCRIPT_DIR/fm-worker-env-lib.sh"
 # shellcheck source=bin/fm-omp-profile-lib.sh
 . "$SCRIPT_DIR/fm-omp-profile-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
@@ -7887,7 +7889,9 @@ if [ "$BACKEND" = t3code ]; then
   # (spawn_t3code_env_install). TRACEPARENT is delivered only once its meta
   # record exists, the same delivered-implies-recorded invariant the pane path
   # keeps by unsetting it when the record fails.
-  T3CODE_ENV=("GOTMPDIR=$TASK_TMP/gotmp" COMPACT_ADVISER_DISABLE=1 "FM_TASK_INBOX=$STATE_REAL/$ID.inbox")
+  T3CODE_ENV=("GOTMPDIR=$TASK_TMP/gotmp" COMPACT_ADVISER_DISABLE=1 "FM_TASK_INBOX=$STATE_REAL/$ID.inbox"
+    "FM_NM_GUARD_STATUS=$(fm_worker_guard_status_path "$STATE_REAL" "$ID")"
+    "PATH=$(fm_worker_guard_shim_path "$FM_ROOT/bin"):$PATH")
   if [ "$GIT_HOOKS_INSTALLED" = 1 ]; then
     T3CODE_ENV+=(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath "GIT_CONFIG_VALUE_0=$GIT_HOOKS_DIR")
   fi
@@ -8055,6 +8059,9 @@ else
     trap 'exit 130' INT
     trap 'exit 143' TERM
   fi
+  sleep 0.3
+  # Worker guards: bind the shims to this task (docs/nm-validation-owner-guard.md).
+  spawn_send_text_line "$T" "$(fm_worker_guard_export_line "$STATE_REAL" "$ID" "$FM_ROOT/bin")"
   sleep 0.3
   spawn_orca_launch_send_fail() {
     rm -f -- "$LAUNCH_FILE" 2>/dev/null || true
