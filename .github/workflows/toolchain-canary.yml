@@ -1,0 +1,62 @@
+name: Toolchain canary
+
+# Fork-added early warning, report only. CI pins Pi (see ci.yml), so a new Pi
+# release cannot turn a required check red on an unrelated PR - which also means
+# nothing announces that a bump is coming. This weekly run installs the LATEST
+# Pi, no-mistakes and tasks-axi and runs the Pi extension suites against them, so
+# a breaking release shows up here first. It is not a required check and gates
+# nothing; a red run is the signal to schedule a deliberate bump.
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: toolchain-canary
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    name: Latest toolchain vs Pi extension suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install latest tasks-axi
+        run: |
+          set -eu
+          npm install -g tasks-axi@latest
+          tasks-axi --version
+      - name: Install latest Pi
+        run: |
+          set -eu
+          npm install -g @earendil-works/pi-coding-agent@latest
+          npm ls -g --depth 0 @earendil-works/pi-coding-agent
+      - name: Install latest no-mistakes
+        run: |
+          set -eu
+          curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          PATH="$HOME/.local/bin:$PATH" no-mistakes --version
+      - name: Record the toolchain versions
+        run: |
+          set -eu
+          {
+            echo '### Toolchain under test'
+            echo '```'
+            npm ls -g --depth 0 @earendil-works/pi-coding-agent tasks-axi
+            no-mistakes --version
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run the Pi extension suites
+        run: |
+          set -eu
+          bin/fm-test-run.sh \
+            --fail-on-gate-skip 'Pi extension typecheck prerequisite not found' \
+            tests/fm-pi-branch-extension.test.sh \
+            tests/fm-pi-watch-extension.test.sh \
+            tests/fm-calm-pi-extension.test.sh \
+            tests/fm-pi-primary-types.test.sh

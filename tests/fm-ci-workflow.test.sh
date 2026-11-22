@@ -184,6 +184,7 @@ def simulated_context(workflow_name, overrides)
     "labels" => "", "association" => "NONE", "head" => "contributor/firstmate",
     "number" => "108", "run_id" => "900001", "skip_push" => "", "skip_macos" => "",
     "needs" => "success", "outcome" => "success",
+    "repository" => "kunchenguid/firstmate", "full" => "false",
   }
   if overrides.any? { |pair| pair == "event=push" }
     o.merge!("action" => "", "association" => "", "head" => "", "number" => "")
@@ -195,7 +196,8 @@ def simulated_context(workflow_name, overrides)
   end
   {
     "github.workflow" => workflow_name,
-    "github.repository" => "kunchenguid/firstmate",
+    "github.repository" => o["repository"],
+    "inputs.full" => o["full"] == "true",
     "github.event_name" => o["event"],
     "github.event.action" => o["action"],
     "github.event.label.name" => o["label"],
@@ -723,6 +725,8 @@ RUBY
   pass "CI matrices cover every executable serial lane and canonical lint root exactly once"
 }
 
+# The fork suite sources these helpers without executing upstream cases.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
 test_ci_matrices_match_executable_partitions
 test_pr_pushes_supersede_within_one_pr
 test_separate_prs_do_not_cancel_each_other
@@ -741,3 +745,4 @@ test_every_job_belongs_to_exactly_one_timeout_tier
 test_fast_tier_shares_one_short_tripwire
 test_normal_tier_shares_one_budget
 test_heavy_tier_keeps_a_step_tripwire_under_a_job_backstop
+fi

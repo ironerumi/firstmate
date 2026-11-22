@@ -15,6 +15,7 @@ fm_fork_family_for_basename() {  # <basename>
   case "$1" in
     fm-fork-runner-local.test.sh) printf '%s\n' pure-contract-unit ;;
     fm-nm-guard.test.sh) printf '%s\n' pure-contract-unit ;;
+    fm-fork-ci-workflow.test.sh) printf '%s\n' pure-contract-unit ;;
     *)
       return 1
       ;;
@@ -30,6 +31,7 @@ fm_fork_serial_weight_hints() {
   cat 2>/dev/null <<'HINTS'
 tests/fm-fork-runner-local.test.sh 3100
 tests/fm-nm-guard.test.sh 38800
+tests/fm-fork-ci-workflow.test.sh 2100
 HINTS
 # Upstream suites upstream has not hinted yet, measured as the slowest successful,
 # non-gate-skipped duration_ms in green upstream Ubuntu CI runs 43209319634,

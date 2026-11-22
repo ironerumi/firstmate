@@ -1,0 +1,25 @@
+name: Fork full CI
+
+# Fork-only. ci.yml gates its heavy jobs to kunchenguid/firstmate, so a fork PR
+# runs only the seconds-long guards. Every fork change already passed
+# bin/fm-lint.sh and targeted tests in no-mistakes before the push; what that
+# cannot prove is the full regression suite, clean-runner setup, and stock macOS
+# Bash on the merged upstream result. Dispatch this run by hand when that proof
+# is wanted, for example after merging upstream.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-ci-full
+  cancel-in-progress: true
+
+jobs:
+  full:
+    name: Full CI
+    if: github.repository != 'kunchenguid/firstmate'
+    uses: ./.github/workflows/ci.yml
+    with:
+      full: true
