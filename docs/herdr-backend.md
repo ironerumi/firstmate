@@ -678,6 +678,9 @@ Enter, Escape, and Ctrl-C are supported.
 
 Typed-plane slash input, and dollar-prefixed skill input for Codex, uses the shared harness-aware settle before the first Enter, so a completion popup cannot consume it.
 Typed-plane text is typed once; only Enter is retried.
+For a Herdr inbox doorbell, the post-submit check also reads the full visible composer.
+If the shared classifier still reads `pending`, that full read contains exactly that doorbell, and Herdr reports the pane idle, the ring sends Enter without retyping the line, up to the two-press internal budget; if Herdr reports busy, it leaves the line queued instead of sending another Enter.
+That path clears a doorbell typed but not submitted, so a swallowed Enter cannot block later steering.
 
 ### Claude composer proof
 
@@ -748,8 +751,8 @@ A missed native transition falls through to the composer verdict rather than rep
 
 `pane read --lines N` can return empty output when N is below the viewport height.
 The capture owner requests at least 200 lines from Herdr and trims locally to the caller's bound.
-This generous floor is required for the small bounded reads that remain: peek and watch tails, the rendered busy-footer read, and the shared steering-inbox pending-line read.
-The adapter's own composer reads are exempt because they read the visible viewport instead, which takes no line count (see [Claude composer proof](#claude-composer-proof)).
+This generous floor is required for the small bounded reads that remain: peek and watch tails, the rendered busy-footer read, and the non-Herdr shared steering-inbox pending-line read.
+The adapter's own composer reads, plus Herdr's shared inbox pending-line read, are exempt because they read the visible viewport instead, which takes no line count; other backends retain the small shared inbox bound (see [Claude composer proof](#claude-composer-proof)).
 
 ### Native idle state
 
