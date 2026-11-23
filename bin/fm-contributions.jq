@@ -68,15 +68,17 @@ def known($input; $saved):
   | map(select(. as $pair | any($retired[]; . == $pair) | not));
 def latest_checks:
   group_by(.name) | map(sort_by([(.started_at // ""),(.id // 0)]) | last);
+# A URL whose saved observation is merged or closed is settled for every owner.
+def settled($saved):
+  reduce ($saved[]?.records[]? | select(.error == null and (.observation.state | IN("merged","closed"))) | .url)
+    as $url ({}; .[$url] = true);
 def projected($input; $saved; $now; $max_age):
-  known($input; $saved) as $known
+  settled($saved) as $settled
+  # Settled URLs leave the projection; their durable records stay.
+  | [known($input; $saved)[] | select($settled[.url] | not)] as $known
   # Eight URLs are observed per 300-second sweep; one extra sweep is margin.
   # This is the rotation-derived coverage window for the current live set.
-  | ([$known[].url | select(supported_url)] | unique
-      | map(. as $url | select(any($saved[]?.records[]?;
-          .url == $url and .error == null
-          and (.observation.state | IN("merged","closed"))) | not))
-      | length) as $open
+  | ([$known[].url | select(supported_url)] | unique | length) as $open
   | (((($open + 7) / 8 | floor) + 1) * 300) as $rotation_age
   | ([$max_age,$rotation_age] | max) as $coverage_age
   # An owned open or merged PR names the issues it fixes; that PR row carries their work.
@@ -96,13 +98,11 @@ def projected($input; $saved; $now; $max_age):
     | ($record.observation // {}) as $o
     | (if $record.error == null and $record.observation != null and ($o.head | sha) then $o.head else null end) as $observed_head
     | (($record.checked_at // "") | try fromdateiso8601 catch null) as $checked
-    # On supported URLs, a merged or closed observation never needs another read.
-    | ($record.error == null and ($o.state | IN("merged","closed"))) as $final
-    | (($final or ($checked != null and ($now - $checked) >= 0 and ($now - $checked) <= $coverage_age))
+    | (($checked != null and ($now - $checked) >= 0 and ($now - $checked) <= $coverage_age)
        and (if $record.kind == "pr" then $observed_head != null
             else $record.error == null and $record.observation != null end)
        and ($k.url | supported_url)) as $fresh
-    | (($final or ($checked != null and ($now - $checked) >= 0 and ($now - $checked) <= $max_age))
+    | (($checked != null and ($now - $checked) >= 0 and ($now - $checked) <= $max_age)
        and (if $record.kind == "pr" then $observed_head != null
             else $record.error == null and $record.observation != null end)
        and ($k.url | supported_url)) as $evidence_fresh
@@ -120,9 +120,9 @@ def projected($input; $saved; $now; $max_age):
        | map(. + {freshness:(if $observed_head != null and .commit_id != $observed_head then "STALE" elif $evidence_fresh then "current" else "unverified" end)})) as $reviews
     | (if ($k.url | supported_url | not) then
          {actor:"unmeasured",reason:"unsupported forge; coverage is unmeasured"}
+       # A terminal observation still here carries an error, so it is not settled.
        elif $o.state == "merged" or $o.state == "closed" then
-         if $fresh then {actor:"nobody",reason:("forge reports " + $o.state)}
-         else {actor:"fleet",reason:"terminal observation needs refresh"} end
+         {actor:"fleet",reason:"terminal observation needs refresh"}
        elif $hold != null then {actor:"captain",reason:$hold.hold_reason,hold:$hold.id}
        elif $record.error != null then {actor:"fleet",reason:$record.error}
        elif $stale then {actor:"fleet",reason:"STALE maintainer verdict; reassess the current head"}
@@ -153,7 +153,7 @@ def projected($input; $saved; $now; $max_age):
        elif $o.can_merge == true then {actor:"captain",reason:"checks green; merge approval needed"}
        else {actor:"maintainer",reason:"delivery awaits the maintainer"} end) as $action
     | $k + {kind:($record.kind // (if ($k.url | contains("/issues/")) then "issue" else "pr" end)),
-         checked_at:$record.checked_at,checked:$fresh,final:$final,head:($observed_head // $recorded_head // $o.head),verdict:$verdict,reviews:$reviews,
+         checked_at:$record.checked_at,checked:$fresh,head:($observed_head // $recorded_head // $o.head),verdict:$verdict,reviews:$reviews,
          distinct_checks:($checks | length),missing_verdicts:(($no_verdict | length) + (($o.absent_checks // []) | length)),
          pending_checks:($pending | length),failed_checks:($failed | length),
          stale_verdicts:((if $stale then 1 else 0 end) + ([$reviews[] | select(.freshness == "STALE")] | length)),
@@ -164,7 +164,7 @@ def projected($input; $saved; $now; $max_age):
   | map(. as $owners | sort_by(if .actor == "captain" then 0 elif .actor == "fleet" then 1 elif .actor == "not_recently_checked" then 3 else 2 end) | first
       | . + {tasks:($owners | map(.task) | unique)});
 def summary($rows; $errors; $max_age):
-  ([$rows[] | select((.final | not) and .actor != "unmeasured")] | length) as $open
+  ([$rows[] | select(.actor != "unmeasured")] | length) as $open
   | (((($open + 7) / 8 | floor) + 1) * 300) as $rotation_age
   | ([$max_age,$rotation_age] | max) as $coverage_age
   | {known:($rows | length),checked:([$rows[] | select(.checked)] | length),
@@ -179,7 +179,7 @@ def summary($rows; $errors; $max_age):
    stale_verdicts:([$rows[].stale_verdicts] | add // 0),
    missing_verdicts:([$rows[].missing_verdicts] | add // 0),
    unreadable_records:$errors,
-   valid_until:([$rows[] | select(.final | not) | .checked_at | try (fromdateiso8601) catch 0] | min // 0),
+   valid_until:([$rows[].checked_at | try (fromdateiso8601) catch 0] | min // 0),
    coverage_age:$coverage_age,
    captain:[$rows[] | select(.actor == "captain") | {task,url,kind,head,reason:(.reason[:240]),hold,
      verdict_freshness:.verdict.freshness,verdict_head:.verdict.head,verdict_source:.verdict.source,checked_at}]};

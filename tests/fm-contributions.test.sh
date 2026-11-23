@@ -50,11 +50,10 @@ test_actor_coverage() {
   record "$home" own 1 open mergeable '(hold: choose scope) (hold-kind: captain)'
   record "$home" repair 2 open conflicting
   record "$home" external 3 open mergeable
-  record "$home" landed 4 merged mergeable
   out=$(bearings "$home") || fail 'Bearings could not read contribution fixture'
   printf '%s' "$out" | jq -e '
-    .contributions.known == 4 and .contributions.checked == 4
-    and .contributions.counts == {captain:1,fleet:1,maintainer:1,nobody:1}
+    .contributions.known == 3 and .contributions.checked == 3
+    and .contributions.counts == {captain:1,fleet:1,maintainer:1,nobody:0}
     and (.contributions.captain | length) == 1
     and .contributions.captain[0].url == "https://github.com/o/r/pull/1"
     and .contributions.complete == true and .contributions.proven_clear == false' >/dev/null \
@@ -1262,10 +1261,10 @@ test_shared_owner_age_only_does_not_hide_measured_state() {
         and .contributions.counts == {captain:0,fleet:0,maintainer:1,nobody:0}' >/dev/null \
         || fail "an age-only owner hid the measured open state: $out"
     else
-      printf '%s' "$out" | jq -e '.contributions.known == 1 and .contributions.checked == 1
+      printf '%s' "$out" | jq -e '.contributions.known == 0 and .contributions.checked == 0
         and .contributions.not_recently_checked == 0
-        and .contributions.counts == {captain:0,fleet:0,maintainer:0,nobody:1}' >/dev/null \
-        || fail "an age-only owner hid the measured terminal state: $out"
+        and .contributions.counts == {captain:0,fleet:0,maintainer:0,nobody:0}' >/dev/null \
+        || fail "an age-only owner kept a settled contribution in the projection: $out"
     fi
   done
   pass 'an age-only shared owner cannot hide measured contribution state'
@@ -1293,9 +1292,9 @@ test_terminal_contribution_settles() {
     cmp -s "$home/prior.json" "$home/data/delivery/contributions.json" \
       || fail "a $mode contribution record changed after it settled: $(cat "$home/data/delivery/contributions.json")"
     [ ! -s "$home/state/.wake-queue" ] || fail "a $mode contribution enqueued a wake"
-    NOW=$later bearings "$home" | jq -e '.contributions.checked == 1 and .contributions.counts.nobody == 1
-      and .contributions.complete == true' >/dev/null \
-      || fail "a settled $mode contribution expired into fleet work"
+    NOW=$later bearings "$home" | jq -e '.contributions.known == 0 and .contributions.counts.fleet == 0
+      and .contributions.complete == true and .contributions.proven_clear == true' >/dev/null \
+      || fail "a settled $mode contribution stayed in the projection"
   done
   home=$(new_home terminal-legacy-error)
   forge_home "$home"
@@ -1569,7 +1568,7 @@ test_fix_pr_carries_ready_issue() {
   printf '%s' "$out" | jq -e '.contributions.counts == {captain:0,fleet:0,maintainer:1,nobody:1}' >/dev/null \
     || fail "a ready issue whose owned fix PR exists was counted twice: $out"
   mutate_record "$home" delivery '.records[0].observation.state="closed"'
-  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:0,nobody:1}' >/dev/null \
+  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:0,nobody:0}' >/dev/null \
     || fail 'a closed unmerged fix PR still carried its ready issue'
   pass 'an owned open fix PR carries its ready-for-pr issue, which is not counted again'
 }
@@ -1953,6 +1952,38 @@ test_late_owner_keeps_failure_episode_suppressed() {
   pass 'a late owner does not restart a shared forge failure episode'
 }
 
+test_settled_history_leaves_the_projection() {
+  local home out before
+  home=$(new_home settled-history)
+  record "$home" live 1 open mergeable
+  record "$home" landed 2 merged mergeable
+  record "$home" dropped 3 closed conflicting
+  # Settled history that would otherwise count as missing and stale verdicts,
+  # failed checks and an expired observation.
+  mutate_record "$home" landed '.records[0].checked_at = "2025-01-01T00:00:00Z"
+    | .records[0].verdict = {head:"'"$HEAD_B"'",source:"https://github.com/o/r/pull/2#r1",actor:"fleet",summary:"old"}
+    | .records[0].observation.checks = [{name:"lane",id:2,status:"completed",conclusion:null,started_at:"2025-01-01T00:00:00Z"}]'
+  mutate_record "$home" dropped '.records[0].checked_at = "2025-01-01T00:00:00Z"
+    | .records[0].observation.checks = [{name:"test",id:3,status:"completed",conclusion:"failure",started_at:"2025-01-01T00:00:00Z"}]'
+  # A second owner with only a backlog link to settled history drops out with it.
+  printf -- '- [ ] relinked - Follow-up https://github.com/o/r/pull/2 (repo: sample) (kind: ship)\n' >> "$home/data/backlog.md"
+  before=$(cat "$home/data/landed/contributions.json" "$home/data/dropped/contributions.json")
+  out=$(bearings "$home") || fail 'Bearings could not read settled history'
+  printf '%s' "$out" | jq -e '.contributions | .known == 1 and .checked == 1
+    and .counts == {captain:0,fleet:0,maintainer:1,nobody:0}
+    and .missing_verdicts == 0 and .stale_verdicts == 0 and .not_recently_checked == 0
+    and .complete == true and .proven_clear == true' >/dev/null \
+    || fail "settled contributions still counted in the projection: $(printf '%s' "$out" | jq -c .contributions)"
+  out=$(PATH="$home/fakebin:$PATH" FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
+    FM_CONFIG_OVERRIDE="$home/config" FM_CONTRIBUTIONS_NOW="$NOW" "$ROOT/bin/fm-contributions.sh" owned) \
+    || fail 'owned could not read settled history'
+  printf '%s' "$out" | jq -e '[.[] | select(.final) | .url] | sort == ["https://github.com/o/r/pull/2","https://github.com/o/r/pull/3"]' >/dev/null \
+    || fail "settled contributions lost their ownership record: $out"
+  [ "$(cat "$home/data/landed/contributions.json" "$home/data/dropped/contributions.json")" = "$before" ] \
+    || fail 'projecting settled history changed its durable records'
+  pass 'settled contributions leave the projection while their durable records stay'
+}
+
 test_retire_ends_observation_of_a_gone_contribution() {
   local home out url=https://github.com/o/r/pull/8
   local line='contributions: observation unavailable for https://github.com/o/r/pull/8 - core read exited 1 with Ns of budget left: gh: Not Found (HTTP 404)'
@@ -1999,9 +2030,11 @@ test_late_owner_of_a_retired_final_contribution_is_not_retired() {
   jq -e '.records[0].retired.reason == "repository deleted"' "$home/data/delivery/contributions.json" >/dev/null \
     || fail 'settling a late owner changed the retired record'
   with_home "$home" "$ROOT/bin/fm-fleet-snapshot.sh" --contribution-input > "$home/input.json" || fail 'contribution input failed'
-  with_home "$home" "$ROOT/bin/fm-contributions.sh" snapshot "$home/input.json" --all | jq -e '.rows[0].tasks == ["duplicate","late"]' >/dev/null \
-    || fail 'a late owner settled beside a retired final record left known'
-  pass 'a late owner settled beside a retired final record stays unretired and known'
+  with_home "$home" "$ROOT/bin/fm-contributions.sh" snapshot "$home/input.json" --all | jq -e '.known == 0 and .rows == []' >/dev/null \
+    || fail 'a late owner settled beside a retired final record stayed in the projection'
+  with_home "$home" "$ROOT/bin/fm-contributions.sh" owned | jq -e '.[0].tasks == ["duplicate","late"] and .[0].final' >/dev/null \
+    || fail 'a late owner settled beside a retired final record lost its ownership'
+  pass 'a late owner settled beside a retired final record stays unretired and owned'
 }
 
 test_retire_is_idempotent_and_refuses_unknown_pairs() {
@@ -2301,7 +2334,7 @@ test_arm_plumbs_the_reply_age_into_the_check_shim() {
 }
 
 failures=0
-for test_name in test_actor_coverage test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_review_bot_inline_wake test_review_bot_watching_is_opt_in test_review_bot_allowlist_is_configurable test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_unsupported_poll_is_silent_and_clears_legacy_errors test_legacy_cleanup_preserves_supported_failure test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_expired_child_coverage_is_not_fleet_work test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_http_500_once_retries_without_waking test_http_500_twice_records_the_failed_read test_http_404_is_not_retried test_real_gh_errors_drive_retry_and_summary test_next_url_does_not_inherit_a_forge_diagnostic test_shared_url_observed_once test_shared_owner_age_only_does_not_hide_measured_state test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_many_settled_records_keep_the_poll_inside_the_check_bound test_many_settled_records_beside_a_malformed_one_keep_the_poll_inside_the_check_bound test_record_without_trailing_newline_does_not_join_its_neighbour test_records_beyond_one_read_batch_are_all_read test_one_poll_observes_a_parallel_wave test_rotation_window_tracks_live_urls test_age_is_not_owed_fleet_work test_fix_pr_carries_ready_issue test_poll_records_fix_links test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_fifo_read_budget_keeps_prior_record test_held_observation_lock_skips_quietly_and_wakes_when_persistent test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_retire_ends_observation_of_a_gone_contribution test_late_owner_of_a_retired_final_contribution_is_not_retired test_retire_is_idempotent_and_refuses_unknown_pairs test_unanswered_thread_is_raised_again_under_hold test_resolved_thread_is_answered test_reply_rules test_reply_age_is_configurable_and_validated test_closed_pull_request_drops_its_threads test_unanswered_reraise_is_off_unless_configured test_arm_plumbs_the_reply_age_into_the_check_shim test_many_reviews_stay_readable; do
+for test_name in test_actor_coverage test_settled_history_leaves_the_projection test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_review_bot_inline_wake test_review_bot_watching_is_opt_in test_review_bot_allowlist_is_configurable test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_unsupported_poll_is_silent_and_clears_legacy_errors test_legacy_cleanup_preserves_supported_failure test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_expired_child_coverage_is_not_fleet_work test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_http_500_once_retries_without_waking test_http_500_twice_records_the_failed_read test_http_404_is_not_retried test_real_gh_errors_drive_retry_and_summary test_next_url_does_not_inherit_a_forge_diagnostic test_shared_url_observed_once test_shared_owner_age_only_does_not_hide_measured_state test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_many_settled_records_keep_the_poll_inside_the_check_bound test_many_settled_records_beside_a_malformed_one_keep_the_poll_inside_the_check_bound test_record_without_trailing_newline_does_not_join_its_neighbour test_records_beyond_one_read_batch_are_all_read test_one_poll_observes_a_parallel_wave test_rotation_window_tracks_live_urls test_age_is_not_owed_fleet_work test_fix_pr_carries_ready_issue test_poll_records_fix_links test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_fifo_read_budget_keeps_prior_record test_held_observation_lock_skips_quietly_and_wakes_when_persistent test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_retire_ends_observation_of_a_gone_contribution test_late_owner_of_a_retired_final_contribution_is_not_retired test_retire_is_idempotent_and_refuses_unknown_pairs test_unanswered_thread_is_raised_again_under_hold test_resolved_thread_is_answered test_reply_rules test_reply_age_is_configurable_and_validated test_closed_pull_request_drops_its_threads test_unanswered_reraise_is_off_unless_configured test_arm_plumbs_the_reply_age_into_the_check_shim test_many_reviews_stay_readable; do
   ( "$test_name" ) || failures=$((failures + 1))
 done
 [ "$failures" -eq 0 ] || fail "$failures contribution regressions"

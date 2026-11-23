@@ -14,6 +14,10 @@
 #
 # snapshot is read-only and never contacts a forge. Its input is the canonical
 # fleet snapshot's backlog/tasks pair; --all adds rows for supervisor inspection.
+# It projects open contributions only: a settled URL (any owner's saved
+# observation is merged or closed with no error) and a retired pair leave
+# known, checked, actor counts, coverage, missing and stale verdict totals and
+# proven_clear entirely. Their durable records stay, and owned still lists them.
 # URLs accepted by canonical_url in fm-contributions.jq and explicitly linked
 # by a structured backlog row or a task's pr= are owned.
 # Previously observed or enrolled URLs remain in data/<task>/contributions.json
@@ -58,8 +62,8 @@
 # never be read again, such as a PR in a deleted repository. It records retired
 # with actor captain, a non-empty reason and the UTC time. It refuses any
 # other actor, a blank reason, and a task/url pair with no saved record or
-# with unacknowledged pending signals. A retired pair leaves known, rotation and coverage even while a
-# backlog link remains. Retiring a retired pair again is a no-op that keeps the
+# with unacknowledged pending signals. A retired pair leaves the projection
+# and rotation even while a backlog link remains. Retiring a retired pair again is a no-op that keeps the
 # first provenance. Nothing un-retires a record, poll never retires one on its
 # own, and a later owner settled from a retired record is not retired. A
 # retirement always records the captain's word: the script cannot verify who
@@ -109,8 +113,8 @@
 # record's error, so the unavailable line is the copy that outlives it.
 # FM_CONTRIBUTIONS_MAX_AGE (default 900 seconds) bounds freshness.
 # A supported URL whose last good observation is merged or closed is final: it is
-# never re-read, stays fresh, and every owner's saved row converges on that
-# observation, with a stale error beside it cleared.
+# never re-read, leaves the projection, and every owner's saved row converges
+# on that observation, with a stale error beside it cleared.
 # A genuine failure prints its unavailable line only when it starts an episode
 # (no prior owner has an error); a successful read ends the episode.
 # FM_CONTRIBUTIONS_NOW supplies an ISO UTC clock for tests, otherwise UTC now.
@@ -288,8 +292,8 @@ project() {
     --arg all "${2:-}" '
     projected($input[0];$saved[0];$now;$max_age) as $rows
     | summary($rows;($errors + (if $input[0].backlog.present == true then 0 else 1 end));$max_age)
-    # Final rows never expire; a home holding only final rows is valid from now.
-    | .valid_until = (if ($rows | length) > 0 and all($rows[]; .final) then $now else .valid_until end) + .coverage_age
+    # A home with no open contribution has nothing to expire; it is valid from now.
+    | .valid_until = (if ($rows | length) == 0 then $now else .valid_until end) + .coverage_age
     | del(.coverage_age)
     | .captain_omitted = ([0, (.captain | length) - 20] | max)
     | .captain |= .[:20]
