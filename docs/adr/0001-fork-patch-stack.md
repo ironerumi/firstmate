@@ -24,7 +24,8 @@ Each sync:
 2. On a branch at `origin/main`, drop GitHub's ` (#N)` suffix from every stack subject so each `fixup!` matches its item: `git rebase <old-base> --exec 'git log -1 --format=%B | sed -E "1s/ \(#[0-9]+\)$//" | git commit --amend -q -F -'`.
 3. Rebase onto the target and fold: `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash --onto <green> <old-base>`, with `rerere.enabled=true`; resolve each conflict by that item's intent.
 4. Remove the commit of any item whose upstream equivalent has landed.
-5. Review with `git range-diff <old-base>..<old-main> <green>..<new-main>`, then run `bin/fm-lint.sh`, `bash bin/fm-test-run.sh --check-coverage`, and the manual full run in `.github/workflows/fork-ci.yml` on the sync branch.
+5. Review with `git range-diff <old-base>..<old-main> <green>..<new-main>`, then run `bin/fm-lint.sh`, `bash bin/fm-test-run.sh --check-coverage`, and the suites the stack touches with `bash bin/fm-test-run.sh --changed --base <green>` on the sync branch.
+   Upstream's own push run already qualified `<green>`, so the fork does not rerun the full suite; a suite that fails is compared against `<green>` before it blocks the sync, and the manual full run in `.github/workflows/fork-ci.yml` stays optional for a sync judged risky.
 6. Publish with `git push --force-with-lease=main:<old-main> origin <sync-branch>:main`, only after the captain's explicit word for that push.
 7. Cut `release` with an adoption commit, `git commit-tree <new-main>^{tree} -p <current release head> -p <new-main>`, pushed as a fast-forward of `release`, so every home fast-forwards to the stack's exact tree.
 8. Rebase any open fork branch with `git rebase --onto origin/main <old-main> <branch>`.
