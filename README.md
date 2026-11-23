@@ -196,7 +196,7 @@ Claude and grok use the slash form shown here; codex uses the same names with `$
 Bearings invocation examples:
 
 - `/bearings` returns the fresh four-section digest in chat only.
-- Owned-contribution follow-up comes from the cached coverage projection; `include PRs` remains the opt-in for repository-wide live PR enrichment.
+- Owned-contribution follow-up comes from the cached open-contribution projection ([contract](bin/fm-contributions.sh)); `include PRs` remains the opt-in for repository-wide live PR enrichment.
 - `/bearings include PRs` keeps chat-only mode and opts into live PR enrichment.
 - `/bearings file` replaces today's `data/status-report-<YYYY-MM-DD>.md` from scratch and links it from the four-section chat digest.
 - `/bearings file include PRs` combines the dated report with live PR enrichment.

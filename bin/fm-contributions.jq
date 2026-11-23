@@ -68,7 +68,7 @@ def known($input; $saved):
   | map(select(. as $pair | any($retired[]; . == $pair) | not));
 def latest_checks:
   group_by(.name) | map(sort_by([(.started_at // ""),(.id // 0)]) | last);
-# A URL whose saved observation is merged or closed is settled for every owner.
+# One error-free terminal observation settles the URL across owners.
 def settled($saved):
   reduce ($saved[]?.records[]? | select(.error == null and (.observation.state | IN("merged","closed"))) | .url)
     as $url ({}; .[$url] = true);
@@ -81,7 +81,7 @@ def projected($input; $saved; $now; $max_age):
   | ([$known[].url | select(supported_url)] | unique | length) as $open
   | (((($open + 7) / 8 | floor) + 1) * 300) as $rotation_age
   | ([$max_age,$rotation_age] | max) as $coverage_age
-  # An owned open or merged PR names the issues it fixes; that PR row carries their work.
+  # Fix links suppress duplicate issue work even after a merged PR leaves the projection.
   | [$saved[] | .records[]
       | select(.kind == "pr" and .retired == null and .error == null
           and (.observation.state | IN("open","merged")))

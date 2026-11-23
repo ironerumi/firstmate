@@ -17,7 +17,8 @@
 # It projects open contributions only: a settled URL (any owner's saved
 # observation is merged or closed with no error) and a retired pair leave
 # known, checked, actor counts, coverage, missing and stale verdict totals and
-# proven_clear entirely. Their durable records stay, and owned still lists them.
+# proven_clear entirely. Their durable records stay; owned still lists settled
+# supported PR URLs with non-retired owners, but excludes retired ownership.
 # URLs accepted by canonical_url in fm-contributions.jq and explicitly linked
 # by a structured backlog row or a task's pr= are owned.
 # Previously observed or enrolled URLs remain in data/<task>/contributions.json
@@ -49,7 +50,7 @@
 # a read refuses it as an unreadable record.
 # A PR observation's fixes lists the issue URLs the forge links as closed by
 # that PR. A ready-for-pr issue named by an owned open or merged PR's fixes
-# needs nobody: that PR's own row carries the work.
+# needs nobody: the open PR carries the work, or the merged PR has settled it.
 # A verdict records the EXACT judged head, source URL, actor and summary. The
 # actor is exactly one of captain, fleet, maintainer or nobody; any other value
 # is refused. A comment's arrival time never supplies its judged head. Record a
