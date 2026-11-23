@@ -1891,7 +1891,7 @@ status_presentation_marker_commit() {
 # No status consumer reads that archive.
 status_retire_presentation_task() {  # <state> <task-id> [<archive-file>]
   local state=$1 task=$2 lock manifest tmp data row_task ident offset backstop extra rc=0 found=0 archive_published=0
-  local signal_marker heartbeat_marker daemon_marker home_appends home_appends_lock home_appends_owner archive=${3:-} archive_tmp=
+  local signal_marker heartbeat_marker daemon_marker home_appends home_appends_lock archive=${3:-} archive_tmp=
   lock="$state/.status-presentation-lock"
   manifest="$state/.status-presentation-cursor"
   tmp="$manifest.tmp.$$"
@@ -1982,9 +1982,7 @@ EOF
     rm -f -- "$state/$task.status" "$state/.$task.open-decisions-cursor" \
       "$state/.$task.open-decisions-cursor.timed" \
       "$home_appends" "$signal_marker" "$heartbeat_marker" "$daemon_marker" || rc=1
-    home_appends_owner=$(fm_lock_link_owner "$home_appends_lock" 2>/dev/null || true)
-    [ -n "$home_appends_owner" ] \
-      && fm_lock_remove_path "$home_appends_lock" "$home_appends_owner" 2>/dev/null || true
+    fm_lock_remove_path "$home_appends_lock" 2>/dev/null || true
   fi
   if [ "$archive_published" -eq 1 ] && [ "$rc" -ne 0 ] \
     && { [ -e "$state/$task.status" ] || [ -L "$state/$task.status" ]; } \

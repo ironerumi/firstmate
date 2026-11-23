@@ -65,8 +65,17 @@ fm_afk_clear_stale_artifacts() {  # <state-dir>
 }
 
 daemon_lock_owner() {
-  fm_lock_link_owner "$FM_AFK_LOCK" >/dev/null || return 1
-  # Metadata is reachable through the public path for either lock form.
+  local owner
+  if [ -L "$FM_AFK_LOCK" ]; then
+    owner=$(readlink "$FM_AFK_LOCK" 2>/dev/null) || return 1
+    [ -n "$owner" ] || return 1
+    case "$owner" in
+      /*) printf '%s\n' "$owner" ;;
+      *) printf '%s/%s\n' "$(dirname "$FM_AFK_LOCK")" "$owner" ;;
+    esac
+    return 0
+  fi
+  [ -d "$FM_AFK_LOCK" ] || return 1
   printf '%s\n' "$FM_AFK_LOCK"
 }
 
@@ -145,7 +154,7 @@ fm_afk_start_main() {
     fm_afk_flag_write "$FM_AFK_STATE" || { echo "afk: failed to write away-mode flag" >&2; return 1; }
   fi
 
-  local pid owner_path
+  local pid
   pid=$(daemon_lock_pid 2>/dev/null || true)
   if daemon_lock_held_by_live_daemon; then
     echo "afk: daemon already running pid=$pid"
@@ -153,8 +162,7 @@ fm_afk_start_main() {
   fi
 
   if fm_pid_alive "$pid" && [ -n "$pid" ]; then
-    owner_path=$(fm_lock_link_owner "$FM_AFK_LOCK" 2>/dev/null || true)
-    [ -n "$owner_path" ] && fm_lock_remove_path "$FM_AFK_LOCK" "$owner_path" 2>/dev/null || true
+    fm_lock_remove_path "$FM_AFK_LOCK" 2>/dev/null || true
   fi
 
   # Clear prior-session state before the new daemon can observe or produce it.

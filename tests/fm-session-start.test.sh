@@ -1002,10 +1002,7 @@ SH
   i=1
   while [ "$i" -le 40 ]; do
     (
-      # BASHPID arrived in bash 4.0; under stock macOS /bin/bash 3.2 it is empty
-      # and $$ is identical in every subshell, so all 40 contenders would present
-      # the same identity to the fake ps and none could be recognised as owner.
-      harness_pid=${BASHPID:-$(sh -c 'echo $PPID')}
+      harness_pid=$(sh -c 'printf "%s\n" "$PPID"')
       : > "$home/state/harness-$harness_pid"
       : > "$ready/$i"
       lock_concurrency_barrier "$ready" 40

@@ -4,6 +4,8 @@
 # Usage: sourced by bin/fm-test-run.sh when present. It owns the family mapping
 # and the serial-weight hints for the fork's own test files, so the tracked
 # runner keeps one hook for them instead of a growing list of fork entries.
+# Each table holds one line per fork suite, added by the fork commit that adds
+# the suite, so dropping that commit drops its lines.
 #
 # fm_fork_family_for_basename <basename>: print the family for a fork test file,
 # or return 1 when the name is not one this fork owns.
@@ -11,57 +13,57 @@
 
 fm_fork_family_for_basename() {  # <basename>
   case "$1" in
-    fm-brief-repo-guard.test.sh|fm-nm-guard.test.sh|fm-classify-decision-key-extra.test.sh|\
-    fm-fork-runner-local.test.sh|fm-fork-ci-workflow.test.sh)
-      printf '%s\n' pure-contract-unit
-      ;;
-    fm-spawn-claude-attribution.test.sh|fm-worker-slot-safety.test.sh|fm-worker-pool-safety.test.sh)
-      printf '%s\n' backend-dispatch
-      ;;
-    fm-pr-merge-admin.test.sh)
-      printf '%s\n' pr-forge
-      ;;
-    fm-worker-role-extensions.test.sh|fm-procevent-identity.test.sh)
-      printf '%s\n' standalone
-      ;;
-    fm-doorbell-recovery.test.sh|fm-directory-lock-interleavings.test.sh|\
-    fm-directory-lock-recovery.test.sh|fm-directory-lock-node.test.sh|fm-directory-lock-wake-queue.test.sh)
-      printf '%s\n' watcher-wake-lock
-      ;;
+    fm-fork-runner-local.test.sh) printf '%s\n' pure-contract-unit ;;
+    fm-nm-guard.test.sh) printf '%s\n' pure-contract-unit ;;
+    fm-fork-ci-workflow.test.sh) printf '%s\n' pure-contract-unit ;;
+    fm-worker-slot-safety.test.sh) printf '%s\n' backend-dispatch ;;
+    fm-worker-pool-safety.test.sh) printf '%s\n' backend-dispatch ;;
+    fm-worker-role-extensions.test.sh) printf '%s\n' standalone ;;
+    fm-doorbell-recovery.test.sh) printf '%s\n' watcher-wake-lock ;;
+    fm-spawn-claude-attribution.test.sh) printf '%s\n' backend-dispatch ;;
+    fm-classify-decision-key-extra.test.sh) printf '%s\n' pure-contract-unit ;;
     *)
       return 1
       ;;
   esac
 }
 
-# Provisional local macOS weights until fork CI measures them on Ubuntu.
-# Brief-guard, nm-guard, merge-admin, directory-lock, doorbell, process-event
-# identity and fork contract hints use the slowest of at least
-# three clean runs plus 10%, rounded
-# up to 100 ms.
-# Other hints retain their initial local measurements (twice one run for older
-# suites). Without hints each file packs at the 45000 ms default and overfills
-# the serial shards. A reader that stops at its first match closes the pipe
-# early, so cat stays quiet.
+# Fork suite weights are local macOS measurements until fork CI measures them
+# on Ubuntu; newer entries use the slowest of at least three clean runs plus
+# 10%, rounded up to 100 ms. Without hints each file packs at the 45000 ms
+# default and overfills the serial shards. A reader that stops at its first
+# match closes the pipe early, so cat stays quiet.
 fm_fork_serial_weight_hints() {
   cat 2>/dev/null <<'HINTS'
-tests/fm-brief-repo-guard.test.sh 20500
-tests/fm-classify-decision-key-extra.test.sh 1200
-tests/fm-nm-guard.test.sh 38800
-tests/fm-pr-merge-admin.test.sh 24100
-tests/fm-spawn-claude-attribution.test.sh 25800
-tests/fm-worker-role-inert.test.sh 6100
-tests/fm-worker-role-extensions.test.sh 578
-tests/fm-worker-pool-safety.test.sh 28070
-tests/fm-worker-slot-safety.test.sh 10453
-tests/fm-session-lock-windows-consumers.test.sh 6299
-tests/fm-directory-lock-interleavings.test.sh 23800
-tests/fm-directory-lock-recovery.test.sh 27400
-tests/fm-directory-lock-node.test.sh 8800
-tests/fm-directory-lock-wake-queue.test.sh 10900
-tests/fm-procevent-identity.test.sh 34900
-tests/fm-doorbell-recovery.test.sh 15200
 tests/fm-fork-runner-local.test.sh 3100
+tests/fm-nm-guard.test.sh 38800
 tests/fm-fork-ci-workflow.test.sh 2100
+tests/fm-worker-slot-safety.test.sh 10453
+tests/fm-worker-pool-safety.test.sh 28070
+tests/fm-worker-role-extensions.test.sh 578
+tests/fm-worker-role-inert.test.sh 6100
+tests/fm-doorbell-recovery.test.sh 15200
+tests/fm-spawn-claude-attribution.test.sh 25800
+tests/fm-classify-decision-key-extra.test.sh 1200
+HINTS
+# Upstream suites upstream has not hinted yet, measured as the slowest successful,
+# non-gate-skipped duration_ms in green upstream Ubuntu CI runs 43209319634,
+# 43331691300 and 43359484992. They keep the serial shards inside budget once
+# the fork suites above add their load; drop a line when upstream hints it.
+  cat 2>/dev/null <<'HINTS'
+tests/fm-assertions.test.sh 127
+tests/fm-fleet-snapshot-contribution-input.test.sh 219
+tests/fm-git-push-guard.test.sh 1316
+tests/fm-hc-lab.test.sh 776
+tests/fm-home-summary-refresh.test.sh 55389
+tests/fm-parent-channel-scan-exclusion.test.sh 4468
+tests/fm-pipeline-spend.test.sh 3015
+tests/fm-project-mode.test.sh 678
+tests/fm-record-export-remote-home.test.sh 3914
+tests/fm-remote-inherit-generation.test.sh 4874
+tests/fm-remote-job-claim-reap.test.sh 3716
+tests/fm-remote-job-claim-retention.test.sh 147
+tests/fm-review-check.test.sh 1957
+tests/fm-send-kiro-confirm.test.sh 1382
 HINTS
 }

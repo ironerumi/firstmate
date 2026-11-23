@@ -4362,7 +4362,7 @@ test_procevent_launch_failed_episodes_are_each_delivered() {
 
 install_marker_mv_fault() {  # <dir>
   local dir=$1
-  REAL_MV=$(fm_real_tool mv)
+  REAL_MV=$(command -v mv)
   export REAL_MV
   cat > "$dir/fakebin/mv" <<'SH'
 #!/usr/bin/env bash
@@ -4908,7 +4908,7 @@ test_pi_stream_publication_lock_revalidation() {
       real_cat=$(command -v cat)
       cat > "$fakebin/cat" <<SH
 #!/usr/bin/env bash
-if [ "\${!#}" = "$lock/pid" ] && [ -e "$dir/lock-created" ]; then printf '1\n' > "$dir/append-blocked"; fi
+if [ "\${!#}" = "$lock/pid" ] && [ -d "$lock" ]; then printf '1\n' > "$dir/append-blocked"; fi
 exec "$real_cat" "\$@"
 SH
       chmod +x "$fakebin/cat"

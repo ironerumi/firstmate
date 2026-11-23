@@ -130,6 +130,8 @@ Untracked files and directories whose names begin with `scratchpad` are also git
 
 - The [`bin/fm-fleet-snapshot.sh` header](../bin/fm-fleet-snapshot.sh) owns the snapshot's event-time and age fields, including secondmate parent-event projections.
 
+- [`bin/fm-wake-lib.sh`](../bin/fm-wake-lib.sh) owns portable coordination-lock publication, including the automatic non-symlink fallback (requires Perl) for Git Bash without native symlink support, and its identity and recovery rules; [`tests/fm-watcher-lock.test.sh`](../tests/fm-watcher-lock.test.sh) covers both publication modes.
+
 - Wake, watcher, away-mode, and Relay-specific state mechanics remain with their named scripts and reference sections rather than being duplicated into one exhaustive state tree here.
 
 ### Session-start references
@@ -1040,7 +1042,7 @@ The bound is required rather than cosmetic because churn and pane staleness read
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes, which run their own crew mix.
 [`architecture.md`](architecture.md) owns the triage contract and `bin/fm-watch.sh`'s `signal_turnend_panes_churned` owns the exact evidence and fail-closed boundaries.
 
-## Wedge parked-gate deferral (config/wedge-defer-parked-gate)
+## Parked-gate wait deferral (config/wedge-defer-parked-gate)
 
 The optional local, gitignored `config/wedge-defer-parked-gate` presence flag opts this home into a default-off further form of wait evidence in the watcher's wedge timer.
 
@@ -1052,7 +1054,7 @@ It stays opt-in because the other evidence is a written record of the lane's sil
 With the flag absent the wedge timer spends no fold or current-state read for it, writes no record, and keeps the unchanged escalation schedule, reasons, and `demand-deep-inspection` wording.
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes, which supervise their own crew and own that trade separately.
 
-[`architecture.md`](architecture.md) owns the supervision contract and `bin/fm-watch.sh`'s `wedge_wait_evidence` owns the exact derivation and fail-closed boundaries.
+[`architecture.md`](architecture.md) owns the wait-evidence contract and which records may take the ladder away; `bin/fm-watch.sh`'s `wedge_wait_evidence` owns the exact derivation and its fail-closed boundaries.
 
 ## Wedge evidence guards (config/wedge-evidence-guards)
 
@@ -1107,15 +1109,14 @@ With it present, a pane whose worker's newest wait line is a `paused:` declarati
 Each superseding state surfaces once per declaration and run on both the idle and busy paths, and repeats use the same bounded recheck cadence.
 It stays opt-in because it adds a wake reason that fires ahead of that cadence and spends a current-state read on each paused poll, so which lanes pay that read for earlier notice is a home's choice.
 
-With the flag absent the watcher spends no current-state read for it and keeps the unchanged declared-wait cadence and wording.
-The flag affects the foreground watcher only; away mode keeps today's declared-wait pause cadence.
+With the flag absent the watcher spends no current-state read for it and keeps the unchanged declared-wait cadence and wording. The flag affects the foreground watcher only; away mode keeps today's declared-wait pause cadence.
 The flag is a home-local supervision-noise preference and is not inherited by secondmate homes.
 [`architecture.md`](architecture.md) owns the declared-wait contract and `bin/fm-watch.sh`'s `paused_wait_superseded` owns the exact derivation, reasons, and throttle.
 
 ## Silent paused rechecks (config/paused-recheck-silent)
 
 The optional local, gitignored `config/paused-recheck-silent` presence flag opts this home into a default-off quiet form of the declared-wait recheck.
-With it present, the watcher's `FM_PAUSE_RESURFACE_SECS` recheck of a worker's `paused:` declaration queues no wake when the declaration is unchanged since its first recheck wake, the agent is confirmed alive (a secondmate's liveness is never read), it has no declared `until` time or that time is not yet due, and the task has no open decision.
+With it present, the watcher's `FM_PAUSE_RESURFACE_SECS` recheck of a worker's `paused:` declaration queues no wake when the declaration is unchanged since its first recheck wake, the agent is confirmed alive (a secondmate's liveness is never read), its declared `until` time is not yet due, and the task has no open decision.
 The watcher records the recheck in the declaration's existing throttle marker, so the recheck cadence is unchanged.
 A first sight, a changed status line, a due declared time, and an open decision still wake.
 Captain-held transfers are not affected.
@@ -1324,8 +1325,6 @@ The optional local, gitignored `config/self-update-source` changes where `/updat
 It suits a home that runs its own fixes before upstream merges them, by following a branch that holds upstream's default branch plus those fixes, for example a `carry` branch on a fork.
 It holds one line, `<remote> <branch>`, for example `fork carry`, naming a remote that already exists in this repository and a branch on that remote.
 When the file is absent, `/updatefirstmate` fast-forwards from `origin` exactly as before.
-This home follows `origin`'s `release` branch (`origin release`), so a merge to `main` reaches it only when released.
-A release is cut with `git push origin <sha>:release`, fast-forward only, on a commit whose full suite is green, and a home never takes a release mid-run.
 
 When it is present, [`bin/fm-update.sh`](../bin/fm-update.sh) fetches only that branch and fast-forwards the primary to it under the same guards as the origin path: a dirty, off-default, or diverged primary is skipped and left untouched, so the named branch must only ever move forward.
 Local secondmate homes then advance to the primary's resulting default-branch commit, the same commit the startup secondmate sync follows, and a standalone-clone home that lacks that commit imports it from the primary first.
@@ -3261,9 +3260,6 @@ Ownership is machine-wide per canonical source, because separate homes can share
 - Each claim binds its caller-reported home and runner PID to a process identity, unique claim generation, exact registration-file generation, and resolved state-root identity.
 - Registration, acquisition, replacement, retirement, and generation-bound release are serialized at one machine-wide boundary per source.
 - A live identity-matched owner is never displaced, and release removes only the exact generation the caller acquired.
-- On hosts using the `ps` identity fallback, matching accepts either the current UTC rendering or the reader's ambient-time-zone rendering used before the UTC pin, so an earlier-version runner still polling across an update remains live when that ambient rendering matches its claim.
-- A live PID is stale only when both renderings are readable and neither matches; an unreadable required rendering leaves ownership `uncertain`, preserving the claim without signalling or starting a replacement.
-  [`fm_procevent_pid_state`](../bin/fm-procevent-lib.sh) owns the classifier, and [`tests/fm-procevent-identity.test.sh`](../tests/fm-procevent-identity.test.sh) covers pre-pin claims, unreadable renderings, PID reuse, and dead leaders.
 
 **Prove ownership before stopping a runner**
 
@@ -3572,7 +3568,7 @@ FM_PROCEVENT_LAUNCH_CONFIRM_SECONDS=3   # how long reconcile waits for the runne
 FM_WHEN_OUTPUT_TAIL_BYTES=8192          # bound on the command-output tail inside one condition->action outcome document
 FM_CODEX_WATCH_CHECKPOINT=180   # seconds per foreground watcher checkpoint in Codex primary supervision
 FM_CODEX_WATCH_CHECKPOINT_AWAY=3600  # requested away checkpoint bound on a home that runs the supervision host; longer of this and attended bound, capped at 27000
-FM_CREW_STATE_NM_TIMEOUT=10   # seconds allowed per no-mistakes query inside fm-crew-state.sh, including the state-database run-inventory read behind a capped AXI overview
+FM_CREW_STATE_NM_TIMEOUT=10   # seconds allowed per no-mistakes query inside fm-crew-state.sh, and per state-database run-inventory read behind a capped AXI overview
 FM_TEARDOWN_NM_TIMEOUT=10    # seconds allowed per no-mistakes query or abort inside fm-teardown.sh
 FM_CREW_STATE_RUNS_LIMIT=200  # plain runs-ledger rows scanned for fallback attribution; does not change the CLI's AXI overview window (selection owner: bin/fm-nm-run-lib.sh)
 FM_TEARDOWN_NM_RUNS_LIMIT=200  # recent no-mistakes run rows scanned to prove an unresolved-head parked run belongs to teardown's task
@@ -3601,7 +3597,7 @@ FMX_X_THREAD_MAX=25     # maximum messages in one auto-split reply thread
 FMX_FOLLOWUP_MAX_AGE_SECS=604800   # local window for posting Relay completion follow-ups (7 days)
 FMX_FOLLOWUP_MAX_COUNT=3   # local cap on Relay completion follow-ups per linked mention
 FM_PF_RETRY_BACKOFF_SECS=900   # seconds before the next attempt after a retryable promised-public-reply delivery error
-FM_LOCK_STALE_AFTER=2   # grace seconds for raw records and generationless lock-directory husks with missing or nonnumeric PIDs (minimum 2s); generation records use their state and PID liveness, and dead numeric holder PIDs, and live ones whose start time (or, for the watch lock, process identity) no longer matches the holder's recorded value, have no age grace
+FM_LOCK_STALE_AFTER=2   # fallback grace seconds for missing or nonnumeric lock-owner PIDs (minimum 2s); generation-aware exceptions: fm_lock_mid_acquire_is_fresh in bin/fm-wake-lib.sh; dead numeric PIDs, and live ones whose start time (or, for the watch lock, process identity) no longer matches the holder's recorded value, have no age grace
 FM_GUARD_GRACE=300      # beacon freshness threshold for guard verdicts, arm health checks, and the primary turn-end guard; see docs/turnend-guard.md for model-aware exceptions
 FM_CLAUDE_AUTOARM_ATTEMPTS=2   # bounded hook-owned arm attempts per Claude auto-arm cycle; accepted values are 1, 2, or 3
 FM_CLAUDE_STOPFAILURE_REWAKE_COOLDOWN=300   # minimum seconds between StopFailure-driven exit-2 continuations; nonnegative integers accepted, invalid or empty values use 300; pacing mechanics: bin/fm-claude-stop-autoarm.sh header

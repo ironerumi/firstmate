@@ -417,8 +417,7 @@ do
   teardown_require_source "$SCRIPT_DIR/$_teardown_source"
 done
 unset _teardown_source
-# Analysis boundary: fm-tasks-axi-lib.sh is analyzed separately as a canonical lint root.
-# shellcheck source=/dev/null
+# shellcheck source=bin/fm-tasks-axi-lib.sh
 . "$SCRIPT_DIR/fm-tasks-axi-lib.sh"
 # shellcheck source=bin/fm-backlog-transition-lib.sh
 . "$SCRIPT_DIR/fm-backlog-transition-lib.sh"

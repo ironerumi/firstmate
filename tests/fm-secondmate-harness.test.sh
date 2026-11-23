@@ -50,12 +50,6 @@
 #      skipped.
 set -u
 
-# Ambient harness markers must not leak in: bin/fm-harness.sh short-circuits on
-# CLAUDECODE before any ancestry walk, so running this suite from inside a Claude
-# Code session would resolve 'claude' for every fake-ps ancestry case. Sites that
-# want the marker set it explicitly per invocation.
-unset CLAUDECODE
-
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # shellcheck source=/dev/null
@@ -416,6 +410,7 @@ SH
     '. "$0/bin/fm-session-lock-lib.sh"; fm_harness_ancestry_pid' "$ROOT" 2>"$err")
   [ "$got" = 4242 ] || fail "session-lock dash-leading ancestry selected '$got', expected pid 4242"
   [ ! -s "$err" ] || fail "session-lock ancestry wrote basename option noise for literal -zsh: $(cat "$err")"
+
   # Force the collision: pid 5252 is a real ancestor of the caller. Its
   # -codex label belongs to the liveness probe only, so the walk must pass
   # through it as an ordinary shell and still select 4242.
@@ -2355,7 +2350,7 @@ test_config_reread_publication_failure_retries_exact_generation() {
   printf 'codex\n' > "$w/home/config/crew-harness"
 
   fakebin=$(make_fake_toolchain "$w")
-  real_mv=$(fm_real_tool mv)
+  real_mv=$(command -v mv)
   alpha_state=$(cd "$w/alpha/state" && pwd -P)
   cat > "$fakebin/mv" <<SH
 #!/usr/bin/env bash
@@ -2404,7 +2399,7 @@ test_config_reread_write_failure_retains_exact_retry_generation() {
   printf 'old\n' > "$w/sm/config/crew-harness"
   printf 'codex\n' > "$w/home/config/crew-harness"
   fakebin=$(make_fake_toolchain "$w")
-  real_mv=$(fm_real_tool mv)
+  real_mv=$(command -v mv)
   mkdir -p "$w/home/state/.fm-inherited-config-reread-retry/sm"
   retry_dir=$(cd "$w/home/state/.fm-inherited-config-reread-retry/sm" && pwd -P)
   cat > "$fakebin/mv" <<SH
@@ -2463,7 +2458,7 @@ test_config_reread_exact_temp_survives_adoption_failure() {
   printf 'old\n' > "$w/sm/config/crew-harness"
   printf 'codex\n' > "$w/home/config/crew-harness"
   fakebin=$(make_fake_toolchain "$w")
-  real_mv=$(fm_real_tool mv)
+  real_mv=$(command -v mv)
   real_cp=$(command -v cp)
   mkdir -p "$w/home/state/.fm-inherited-config-reread-retry/sm"
   retry_dir=$(cd "$w/home/state/.fm-inherited-config-reread-retry/sm" && pwd -P)
@@ -2645,7 +2640,7 @@ test_config_reread_cleanup_runs_after_mixed_delivery_failure() {
   # fail: the durable inbox enqueue. The staged steer record carries that
   # generation's pointer path in its body, so a content-matching mv wrapper
   # rejects exactly that one atomic publish and nothing else.
-  real_mv=$(fm_real_tool mv)
+  real_mv=$(command -v mv)
   cat > "$fakebin/mv" <<SH
 #!/usr/bin/env bash
 if [ -f "\${1:-}" ] && grep -q '\.9999-fail' "\${1:-}" 2>/dev/null; then
@@ -2919,7 +2914,7 @@ test_spawn_quarantines_pending_rereads_on_cleanup_failure() {
     printf 'hidden-quarantine-%s\n' "$n" > "$dir/.hidden-snapshot"
   done
   fakebin=$(make_launch_capturing_tmux "$w/tmux-spawn-quarantine")
-  real_rm=$(fm_real_tool rm)
+  real_rm=$(command -v rm)
   cat > "$fakebin/rm" <<SH
 #!/usr/bin/env bash
 case "\$*" in

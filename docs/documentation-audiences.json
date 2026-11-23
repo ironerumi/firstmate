@@ -302,20 +302,12 @@
       "audience": "maintainer-architecture"
     },
     {
-      "path": ".out-of-scope/nm-respond-enforcement.md",
-      "audience": "maintainer-architecture"
-    },
-    {
       "path": "AGENTS.md",
       "audience": "agent-runtime"
     },
     {
       "path": "CLAUDE.md",
       "audience": "agent-runtime"
-    },
-    {
-      "path": "CONTEXT.md",
-      "audience": "maintainer-architecture"
     },
     {
       "path": "CONTRIBUTING.md",
@@ -334,7 +326,7 @@
       "audience": "public-product"
     },
     {
-      "path": "docs/adr/0001-fork-divergence-budget.md",
+      "path": "docs/adr/0001-fork-patch-stack.md",
       "audience": "maintainer-architecture"
     },
     {
