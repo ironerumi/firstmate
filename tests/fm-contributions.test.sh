@@ -53,7 +53,7 @@ test_actor_coverage() {
   out=$(bearings "$home") || fail 'Bearings could not read contribution fixture'
   printf '%s' "$out" | jq -e '
     .contributions.known == 3 and .contributions.checked == 3
-    and .contributions.counts == {captain:1,fleet:1,maintainer:1,nobody:0}
+    and .contributions.counts == {captain:1,fleet:1,maintainer:1}
     and (.contributions.captain | length) == 1
     and .contributions.captain[0].url == "https://github.com/o/r/pull/1"
     and .contributions.complete == true and .contributions.proven_clear == false' >/dev/null \
@@ -572,7 +572,7 @@ test_unsupported_poll_is_silent_and_clears_legacy_errors() {
     done
     bearings "$home" | jq -e '.contributions | .known == 4 and .checked == 0
       and .unmeasured == 4 and .unreadable_records == 0
-      and .counts == {captain:0,fleet:0,maintainer:0,nobody:0}
+      and .counts == {captain:0,fleet:0,maintainer:0}
       and .complete == false and .proven_clear == false' >/dev/null \
       || fail "unsupported poll corrupted unmeasured coverage ($mode)"
   done
@@ -608,7 +608,7 @@ test_legacy_cleanup_preserves_supported_failure() {
     || fail 'unsupported cleanup erased supported failure or fabricated an observation'
   bearings "$home" | jq -e '.contributions | .known == 4 and .checked == 0
     and .unmeasured == 3 and .unreadable_records == 0
-    and .counts == {captain:0,fleet:1,maintainer:0,nobody:0} and .complete == false' >/dev/null \
+    and .counts == {captain:0,fleet:1,maintainer:0} and .complete == false' >/dev/null \
     || fail 'mixed legacy cleanup confused supported failures with unmeasured coverage'
   rm "$home/forge/fault"
   out=$(with_home "$home" bash "$ROOT/bin/fm-contributions.sh" poll 2>&1) \
@@ -621,7 +621,7 @@ test_legacy_cleanup_preserves_supported_failure() {
     || fail 'supported recovery changed retained unsupported evidence'
   bearings "$home" | jq -e '.contributions | .known == 4 and .checked == 1
     and .unmeasured == 3 and .unreadable_records == 0
-    and .counts == {captain:0,fleet:0,maintainer:1,nobody:0} and .complete == false' >/dev/null \
+    and .counts == {captain:0,fleet:0,maintainer:1} and .complete == false' >/dev/null \
     || fail 'real GitHub recovery lost mixed saved ownership'
   pass 'legacy cleanup preserves unsupported ownership and supported missing-evidence failure in the same file'
 }
@@ -1258,12 +1258,12 @@ test_shared_owner_age_only_does_not_hide_measured_state() {
     if [ "$mode" = open ]; then
       printf '%s' "$out" | jq -e '.contributions.known == 1 and .contributions.checked == 1
         and .contributions.not_recently_checked == 0
-        and .contributions.counts == {captain:0,fleet:0,maintainer:1,nobody:0}' >/dev/null \
+        and .contributions.counts == {captain:0,fleet:0,maintainer:1}' >/dev/null \
         || fail "an age-only owner hid the measured open state: $out"
     else
       printf '%s' "$out" | jq -e '.contributions.known == 0 and .contributions.checked == 0
         and .contributions.not_recently_checked == 0
-        and .contributions.counts == {captain:0,fleet:0,maintainer:0,nobody:0}' >/dev/null \
+        and .contributions.counts == {captain:0,fleet:0,maintainer:0}' >/dev/null \
         || fail "an age-only owner kept a settled contribution in the projection: $out"
     fi
   done
@@ -1561,11 +1561,11 @@ test_fix_pr_carries_ready_issue() {
   home=$(new_home fix-pr)
   record "$home" delivery 8 open mergeable
   fixed_issue "$home" filed 9 true
-  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:1,nobody:0}' >/dev/null \
+  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:1}' >/dev/null \
     || fail 'a ready issue without a fix PR was not fleet work'
   mutate_record "$home" delivery '.records[0].observation.fixes=["https://github.com/o/r/issues/9"]'
   out=$(bearings "$home") || fail 'Bearings could not read the fix-PR fixture'
-  printf '%s' "$out" | jq -e '.contributions.counts == {captain:0,fleet:0,maintainer:1,nobody:0}
+  printf '%s' "$out" | jq -e '.contributions.counts == {captain:0,fleet:0,maintainer:1}
     and .contributions.known == 1 and .contributions.checked == 1 and .contributions.proven_clear' >/dev/null \
     || fail "a ready issue whose owned fix PR exists was counted: $out"
   with_home "$home" "$ROOT/bin/fm-fleet-snapshot.sh" --contribution-input > "$home/input.json" || fail 'contribution input failed'
@@ -1576,7 +1576,7 @@ test_fix_pr_carries_ready_issue() {
     and ([.rows[] | select(.counted)] | map(.url)) == ["https://github.com/o/r/pull/8"]' >/dev/null \
     || fail "--all did not list the covered issue as uncounted: $out"
   mutate_record "$home" delivery '.records[0].observation.state="closed"'
-  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:0,nobody:0}' >/dev/null \
+  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:0}' >/dev/null \
     || fail 'a closed unmerged fix PR still carried its ready issue'
   pass 'an owned open fix PR carries its ready-for-pr issue, which leaves the counts but stays listed under --all'
 }
@@ -1596,14 +1596,14 @@ test_poll_records_fix_links() {
     || fail 'the ready issue raised no signal'
   with_home "$home" "$ROOT/bin/fm-contributions.sh" ack filed https://github.com/o/r/issues/9 "$token" \
     || fail 'could not acknowledge the ready signal'
-  bearings "$home" | jq -e '.contributions.counts.fleet == 0 and .contributions.counts.nobody == 0 and .contributions.known == 1' >/dev/null \
+  bearings "$home" | jq -e '.contributions.counts.fleet == 0 and (.contributions.counts | has("nobody") | not) and .contributions.known == 1' >/dev/null \
     || fail 'an observed fix link did not carry the ready issue'
   printf 'fail\n' > "$home/forge/fault"
   later=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 315 | todateiso8601')
   with_home "$home" env FM_CONTRIBUTIONS_NOW="$later" "$ROOT/bin/fm-contributions.sh" poll >/dev/null \
     || fail 'fix-link failure transition poll failed'
   out=$(NOW="$later" bearings "$home") || fail 'could not inspect a failed fix-link transition'
-  printf '%s' "$out" | jq -e '.contributions.counts.fleet == 2 and .contributions.counts.nobody == 0' >/dev/null \
+  printf '%s' "$out" | jq -e '.contributions.counts.fleet == 2 and (.contributions.counts | has("nobody") | not)' >/dev/null \
     || fail "a failed fix PR observation still carried its stale issue link: $out"
   pass 'poll records fix links and drops them after a failed PR observation'
 
@@ -1978,7 +1978,7 @@ test_settled_history_leaves_the_projection() {
   before=$(cat "$home/data/landed/contributions.json" "$home/data/dropped/contributions.json")
   out=$(bearings "$home") || fail 'Bearings could not read settled history'
   printf '%s' "$out" | jq -e '.contributions | .known == 1 and .checked == 1
-    and .counts == {captain:0,fleet:0,maintainer:1,nobody:0}
+    and .counts == {captain:0,fleet:0,maintainer:1}
     and .missing_verdicts == 0 and .stale_verdicts == 0 and .not_recently_checked == 0
     and .complete == true and .proven_clear == true' >/dev/null \
     || fail "settled contributions still counted in the projection: $(printf '%s' "$out" | jq -c .contributions)"

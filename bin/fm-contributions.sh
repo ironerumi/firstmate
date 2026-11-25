@@ -17,8 +17,8 @@
 # It projects open contributions only: a settled URL (any owner's saved
 # observation is merged or closed with no error), a retired pair, and a row
 # whose required actor is nobody leave known, checked, actor counts, coverage,
-# missing and stale verdict totals and proven_clear entirely, so counts.nobody
-# is always zero. Their durable records stay; --all still lists nobody rows,
+# missing and stale verdict totals and proven_clear entirely, so counts has no
+# nobody entry. Their durable records stay; --all still lists nobody rows,
 # marked counted:false, while every counted row carries counted:true. owned
 # still lists settled supported PR URLs with non-retired owners, but excludes
 # retired ownership.
