@@ -97,8 +97,9 @@
 # at (five-minute bucket * 8) modulo the live URL count, so every live URL is
 # retried within the current open-set rotation. Coverage freshness is the
 # greater of FM_CONTRIBUTIONS_MAX_AGE and (ceil(open/8) + 1) * 300 seconds,
-# where open is the number of non-final supported URLs. Terminal URLs settle
-# separately before the forge budget starts and consume no rotation slots.
+# where open is the number of non-final supported URLs, including nobody rows
+# excluded from digest totals. Terminal URLs settle separately before the forge
+# budget starts and consume no rotation slots.
 # A deliberately smaller configured budget remains bounded and may be
 # unmeasured, rather than being mislabeled unavailable. Each distinct supported
 # URL is attempted at most once per poll and its observation applied to every owner.
@@ -296,7 +297,7 @@ project() {
     --arg all "${2:-}" '
     projected($input[0];$saved[0];$now;$max_age) as $all_rows
     | summary($all_rows;($errors + (if $input[0].backlog.present == true then 0 else 1 end));$max_age)
-    # A home with no open contribution has nothing to expire; it is valid from now.
+    # With no counted contribution, no retained observation can expire the summary.
     | .valid_until = (if .known == 0 then $now else .valid_until end) + .coverage_age
     | del(.coverage_age)
     | .captain_omitted = ([0, (.captain | length) - 20] | max)
