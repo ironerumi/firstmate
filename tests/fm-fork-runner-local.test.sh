@@ -4,7 +4,7 @@ set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-# shellcheck source=bin/fm-dod-lib.sh
+# shellcheck source=/dev/null
 . "$ROOT/bin/fm-dod-lib.sh"
 
 RUNNER="$ROOT/bin/fm-test-run.sh"
@@ -29,7 +29,6 @@ make_case() {
   printf 'approved X\n' > "$WT/approved.txt"
   git -C "$WT" add approved.txt
   git -C "$WT" commit -q -m X
-  X=$(git -C "$WT" rev-parse HEAD)
   printf 'kind=ship\nmode=local-only\nbranch=fm/local-task\nproject=%s\nworktree=%s\nspawn_gen=fixture-1\n' \
     "$PROJ" "$WT" > "$META"
 }
@@ -51,7 +50,7 @@ test_fork_weight_hints_stay_quiet_when_the_reader_stops_early() {
   tmp=$(fm_test_tmproot fm-test-run-fork-hints)
   err="$tmp/hints.err"
   ( trap '' PIPE
-    # shellcheck source=bin/fm-test-run-fork.sh
+    # shellcheck source=/dev/null
     . "$ROOT/bin/fm-test-run-fork.sh"
     fm_fork_serial_weight_hints
   ) 2>"$err" | { exec <&-; sleep 0.3; }

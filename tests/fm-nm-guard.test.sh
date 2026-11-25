@@ -401,6 +401,7 @@ pass "a review fix response is allowed however many rounds have run"
 # --- 10. classification and decision units ----------------------------------
 
 # shellcheck disable=SC1091
+# shellcheck source=/dev/null
 . "$ROOT/bin/fm-nm-guard-lib.sh"
 
 check_action() {  # <expected> <tool> <args...>
@@ -507,7 +508,7 @@ pass "a refusal without a status record still refuses"
 # hook, which is what makes the coverage complete. bin/fm-worker-env-lib.sh owns
 # that environment, while tests/fm-backend-orca.test.sh proves the line reaches
 # a non-default backend end to end.
-# shellcheck source=bin/fm-worker-env-lib.sh
+# shellcheck source=/dev/null
 . "$ROOT/bin/fm-worker-env-lib.sh"
 WORKER_LINE=$(fm_worker_guard_export_line "$TMP/state dir" t1 "$ROOT/bin")
 WORKER_ENV=$(env -i PATH=/usr/bin:/bin bash -c "$WORKER_LINE; printf '%s\n' \"\$FM_NM_GUARD_STATUS\" \"\$PATH\"")
