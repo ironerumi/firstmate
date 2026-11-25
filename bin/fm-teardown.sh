@@ -122,7 +122,10 @@
 # - or a version 1 attempt whose workspace is still present or unreadable - may
 # name a live quarantined space and is retained for that sweep.
 # data/<id>/ is deliberately left in place: a successor spawn reads brief.md
-# from it.
+# from it. Because those records outlive cleanup, teardown removes every entry
+# that is not a regular file or directory, including symlinks. Link targets
+# are never deleted and linked directories are never traversed, including when
+# the records root itself is a symlink. Workers use the task temp root for sync objects.
 # Worktree-slot ownership (teardown-slot-collision): a treehouse pool slot is
 # reused across tasks, so a stale, duplicated, or drifted worktree= record can
 # name a slot a DIFFERENT live task now holds. Cleanup kills every process under
@@ -342,12 +345,13 @@
 # status and bookkeeping removal. A failed publication leaves live state intact.
 # Forced child retirement uses data/<id>/children/<child-id>/ (recursively),
 # outside the home being removed. Remote-home retirement with no status is a
-# no-op. Symlinked/non-regular sources and symlinked archive directories refuse
-# cleanup rather than following them; the configured data root may be a symlink.
+# no-op. Archival refuses symlinked/non-regular sources and any symlinked
+# archive directories remaining after the records cleanup described above;
+# the configured data root may be a symlink.
 # Existing archive filenames are never overwritten. Each archival prunes owned
 # logs and orphaned staging files older than 30 completed days by mtime.
-# Pruning failures warn, never abort teardown, and leave other task data and
-# symlinks alone.
+# Pruning failures warn and never abort teardown. Archive pruning itself leaves
+# other task data and symlinks alone; the separate records cleanup above does not.
 # Opt-in config/record-export-root delegates the record archive transaction to
 # bin/fm-record-export.sh immediately before status, metadata, or inbox records
 # for the retiring task are removed. A failed commit retains those sources.
@@ -4261,6 +4265,12 @@ fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Remove the per-task temp root (/tmp/fm-<id>/, incl. its gotmp/) recorded by spawn.
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.
 [ -n "$TASK_TMP" ] && rm -rf "$TASK_TMP"
+# The kept data/<id>/ records lose their pipes, sockets, and other special files
+# (header); find never follows a symlink, even at the records root.
+if [ -d "$DATA/$ID" ] || [ -L "$DATA/$ID" ]; then
+  find "$DATA/$ID" ! -type f ! -type d -exec rm -f -- {} + \
+    || echo "warning: could not remove every special file under $DATA/$ID; remove them by hand: find '$DATA/$ID' ! -type f ! -type d -delete" >&2
+fi
 # Retire only this Firstmate home's launch namespace. Its never-reused per-spawn
 # files leave the equal task-id namespace of every other home untouched.
 teardown_launch_home_token() {

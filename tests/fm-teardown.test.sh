@@ -743,6 +743,58 @@ test_local_only_fork_remote_allows() {
   pass "local-only worktree with HEAD on a fork remote is torn down and the home summary is refreshed"
 }
 
+test_teardown_removes_sync_objects_from_kept_task_records() {
+  local case_dir rc records
+  case_dir=$(make_case records-sync-objects)
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "fix the thing"
+  add_fork_with_pushed_branch "$case_dir"
+  records="$case_dir/data/task-x1"
+  mkdir -p "$records/proof" "$case_dir/outside"
+  printf 'report\n' > "$records/report.md"
+  printf 'evidence\n' > "$records/proof/run.log"
+  mkfifo "$records/wake.fifo" "$records/proof/nested.fifo" "$case_dir/outside/target.fifo"
+  ln -s "$case_dir/outside" "$records/proof/outside-link"
+  printf 'external evidence\n' > "$case_dir/outside/target.log"
+  ln -s "$case_dir/outside/target.fifo" "$records/pipe-link"
+  ln -s "$case_dir/outside/target.log" "$records/file-link"
+  ln -s ready.sock "$records/socket-link"
+  ln -s pipe-link "$records/pipe-chain"
+  ln -s missing "$records/broken-link"
+  # A Unix socket, the other sync object a waiting worker leaves behind; its
+  # file outlives the binding process. A relative name keeps a long temp path
+  # under the socket path limit.
+  ( cd "$records" && exec perl -MIO::Socket::UNIX -e 'IO::Socket::UNIX->new(Type=>SOCK_STREAM(),Local=>"ready.sock",Listen=>1) or die "bind: $!\n"' ) \
+    || fail "records-sync-objects: socket fixture could not bind"
+  [ -S "$records/ready.sock" ] || fail "records-sync-objects: socket fixture left no socket"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "records-sync-objects: teardown should succeed: $(cat "$case_dir/stderr")"
+  [ ! -e "$records/wake.fifo" ] && [ ! -p "$records/wake.fifo" ] \
+    || fail "records-sync-objects: teardown left a named pipe in the task's records"
+  [ ! -e "$records/proof/nested.fifo" ] && [ ! -p "$records/proof/nested.fifo" ] \
+    || fail "records-sync-objects: teardown left a nested named pipe in the task's records"
+  [ ! -S "$records/ready.sock" ] || fail "records-sync-objects: teardown left a socket in the task's records"
+  [ "$(cat "$records/report.md")" = report ] || fail "records-sync-objects: teardown changed a regular file"
+  [ "$(cat "$records/proof/run.log")" = evidence ] || fail "records-sync-objects: teardown changed a nested regular file"
+  # Contract: permanent records retain only regular files and directories;
+  # unlink symlinks without touching any external target.
+  [ ! -L "$records/proof/outside-link" ] || fail "records-sync-objects: teardown kept a directory symlink"
+  [ ! -L "$records/pipe-link" ] || fail "records-sync-objects: teardown kept a link to a pipe"
+  [ ! -L "$records/socket-link" ] || fail "records-sync-objects: teardown kept a link to a socket"
+  [ ! -L "$records/pipe-chain" ] || fail "records-sync-objects: teardown kept an indirect link to a pipe"
+  [ ! -L "$records/broken-link" ] || fail "records-sync-objects: teardown kept a broken link"
+  [ ! -L "$records/file-link" ] || fail "records-sync-objects: teardown kept a regular-file link"
+  [ "$(cat "$case_dir/outside/target.log")" = "external evidence" ] \
+    || fail "records-sync-objects: teardown changed an external target"
+  [ -p "$case_dir/outside/target.fifo" ] || fail "records-sync-objects: teardown followed a symlink out of the task's records"
+  pass "teardown keeps only regular files and directories without following symlinks"
+}
+
 test_teardown_closes_the_backlog_item_itself() {
   local case_dir out
   case_dir=$(make_case tasks-axi-close)
@@ -6377,10 +6429,12 @@ test_status_archive_reuse_and_retention() {
   run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
   expect_code 0 "$rc" "status archive reuse"
   assert_grep 'first generation' "$case_dir/data/task-x1/status.log" "first archive overwritten"
-  archive="$case_dir/data/task-x1/status.2.log"
+  # Record cleanup unlinks the symlink before archival, freeing its name;
+  # the existing regular archive must still survive ID reuse unchanged.
+  archive="$case_dir/data/task-x1/status.1.log"
   assert_grep 'second generation' "$archive" "reused ID did not select a fresh archive"
   assert_grep 'outside sentinel' "$case_dir/outside/status.log" "archive or pruning followed a symlink"
-  [ -L "$case_dir/data/task-x1/status.1.log" ] || fail "archive replaced an existing symlink"
+  [ ! -L "$archive" ] || fail "archive retained a symlink in task records"
   assert_absent "$case_dir/data/old/status.log" "expired status archive survived pruning"
   assert_present "$case_dir/data/old/report.md" "pruning removed other task data"
   assert_present "$case_dir/data/old/status.notes.log" "pruning removed an unowned filename"
@@ -6407,8 +6461,15 @@ test_status_archive_unsafe_paths_refuse() {
     if [ "$unsafe" = data ]; then
       expect_code 0 "$rc" "configured symlinked data root"
       assert_grep 'done: complete' "$case_dir/outside/task-x1/status.log" "archive did not use physical data root"
+    elif [ "$unsafe" = task ]; then
+      # The records cleanup contract unlinks even a symlinked task root before
+      # archival; it must recreate a real directory, never follow the link.
+      expect_code 0 "$rc" "cleanup replaces symlinked task records: $(cat "$case_dir/stderr")"
+      [ ! -L "$case_dir/data/task-x1" ] || fail "cleanup retained the task root symlink"
+      assert_grep 'done: complete' "$case_dir/data/task-x1/status.log" "status was not archived in the replacement directory"
     elif [ "$unsafe" = children ]; then
-      expect_code 0 "$rc" "pruning ignores symlinked children: $(cat "$case_dir/stderr")"
+      expect_code 0 "$rc" "cleanup unlinks symlinked children: $(cat "$case_dir/stderr")"
+      assert_absent "$case_dir/data/task-x1/children" "cleanup retained a children symlink"
     else
       [ "$rc" -ne 0 ] || fail "unsafe $unsafe archive path accepted"
       assert_present "$case_dir/state/task-x1.status" "refusal lost status"
@@ -6416,7 +6477,7 @@ test_status_archive_unsafe_paths_refuse() {
     assert_grep 'untouched' "$case_dir/outside/sentinel" "unsafe path changed outside data"
     assert_absent "$case_dir/outside/status.log" "archive escaped through symlink"
   done
-  pass "archive sources and directories reject symlinks; pruning never follows children links"
+  pass "archive rejects linked sources; record cleanup unlinks task and children links without following targets"
 }
 
 # Intercept both the old move and atomic publication so the regressions also
@@ -6790,6 +6851,7 @@ test_forced_child_missing_adapter_sibling_refuses_before_cleanup
 test_forced_secondmate_own_missing_adapter_sibling_refuses_before_child_cleanup
 test_retained_sources_still_reach_the_ordinary_refusal
 test_local_only_fork_remote_allows
+test_teardown_removes_sync_objects_from_kept_task_records
 test_teardown_closes_the_backlog_item_itself
 test_teardown_closes_a_gerrit_task_with_its_change_url_as_a_note
 test_teardown_closes_a_gitlab_task_with_its_merge_request_url_as_a_note
