@@ -163,15 +163,15 @@ def projected($input; $saved; $now; $max_age):
   | group_by(.url)
   | map(. as $owners | sort_by(if .actor == "captain" then 0 elif .actor == "fleet" then 1 elif .actor == "not_recently_checked" then 3 else 2 end) | first
       | . + {tasks:($owners | map(.task) | unique)});
-def summary($rows; $errors; $max_age):
-  ([$rows[] | select(.actor != "unmeasured")] | length) as $open
+def summary($all_rows; $errors; $max_age):
+  ([$all_rows[] | select(.actor != "unmeasured")] | length) as $open
   | (((($open + 7) / 8 | floor) + 1) * 300) as $rotation_age
   | ([$max_age,$rotation_age] | max) as $coverage_age
+  | [$all_rows[] | select(.actor != "nobody")] as $rows
   | {known:($rows | length),checked:([$rows[] | select(.checked)] | length),
    counts:{captain:([$rows[] | select(.actor == "captain")] | length),
      fleet:([$rows[] | select(.actor == "fleet")] | length),
-     maintainer:([$rows[] | select(.actor == "maintainer")] | length),
-     nobody:([$rows[] | select(.actor == "nobody")] | length)},
+     maintainer:([$rows[] | select(.actor == "maintainer")] | length)},
    unmeasured:([$rows[] | select(.actor == "unmeasured")] | length),
    not_recently_checked:([$rows[] | select(.actor == "not_recently_checked")] | length),
    complete:($errors == 0 and all($rows[]; .checked)),

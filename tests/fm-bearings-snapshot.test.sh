@@ -3106,7 +3106,6 @@ SH
 
 test_large_local_snapshot_overlaps_local_reads_without_projection_drift() {
   local home fakebin worktree serial parallel parallel_file snapshot_pid i
-  local serial_started serial_elapsed parallel_started parallel_elapsed saved
   home=$(make_home large-local-snapshot)
   worktree="$home/projects/shared-worktree"
   fm_git_init_commit "$worktree"
@@ -3116,6 +3115,13 @@ test_large_local_snapshot_overlaps_local_reads_without_projection_drift() {
 #!/usr/bin/env bash
 if [ "$*" = "axi status" ] && [ "${FAKE_NM_DELAY:-0}" = 1 ]; then
   [ -z "${FAKE_NM_SIGNAL:-}" ] || : > "$FAKE_NM_SIGNAL"
+  if [ -n "${FAKE_NM_ACTIVE:-}" ]; then
+    mkdir "$FAKE_NM_ACTIVE/$$"
+    trap 'rmdir "$FAKE_NM_ACTIVE/$$"' EXIT
+    for reader in "$FAKE_NM_ACTIVE"/*/; do
+      [ "$reader" = "$FAKE_NM_ACTIVE/$$/" ] || : > "$FAKE_NM_ACTIVE/overlapped"
+    done
+  fi
   sleep 1
 fi
 exit 0
@@ -3147,20 +3153,11 @@ SH
 
   serial=$(FAKE_NM_DELAY=0 FM_SNAPSHOT_LOCAL_READ_CONCURRENCY=1 run "$home" "$fakebin" --json)
 
-  # Serialized reads pay every worker's delay end to end while concurrent reads
-  # overlap them. Time both runs and compare, because the two pay the same
-  # composition overhead: the difference isolates the overlap this change
-  # delivers, where an absolute wall-clock budget would instead measure how
-  # loaded the host happens to be and flake on a busy runner.
-  serial_started=$(date +%s)
-  FAKE_NM_DELAY=1 FM_SNAPSHOT_LOCAL_READ_CONCURRENCY=1 \
-    run "$home" "$fakebin" --json >/dev/null \
-    || fail "serialized local snapshot failed"
-  serial_elapsed=$(( $(date +%s) - serial_started ))
-
-  parallel_started=$(date +%s)
+  # Observe overlapping external reads directly: wall-clock savings also
+  # include variable composition overhead and can vanish on a loaded host.
+  mkdir "$home/nm-active"
   parallel_file="$home/parallel-snapshot.json"
-  FAKE_NM_DELAY=1 FAKE_NM_SIGNAL="$home/nm-started" \
+  FAKE_NM_DELAY=1 FAKE_NM_SIGNAL="$home/nm-started" FAKE_NM_ACTIVE="$home/nm-active" \
     FM_SNAPSHOT_LOCAL_READ_CONCURRENCY=8 \
     run "$home" "$fakebin" --json > "$parallel_file" &
   snapshot_pid=$!
@@ -3176,13 +3173,8 @@ SH
   fi
   wait "$snapshot_pid" || fail "concurrent local snapshot failed"
   parallel=$(<"$parallel_file")
-  parallel_elapsed=$(( $(date +%s) - parallel_started ))
-  # Five one-second reads serialize into five seconds and overlap into about
-  # one, so at least two of those four seconds must show up as real savings.
-  # Serializing the reads again collapses that difference to roughly zero.
-  saved=$(( serial_elapsed - parallel_elapsed ))
-  [ "$saved" -ge 2 ] \
-    || fail "concurrent local reads saved no measurable time (serial ${serial_elapsed}s vs concurrent ${parallel_elapsed}s)"
+  [ -f "$home/nm-active/overlapped" ] \
+    || fail "concurrent local reads never overlapped"
   [ "$parallel" = "$serial" ] \
     || fail "concurrent local observation changed the fm-bearings.v1 projection"
   printf '%s' "$parallel" | jq -e '

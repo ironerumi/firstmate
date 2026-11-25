@@ -621,14 +621,14 @@ MODEL=$(printf '%s' "$SNAP" | jq \
         | map(if . != null and .owner != "(main)" and .known > 0 and (.valid_until // 0) < ($now | fromdateiso8601)
               then .complete=false | .proven_clear=false | .checked=0 | .captain=[]
                 | .unmeasured=(.unmeasured // 0)
-                | .counts={captain:0,fleet:(.counts.fleet // 0),maintainer:0,nobody:0}
+                | .counts={captain:0,fleet:(.counts.fleet // 0),maintainer:0}
                 | .not_recently_checked=([0, (.known - .unmeasured - .counts.fleet)] | max)
               else . end) as $homes
         | ([$homes[] | select(. != null)]) as $measured
         | {scope:"owned contributions per home",known:([$measured[].known] | add // 0),
            checked:([$measured[].checked] | add // 0),
            counts:{captain:([$measured[].counts.captain] | add // 0),fleet:([$measured[].counts.fleet] | add // 0),
-                   maintainer:([$measured[].counts.maintainer] | add // 0),nobody:([$measured[].counts.nobody] | add // 0)},
+                   maintainer:([$measured[].counts.maintainer] | add // 0)},
            complete:(all($homes[]; . != null and .complete) and ($snap.secondmate_current.truncated // 0) == 0
                      and $snap.secondmate_current.registry.available != false
                      and $snap.secondmate_current.registry.input_truncated != true
