@@ -781,15 +781,18 @@ test_teardown_removes_sync_objects_from_kept_task_records() {
   [ ! -S "$records/ready.sock" ] || fail "records-sync-objects: teardown left a socket in the task's records"
   [ "$(cat "$records/report.md")" = report ] || fail "records-sync-objects: teardown changed a regular file"
   [ "$(cat "$records/proof/run.log")" = evidence ] || fail "records-sync-objects: teardown changed a nested regular file"
-  [ -L "$records/proof/outside-link" ] || fail "records-sync-objects: teardown removed a directory symlink"
+  # Contract: permanent records retain only regular files and directories;
+  # unlink symlinks without touching any external target.
+  [ ! -L "$records/proof/outside-link" ] || fail "records-sync-objects: teardown kept a directory symlink"
   [ ! -L "$records/pipe-link" ] || fail "records-sync-objects: teardown kept a link to a pipe"
   [ ! -L "$records/socket-link" ] || fail "records-sync-objects: teardown kept a link to a socket"
   [ ! -L "$records/pipe-chain" ] || fail "records-sync-objects: teardown kept an indirect link to a pipe"
-  [ -L "$records/broken-link" ] || fail "records-sync-objects: teardown removed a broken link"
-  [ -L "$records/file-link" ] && [ "$(cat "$records/file-link")" = "external evidence" ] \
-    || fail "records-sync-objects: teardown changed a regular-file link or its target"
+  [ ! -L "$records/broken-link" ] || fail "records-sync-objects: teardown kept a broken link"
+  [ ! -L "$records/file-link" ] || fail "records-sync-objects: teardown kept a regular-file link"
+  [ "$(cat "$case_dir/outside/target.log")" = "external evidence" ] \
+    || fail "records-sync-objects: teardown changed an external target"
   [ -p "$case_dir/outside/target.fifo" ] || fail "records-sync-objects: teardown followed a symlink out of the task's records"
-  pass "teardown removes named pipes and sockets from a task's kept records and keeps files and symlinks"
+  pass "teardown keeps only regular files and directories without following symlinks"
 }
 
 test_teardown_closes_the_backlog_item_itself() {

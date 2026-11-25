@@ -123,10 +123,9 @@
 # name a live quarantined space and is retained for that sweep.
 # data/<id>/ is deliberately left in place: a successor spawn reads brief.md
 # from it. Because those records outlive cleanup, teardown removes every entry
-# under them that is not a regular file, directory, or symlink, plus symlinks
-# resolving to pipes or sockets. Other symlinks and regular files are preserved.
-# Link targets are never deleted, linked directories are never traversed, and
-# symlinked records roots are skipped. Workers use the task temp root for sync objects.
+# that is not a regular file or directory, including symlinks. Link targets
+# are never deleted and linked directories are never traversed, including when
+# the records root itself is a symlink. Workers use the task temp root for sync objects.
 # Worktree-slot ownership (teardown-slot-collision): a treehouse pool slot is
 # reused across tasks, so a stale, duplicated, or drifted worktree= record can
 # name a slot a DIFFERENT live task now holds. Cleanup kills every process under
@@ -4266,18 +4265,10 @@ fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.
 [ -n "$TASK_TMP" ] && rm -rf "$TASK_TMP"
 # The kept data/<id>/ records lose their pipes, sockets, and other special files
-# (header); find never follows a symlink, and a symlinked records root is skipped.
-if [ -d "$DATA/$ID" ] && [ ! -L "$DATA/$ID" ]; then
-  SYNC_LINKS=()
-  while IFS= read -r -d '' link; do
-    SYNC_LINKS+=("$link")
-  done < <(find "$DATA/$ID" -mindepth 1 -type l \( -exec test -p {} \; -o -exec test -S {} \; \) -print0)
-  if [ "${#SYNC_LINKS[@]}" -gt 0 ]; then
-    rm -f -- "${SYNC_LINKS[@]}" \
-      || echo "warning: could not remove every link to a pipe or socket under $DATA/$ID; unlink those links by hand without deleting their targets" >&2
-  fi
-  find "$DATA/$ID" -mindepth 1 ! -type f ! -type d ! -type l -exec rm -f -- {} + \
-    || echo "warning: could not remove every special file under $DATA/$ID; remove them by hand: find '$DATA/$ID' -mindepth 1 ! -type f ! -type d ! -type l -delete; skip symlinked records roots" >&2
+# (header); find never follows a symlink, even at the records root.
+if [ -d "$DATA/$ID" ] || [ -L "$DATA/$ID" ]; then
+  find "$DATA/$ID" ! -type f ! -type d -exec rm -f -- {} + \
+    || echo "warning: could not remove every special file under $DATA/$ID; remove them by hand: find '$DATA/$ID' ! -type f ! -type d -delete" >&2
 fi
 # Retire only this Firstmate home's launch namespace. Its never-reused per-spawn
 # files leave the equal task-id namespace of every other home untouched.
