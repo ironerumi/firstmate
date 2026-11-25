@@ -1910,7 +1910,7 @@ test_rejects_test_sources_into_production_modules() {
   fm_lint_stub_shellcheck "$fakebin" "$tmp/shellcheck.log"
 
   # shellcheck disable=SC2016 # The fixtures are shell source, expanded only when linted.
-  red_names=(directive implicit braced-subshell dirname env-prefix sc1091-disabled)
+  red_names=(directive implicit braced-subshell dirname env-prefix sc1091-disabled literal-dot literal-source relative-dot relative-source double-dot double-source single-dot single-source)
   # shellcheck disable=SC2016
   red_bodies=(
     'x=1\n# shellcheck source=bin/mod.sh\n. "$ROOT/bin/mod.sh"\n'
@@ -1919,6 +1919,14 @@ test_rejects_test_sources_into_production_modules() {
     'x=1\nsource "$(dirname "${BASH_SOURCE[0]}")/../bin/mod.sh"\n'
     'x=1\nFM_X=1 . "$ROOT/bin/mod.sh"\n'
     '# shellcheck disable=SC1091\n. "$ROOT/bin/mod.sh"\n'
+    'x=1\n. bin/mod.sh\n'
+    'x=1\nsource bin/mod.sh\n'
+    'x=1\n. ./bin/mod.sh\n'
+    'x=1\nsource ./bin/mod.sh\n'
+    'x=1\n. "bin/mod.sh"\n'
+    'x=1\nsource "bin/mod.sh"\n'
+    "x=1\n. 'bin/mod.sh'\n"
+    "x=1\nsource 'bin/mod.sh'\n"
   )
   for name in "${!red_names[@]}"; do
     # shellcheck disable=SC2059 # The fixture body is the format.
@@ -1943,7 +1951,7 @@ test_rejects_test_sources_into_production_modules() {
   [ "$rc" -eq 0 ] || fail "a root outside tests/ was held to the test source boundary"$'\n'"$out"
 
   # shellcheck disable=SC2016
-  green_names=(cut-directive cut-implicit single-quoted heredoc comment test-helper)
+  green_names=(cut-directive cut-implicit single-quoted heredoc comment test-helper double-quoted zsh-quoted multiline-quoted cut-literal cut-double cut-single)
   # shellcheck disable=SC2016
   green_bodies=(
     '# shellcheck source=/dev/null\n. "$ROOT/bin/mod.sh"\n'
@@ -1952,6 +1960,12 @@ test_rejects_test_sources_into_production_modules() {
     "x=1\ncat <<'SH' > \"\$ROOT/generated.sh\"\n. \"\$ROOT/bin/mod.sh\"\nSH\n"
     'x=1\n# . "$ROOT/bin/mod.sh"\n'
     'x=1\n# shellcheck source=tests/lib.sh\n. "$ROOT/tests/lib.sh"\n'
+    "x=1\nbash -c \"cd '\$ROOT' && source bin/mod.sh; . bin/mod.sh\"\n"
+    'x=1\nzsh -c "source bin/mod.sh"\n'
+    'x=1\nbash -c "\nsource bin/mod.sh\n"\n'
+    '# shellcheck source=/dev/null\n. bin/mod.sh\n'
+    '# shellcheck source=/dev/null\nsource "bin/mod.sh"\n'
+    "# shellcheck source=/dev/null\n. 'bin/mod.sh'\n"
   )
   for name in "${!green_names[@]}"; do
     # shellcheck disable=SC2059 # The fixture body is the format.

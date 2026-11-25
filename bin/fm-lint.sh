@@ -812,31 +812,35 @@ fm_lint_run_test_source_boundary() {
     my $q = "\x27";
     my $bin = qr~(?:\.\.?/)*bin/~;
     my $prefix = qr~(?:\$[A-Za-z_]\w*|\$\{[A-Za-z_]\w*\}|\$\(dirname [^)]*\))"?/$bin~;
-    my $sourcing = qr~(?:^|[;&|({!`\s])(?:\.|source)\s+"?$prefix([^"\s;)]*)~;
-    my ($mode, @heredocs);
-    # Return the line as shell code: single-quoted text and comments dropped,
-    # double-quoted text kept, $mode carried across lines, heredocs queued.
+    my $sourcing = qr~(?:^|[;&|({!`\s])(?:\.|source)\s+["$q]?(?:$prefix|(?:\./)?bin/)([^"$q\s;)]*)~;
+    my ($mode, $keep_quote, @heredocs);
     sub code_of {
       my ($rest, $out, $prev) = (shift, "", "");
       while (length $rest) {
         if ($mode eq "S") {
-          return $out unless $rest =~ s/^[^$q]*$q//;
-          ($mode, $prev) = ("N", $q); $out .= "$q$q"; next;
+          unless ($rest =~ s/^([^$q]*)$q//) { return $out . ($keep_quote ? $rest : "") }
+          $out .= $1 if $keep_quote;
+          ($mode, $prev) = ("N", $q); $out .= $q; next;
         }
         if ($mode eq "A") {
-          return $out unless $rest =~ s/^(?:[^\\$q]|\\.)*$q//s;
-          ($mode, $prev) = ("N", $q); $out .= "$q$q"; next;
+          unless ($rest =~ s/^((?:[^\\$q]|\\.)*)$q//s) { return $out . ($keep_quote ? $rest : "") }
+          $out .= $1 if $keep_quote;
+          ($mode, $prev) = ("N", $q); $out .= $q; next;
         }
         if ($mode eq "D") {
-          unless ($rest =~ s/^((?:[^\\"]|\\.)*)"//s) { return $out . $rest }
-          $out .= "$1\""; ($mode, $prev) = ("N", "\""); next;
+          unless ($rest =~ s/^((?:[^\\"]|\\.)*)"//s) { return $out . ($keep_quote ? $rest : "") }
+          $out .= $1 if $keep_quote;
+          $out .= "\""; ($mode, $prev) = ("N", "\""); next;
         }
         return $out . $rest unless $rest =~ /(\\.|[$q"#]|<<<|<<)/s;
         my ($before, $token) = ($`, $1);
         $rest = $'"'"';
         if (length $before) { $out .= $before; $prev = substr($before, -1) }
-        if ($token eq $q) { $mode = $prev eq "\$" ? "A" : "S"; next }
-        if ($token eq "\"") { $mode = "D"; $out .= $token; $prev = $token; next }
+        if ($token eq $q || $token eq "\"") {
+          $keep_quote = $out =~ /(?:^|[;&|({!`\s])(?:\.|source)\s+[^;&|]*$/;
+          $mode = $token eq "\"" ? "D" : $prev eq "\$" ? "A" : "S";
+          $out .= $token; $prev = $token; next;
+        }
         if ($token eq "#") {
           return $out if $prev eq "" || $prev =~ /[\s;&|()]/;
           $out .= $token; $prev = $token; next;
