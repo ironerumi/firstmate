@@ -19,7 +19,8 @@
 # The test source-boundary check enforces that boundary on every run: a
 # tests/*.sh source that ShellCheck would follow into bin/ - a
 # `# shellcheck source=` directive naming bin/, or an undirected `.`/`source`
-# of `$VAR/bin/...`, `${VAR}/bin/...`, or `$(dirname ...)/bin/...` -
+# of literal `bin/...` or `./bin/...` paths (unquoted or quoted), or
+# `$VAR/bin/...`, `${VAR}/bin/...`, or `$(dirname ...)/bin/...` -
 # fails by file and line until it is cut with `# shellcheck source=/dev/null`.
 # ShellCheck inlines every followed source site again, so one such edge can
 # multiply a test root past any memory bound.
@@ -774,11 +775,12 @@ fm_lint_run_backend_purity() {
 # Test roots stop source analysis at bin/: ShellCheck inlines every followed
 # source site again, so a test that follows a production module re-analyzes
 # that module's whole graph and can exhaust any per-root memory bound. This
-# lexical check mirrors the two ways ShellCheck follows a source - a
-# `source=` directive, or a `.`/`source` argument whose leading `$VAR`,
-# `${VAR}`, or `$(dirname ...)` prefix it strips - and skips single-quoted
-# strings, comments, and heredoc bodies, which ShellCheck never follows. Any
-# directive naming bin/, or an undirected source into bin/, fails by line.
+# lexical check recognizes source directives and literal or variable-prefixed
+# source operands as described in the header. Quoted source operands remain
+# visible, but quoted command payloads, comments, and heredoc bodies do not:
+# ShellCheck does not follow sources embedded in those payloads. See
+# test_rejects_test_sources_into_production_modules in tests/fm-lint.test.sh
+# for the executable boundary cases.
 fm_lint_run_test_source_boundary() {
   local findings path canonical
   local -a boundary_roots
