@@ -6429,10 +6429,12 @@ test_status_archive_reuse_and_retention() {
   run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
   expect_code 0 "$rc" "status archive reuse"
   assert_grep 'first generation' "$case_dir/data/task-x1/status.log" "first archive overwritten"
-  archive="$case_dir/data/task-x1/status.2.log"
+  # Record cleanup unlinks the symlink before archival, freeing its name;
+  # the existing regular archive must still survive ID reuse unchanged.
+  archive="$case_dir/data/task-x1/status.1.log"
   assert_grep 'second generation' "$archive" "reused ID did not select a fresh archive"
   assert_grep 'outside sentinel' "$case_dir/outside/status.log" "archive or pruning followed a symlink"
-  [ -L "$case_dir/data/task-x1/status.1.log" ] || fail "archive replaced an existing symlink"
+  [ ! -L "$archive" ] || fail "archive retained a symlink in task records"
   assert_absent "$case_dir/data/old/status.log" "expired status archive survived pruning"
   assert_present "$case_dir/data/old/report.md" "pruning removed other task data"
   assert_present "$case_dir/data/old/status.notes.log" "pruning removed an unowned filename"
