@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 fm_task_temp_rule() {
   local data=$1 id=$2
   cat <<EOF
