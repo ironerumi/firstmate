@@ -6461,8 +6461,15 @@ test_status_archive_unsafe_paths_refuse() {
     if [ "$unsafe" = data ]; then
       expect_code 0 "$rc" "configured symlinked data root"
       assert_grep 'done: complete' "$case_dir/outside/task-x1/status.log" "archive did not use physical data root"
+    elif [ "$unsafe" = task ]; then
+      # The records cleanup contract unlinks even a symlinked task root before
+      # archival; it must recreate a real directory, never follow the link.
+      expect_code 0 "$rc" "cleanup replaces symlinked task records: $(cat "$case_dir/stderr")"
+      [ ! -L "$case_dir/data/task-x1" ] || fail "cleanup retained the task root symlink"
+      assert_grep 'done: complete' "$case_dir/data/task-x1/status.log" "status was not archived in the replacement directory"
     elif [ "$unsafe" = children ]; then
-      expect_code 0 "$rc" "pruning ignores symlinked children: $(cat "$case_dir/stderr")"
+      expect_code 0 "$rc" "cleanup unlinks symlinked children: $(cat "$case_dir/stderr")"
+      assert_absent "$case_dir/data/task-x1/children" "cleanup retained a children symlink"
     else
       [ "$rc" -ne 0 ] || fail "unsafe $unsafe archive path accepted"
       assert_present "$case_dir/state/task-x1.status" "refusal lost status"
@@ -6470,7 +6477,7 @@ test_status_archive_unsafe_paths_refuse() {
     assert_grep 'untouched' "$case_dir/outside/sentinel" "unsafe path changed outside data"
     assert_absent "$case_dir/outside/status.log" "archive escaped through symlink"
   done
-  pass "archive sources and directories reject symlinks; pruning never follows children links"
+  pass "archive rejects linked sources; record cleanup unlinks task and children links without following targets"
 }
 
 # Intercept both the old move and atomic publication so the regressions also
