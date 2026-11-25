@@ -755,6 +755,12 @@ test_teardown_removes_sync_objects_from_kept_task_records() {
   printf 'evidence\n' > "$records/proof/run.log"
   mkfifo "$records/wake.fifo" "$records/proof/nested.fifo" "$case_dir/outside/target.fifo"
   ln -s "$case_dir/outside" "$records/proof/outside-link"
+  printf 'external evidence\n' > "$case_dir/outside/target.log"
+  ln -s "$case_dir/outside/target.fifo" "$records/pipe-link"
+  ln -s "$case_dir/outside/target.log" "$records/file-link"
+  ln -s ready.sock "$records/socket-link"
+  ln -s pipe-link "$records/pipe-chain"
+  ln -s missing "$records/broken-link"
   # A Unix socket, the other sync object a waiting worker leaves behind; its
   # file outlives the binding process. A relative name keeps a long temp path
   # under the socket path limit.
@@ -775,7 +781,13 @@ test_teardown_removes_sync_objects_from_kept_task_records() {
   [ ! -S "$records/ready.sock" ] || fail "records-sync-objects: teardown left a socket in the task's records"
   [ "$(cat "$records/report.md")" = report ] || fail "records-sync-objects: teardown changed a regular file"
   [ "$(cat "$records/proof/run.log")" = evidence ] || fail "records-sync-objects: teardown changed a nested regular file"
-  [ -L "$records/proof/outside-link" ] || fail "records-sync-objects: teardown removed a symlink"
+  [ -L "$records/proof/outside-link" ] || fail "records-sync-objects: teardown removed a directory symlink"
+  [ ! -L "$records/pipe-link" ] || fail "records-sync-objects: teardown kept a link to a pipe"
+  [ ! -L "$records/socket-link" ] || fail "records-sync-objects: teardown kept a link to a socket"
+  [ ! -L "$records/pipe-chain" ] || fail "records-sync-objects: teardown kept an indirect link to a pipe"
+  [ -L "$records/broken-link" ] || fail "records-sync-objects: teardown removed a broken link"
+  [ -L "$records/file-link" ] && [ "$(cat "$records/file-link")" = "external evidence" ] \
+    || fail "records-sync-objects: teardown changed a regular-file link or its target"
   [ -p "$case_dir/outside/target.fifo" ] || fail "records-sync-objects: teardown followed a symlink out of the task's records"
   pass "teardown removes named pipes and sockets from a task's kept records and keeps files and symlinks"
 }

@@ -358,6 +358,12 @@ test_promote_refuses_a_symlinked_task_record() {
 # no-mistakes worker gets. This drives the real promotion path, then runs the delivery command it
 # prints against a capturing fm-send.sh, and asserts on the message the worker would
 # actually receive - for every supported mode.
+assert_task_temp_contract() {
+  local contract=$1 id=$2 data=$3
+  assert_grep "Named pipes, sockets, and other temporary sync objects go only in the task temp root \`/tmp/fm-$id/\` (\`tasktmp=\` in the task's meta), never under \`$data/$id/\`" "$contract" \
+    "worker prompt must put temporary sync objects in tasktmp, not permanent records"
+}
+
 test_promotion_delivers_the_real_definition_of_done() {
   local home meta out sendroot payload mode id brief_dod delivered_dod contract
   home="$TMP_ROOT/promote-dod/home"
@@ -376,6 +382,9 @@ STUB
     printf 'window=fm-%s\nkind=scout\nworktree=/tmp/wt\n' "$id" > "$meta"
     FM_HOME="$home" "$BRIEF" "$id" fixture-project --scout >/dev/null 2>&1 \
       || fail "$mode: scout brief generation should succeed"
+    assert_task_temp_contract "$home/data/$id/brief.md" "$id" "$home/data"
+    assert_grep "outside it, write only temporary sync objects in the task temp root" "$home/data/$id/brief.md" \
+      "scout prompt must authorize its task-temp writes"
     fill_brief_subsections "$home/data/$id/brief.md" \
       "Ship the delivery-contract change." "Preserve the selected delivery mode."
     out=$(FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" "$PROMOTE" "$id" --mode "$mode" --yolo off 2>&1) \
@@ -409,6 +418,7 @@ STUB
 
     # Both the delivered prompt and persisted relaunch brief are public outputs.
     for contract in "$payload" "$home/data/$id/brief.md"; do
+      assert_task_temp_contract "$contract" "$id" "$home/data"
       assert_grep "This replaces the scout rule limiting outside-worktree writes to the report and status file." "$contract" \
         "$mode: $contract retained the scout-only write restriction"
       assert_grep "Keep project edits inside this worktree; keep proof and scratch output outside it, under \`$home/data/$id/\` or a temporary directory." "$contract" \
@@ -425,6 +435,7 @@ STUB
     rm "$home/data/$id/brief.md"
     FM_HOME="$home" "$BRIEF" "$id" fixture-project --mode "$mode" >/dev/null 2>&1 \
       || fail "$mode: ordinary ship brief generation should succeed"
+    assert_task_temp_contract "$home/data/$id/brief.md" "$id" "$home/data"
     brief_dod="$TMP_ROOT/promote-dod/brief-dod-$id"
     delivered_dod="$TMP_ROOT/promote-dod/delivered-dod-$id"
     awk '/^# Definition of done$/ { emit=1 } emit' "$home/data/$id/brief.md" > "$brief_dod"
