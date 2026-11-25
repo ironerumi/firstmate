@@ -796,6 +796,7 @@ If the top-level path is the primary checkout or not the worktree you were launc
 # Rules
 $RULE1
 2. Keep project edits inside this worktree; keep proof and scratch output outside it, under \`$DATA/$ID/\` or a temporary directory.
+   Named pipes, sockets, and other sync objects you wait on go only in the task temp root \`/tmp/fm-$ID/\` (\`tasktmp=\` in the task's meta), never under \`$DATA/$ID/\`: those records outlive the task and a leftover pipe hangs anything that reads them.
    Outside the worktree, write only that task material and the status and steering-inbox records authorized below.
    Leave the worktree clean before reporting done.
 3. $FORGE_RULE_LINE

@@ -122,7 +122,11 @@
 # - or a version 1 attempt whose workspace is still present or unreadable - may
 # name a live quarantined space and is retained for that sweep.
 # data/<id>/ is deliberately left in place: a successor spawn reads brief.md
-# from it.
+# from it. Because those records outlive cleanup, teardown removes every entry
+# under them that is not a regular file, directory, or symlink - the named pipes
+# and sockets a worker made to wait on events, which hang anything that later
+# reads the records as files. It never follows a symlink and never touches a
+# regular file; bin/fm-brief.sh sends such sync objects to the task temp root.
 # Worktree-slot ownership (teardown-slot-collision): a treehouse pool slot is
 # reused across tasks, so a stale, duplicated, or drifted worktree= record can
 # name a slot a DIFFERENT live task now holds. Cleanup kills every process under
@@ -4261,6 +4265,12 @@ fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Remove the per-task temp root (/tmp/fm-<id>/, incl. its gotmp/) recorded by spawn.
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.
 [ -n "$TASK_TMP" ] && rm -rf "$TASK_TMP"
+# The kept data/<id>/ records lose their pipes, sockets, and other special files
+# (header); find never follows a symlink, and a symlinked records root is skipped.
+if [ -d "$DATA/$ID" ] && [ ! -L "$DATA/$ID" ]; then
+  find "$DATA/$ID" -mindepth 1 ! -type f ! -type d ! -type l -exec rm -f -- {} + \
+    || echo "warning: could not remove every pipe or socket under $DATA/$ID; remove them by hand: find '$DATA/$ID' ! -type f ! -type d ! -type l -delete" >&2
+fi
 # Retire only this Firstmate home's launch namespace. Its never-reused per-spawn
 # files leave the equal task-id namespace of every other home untouched.
 teardown_launch_home_token() {

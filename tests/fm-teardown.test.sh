@@ -743,6 +743,43 @@ test_local_only_fork_remote_allows() {
   pass "local-only worktree with HEAD on a fork remote is torn down and the home summary is refreshed"
 }
 
+test_teardown_removes_sync_objects_from_kept_task_records() {
+  local case_dir rc records
+  case_dir=$(make_case records-sync-objects)
+  write_meta "$case_dir" local-only ship
+  wt_commit "$case_dir" "fix the thing"
+  add_fork_with_pushed_branch "$case_dir"
+  records="$case_dir/data/task-x1"
+  mkdir -p "$records/proof" "$case_dir/outside"
+  printf 'report\n' > "$records/report.md"
+  printf 'evidence\n' > "$records/proof/run.log"
+  mkfifo "$records/wake.fifo" "$records/proof/nested.fifo" "$case_dir/outside/target.fifo"
+  ln -s "$case_dir/outside" "$records/proof/outside-link"
+  # A Unix socket, the other sync object a waiting worker leaves behind; its
+  # file outlives the binding process. A relative name keeps a long temp path
+  # under the socket path limit.
+  ( cd "$records" && exec perl -MIO::Socket::UNIX -e 'IO::Socket::UNIX->new(Type=>SOCK_STREAM(),Local=>"ready.sock",Listen=>1) or die "bind: $!\n"' ) \
+    || fail "records-sync-objects: socket fixture could not bind"
+  [ -S "$records/ready.sock" ] || fail "records-sync-objects: socket fixture left no socket"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "records-sync-objects: teardown should succeed: $(cat "$case_dir/stderr")"
+  [ ! -e "$records/wake.fifo" ] && [ ! -p "$records/wake.fifo" ] \
+    || fail "records-sync-objects: teardown left a named pipe in the task's records"
+  [ ! -e "$records/proof/nested.fifo" ] && [ ! -p "$records/proof/nested.fifo" ] \
+    || fail "records-sync-objects: teardown left a nested named pipe in the task's records"
+  [ ! -S "$records/ready.sock" ] || fail "records-sync-objects: teardown left a socket in the task's records"
+  [ "$(cat "$records/report.md")" = report ] || fail "records-sync-objects: teardown changed a regular file"
+  [ "$(cat "$records/proof/run.log")" = evidence ] || fail "records-sync-objects: teardown changed a nested regular file"
+  [ -L "$records/proof/outside-link" ] || fail "records-sync-objects: teardown removed a symlink"
+  [ -p "$case_dir/outside/target.fifo" ] || fail "records-sync-objects: teardown followed a symlink out of the task's records"
+  pass "teardown removes named pipes and sockets from a task's kept records and keeps files and symlinks"
+}
+
 test_teardown_closes_the_backlog_item_itself() {
   local case_dir out
   case_dir=$(make_case tasks-axi-close)
@@ -6790,6 +6827,7 @@ test_forced_child_missing_adapter_sibling_refuses_before_cleanup
 test_forced_secondmate_own_missing_adapter_sibling_refuses_before_child_cleanup
 test_retained_sources_still_reach_the_ordinary_refusal
 test_local_only_fork_remote_allows
+test_teardown_removes_sync_objects_from_kept_task_records
 test_teardown_closes_the_backlog_item_itself
 test_teardown_closes_a_gerrit_task_with_its_change_url_as_a_note
 test_teardown_closes_a_gitlab_task_with_its_merge_request_url_as_a_note
