@@ -82,7 +82,8 @@
 # cannot apply the address-space limit at all) each root runs under the same
 # wall deadline and grace plus a resident-memory ceiling instead
 # (FM_LINT_ROOT_RSS_KIB, default 6291456 = 6 GiB summed over the root's
-# process group, polled through ps every half second). A root over that
+# process group, polled through ps every 50 ms for the root's first half
+# second and every half second after). A root over that
 # ceiling is killed and classified memory, exactly like a CI memory death.
 # A local run without bin/fm-timeout-lib.sh refuses rather than lint
 # unbounded.
@@ -419,7 +420,9 @@ fi
 # parent reports limit-unavailable instead of running uncapped. Under the
 # resident kind it runs the tool beside a monitor that sums resident memory
 # over this process group (the bounded runner made this process its leader)
-# every half second; over the limit it kills the group's other members,
+# on every 50 ms exit poll for the first half second, so a brief or soon
+# compressed allocation cannot slip past a delayed first sample, then every
+# half second; over the limit it kills the group's other members,
 # records the observed peak, and exits 98, which the parent classifies as
 # memory. Either kind wraps the tool in /usr/bin/time for the per-root
 # peak-RSS record when it is available.
@@ -469,7 +472,9 @@ if [ "${1:-}" = "--internal-root" ]; then
           my $done = waitpid $child, WNOHANG;
           exit(($? & 127) ? 128 + ($? & 127) : $? >> 8) if $done == $child;
           exit 127 if $done == -1;
-          if ($tick++ % 10 == 9) {
+          my $sample = $tick < 10 || $tick % 10 == 9;
+          $tick++;
+          if ($sample) {
             my ($total, @members) = (0);
             my $ps = open(my $rows, "-|", "ps", "-A", "-o", "pid=", "-o", "pgid=", "-o", "rss=");
             if ($ps) {

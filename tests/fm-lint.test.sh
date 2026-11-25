@@ -387,6 +387,11 @@ case "$target" in
       exit "$alloc_rc"
     fi
     ;;
+  *brief-hog*)
+    perl -e 'my $s = "x" x (256 * 1048576);
+      if (open my $f, ">", $ENV{FM_TEST_HOG_PID} || "/dev/null") { print $f "$$\n"; close $f }
+      select(undef, undef, undef, 0.2)'
+    ;;
   *resident-hog*|*source-hog*)
     follow=no
     for arg in "$@"; do
@@ -396,8 +401,8 @@ case "$target" in
       *resident-hog*) follow=yes ;;
     esac
     if [ "$follow" = yes ]; then
-      perl -e 'my $s = "x" x (256 * 1048576);
-        if (open my $f, ">", $ENV{FM_TEST_HOG_PID} || "/dev/null") { print $f "$$\n"; close $f }
+      perl -e 'if (open my $f, ">", $ENV{FM_TEST_HOG_PID} || "/dev/null") { print $f "$$\n"; close $f }
+        my $s = "x" x (256 * 1048576);
         sleep($ENV{FM_TEST_HOG_SECS} || 300)'
     fi
     ;;
@@ -1810,7 +1815,7 @@ SH
 
 test_local_lint_bounds_resident_memory_and_deadline() {
   local tmp fakebin stub_log roots_log out rc hog source_hog blocker ok lone_dir hog_pid_file hog_pid
-  local sentinel_pid
+  local sentinel_pid brief_hog
   tmp=$(fm_test_tmproot fm-lint-local-bounds)
   fakebin=$(fm_fakebin "$tmp")
   fm_lint_stub_reactive_shellcheck "$fakebin"
@@ -1819,8 +1824,9 @@ test_local_lint_bounds_resident_memory_and_deadline() {
   source_hog="$tmp/source-hog.sh"
   blocker="$tmp/blocker.sh"
   ok="$tmp/ok.sh"
+  brief_hog="$tmp/brief-hog.sh"
   hog_pid_file="$tmp/hog.pid"
-  for root in "$hog" "$source_hog" "$blocker" "$ok"; do
+  for root in "$hog" "$source_hog" "$brief_hog" "$blocker" "$ok"; do
     printf '#!/usr/bin/env bash\nexit 0\n' > "$root"
   done
 
@@ -1859,6 +1865,20 @@ test_local_lint_bounds_resident_memory_and_deadline() {
     "$roots_log" || fail "the sidecar did not record the killed root's memory reason and peak"
   awk -F '\t' '$1 == "end" && $3 ~ /ok\.sh$/ && $10 == "ok" { found=1 } END { exit !found }' \
     "$roots_log" || fail "the sidecar lost the clean root's record"
+
+  # A root that holds 256 MiB for only 0.2 s and exits clean is still over
+  # the ceiling: the monitor samples from the root's start rather than
+  # first looking half a second in, after the allocation is gone.
+  : > "$hog_pid_file"
+  rc=0
+  out=$(PATH="$fakebin:$PATH" FM_LINT_JOBS=1 FM_LINT_ROOT_RSS_KIB=65536 \
+    FM_TEST_HOG_PID="$hog_pid_file" \
+    "$LINT" --telemetry "$tmp/brief.tsv" "$brief_hog" 2>&1) || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    [ -s "$hog_pid_file" ] || fail "the brief root passed without allocating"$'\n'"$out"
+    fail "a brief allocation over the resident ceiling escaped the first sample"$'\n'"$out"
+  fi
+  assert_contains "$out" "brief-hog.sh reason=memory rc=98" "the brief allocation was not classified as memory"
 
   # A root over the ceiling only while following sources takes the existing
   # no-source retry and passes with the disclosed memory-fallback reason.
