@@ -964,7 +964,8 @@ The flag is a home-local preference and is not inherited by secondmate homes; [`
 
 The optional local, gitignored `config/status-archive` presence flag opts this home into retaining task status history during teardown.
 Create it with `touch "$FM_HOME/config/status-archive"`; remove it to disable future archival and pruning.
-It is off by default: without the flag, teardown deletes status logs as before and leaves existing archives untouched.
+It is off by default: without the flag, teardown deletes live status logs as before and neither publishes nor age-prunes archives.
+The independent task-record cleanup still applies; [`bin/fm-teardown.sh`](../bin/fm-teardown.sh)'s header owns that contract.
 The flag applies to teardown run by this home, including forced retirement of its secondmate children; it is not inherited by other homes.
 Each opted-in archival prunes owned logs older than 30 completed days by mtime; housekeeping failures warn and never abort teardown.
 Age-based retention works independently of the selected backlog backend and keeps histories available for a predictable audit period.

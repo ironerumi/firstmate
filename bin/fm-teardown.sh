@@ -345,12 +345,13 @@
 # status and bookkeeping removal. A failed publication leaves live state intact.
 # Forced child retirement uses data/<id>/children/<child-id>/ (recursively),
 # outside the home being removed. Remote-home retirement with no status is a
-# no-op. Symlinked/non-regular sources and symlinked archive directories refuse
-# cleanup rather than following them; the configured data root may be a symlink.
+# no-op. Archival refuses symlinked/non-regular sources and any symlinked
+# archive directories remaining after the records cleanup described above;
+# the configured data root may be a symlink.
 # Existing archive filenames are never overwritten. Each archival prunes owned
 # logs and orphaned staging files older than 30 completed days by mtime.
-# Pruning failures warn, never abort teardown, and leave other task data and
-# symlinks alone.
+# Pruning failures warn and never abort teardown. Archive pruning itself leaves
+# other task data and symlinks alone; the separate records cleanup above does not.
 # Opt-in config/record-export-root delegates the record archive transaction to
 # bin/fm-record-export.sh immediately before status, metadata, or inbox records
 # for the retiring task are removed. A failed commit retains those sources.
