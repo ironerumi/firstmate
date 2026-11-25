@@ -1565,12 +1565,20 @@ test_fix_pr_carries_ready_issue() {
     || fail 'a ready issue without a fix PR was not fleet work'
   mutate_record "$home" delivery '.records[0].observation.fixes=["https://github.com/o/r/issues/9"]'
   out=$(bearings "$home") || fail 'Bearings could not read the fix-PR fixture'
-  printf '%s' "$out" | jq -e '.contributions.counts == {captain:0,fleet:0,maintainer:1,nobody:1}' >/dev/null \
-    || fail "a ready issue whose owned fix PR exists was counted twice: $out"
+  printf '%s' "$out" | jq -e '.contributions.counts == {captain:0,fleet:0,maintainer:1,nobody:0}
+    and .contributions.known == 1 and .contributions.checked == 1 and .contributions.proven_clear' >/dev/null \
+    || fail "a ready issue whose owned fix PR exists was counted: $out"
+  with_home "$home" "$ROOT/bin/fm-fleet-snapshot.sh" --contribution-input > "$home/input.json" || fail 'contribution input failed'
+  out=$(with_home "$home" "$ROOT/bin/fm-contributions.sh" snapshot "$home/input.json" --all) || fail 'fix-PR --all projection failed'
+  printf '%s' "$out" | jq -e '.known == 1 and ([.rows[] | select(.counted == false)] | map(.url))
+    == ["https://github.com/o/r/issues/9"]
+    and ([.rows[] | select(.counted == false)] | .[0].actor == "nobody")
+    and ([.rows[] | select(.counted)] | map(.url)) == ["https://github.com/o/r/pull/8"]' >/dev/null \
+    || fail "--all did not list the covered issue as uncounted: $out"
   mutate_record "$home" delivery '.records[0].observation.state="closed"'
   bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:0,nobody:0}' >/dev/null \
     || fail 'a closed unmerged fix PR still carried its ready issue'
-  pass 'an owned open fix PR carries its ready-for-pr issue, which is not counted again'
+  pass 'an owned open fix PR carries its ready-for-pr issue, which leaves the counts but stays listed under --all'
 }
 
 test_poll_records_fix_links() {
@@ -1588,7 +1596,7 @@ test_poll_records_fix_links() {
     || fail 'the ready issue raised no signal'
   with_home "$home" "$ROOT/bin/fm-contributions.sh" ack filed https://github.com/o/r/issues/9 "$token" \
     || fail 'could not acknowledge the ready signal'
-  bearings "$home" | jq -e '.contributions.counts.fleet == 0 and .contributions.counts.nobody == 1' >/dev/null \
+  bearings "$home" | jq -e '.contributions.counts.fleet == 0 and .contributions.counts.nobody == 0 and .contributions.known == 1' >/dev/null \
     || fail 'an observed fix link did not carry the ready issue'
   printf 'fail\n' > "$home/forge/fault"
   later=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 315 | todateiso8601')

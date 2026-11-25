@@ -15,10 +15,13 @@
 # snapshot is read-only and never contacts a forge. Its input is the canonical
 # fleet snapshot's backlog/tasks pair; --all adds rows for supervisor inspection.
 # It projects open contributions only: a settled URL (any owner's saved
-# observation is merged or closed with no error) and a retired pair leave
-# known, checked, actor counts, coverage, missing and stale verdict totals and
-# proven_clear entirely. Their durable records stay; owned still lists settled
-# supported PR URLs with non-retired owners, but excludes retired ownership.
+# observation is merged or closed with no error), a retired pair, and a row
+# whose required actor is nobody leave known, checked, actor counts, coverage,
+# missing and stale verdict totals and proven_clear entirely, so counts.nobody
+# is always zero. Their durable records stay; --all still lists nobody rows,
+# marked counted:false, while every counted row carries counted:true. owned
+# still lists settled supported PR URLs with non-retired owners, but excludes
+# retired ownership.
 # URLs accepted by canonical_url in fm-contributions.jq and explicitly linked
 # by a structured backlog row or a task's pr= are owned.
 # Previously observed or enrolled URLs remain in data/<task>/contributions.json
@@ -291,14 +294,16 @@ project() {
   jq_lib -n --slurpfile input "$1" --slurpfile saved "$TMP/saved.json" \
     --argjson now "$EPOCH" --argjson max_age "$MAX_AGE" --argjson errors "$ERRORS" \
     --arg all "${2:-}" '
-    projected($input[0];$saved[0];$now;$max_age) as $rows
+    projected($input[0];$saved[0];$now;$max_age) as $all_rows
+    # A nobody-actor row is already covered and leaves the projection like a settled URL.
+    | [$all_rows[] | select(.actor != "nobody")] as $rows
     | summary($rows;($errors + (if $input[0].backlog.present == true then 0 else 1 end));$max_age)
     # A home with no open contribution has nothing to expire; it is valid from now.
     | .valid_until = (if ($rows | length) == 0 then $now else .valid_until end) + .coverage_age
     | del(.coverage_age)
     | .captain_omitted = ([0, (.captain | length) - 20] | max)
     | .captain |= .[:20]
-    | . + (if $all == "--all" then {rows:$rows} else {} end)'
+    | . + (if $all == "--all" then {rows:[$all_rows[] | . + {counted:(.actor != "nobody")}]} else {} end)'
 }
 
 acquire() { # [max-wait-seconds]; with a bound, returns 1 when the lock stays held
