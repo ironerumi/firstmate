@@ -295,11 +295,9 @@ project() {
     --argjson now "$EPOCH" --argjson max_age "$MAX_AGE" --argjson errors "$ERRORS" \
     --arg all "${2:-}" '
     projected($input[0];$saved[0];$now;$max_age) as $all_rows
-    # A nobody-actor row is already covered and leaves the projection like a settled URL.
-    | [$all_rows[] | select(.actor != "nobody")] as $rows
-    | summary($rows;($errors + (if $input[0].backlog.present == true then 0 else 1 end));$max_age)
+    | summary($all_rows;($errors + (if $input[0].backlog.present == true then 0 else 1 end));$max_age)
     # A home with no open contribution has nothing to expire; it is valid from now.
-    | .valid_until = (if ($rows | length) == 0 then $now else .valid_until end) + .coverage_age
+    | .valid_until = (if .known == 0 then $now else .valid_until end) + .coverage_age
     | del(.coverage_age)
     | .captain_omitted = ([0, (.captain | length) - 20] | max)
     | .captain |= .[:20]
