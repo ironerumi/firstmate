@@ -1,0 +1,16 @@
+{
+  "dead_pid": 33975,
+  "live_pid": 33872,
+  "removed": {
+    ".watch-arm-output.33975.startup": true,
+    "inbox/.replies.lock.owner.33975.startup": true,
+    ".claude-autoarm-epoch.tmp.33975": true
+  },
+  "preserved": {
+    ".watch-arm-output.33872.startup": true,
+    "inbox/.replies.lock.owner.33872.startup": true
+  },
+  "session_start_complete": true,
+  "session_lock": "34021\n",
+  "pane": "CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS is set, so dangerous rm commands can run without a prompt in bypass p\nermissions mode once managed settings and plugin hooks have loaded. If you didn't set it, check your shell profile.\nCLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS is set. In bypass permissions mode, once managed settings and plugin\nhooks have loaded, Claude in Chrome actions in any Chrome connected to your account can run without auto mode's safety c\nheck, a permission prompt, or the Chrome extension's site permissions. If you didn't set it, check your shell profile.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+}

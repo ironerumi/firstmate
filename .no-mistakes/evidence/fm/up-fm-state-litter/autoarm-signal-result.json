@@ -1,0 +1,10 @@
+{
+  "autoarm_pid": 91749,
+  "arm_pid": 91995,
+  "capture_before_TERM": ".claude-autoarm-output.91749.QZmOTg",
+  "capture_exists_before_TERM": true,
+  "arm_status_before_TERM": "T",
+  "capture_removed_before_KILL": true,
+  "escalated_to_SIGKILL": true,
+  "capture_remains_after_escalation": false
+}

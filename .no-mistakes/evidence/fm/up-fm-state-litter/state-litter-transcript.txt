@@ -1,0 +1,32 @@
+SIGKILL real fm-home-summary-refresh worker pid=96748 exit=-9 stranded=['.home-summary-error.96748.DVN3Hu', '.home-summary.json.96748.1kVIuL']
+RECOVERY: real refresh temporary files removed; published lock owner retained for ordinary lock recovery
+KILLED session live-holder pid=96885 status=-9 unpublished=['.lock.acquire.owner.96885.UgrpnG']
+RECOVERY session live-holder: zero stranded owners; referenced holder preserved
+KILLED session dead-holder pid=97168 status=-9 unpublished=['.lock.acquire.steal.owner.97168.QbSkq7']
+RECOVERY session dead-holder: zero stranded owners; referenced holder preserved
+KILLED registry live-holder pid=97371 status=-9 unpublished=['public-followup/.registry-demo.lock.owner.97371.apkgFK']
+RECOVERY registry live-holder: zero stranded owners; referenced holder preserved
+KILLED registry dead-holder pid=97529 status=-9 unpublished=['public-followup/.registry-demo.lock.steal.owner.97529.i8DUTy']
+RECOVERY registry dead-holder: zero stranded owners; referenced holder preserved
+KILLED reply live-holder pid=97699 status=-9 unpublished=['inbox/.replies.lock.owner.97699.d8QhUj']
+RECOVERY reply live-holder: zero stranded owners; referenced holder preserved
+KILLED reply dead-holder pid=97847 status=-9 unpublished=['inbox/.replies.lock.steal.owner.97847.9K0oqd']
+RECOVERY reply dead-holder: zero stranded owners; referenced holder preserved
+KILLED extension live-holder pid=98013 status=-9 unpublished=['procevent/.extension-binding-lifecycle.lock.owner.98013.5CrR9S']
+RECOVERY extension live-holder: zero stranded owners; referenced holder preserved
+KILLED extension dead-holder pid=98173 status=-9 unpublished=['procevent/.extension-binding-lifecycle.lock.steal.owner.98173.gVMQcH']
+RECOVERY extension dead-holder: zero stranded owners; referenced holder preserved
+KILLED presentation live-holder pid=98331 status=-9 unpublished=['.status-presentation-lock.owner.98331.AhBvkH']
+RECOVERY presentation live-holder: zero stranded owners; referenced holder preserved
+KILLED presentation dead-holder pid=98491 status=-9 unpublished=['.status-presentation-lock.steal.owner.98491.9YZbQg']
+RECOVERY presentation dead-holder: zero stranded owners; referenced holder preserved
+KILLED inbox live-holder pid=98649 status=-9 unpublished=['demo.inbox/.seq.lock.owner.98649.UcefVa']
+RECOVERY inbox live-holder: zero stranded owners; referenced holder preserved
+KILLED inbox dead-holder pid=98803 status=-9 unpublished=['demo.inbox/.seq.lock.steal.owner.98803.ecVA3G']
+RECOVERY inbox dead-holder: zero stranded owners; referenced holder preserved
+KILLED future live-holder pid=98983 status=-9 unpublished=['arbitrary/deeper/.future-mutex.owner.98983.7u4r9u']
+RECOVERY future live-holder: zero stranded owners; referenced holder preserved
+KILLED future dead-holder pid=99297 status=-9 unpublished=['arbitrary/deeper/.future-mutex.steal.owner.99297.luvSoL']
+RECOVERY future dead-holder: zero stranded owners; referenced holder preserved
+BOUNDARIES: all seven dead-pid temporary formats removed; live temp files, live owners, recorded live handoff, foreign content, legacy name, tombstone and symlinks preserved
+ALL LOCAL RECOVERY SCENARIOS PASSED
