@@ -1,0 +1,48 @@
+scenario=below-ceiling-control
+allocated_bytes=268435456 pid=42719
+exit=0 expected=0
+        1.24 real         0.02 user         0.02 sys
+           262127616  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               18372  page reclaims
+                  46  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 888  involuntary context switches
+           275721042  instructions retired
+           164432503  cycles elapsed
+           276071144  peak memory footprint
+
+unrelated_sentinel_alive=true
+scenario=over-ceiling-1
+allocated_bytes=268435456 pid=43656
+fm-lint.sh: physical footprint 270512 KiB exceeded the per-root limit of 65536 KiB
+exit=98 expected=98
+max_rss_kib=270512
+
+allocator_reaped=true
+unrelated_sentinel_alive=true
+scenario=over-ceiling-2
+allocated_bytes=268435456 pid=44257
+fm-lint.sh: physical footprint 270592 KiB exceeded the per-root limit of 65536 KiB
+exit=98 expected=98
+max_rss_kib=270592
+
+allocator_reaped=true
+unrelated_sentinel_alive=true
+scenario=over-ceiling-3
+allocated_bytes=268435456 pid=44982
+fm-lint.sh: physical footprint 270400 KiB exceeded the per-root limit of 65536 KiB
+exit=98 expected=98
+max_rss_kib=270400
+
+allocator_reaped=true
+unrelated_sentinel_alive=true
+All direct memory guard scenarios passed; all children stopped.

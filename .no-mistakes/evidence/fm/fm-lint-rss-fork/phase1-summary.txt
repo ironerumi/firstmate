@@ -1,0 +1,4 @@
+Phase 1 narrowed changed-suite execution:
+- tests/fm-worker-pool-safety.test.sh: passed, runner exit 0, 149139 ms; all three pooled-slot behavior checks completed.
+- tests/fm-lint.test.sh: time bound, runner script exit 124 at 300544 ms; only help and inventory checks completed before termination. This is untested, not an assertion failure, and was not rerun. Broad coverage remains CI-owned.
+- Initial --list --changed was blocked by a transient timing marker created by this agent; marker removed immediately and listing succeeded. No source changes made.
