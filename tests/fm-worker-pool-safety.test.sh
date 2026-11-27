@@ -42,7 +42,6 @@ make_case() {
 }
 
 read_case_record() {
-  # shellcheck disable=SC2034 # CASE_DIR, INITIAL_SHA, and DEFAULT_BRANCH complete the shared case-record shape.
   IFS='|' read -r CASE_DIR HOME_DIR PROJECT_DIR POOL_DIR FAKEBIN_DIR INITIAL_SHA DEFAULT_BRANCH <<EOF
 $1
 EOF

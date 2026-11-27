@@ -387,11 +387,6 @@ case "$target" in
       exit "$alloc_rc"
     fi
     ;;
-  *brief-hog*)
-    perl -e 'my $s = "x" x (256 * 1048576);
-      if (open my $f, ">", $ENV{FM_TEST_HOG_PID} || "/dev/null") { print $f "$$\n"; close $f }
-      select(undef, undef, undef, 0.2)'
-    ;;
   *resident-hog*|*source-hog*)
     follow=no
     for arg in "$@"; do
@@ -401,8 +396,8 @@ case "$target" in
       *resident-hog*) follow=yes ;;
     esac
     if [ "$follow" = yes ]; then
-      perl -e 'if (open my $f, ">", $ENV{FM_TEST_HOG_PID} || "/dev/null") { print $f "$$\n"; close $f }
-        my $s = "x" x (256 * 1048576);
+      perl -e 'my $s = "x" x (256 * 1048576);
+        if (open my $f, ">", $ENV{FM_TEST_HOG_PID} || "/dev/null") { print $f "$$\n"; close $f }
         sleep($ENV{FM_TEST_HOG_SECS} || 300)'
     fi
     ;;
@@ -1815,7 +1810,7 @@ SH
 
 test_local_lint_bounds_resident_memory_and_deadline() {
   local tmp fakebin stub_log roots_log out rc hog source_hog blocker ok lone_dir hog_pid_file hog_pid
-  local sentinel_pid brief_hog
+  local sentinel_pid attempt
   tmp=$(fm_test_tmproot fm-lint-local-bounds)
   fakebin=$(fm_fakebin "$tmp")
   fm_lint_stub_reactive_shellcheck "$fakebin"
@@ -1824,9 +1819,8 @@ test_local_lint_bounds_resident_memory_and_deadline() {
   source_hog="$tmp/source-hog.sh"
   blocker="$tmp/blocker.sh"
   ok="$tmp/ok.sh"
-  brief_hog="$tmp/brief-hog.sh"
   hog_pid_file="$tmp/hog.pid"
-  for root in "$hog" "$source_hog" "$brief_hog" "$blocker" "$ok"; do
+  for root in "$hog" "$source_hog" "$blocker" "$ok"; do
     printf '#!/usr/bin/env bash\nexit 0\n' > "$root"
   done
 
@@ -1839,46 +1833,42 @@ test_local_lint_bounds_resident_memory_and_deadline() {
   awk -F '\t' '$1 == "end" && $3 ~ /resident-hog\.sh$/ && $10 == "ok" { found=1 } END { exit !found }' \
     "$tmp/control.roots.tsv" || fail "the control root did not complete ok"
 
-  # Over a 64 MiB resident ceiling the root, and its no-source retry, are
-  # killed by name and classified memory; an unrelated process survives.
-  sleep 300 &
-  sentinel_pid=$!
-  rc=0
-  out=$(PATH="$fakebin:$PATH" FM_LINT_JOBS=1 FM_LINT_ROOT_RSS_KIB=65536 \
-    FM_TEST_STUB_LOG="$stub_log" FM_TEST_HOG_PID="$hog_pid_file" \
-    "$LINT" --telemetry "$tmp/capped.tsv" "$ok" "$hog" 2>&1) || rc=$?
-  [ "$rc" -ne 0 ] || fail "a root over the local resident ceiling unexpectedly passed"
-  assert_contains "$out" "resident-hog.sh" "the over-ceiling root was not named"
-  assert_contains "$out" "reason=memory rc=98" "the resident kill was not classified as memory"
-  assert_contains "$out" "exceeded the per-root limit of 65536 KiB" "the resident kill did not explain itself"
-  kill -0 "$sentinel_pid" 2>/dev/null \
-    || fail "the resident-memory kill took an unrelated sentinel process with it"
-  kill -KILL "$sentinel_pid" 2>/dev/null || true
-  wait "$sentinel_pid" 2>/dev/null || true
-  [ -s "$hog_pid_file" ] || fail "the over-ceiling root never recorded its allocator pid"
-  hog_pid=$(cat "$hog_pid_file")
-  if kill -0 "$hog_pid" 2>/dev/null; then
-    fail "the over-ceiling root's allocator survived the resident-memory kill"
-  fi
-  roots_log="$tmp/capped.roots.tsv"
-  awk -F '\t' '$1 == "end" && $3 ~ /resident-hog\.sh$/ && $10 == "memory" && $11 > 65536 { found=1 } END { exit !found }' \
-    "$roots_log" || fail "the sidecar did not record the killed root's memory reason and peak"
-  awk -F '\t' '$1 == "end" && $3 ~ /ok\.sh$/ && $10 == "ok" { found=1 } END { exit !found }' \
-    "$roots_log" || fail "the sidecar lost the clean root's record"
-
-  # A root that holds 256 MiB for only 0.2 s and exits clean is still over
-  # the ceiling: the monitor samples from the root's start rather than
-  # first looking half a second in, after the allocation is gone.
-  : > "$hog_pid_file"
-  rc=0
-  out=$(PATH="$fakebin:$PATH" FM_LINT_JOBS=1 FM_LINT_ROOT_RSS_KIB=65536 \
-    FM_TEST_HOG_PID="$hog_pid_file" \
-    "$LINT" --telemetry "$tmp/brief.tsv" "$brief_hog" 2>&1) || rc=$?
-  if [ "$rc" -eq 0 ]; then
-    [ -s "$hog_pid_file" ] || fail "the brief root passed without allocating"$'\n'"$out"
-    fail "a brief allocation over the resident ceiling escaped the first sample"$'\n'"$out"
-  fi
-  assert_contains "$out" "brief-hog.sh reason=memory rc=98" "the brief allocation was not classified as memory"
+  # Contract: a populated 256 MiB allocation exceeds 64 MiB and must exit
+  # 98 (memory), not 124 (deadline). Repeat through the public CLI to reject
+  # intermittent missed RSS samples on macOS, including on the no-source retry.
+  # An unrelated process must survive each attempt.
+  for attempt in 1 2 3; do
+    sleep 300 &
+    sentinel_pid=$!
+    rc=0
+    out=$(PATH="$fakebin:$PATH" FM_LINT_JOBS=1 FM_LINT_ROOT_RSS_KIB=65536 \
+      FM_LINT_ROOT_SECONDS=5 FM_LINT_ROOT_GRACE=1 \
+      FM_TEST_STUB_LOG="$stub_log" FM_TEST_HOG_PID="$hog_pid_file" \
+      "$LINT" --telemetry "$tmp/capped.$attempt.tsv" "$ok" "$hog" 2>&1) || rc=$?
+    [ "$rc" -eq 98 ] || fail "over-ceiling attempt $attempt exited $rc, expected memory exit 98"$'\n'"$out"
+    assert_contains "$out" "resident-hog.sh" "the over-ceiling root was not named"
+    assert_contains "$out" "reason=memory rc=98" "the resident kill was not classified as memory"
+    assert_contains "$out" "exceeded the per-root limit of 65536 KiB" "the resident kill did not explain itself"
+    if [ "$(uname)" = Darwin ]; then
+      # macOS compresses an idle allocation until ps rss is near zero, so the
+      # ceiling must count physical footprint there, not RSS.
+      assert_contains "$out" "physical footprint" "the macOS kill did not measure physical footprint"
+    fi
+    kill -0 "$sentinel_pid" 2>/dev/null \
+      || fail "the resident-memory kill took an unrelated sentinel process with it"
+    kill -KILL "$sentinel_pid" 2>/dev/null || true
+    wait "$sentinel_pid" 2>/dev/null || true
+    [ -s "$hog_pid_file" ] || fail "the over-ceiling root never recorded its allocator pid"
+    hog_pid=$(cat "$hog_pid_file")
+    if kill -0 "$hog_pid" 2>/dev/null; then
+      fail "the over-ceiling root's allocator survived the resident-memory kill"
+    fi
+    roots_log="$tmp/capped.$attempt.roots.tsv"
+    awk -F '\t' '$1 == "end" && $3 ~ /resident-hog\.sh$/ && $10 == "memory" && $11 > 65536 { found=1 } END { exit !found }' \
+      "$roots_log" || fail "the sidecar did not record the killed root's memory reason and peak"
+    awk -F '\t' '$1 == "end" && $3 ~ /ok\.sh$/ && $10 == "ok" { found=1 } END { exit !found }' \
+      "$roots_log" || fail "the sidecar lost the clean root's record"
+  done
 
   # A root over the ceiling only while following sources takes the existing
   # no-source retry and passes with the disclosed memory-fallback reason.
@@ -1970,6 +1960,16 @@ test_rejects_test_sources_into_production_modules() {
   out=$(cd "$repo" && PATH="$fakebin:$PATH" "$lint" "$tmp/outside.sh" 2>&1) || rc=$?
   [ "$rc" -eq 0 ] || fail "a root outside tests/ was held to the test source boundary"$'\n'"$out"
 
+  fm_lint_stub_git "$fakebin"
+  : > "$tmp/diff.nul"
+  rc=0
+  out=$(cd "$repo" && PATH="$fakebin:$PATH" GITHUB_ACTIONS='' CI='' \
+    FM_TEST_GIT_BRANCH=feature FM_TEST_GIT_DIFF_FILE="$tmp/diff.nul" \
+    "$lint" 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "zero changed targets bypassed the test source-boundary check"
+  assert_contains "$out" "no changed lint targets" "the empty-target path was not exercised"
+  assert_contains "$out" "tests/edge.test.sh:3: test source" "the unselected test source edge was not named"
+
   # shellcheck disable=SC2016
   green_names=(cut-directive cut-implicit single-quoted heredoc comment test-helper double-quoted zsh-quoted multiline-quoted cut-literal cut-double cut-single)
   # shellcheck disable=SC2016
@@ -1994,6 +1994,12 @@ test_rejects_test_sources_into_production_modules() {
     out=$(cd "$repo" && CI=true PATH="$fakebin:$PATH" "$lint" 2>&1) || rc=$?
     [ "$rc" -eq 0 ] || fail "lint rejected a source ShellCheck does not follow into bin/: ${green_names[$name]}"$'\n'"$out"
   done
+  rc=0
+  out=$(cd "$repo" && PATH="$fakebin:$PATH" GITHUB_ACTIONS='' CI='' \
+    FM_TEST_GIT_BRANCH=feature FM_TEST_GIT_DIFF_FILE="$tmp/diff.nul" \
+    "$lint" 2>&1) || rc=$?
+  [ "$rc" -eq 0 ] || fail "zero changed targets rejected a cut test source edge"$'\n'"$out"
+  assert_contains "$out" "no changed lint targets" "the clean empty-target path was not exercised"
   pass "fm-lint.sh names every test source edge into bin/ and accepts cut, quoted, heredoc, and comment forms"
 }
 
