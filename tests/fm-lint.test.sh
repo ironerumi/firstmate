@@ -1960,6 +1960,16 @@ test_rejects_test_sources_into_production_modules() {
   out=$(cd "$repo" && PATH="$fakebin:$PATH" "$lint" "$tmp/outside.sh" 2>&1) || rc=$?
   [ "$rc" -eq 0 ] || fail "a root outside tests/ was held to the test source boundary"$'\n'"$out"
 
+  fm_lint_stub_git "$fakebin"
+  : > "$tmp/diff.nul"
+  rc=0
+  out=$(cd "$repo" && PATH="$fakebin:$PATH" GITHUB_ACTIONS='' CI='' \
+    FM_TEST_GIT_BRANCH=feature FM_TEST_GIT_DIFF_FILE="$tmp/diff.nul" \
+    "$lint" 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "zero changed targets bypassed the test source-boundary check"
+  assert_contains "$out" "no changed lint targets" "the empty-target path was not exercised"
+  assert_contains "$out" "tests/edge.test.sh:3: test source" "the unselected test source edge was not named"
+
   # shellcheck disable=SC2016
   green_names=(cut-directive cut-implicit single-quoted heredoc comment test-helper double-quoted zsh-quoted multiline-quoted cut-literal cut-double cut-single)
   # shellcheck disable=SC2016
@@ -1984,6 +1994,12 @@ test_rejects_test_sources_into_production_modules() {
     out=$(cd "$repo" && CI=true PATH="$fakebin:$PATH" "$lint" 2>&1) || rc=$?
     [ "$rc" -eq 0 ] || fail "lint rejected a source ShellCheck does not follow into bin/: ${green_names[$name]}"$'\n'"$out"
   done
+  rc=0
+  out=$(cd "$repo" && PATH="$fakebin:$PATH" GITHUB_ACTIONS='' CI='' \
+    FM_TEST_GIT_BRANCH=feature FM_TEST_GIT_DIFF_FILE="$tmp/diff.nul" \
+    "$lint" 2>&1) || rc=$?
+  [ "$rc" -eq 0 ] || fail "zero changed targets rejected a cut test source edge"$'\n'"$out"
+  assert_contains "$out" "no changed lint targets" "the clean empty-target path was not exercised"
   pass "fm-lint.sh names every test source edge into bin/ and accepts cut, quoted, heredoc, and comment forms"
 }
 

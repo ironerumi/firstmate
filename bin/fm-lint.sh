@@ -1147,6 +1147,11 @@ if [ "$CHANGED_MODE" -eq 1 ] && [ "$ROOT_COUNT" -eq 0 ]; then
   printf 'fm-lint.sh: no changed lint targets\n'
   overall_rc=0
   fm_lint_run_backend_purity || overall_rc=$?
+  boundary_rc=0
+  fm_lint_run_test_source_boundary || boundary_rc=$?
+  if [ "$overall_rc" -eq 0 ] && [ "$boundary_rc" -ne 0 ]; then
+    overall_rc=$boundary_rc
+  fi
   fm_lint_run_workflows || overall_rc=$?
   exit "$overall_rc"
 fi
