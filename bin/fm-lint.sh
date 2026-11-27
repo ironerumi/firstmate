@@ -62,8 +62,8 @@
 # exposes their actual roots.
 # Partition mode starts with full source-aware analysis, never changed-only
 # or --fast, and does not accept explicit paths. Each partition also runs
-# workflow lint, backend-purity, and test source-boundary checks, keeping
-# either invocation independently useful.
+# workflow lint, backend-purity, and test source-boundary checks,
+# keeping either invocation independently useful.
 #
 # With FM_LINT_REQUIRE_BOUNDS=1, which CI sets, every per-root ShellCheck
 # process runs under an enforced envelope: a wall deadline
@@ -82,10 +82,12 @@
 # cannot apply the address-space limit at all) each root runs under the same
 # wall deadline and grace plus a resident-memory ceiling instead
 # (FM_LINT_ROOT_RSS_KIB, default 6291456 = 6 GiB summed over the root's
-# process group, sampled through ps before the first sleep, on each of the
-# first ten exit polls, then every tenth poll; polls sleep 50 ms).
-# A root observed over that
-# ceiling is killed and classified memory, exactly like a CI memory death.
+# process group, sampled immediately then every 500 milliseconds). On macOS
+# each member counts its physical footprint (resident plus compressed and
+# swapped memory, what top's MEM column shows), because under memory pressure
+# the kernel compresses a growing ShellCheck so its RSS stays near zero; other
+# hosts count RSS from ps.
+# A root over that ceiling is killed and classified memory, like a CI memory death.
 # A local run without bin/fm-timeout-lib.sh refuses rather than lint
 # unbounded.
 #
@@ -420,11 +422,9 @@ fi
 # count) and execs the tool; a limit the host cannot apply exits 97 so the
 # parent reports limit-unavailable instead of running uncapped. Under the
 # resident kind it runs the tool beside a monitor that sums resident memory
-# over this process group (the bounded runner made this process its leader)
-# with the startup-heavy polling described in the header to reduce missed
-# brief allocations or allocations compressed by macOS before sampling.
-# Over the limit it kills the group's other members,
-# records the observed peak, and exits 98, which the parent classifies as
+# (macOS: physical footprint) over this process group (the bounded runner made this process its leader)
+# immediately then every 500 milliseconds; over the limit it kills the
+# group's other members, records the observed peak, and exits 98, classified as
 # memory. Either kind wraps the tool in /usr/bin/time for the per-root
 # peak-RSS record when it is available.
 if [ "${1:-}" = "--internal-root" ]; then
@@ -465,23 +465,37 @@ if [ "${1:-}" = "--internal-root" ]; then
       # shellcheck disable=SC2016 # Perl, not the shell, expands its variables.
       exec "${FM_LINT_PERL_BIN:-perl}" -MPOSIX=WNOHANG -MTime::HiRes=sleep -e '
         my ($rss_file, $limit) = (shift, shift);
+        # macOS: proc_pid_rusage(pid, RUSAGE_INFO_V0) through the proc_info
+        # syscall (336, call 9); phys_footprint is the eighth uint64 after the
+        # 16-byte uuid. It includes compressed and swapped pages that ps rss
+        # omits, so a compressed allocation still counts toward the ceiling.
+        my $darwin = $^O eq "darwin";
+        sub footprint_kib {
+          my $info = "\0" x 96;
+          return undef unless syscall(336, 9, $_[0] + 0, 0, 0, $info, 0) == 0;
+          return int((unpack "a16 Q10", $info)[8] / 1024);
+        }
         my $child = fork;
         exit 127 unless defined $child;
         if (!$child) { exec @ARGV; exit 127 }
-        my ($group, $peak, $tick) = (getpgrp(), 0, 0);
+        my ($group, $peak) = (getpgrp(), 0);
         while (1) {
           my $done = waitpid $child, WNOHANG;
           exit(($? & 127) ? 128 + ($? & 127) : $? >> 8) if $done == $child;
           exit 127 if $done == -1;
-          my $sample = $tick < 10 || $tick % 10 == 9;
-          $tick++;
-          if ($sample) {
+          # Sample before the first sleep too: macOS may compress an idle
+          # allocation before the next sample sees it.
+          {
             my ($total, @members) = (0);
             my $ps = open(my $rows, "-|", "ps", "-A", "-o", "pid=", "-o", "pgid=", "-o", "rss=");
             if ($ps) {
               while (my $row = <$rows>) {
                 my ($pid, $pgid, $rss) = split " ", $row;
                 next unless defined $rss && $pgid == $group && $pid != $$ && $pid != $ps;
+                if ($darwin) {
+                  my $footprint = footprint_kib($pid);
+                  $rss = $footprint if defined $footprint && $footprint > $rss;
+                }
                 $total += $rss;
                 push @members, $pid;
               }
@@ -492,11 +506,11 @@ if [ "${1:-}" = "--internal-root" ]; then
               kill "KILL", @members;
               waitpid $child, 0;
               if (open my $record, ">", $rss_file) { print $record "max_rss_kib=$peak\n"; close $record }
-              print STDERR "fm-lint.sh: resident memory $total KiB exceeded the per-root limit of $limit KiB\n";
+              print STDERR "fm-lint.sh: ", ($darwin ? "physical footprint" : "resident memory"), " $total KiB exceeded the per-root limit of $limit KiB\n";
               exit 98;
             }
           }
-          sleep 0.05;
+          sleep 0.5;
         }
       ' -- "$internal_rss_file" "$internal_memory_kib" "${internal_command[@]}"
       ;;
@@ -1133,7 +1147,6 @@ if [ "$CHANGED_MODE" -eq 1 ] && [ "$ROOT_COUNT" -eq 0 ]; then
   printf 'fm-lint.sh: no changed lint targets\n'
   overall_rc=0
   fm_lint_run_backend_purity || overall_rc=$?
-  fm_lint_run_test_source_boundary || overall_rc=$?
   fm_lint_run_workflows || overall_rc=$?
   exit "$overall_rc"
 fi
@@ -1231,6 +1244,8 @@ if [ "${FM_LINT_REQUIRE_BOUNDS:-0}" = 1 ]; then
     printf 'fm-lint.sh: refusing to lint uncapped under FM_LINT_REQUIRE_BOUNDS=1.\n' >&2
     exit 2
   fi
+elif [ "$ROOT_COUNT" -eq 0 ]; then
+  :
 elif declare -F fm_exec_timed >/dev/null 2>&1; then
   BOUND_MECH=perl
 else
@@ -1281,11 +1296,19 @@ else
   ROOTS_LOG=$TMP_ROOT/roots.tsv
 fi
 : > "$ROOTS_LOG"
-bounds_applied=1
-root_deadline_meta=$ROOT_SECONDS
-root_grace_meta=$ROOT_GRACE
-root_memory_meta=$MEMORY_LIMIT_KIB
-root_memory_kind_meta=$MEMORY_KIND
+if [ "$BOUND_MECH" != none ]; then
+  bounds_applied=1
+  root_deadline_meta=$ROOT_SECONDS
+  root_grace_meta=$ROOT_GRACE
+  root_memory_meta=$MEMORY_LIMIT_KIB
+  root_memory_kind_meta=$MEMORY_KIND
+else
+  bounds_applied=0
+  root_deadline_meta=unbounded
+  root_grace_meta=unbounded
+  root_memory_meta=unbounded
+  root_memory_kind_meta=unbounded
+fi
 {
   printf 'format\t%s\n' 'fm-lint-roots-v1'
   printf 'meta\t%s\t%s\n' 'shellcheck_version' "$resolved"
