@@ -82,14 +82,14 @@
 # cannot apply the address-space limit at all) each root runs under the same
 # wall deadline and grace plus a resident-memory ceiling instead
 # (FM_LINT_ROOT_RSS_KIB, default 6291456 = 6 GiB summed over the root's
-# process group, sampled immediately then every 500 milliseconds). On macOS
-# each member counts its physical footprint (resident plus compressed and
-# swapped memory, what top's MEM column shows), because under memory pressure
-# the kernel compresses a growing ShellCheck so its RSS stays near zero; other
-# hosts count RSS from ps.
-# A root over that ceiling is killed and classified memory, like a CI memory death.
-# A local run without bin/fm-timeout-lib.sh refuses rather than lint
-# unbounded.
+# process group, sampled before the first sleep then every 500 milliseconds).
+# On macOS each member counts the larger of ps RSS and its physical footprint
+# when available (including compressed and swapped memory), because memory
+# pressure can compress a growing ShellCheck while its RSS stays near zero;
+# other hosts count RSS from ps.
+# A root observed over that ceiling is killed and classified memory, like a CI
+# memory death. A local run with roots but without bin/fm-timeout-lib.sh refuses
+# rather than lint unbounded; an empty inventory needs no watchdog.
 #
 # If a source-following root exits with a memory failure, it is retried once
 # without --external-sources under the same memory limit and only the time
@@ -143,8 +143,8 @@ ROOT="$(cd "$SELF_DIR/.." && pwd -P)"
 cd "$ROOT" || exit 1
 
 # The sibling timeout library supplies the shared group-kill watchdog that
-# bounds each root; without the library a run refuses in preflight rather than
-# lint unbounded.
+# bounds each root; without the library a run with roots refuses in preflight
+# rather than lint unbounded.
 if [ -r "$SELF_DIR/fm-timeout-lib.sh" ]; then
   # shellcheck source=bin/fm-timeout-lib.sh
   . "$SELF_DIR/fm-timeout-lib.sh"
@@ -421,10 +421,9 @@ fi
 # the address-space kind it applies that per-process limit (a positive KiB
 # count) and execs the tool; a limit the host cannot apply exits 97 so the
 # parent reports limit-unavailable instead of running uncapped. Under the
-# resident kind it runs the tool beside a monitor that sums resident memory
-# (macOS: physical footprint) over this process group (the bounded runner made this process its leader)
-# immediately then every 500 milliseconds; over the limit it kills the
-# group's other members, records the observed peak, and exits 98, classified as
+# resident kind it runs the tool beside the monitor described in the header.
+# The bounded runner made this process the group's leader; over the limit the
+# monitor kills the group's other members, records the observed peak, and exits 98, classified as
 # memory. Either kind wraps the tool in /usr/bin/time for the per-root
 # peak-RSS record when it is available.
 if [ "${1:-}" = "--internal-root" ]; then
