@@ -1,0 +1,46 @@
+HOST Darwin
+COMMAND ['bash', '{run-worktree}/bin/fm-lint.sh', '--internal-timed', '8', '1', 'bash', '{run-worktree}/bin/fm-lint.sh', '--internal-root', '{run-worktree}/.test-runtime-bounds/under-ceiling.rss', 'resident', '524288', '/opt/homebrew/opt/python@3.15/bin/python3.15', '-u', '-c', 'import time; x=bytearray(64*1024*1024); print("64 MiB populated; normal exit 7",flush=True); time.sleep(1); raise SystemExit(7)']
+64 MiB populated; normal exit 7
+under-ceiling: exit=7 elapsed=1.974s; memory-record=1.20 real         0.01 user         0.01 sys
+            78118912  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                5689  page reclaims
+                  46  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 124  involuntary context switches
+           172337822  instructions retired
+            76598889  cycles elapsed
+            73236960  peak memory footprint
+COMMAND ['bash', '{run-worktree}/bin/fm-lint.sh', '--internal-timed', '8', '1', 'bash', '{run-worktree}/bin/fm-lint.sh', '--internal-root', '{run-worktree}/.test-runtime-bounds/over-ceiling-1.rss', 'resident', '65536', '/opt/homebrew/opt/python@3.15/bin/python3.15', '-u', '-c', 'import os,time,pathlib; x=bytearray(256*1024*1024); pathlib.Path(\'{run-worktree}/.test-runtime-bounds/hog-0.pid\').write_text(str(os.getpid())); print("256 MiB populated pid",os.getpid(),flush=True); time.sleep(30)']
+256 MiB populated pid 379
+fm-lint.sh: physical footprint 269696 KiB exceeded the per-root limit of 65536 KiB
+over-ceiling-1: exit=98 elapsed=0.824s; memory-record=max_rss_kib=269696
+Allocator reaped; unrelated sentinel remains alive
+COMMAND ['bash', '{run-worktree}/bin/fm-lint.sh', '--internal-timed', '8', '1', 'bash', '{run-worktree}/bin/fm-lint.sh', '--internal-root', '{run-worktree}/.test-runtime-bounds/over-ceiling-2.rss', 'resident', '65536', '/opt/homebrew/opt/python@3.15/bin/python3.15', '-u', '-c', 'import os,time,pathlib; x=bytearray(256*1024*1024); pathlib.Path(\'{run-worktree}/.test-runtime-bounds/hog-1.pid\').write_text(str(os.getpid())); print("256 MiB populated pid",os.getpid(),flush=True); time.sleep(30)']
+256 MiB populated pid 452
+fm-lint.sh: physical footprint 270176 KiB exceeded the per-root limit of 65536 KiB
+over-ceiling-2: exit=98 elapsed=0.870s; memory-record=max_rss_kib=270176
+Allocator reaped; unrelated sentinel remains alive
+COMMAND ['bash', '{run-worktree}/bin/fm-lint.sh', '--internal-timed', '8', '1', 'bash', '{run-worktree}/bin/fm-lint.sh', '--internal-root', '{run-worktree}/.test-runtime-bounds/over-ceiling-3.rss', 'resident', '65536', '/opt/homebrew/opt/python@3.15/bin/python3.15', '-u', '-c', 'import os,time,pathlib; x=bytearray(256*1024*1024); pathlib.Path(\'{run-worktree}/.test-runtime-bounds/hog-2.pid\').write_text(str(os.getpid())); print("256 MiB populated pid",os.getpid(),flush=True); time.sleep(30)']
+256 MiB populated pid 495
+fm-lint.sh: physical footprint 269520 KiB exceeded the per-root limit of 65536 KiB
+over-ceiling-3: exit=98 elapsed=0.889s; memory-record=max_rss_kib=269520
+Allocator reaped; unrelated sentinel remains alive
+COMMAND ['bash', '{run-worktree}/bin/fm-lint.sh', '--internal-timed', '8', '1', 'bash', '{run-worktree}/bin/fm-lint.sh', '--internal-root', '{run-worktree}/.test-runtime-bounds/aggregate-group.rss', 'resident', '196608', '/opt/homebrew/opt/python@3.15/bin/python3.15', '-u', '-c', 'import subprocess,sys,time; a=subprocess.Popen([sys.executable,"-u","-c",\'import os,time; x=bytearray(112*1024*1024); print("child holds 112 MiB",os.getpid(),flush=True); time.sleep(30)\']); b=subprocess.Popen([sys.executable,"-u","-c",\'import os,time; x=bytearray(112*1024*1024); print("child holds 112 MiB",os.getpid(),flush=True); time.sleep(30)\']); time.sleep(30)']
+child holds 112 MiB 550
+child holds 112 MiB 551
+fm-lint.sh: physical footprint 252192 KiB exceeded the per-root limit of 196608 KiB
+aggregate-group: exit=98 elapsed=0.713s; memory-record=max_rss_kib=252192
+COMMAND ['bash', '{run-worktree}/bin/fm-lint.sh', '--internal-timed', '2', '1', 'bash', '{run-worktree}/bin/fm-lint.sh', '--internal-root', '{run-worktree}/.test-runtime-bounds/wall-deadline.rss', 'resident', '524288', '/opt/homebrew/opt/python@3.15/bin/python3.15', '-u', '-c', 'import subprocess,sys,time,signal; signal.signal(signal.SIGTERM,signal.SIG_IGN); p=subprocess.Popen([sys.executable,"-u","-c",\'import os,time,signal,pathlib; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(\\\'{run-worktree}/.test-runtime-bounds/timeout-child.pid\\\').write_text(str(os.getpid())); print("TERM-ignoring descendant",os.getpid(),flush=True); time.sleep(30)\']); print("waiting beyond deadline",flush=True); time.sleep(30)']
+waiting beyond deadline
+TERM-ignoring descendant 594
+wall-deadline: exit=124 elapsed=2.229s; memory-record=
+Deadline descendant reaped; unrelated sentinel remains alive
