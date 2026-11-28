@@ -53,7 +53,7 @@ test_actor_coverage() {
   out=$(bearings "$home") || fail 'Bearings could not read contribution fixture'
   printf '%s' "$out" | jq -e '
     .contributions.known == 3 and .contributions.checked == 3
-    and .contributions.counts == {captain:1,fleet:1,maintainer:1,nobody:0}
+    and .contributions.counts == {captain:1,fleet:1,maintainer:1}
     and (.contributions.captain | length) == 1
     and .contributions.captain[0].url == "https://github.com/o/r/pull/1"
     and .contributions.complete == true and .contributions.proven_clear == false' >/dev/null \
@@ -572,7 +572,7 @@ test_unsupported_poll_is_silent_and_clears_legacy_errors() {
     done
     bearings "$home" | jq -e '.contributions | .known == 4 and .checked == 0
       and .unmeasured == 4 and .unreadable_records == 0
-      and .counts == {captain:0,fleet:0,maintainer:0,nobody:0}
+      and .counts == {captain:0,fleet:0,maintainer:0}
       and .complete == false and .proven_clear == false' >/dev/null \
       || fail "unsupported poll corrupted unmeasured coverage ($mode)"
   done
@@ -608,7 +608,7 @@ test_legacy_cleanup_preserves_supported_failure() {
     || fail 'unsupported cleanup erased supported failure or fabricated an observation'
   bearings "$home" | jq -e '.contributions | .known == 4 and .checked == 0
     and .unmeasured == 3 and .unreadable_records == 0
-    and .counts == {captain:0,fleet:1,maintainer:0,nobody:0} and .complete == false' >/dev/null \
+    and .counts == {captain:0,fleet:1,maintainer:0} and .complete == false' >/dev/null \
     || fail 'mixed legacy cleanup confused supported failures with unmeasured coverage'
   rm "$home/forge/fault"
   out=$(with_home "$home" bash "$ROOT/bin/fm-contributions.sh" poll 2>&1) \
@@ -621,7 +621,7 @@ test_legacy_cleanup_preserves_supported_failure() {
     || fail 'supported recovery changed retained unsupported evidence'
   bearings "$home" | jq -e '.contributions | .known == 4 and .checked == 1
     and .unmeasured == 3 and .unreadable_records == 0
-    and .counts == {captain:0,fleet:0,maintainer:1,nobody:0} and .complete == false' >/dev/null \
+    and .counts == {captain:0,fleet:0,maintainer:1} and .complete == false' >/dev/null \
     || fail 'real GitHub recovery lost mixed saved ownership'
   pass 'legacy cleanup preserves unsupported ownership and supported missing-evidence failure in the same file'
 }
@@ -665,6 +665,8 @@ test_shared_contribution_signal_wakes_once() {
   pass 'shared contribution signal wakes once while retaining both acknowledgements'
 }
 
+# Allow startup plus the watcher's 30-second check bound; these assertions
+# test wake delivery, not a five- or fifteen-second performance contract.
 test_watcher_keeps_diagnostics_separate_from_contribution_wakes() {
   local home out rc wakes diagnostic
   home=$(new_home watcher-diagnostics)
@@ -681,7 +683,7 @@ test_watcher_keeps_diagnostics_separate_from_contribution_wakes() {
   out="$home/watcher-diagnostics.out"
   rc=0
   with_home "$home" env FM_POLL=1 FM_SIGNAL_GRACE=0 FM_CHECK_INTERVAL=0 FM_HEARTBEAT=999999 \
-    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 15 > "$out" 2> "$home/watcher-diagnostics.err" || rc=$?
+    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 45 > "$out" 2> "$home/watcher-diagnostics.err" || rc=$?
   [ "$rc" -eq 0 ] || fail "watcher did not surface contribution diagnostics: $(cat "$home/watcher-diagnostics.err")"
   diagnostic=$(awk -F '\t' -v key="$home/state/contributions.check.sh" '$3 == "check" && $4 == key { print $5 }' "$home/state/.wake-queue")
   [ "$diagnostic" = "check: $home/state/contributions.check.sh: contributions: 1 unreadable durable record(s)" ] \
@@ -750,7 +752,7 @@ test_watcher_surfaces_new_contribution_once() {
   out="$home/watcher.out"
   rc=0
   with_home "$home" env FM_POLL=1 FM_SIGNAL_GRACE=0 FM_CHECK_INTERVAL=0 FM_HEARTBEAT=999999 \
-    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 5 > "$out" 2> "$home/watcher.err" || rc=$?
+    "$ROOT/bin/fm-watch-checkpoint.sh" --seconds 45 > "$out" 2> "$home/watcher.err" || rc=$?
   [ "$rc" -eq 0 ] || fail "watcher did not surface the new contribution signal: $(cat "$home/watcher.err")"
   grep -E '^check: contributions delivery [0-9a-f]{64}$' "$out" >/dev/null \
     || fail "watcher did not surface the durable contribution wake: $(cat "$out")"
@@ -1258,12 +1260,12 @@ test_shared_owner_age_only_does_not_hide_measured_state() {
     if [ "$mode" = open ]; then
       printf '%s' "$out" | jq -e '.contributions.known == 1 and .contributions.checked == 1
         and .contributions.not_recently_checked == 0
-        and .contributions.counts == {captain:0,fleet:0,maintainer:1,nobody:0}' >/dev/null \
+        and .contributions.counts == {captain:0,fleet:0,maintainer:1}' >/dev/null \
         || fail "an age-only owner hid the measured open state: $out"
     else
       printf '%s' "$out" | jq -e '.contributions.known == 0 and .contributions.checked == 0
         and .contributions.not_recently_checked == 0
-        and .contributions.counts == {captain:0,fleet:0,maintainer:0,nobody:0}' >/dev/null \
+        and .contributions.counts == {captain:0,fleet:0,maintainer:0}' >/dev/null \
         || fail "an age-only owner kept a settled contribution in the projection: $out"
     fi
   done
@@ -1410,7 +1412,7 @@ test_many_settled_records_keep_the_poll_inside_the_check_bound() {
   real_jq=$(command -v jq)
   printf '#!/bin/sh\nsleep 0.05\nexec %s "$@"\n' "$real_jq" > "$home/fakebin/jq"
   chmod +x "$home/fakebin/jq"
-  # shellcheck source=bin/fm-timeout-lib.sh
+  # shellcheck source=/dev/null
   . "$ROOT/bin/fm-timeout-lib.sh"
   with_home "$home" fm_run_timed 20 bash "$home/state/contributions.check.sh" >/dev/null 2>&1 || rc=$?
   [ "$rc" -eq 0 ] || fail "a poll over 151 settled records outlived the watcher's 20-second check bound (status $rc)"
@@ -1438,7 +1440,7 @@ test_many_settled_records_beside_a_malformed_one_keep_the_poll_inside_the_check_
   real_jq=$(command -v jq)
   printf '#!/bin/sh\nsleep 0.05\nexec %s "$@"\n' "$real_jq" > "$home/fakebin/jq"
   chmod +x "$home/fakebin/jq"
-  # shellcheck source=bin/fm-timeout-lib.sh
+  # shellcheck source=/dev/null
   . "$ROOT/bin/fm-timeout-lib.sh"
   with_home "$home" fm_run_timed 20 bash "$home/state/contributions.check.sh" >/dev/null 2>&1 || rc=$?
   [ "$rc" -eq 0 ] || fail "a poll over 150 settled records and a malformed one outlived the watcher's 20-second check bound (status $rc)"
@@ -1556,21 +1558,54 @@ fixed_issue() { # home task issue-number ready
     > "$1/data/$2/contributions.json"
 }
 
+test_covered_issues_preserve_rotation_expiry() {
+  local home number out
+  home=$(new_home covered-rotation)
+  record "$home" delivery 8 open mergeable
+  for number in {40..55}; do
+    fixed_issue "$home" "filed-$number" "$number" true
+    mutate_record "$home" "filed-$number" '.records[0].checked_at="2026-09-16T07:43:20Z"'
+  done
+  mutate_record "$home" delivery '.records[0].checked_at="2026-09-16T07:43:20Z"
+    | .records[0].observation.can_merge=true
+    | .records[0].observation.fixes=[range(40;56) | "https://github.com/o/r/issues/\(.)"]'
+  with_home "$home" "$ROOT/bin/fm-fleet-snapshot.sh" --contribution-input > "$home/input.json" \
+    || fail 'covered-rotation contribution input failed'
+  out=$(with_home "$home" env FM_CONTRIBUTIONS_MAX_AGE=900 "$ROOT/bin/fm-contributions.sh" snapshot "$home/input.json" --all) \
+    || fail 'covered-rotation snapshot failed'
+  printf '%s' "$out" | jq -e '.known == 1 and .checked == 1
+    and .counts == {captain:1,fleet:0,maintainer:0}
+    and .complete and (.proven_clear | not)
+    and (.captain | length) == 1
+    and ([.rows[] | select(.actor == "nobody" and .counted == false)] | length) == 16
+    and .valid_until == ("2026-09-16T08:03:20Z" | fromdateiso8601)' >/dev/null \
+    || fail "covered issues shortened the 17-URL observation window or entered totals: $out"
+  pass 'covered issues preserve rotation expiry without entering digest totals'
+}
+
 test_fix_pr_carries_ready_issue() {
   local home out
   home=$(new_home fix-pr)
   record "$home" delivery 8 open mergeable
   fixed_issue "$home" filed 9 true
-  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:1,nobody:0}' >/dev/null \
+  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:1}' >/dev/null \
     || fail 'a ready issue without a fix PR was not fleet work'
   mutate_record "$home" delivery '.records[0].observation.fixes=["https://github.com/o/r/issues/9"]'
   out=$(bearings "$home") || fail 'Bearings could not read the fix-PR fixture'
-  printf '%s' "$out" | jq -e '.contributions.counts == {captain:0,fleet:0,maintainer:1,nobody:1}' >/dev/null \
-    || fail "a ready issue whose owned fix PR exists was counted twice: $out"
+  printf '%s' "$out" | jq -e '.contributions.counts == {captain:0,fleet:0,maintainer:1}
+    and .contributions.known == 1 and .contributions.checked == 1 and .contributions.proven_clear' >/dev/null \
+    || fail "a ready issue whose owned fix PR exists was counted: $out"
+  with_home "$home" "$ROOT/bin/fm-fleet-snapshot.sh" --contribution-input > "$home/input.json" || fail 'contribution input failed'
+  out=$(with_home "$home" "$ROOT/bin/fm-contributions.sh" snapshot "$home/input.json" --all) || fail 'fix-PR --all projection failed'
+  printf '%s' "$out" | jq -e '.known == 1 and ([.rows[] | select(.counted == false)] | map(.url))
+    == ["https://github.com/o/r/issues/9"]
+    and ([.rows[] | select(.counted == false)] | .[0].actor == "nobody")
+    and ([.rows[] | select(.counted)] | map(.url)) == ["https://github.com/o/r/pull/8"]' >/dev/null \
+    || fail "--all did not list the covered issue as uncounted: $out"
   mutate_record "$home" delivery '.records[0].observation.state="closed"'
-  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:0,nobody:0}' >/dev/null \
+  bearings "$home" | jq -e '.contributions.counts == {captain:0,fleet:1,maintainer:0}' >/dev/null \
     || fail 'a closed unmerged fix PR still carried its ready issue'
-  pass 'an owned open fix PR carries its ready-for-pr issue, which is not counted again'
+  pass 'an owned open fix PR carries its ready-for-pr issue, which leaves the counts but stays listed under --all'
 }
 
 test_poll_records_fix_links() {
@@ -1588,14 +1623,14 @@ test_poll_records_fix_links() {
     || fail 'the ready issue raised no signal'
   with_home "$home" "$ROOT/bin/fm-contributions.sh" ack filed https://github.com/o/r/issues/9 "$token" \
     || fail 'could not acknowledge the ready signal'
-  bearings "$home" | jq -e '.contributions.counts.fleet == 0 and .contributions.counts.nobody == 1' >/dev/null \
+  bearings "$home" | jq -e '.contributions.counts.fleet == 0 and (.contributions.counts | has("nobody") | not) and .contributions.known == 1' >/dev/null \
     || fail 'an observed fix link did not carry the ready issue'
   printf 'fail\n' > "$home/forge/fault"
   later=$(jq -nr --arg now "$NOW" '($now | fromdateiso8601) + 315 | todateiso8601')
   with_home "$home" env FM_CONTRIBUTIONS_NOW="$later" "$ROOT/bin/fm-contributions.sh" poll >/dev/null \
     || fail 'fix-link failure transition poll failed'
   out=$(NOW="$later" bearings "$home") || fail 'could not inspect a failed fix-link transition'
-  printf '%s' "$out" | jq -e '.contributions.counts.fleet == 2 and .contributions.counts.nobody == 0' >/dev/null \
+  printf '%s' "$out" | jq -e '.contributions.counts.fleet == 2 and (.contributions.counts | has("nobody") | not)' >/dev/null \
     || fail "a failed fix PR observation still carried its stale issue link: $out"
   pass 'poll records fix links and drops them after a failed PR observation'
 
@@ -1970,7 +2005,7 @@ test_settled_history_leaves_the_projection() {
   before=$(cat "$home/data/landed/contributions.json" "$home/data/dropped/contributions.json")
   out=$(bearings "$home") || fail 'Bearings could not read settled history'
   printf '%s' "$out" | jq -e '.contributions | .known == 1 and .checked == 1
-    and .counts == {captain:0,fleet:0,maintainer:1,nobody:0}
+    and .counts == {captain:0,fleet:0,maintainer:1}
     and .missing_verdicts == 0 and .stale_verdicts == 0 and .not_recently_checked == 0
     and .complete == true and .proven_clear == true' >/dev/null \
     || fail "settled contributions still counted in the projection: $(printf '%s' "$out" | jq -c .contributions)"
@@ -2334,7 +2369,7 @@ test_arm_plumbs_the_reply_age_into_the_check_shim() {
 }
 
 failures=0
-for test_name in test_actor_coverage test_settled_history_leaves_the_projection test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_review_bot_inline_wake test_review_bot_watching_is_opt_in test_review_bot_allowlist_is_configurable test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_unsupported_poll_is_silent_and_clears_legacy_errors test_legacy_cleanup_preserves_supported_failure test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_expired_child_coverage_is_not_fleet_work test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_http_500_once_retries_without_waking test_http_500_twice_records_the_failed_read test_http_404_is_not_retried test_real_gh_errors_drive_retry_and_summary test_next_url_does_not_inherit_a_forge_diagnostic test_shared_url_observed_once test_shared_owner_age_only_does_not_hide_measured_state test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_many_settled_records_keep_the_poll_inside_the_check_bound test_many_settled_records_beside_a_malformed_one_keep_the_poll_inside_the_check_bound test_record_without_trailing_newline_does_not_join_its_neighbour test_records_beyond_one_read_batch_are_all_read test_one_poll_observes_a_parallel_wave test_rotation_window_tracks_live_urls test_age_is_not_owed_fleet_work test_fix_pr_carries_ready_issue test_poll_records_fix_links test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_fifo_read_budget_keeps_prior_record test_held_observation_lock_skips_quietly_and_wakes_when_persistent test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_retire_ends_observation_of_a_gone_contribution test_late_owner_of_a_retired_final_contribution_is_not_retired test_retire_is_idempotent_and_refuses_unknown_pairs test_unanswered_thread_is_raised_again_under_hold test_resolved_thread_is_answered test_reply_rules test_reply_age_is_configurable_and_validated test_closed_pull_request_drops_its_threads test_unanswered_reraise_is_off_unless_configured test_arm_plumbs_the_reply_age_into_the_check_shim test_many_reviews_stay_readable; do
+for test_name in test_actor_coverage test_settled_history_leaves_the_projection test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_review_bot_inline_wake test_review_bot_watching_is_opt_in test_review_bot_allowlist_is_configurable test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_unsupported_poll_is_silent_and_clears_legacy_errors test_legacy_cleanup_preserves_supported_failure test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_expired_child_coverage_is_not_fleet_work test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_http_500_once_retries_without_waking test_http_500_twice_records_the_failed_read test_http_404_is_not_retried test_real_gh_errors_drive_retry_and_summary test_next_url_does_not_inherit_a_forge_diagnostic test_shared_url_observed_once test_shared_owner_age_only_does_not_hide_measured_state test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_many_settled_records_keep_the_poll_inside_the_check_bound test_many_settled_records_beside_a_malformed_one_keep_the_poll_inside_the_check_bound test_record_without_trailing_newline_does_not_join_its_neighbour test_records_beyond_one_read_batch_are_all_read test_one_poll_observes_a_parallel_wave test_rotation_window_tracks_live_urls test_age_is_not_owed_fleet_work test_covered_issues_preserve_rotation_expiry test_fix_pr_carries_ready_issue test_poll_records_fix_links test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_fifo_read_budget_keeps_prior_record test_held_observation_lock_skips_quietly_and_wakes_when_persistent test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_retire_ends_observation_of_a_gone_contribution test_late_owner_of_a_retired_final_contribution_is_not_retired test_retire_is_idempotent_and_refuses_unknown_pairs test_unanswered_thread_is_raised_again_under_hold test_resolved_thread_is_answered test_reply_rules test_reply_age_is_configurable_and_validated test_closed_pull_request_drops_its_threads test_unanswered_reraise_is_off_unless_configured test_arm_plumbs_the_reply_age_into_the_check_shim test_many_reviews_stay_readable; do
   ( "$test_name" ) || failures=$((failures + 1))
 done
 [ "$failures" -eq 0 ] || fail "$failures contribution regressions"
